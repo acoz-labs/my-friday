@@ -9,7 +9,8 @@ explicit temporary APFS roots and assert the complete before/after tree.
 ### Unit and contract tests
 
 - `internal/profile/*_test.go`: Unicode lengths, trimming, style/custom rules,
-  control/format rejection, deterministic assistant ID.
+  NFC ordering, control/format rejection, deterministic assistant ID, and
+  composed/decomposed equivalence.
 - `internal/plan/*_test.go`: canonical serialization, ordered actions, content
   digests, negative actions, stable plan ID, stable location defaults, preview
   model, and exact missing-parent action order.
@@ -20,9 +21,11 @@ explicit temporary APFS roots and assert the complete before/after tree.
   harness ships.
 - `internal/paths/*_test.go`: root/home, absent descendants, same/nested targets,
   symlink ancestors/targets, Unicode paths, empty/non-empty targets, injected
-  filesystem/environment results.
+  filesystem/environment results, captured-cwd default/relative resolution,
+  absolute/current-home tilde parsing, and tilde/env-expression rejection.
 - `internal/terminal/*_test.go`: line transcripts, default Exit, exact Create,
-  answer preservation, no ANSI/cursor control, stable English messages.
+  `b`/`q`/EOF behavior at every pre-mutation step, answer preservation, no
+  ANSI/cursor control, and stable English messages.
 
 ### Integration and acceptance tests
 
@@ -31,10 +34,12 @@ explicit temporary APFS roots and assert the complete before/after tree.
 - `internal/transaction/*_test.go`: absent and empty targets, modes, journals,
   reservations, concurrency, promotion, rollback, and recovery.
 - `test/acceptance/init_test.go`: drive Scope through Result, retain transcript,
-  validate both repos, compare every mutation with `CreationPlan`.
+  validate both repos, compare every mutation with `CreationPlan`, then rerun
+  the exact answers and prove `Already complete` with zero writes.
 - `test/acceptance/fault_matrix_test.go`: fail immediately before/after every
   journal/reservation/stage/init/validate/backup/promote/final-validate/cleanup
-  transition; assert both-valid, pre-run, or recoverable, then recover twice.
+  transition; assert both-valid, pre-run, or recoverable, rerun `init` at every
+  retained journal phase, then recover twice.
 - `test/acceptance/zero_network_test.go`: source import allowlist, injected
   runner rejecting non-allowlisted Git operations, captured argv/environment,
   schema compiler rejecting `http`, `https`, `file`, and unknown resource
@@ -55,6 +60,8 @@ explicit temporary APFS roots and assert the complete before/after tree.
   change.
 - Extended-grapheme boundaries for combining text, emoji, flags, and ZWJ
   sequences at 60/240 limits, with schema/semantic fixture agreement.
+- Canonically equivalent composed/decomposed inputs produce byte-identical NFC
+  profiles, IDs, plans, previews, and generated content.
 - Owner-only modes under permissive caller umask; empty-shell normalization to
   `0700` on success and original-mode restore on rollback.
 - Missing-parent creation order, success retention, reverse empty rollback, and
@@ -69,7 +76,8 @@ explicit temporary APFS roots and assert the complete before/after tree.
 5. Staged Git pair and empty-template isolation, then runner/renderer/validator.
 6. Every fault transition for absent targets, then transaction/rollback.
 7. Empty-shell modes, crash states, idempotent recovery, changed-target refusal.
-8. End-to-end Unicode success/Exit/collision/failure/recovery command wiring.
+8. End-to-end Unicode success, navigation/EOF Exit, Already-complete rerun,
+   collision, failure, interrupted-init routing, and recovery command wiring.
 9. Zero-network/privacy allowlists and output scans.
 10. Full formatting, vet, race/unit/integration/acceptance, ARM64 build, and docs
     reconciliation.
@@ -113,6 +121,7 @@ Attach or commit machine-generated plain-text transcripts for:
 3. separate-path symlink/nesting collision;
 4. injected failure with successful rollback;
 5. partial promotion followed by recovery.
+6. exact completed rerun reporting `Already complete` without writes.
 
 Transcripts bind to exact PR head, consistently redact only temp-root prefixes,
 contain no ANSI cursor sequences, and note terminal dimensions only as context.
@@ -124,11 +133,11 @@ product acceptance.
 
 | Acceptance group | Required evidence |
 |---|---|
-| Deterministic preview | repeated-plan golden, action/file/hash comparison, zero-write Exit transcript |
+| Deterministic preview | NFC-equivalence/repeated-plan golden, path parsing/default fixtures, action/file/hash comparison, zero-write navigation/EOF Exit transcript |
 | Valid repositories | schema corpus, exact trees, matching IDs, branch/no-commit/no-remote assertions |
 | No adjacent effects | temp-root diff, imports, subprocess trace, template sentinel, privacy scan |
 | Safe paths | canonical/symlink/home/root/nesting/case-fold/emptiness tests on APFS |
-| Recoverability | full fault matrix, two-pass recovery, foreign-change refusal |
+| Recoverability | Already-complete zero-write rerun, interrupted-init routing at every journal phase, full fault matrix, two-pass recovery, foreign-change refusal |
 | Accessible terminal | transcripts, control-sequence scan, keyboard/VoiceOver review |
 
 ## Rollout
@@ -171,7 +180,8 @@ Non-blocking for implementation, blocking before public artifact release:
    signing/notarization/distribution decision, and rollback procedure.
 4. Configured nomination/acceptance/release variables and independent acceptor.
 5. Dependency review and license notices for the Apache-2.0 JSON Schema
-   validator and MIT grapheme-segmentation library.
+   validator, BSD-3-Clause Unicode normalization module, and MIT grapheme
+   segmentation library.
 6. Verified minimum-macOS build target and an ARM64 candidate from the approved
    release path, not a contributor-local binary.
 

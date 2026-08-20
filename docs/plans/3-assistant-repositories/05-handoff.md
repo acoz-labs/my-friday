@@ -21,12 +21,12 @@ contract. Each begins with the red tests in `04-verification.md`.
 | Slice | Likely paths | Depends | Exit condition |
 |---|---|---|---|
 | 1. Toolchain/environment | `go.mod`, `go.sum`, `mise.toml`, `internal/environment/`, `docs/development.md`, `bin/ci` | None | Pinned Go/dependency; typed macOS/ARM64/APFS/Git/TTY tests pass. |
-| 2. Profile/contracts | `internal/profile/`, `internal/contract/`, embedded assets/schemas | 1 | Schema/grapheme corpus passes at 60/240 limits; profile cannot supply trust policy. |
+| 2. Profile/contracts | `internal/profile/`, `internal/contract/`, embedded assets/schemas | 1 | Trim→NFC→reject→grapheme corpus passes at 60/240 limits and canonical equivalents match; profile cannot supply trust policy. |
 | 3. Plan/rendering | `internal/plan/`, `internal/templates/`, `internal/projection/codex/`, `testdata/` | 2 | Stable IDs/actions/files/hashes and golden trees; Codex projection consumes neutral contracts without an adapter framework. |
-| 4. Wizard/preview | `internal/terminal/`, `cmd/my-friday/` | 3 | Seven steps, retries, Exit/Create, ANSI-free transcripts, zero writes. |
+| 4. Wizard/preview | `internal/terminal/`, `cmd/my-friday/` | 3 | Seven steps, captured-cwd/path grammar, `b`/`q`/EOF, retries, Exit/Create, ANSI-free transcripts, zero writes. |
 | 5. Git/validation | `internal/git/`, `internal/repository/` | 3 | Fixed allowlist creates valid stages with no templates/commits/remotes. |
 | 6. Transaction/recovery | `internal/transaction/`, `internal/paths/` | 3, 5 | Reservations, planned parent creation, empty-shell `0700` normalization/original-mode rollback, full fault matrix, recovery. |
-| 7. End to end | `cmd/my-friday/`, `test/acceptance/` | 4, 6 | Success/Exit/collision/failure/recovery prove plan-to-mutation trace. |
+| 7. End to end | `cmd/my-friday/`, `test/acceptance/` | 4, 6 | Success/Exit/Already-complete/interrupted-rerun/collision/failure/recovery prove plan-to-mutation trace. |
 | 8. Reconciliation/docs | durable docs and PR reconciliation; delete this plan | 1-7 | Docs match code, all checks pass, plan removed, no drift. |
 
 Prompting, domain validation, planning, filesystem mutation, and command
@@ -43,6 +43,7 @@ effects. This is a safety seam, not a plugin framework.
 | Safe paths | 1, 6, 7 | APFS symlink/case/nesting/collision matrix |
 | Recoverability | 6, 7 | full fault matrix and idempotent recovery |
 | Accessible terminal | 4, 7 | exact-head transcripts and design review |
+| Idempotent retry/navigation | 4, 6, 7 | no-write Already complete; every journal phase routes to recovery; `b`/`q`/EOF matrix |
 
 ## Documentation Promotion
 
@@ -70,7 +71,8 @@ larger trust surface; capability docs own local authorization/data/failure.
 - Run `bin/container bin/ci` plus native Apple Silicon macOS checks and document
   container limitations.
 - Attach exact-head transcripts; obtain product-design review.
-- Review/license the JSON Schema and grapheme-segmentation dependencies.
+- Review/license the JSON Schema, Unicode-normalization, and grapheme-
+  segmentation dependencies.
 - Reconcile to this plan, explain drift, promote docs, delete
   `docs/plans/3-assistant-repositories/`, and run
   `solution-design-plan verify-implementation` before leaving draft.

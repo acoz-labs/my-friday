@@ -25,8 +25,8 @@ Create one `my-friday` executable. Pure packages own answers, normalized
 profile values, path resolution, plan construction, template rendering,
 validation, and transaction state. A thin terminal adapter owns prompts and
 line output. Versioned templates and JSON Schemas are embedded in the binary.
-Pinned JSON Schema and Unicode-segmentation libraries validate generated
-documents and user-perceived character limits over shared fixtures.
+Pinned JSON Schema, Unicode-normalization, and segmentation libraries validate
+generated documents and user-perceived character limits over shared fixtures.
 
 The repository pins Go 1.26.x in `mise.toml`, `go.mod`, and CI. The delivered
 runtime binary has no language-runtime or service dependency; official Go
@@ -74,10 +74,11 @@ Select H1 with Medium-high confidence.
 
 The implementation is a small Go module using standard-library packages for
 the terminal, JSON, hashing, embedded templates, path handling, subprocesses,
-and file operations. Two reviewed dependencies are allowed: the JSON Schema
-validator and `github.com/rivo/uniseg` v0.4.7 for extended grapheme clusters.
-No CLI framework, telemetry SDK, database, daemon, network client, template
-repository fetch, or plugin system is introduced.
+and file operations. Three reviewed dependencies are allowed: the JSON Schema
+validator, `golang.org/x/text` v0.40.0 for NFC, and
+`github.com/rivo/uniseg` v0.4.7 for extended grapheme clusters. No CLI
+framework, telemetry SDK, database, daemon, network client, template fetch, or
+plugin system is introduced.
 
 The core boundary is a canonical `CreationPlan`. Prompt answers are normalized
 and validated once, then compiled into that plan. Preview, file rendering,
@@ -119,6 +120,7 @@ Consequences:
 | D11 | Use `implementation` execution envelope. | No declared artifact/release contract, naming clearance, or exact-machine evidence yet. | Current `docs/deployment.md` and unknowns U1-U4 |
 | D12 | Keep profile/manifests/planner harness-neutral and render only a Codex `AGENTS.md` projection in O1. | Preserve an extension seam without alternate harnesses, adapter machinery, or lowest-common-denominator semantics. | Product-authority guidance; O1/O2 remain Codex-first |
 | D13 | Count user text limits with `github.com/rivo/uniseg` v0.4.7 extended grapheme clusters; cap custom guidance at 240. | User-perceived characters treat combining sequences/emoji coherently and preserve the approved profile boundary. | Product-experience contract; <https://github.com/rivo/uniseg/tree/v0.4.7> |
+| D14 | Normalize profile text with `golang.org/x/text/unicode/norm` pinned at v0.40.0 in the order trim → NFC → prohibited-category rejection → grapheme count. | Canonically equivalent input must generate identical IDs, plan bytes, previews, and profiles. | Product-experience contract; <https://pkg.go.dev/golang.org/x/text/unicode/norm@v0.40.0> |
 
 ## Rejected Mechanisms And Scope
 

@@ -61,9 +61,12 @@ handling requests rollback; an uncatchable interruption is resolved by
   color is optional decoration only and disabled when output is not a TTY.
 - Earlier answers remain visible. Validation errors identify field, rule, and
   corrective action without clearing the screen.
-- Name is 1-60 extended grapheme clusters (user-perceived characters); optional
-  form of address is 0-60; purpose is 1-240. Leading/trailing Unicode
-  whitespace is trimmed before counting.
+- Profile text follows one canonical pipeline: trim Unicode `White_Space` at
+  both ends, normalize to NFC with pinned `golang.org/x/text` v0.40.0, reject
+  prohibited categories, then count extended grapheme clusters. File paths are
+  not Unicode-normalized by this text pipeline.
+- Name is 1-60 grapheme clusters; optional form of address is 0-60; purpose is
+  1-240. An address empty after normalization becomes JSON `null`.
 - Style is `Balanced`, `Concise`, `Conversational`, or `Custom`. Custom guidance
   is required only for `Custom` and is 1-240 extended grapheme clusters.
 - Profile fields reject NUL, control characters, Unicode format characters,
@@ -73,9 +76,19 @@ handling requests rollback; an uncatchable interruption is resolved by
   `my-friday-runtime` and `my-friday-memory`, or two explicit targets. The
   assistant name is never transliterated into a path. Parent directories may
   be missing; every segment to create is listed in Preview.
+- Capture the invocation working directory once before prompting. It is the
+  combined-parent default and the base for every relative path. Accept absolute
+  paths, relative paths, and exact `~`/`~/…` expansion for the current home.
+  Reject `~other`, `$NAME`, and `${NAME}` expressions; perform no glob, command,
+  shell, or arbitrary environment expansion. Preview shows normalized absolute
+  paths and every existing symlink ancestor plus its resolved target.
+- Before mutation, exact lowercase `b` returns to the previous step with
+  answers preserved (`b` at Scope exits), exact lowercase `q` exits, and EOF
+  exits 0; all exits print `No changes made`. These navigation tokens are
+  reserved at every prompt and disclosed beside it.
 - Confirmation is `Create these two repositories? [type Create; default Exit]`.
-  Only case-sensitive `Create` proceeds; every other input exits without disk
-  mutation.
+  Case-sensitive `Create` proceeds, `b` returns to Locations, and `q`, EOF,
+  Return, or every other input exits without disk mutation.
 - No spinner, progress bar, cursor addressing, screen clearing, required ANSI
   color, sound, animation, or time-dependent text is used.
 - English is the v1 UI. Text constants are centralized for later localization.
@@ -252,7 +265,7 @@ future records require a versioned schema and O3's proposal/promotion flow.
 
 | Command | Inputs | Success | Errors / idempotency |
 |---|---|---|---|
-| `my-friday init` (and no-argument alias) | Interactive wizard | Exit 0; prints verified paths/IDs, resulting `0700` repository modes, any created parent paths, no-commit/no-remote statement, and next action. | Exit 0 on pre-create Exit; typed non-zero errors. Repeated plan collides and recommends `validate`, never merges. |
+| `my-friday init` (and no-argument alias) | Interactive wizard | Exit 0; prints verified paths/IDs, resulting `0700` modes, created parents, no-commit/no-remote statement, and next action. An exact completed pair prints `Already complete` and validation summary with zero writes. | Pre-create Exit is 0. A matching journal prints phase/support state and offers exact lowercase `r` to run the same bounded recovery or default Exit with the exact recovery command. Unrelated/ambiguous content remains a typed collision; never merge/overwrite. |
 | `my-friday validate --runtime PATH --memory PATH` | Explicit pair | Exit 0 with versions, roles, matching assistant ID, and summary. | Read-only/repeatable; unknown contract, schema, role, Git, or path errors are non-zero. |
 | `my-friday recover --transaction PATH` | Exact journal path | Exit 0 after finishing a valid pair/cleanup or restoring both original states. | Idempotent; corrupt/mismatched/foreign state causes no mutation and prints bounded manual evidence. |
 | `my-friday version` | None | Tool and contract versions. | Read-only. |
@@ -261,6 +274,23 @@ There is no non-interactive create, answer file, environment-variable input,
 remote URL, credential flag, force/overwrite, or assume-yes in v1. Tests drive
 pure planner/domain APIs and an injected terminal instead of adding a second
 public setup interface.
+
+Before classifying a target as collision, `init` computes the plan and checks:
+
+1. **Already complete:** both targets are a matching valid v1 pair with the
+   same assistant ID and exact planned profile/baseline contract. Report and
+   exit 0 without journal, permission, timestamp, or content writes.
+2. **Interrupted:** the canonical journal/reservations/creation markers match
+   `plan_id`. Report its last durable phase and route to the existing `recover`
+   state machine. `r` authorizes recovery now; Return, `q`, or EOF exits 0 and
+   prints the command. Recovery never starts a second transaction.
+3. **Foreign or ambiguous:** any nonmatching content, one target without
+   matching transaction evidence, or corrupted ownership evidence is a
+   collision/validation error with no mutation.
+
+This classification is idempotent after clean completion and after every
+retained-journal phase. It does not make evolved repositories match a fresh
+plan merely because they share a name.
 
 ### Exit categories
 

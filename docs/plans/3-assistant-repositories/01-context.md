@@ -105,7 +105,8 @@ commit.
    support paths.
 4. **Safe paths and collisions:** canonical targets are distinct, non-nested,
    not `/` or the home directory, reside on supported local APFS, and are not
-   symlink or non-empty collisions.
+   symlink or non-empty collisions. Path grammar/defaults resolve visibly from
+   one captured invocation directory.
 5. **Recoverability:** injected failure at every mutating transition ends in
    both valid, neither beyond allowed pre-existing empty shells, or an
    owner-only journal accepted by idempotent recovery.
@@ -113,6 +114,10 @@ commit.
    keyboard-only operation, visible focus-by-prompt, non-color status, and no
    animation or cursor rewriting. Unicode profile values and paths work after
    validation.
+7. **Idempotent retry:** an exact completed plan reports `Already complete`
+   without writes; a matching interrupted plan routes to its existing recovery
+   state; only unrelated or ambiguous content is a collision. `b`, `q`, and EOF
+   have explicit no-mutation behavior before creation.
 
 ### Explicit non-goals
 
@@ -179,6 +184,7 @@ operations, or production environments in O1.
 | E4 | Git 2.28 exposes `--initial-branch`; Go supports native Darwin ARM64 binaries; APFS is the modern Mac default. | Official Git, Go, and Apple documentation linked above |
 | E5 | No representative user has yet completed the flow independently. | `docs/product.md` validation signals and discovery unknowns |
 | E6 | `rivo/uniseg` v0.4.7 implements Unicode extended grapheme segmentation and has no non-standard-library dependencies. | <https://github.com/rivo/uniseg/tree/v0.4.7> |
+| E7 | Go's supplementary `x/text/unicode/norm` package provides Unicode normalization and v0.40.0 is BSD-3-Clause. | <https://pkg.go.dev/golang.org/x/text/unicode/norm@v0.40.0> |
 
 ### Assumptions
 
