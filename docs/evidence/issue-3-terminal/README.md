@@ -24,10 +24,11 @@ Environment evidence: generated natively on Apple Silicon macOS/APFS with the
 repository-pinned Go and Git toolchain. Tests exercise the supported contract
 and each architecture, OS, terminal, filesystem, and Git denial. The committed
 evidence test scans every transcript byte for ESC and checks scenario-specific
-receipts. A production-source AST check rejects networking imports and any
-subprocess other than literal `git`; repository tests cover the fixed Git
-operations. The command has no external schema loader, telemetry, credential,
-hosted-account, commit, or remote path.
+receipts. A production-source AST check enforces an exact import boundary and
+permits only literal `git` subprocesses. Repository tests capture every shipped
+Git argv/environment, restrict commands to the fixed local allowlist, and reject
+network-capable operations. The command has no external schema loader,
+telemetry, credential, hosted-account, commit, or remote-creation path.
 
 Accessibility evidence: all scenarios use ordinary line input and keyboard-only
 navigation. A table-driven test exercises `b`, `q`, and EOF at every applicable

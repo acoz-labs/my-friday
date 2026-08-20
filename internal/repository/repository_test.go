@@ -10,6 +10,44 @@ import (
 	"testing"
 )
 
+func TestProductionGitCommandsUseExactArgvAndEnvironment(t *testing.T) {
+	original := observeGitCommand
+	defer func() { observeGitCommand = original }()
+	var observed [][]string
+	observeGitCommand = func(args, env []string) {
+		if len(env) != 3 || !strings.HasPrefix(env[0], "PATH=") || !strings.HasPrefix(env[1], "HOME=") || env[2] != "LANG=C.UTF-8" {
+			t.Fatalf("unexpected Git environment: %q", env)
+		}
+		observed = append(observed, args)
+	}
+	root := t.TempDir()
+	p, _ := profile.New("Friday", "", "Help", "balanced", "")
+	pl, _ := plan.Build(p, filepath.Join(root, "runtime"), filepath.Join(root, "memory"))
+	if err := Create(pl, pl.Targets.Runtime, pl.Targets.Memory); err != nil {
+		t.Fatal(err)
+	}
+	if !ExactBaseline(pl, pl.Targets.Runtime, pl.Targets.Memory) {
+		t.Fatal("baseline validation failed")
+	}
+	if len(observed) == 0 {
+		t.Fatal("no Git commands captured")
+	}
+	for _, args := range observed {
+		allowed := len(args) == 5 && args[0] == "init" && args[1] == "--quiet" && args[2] == "--initial-branch=main" && strings.HasPrefix(args[3], "--template=") ||
+			len(args) >= 3 && args[0] == "-C" && map[string]bool{"config": true, "rev-parse": true, "symbolic-ref": true, "remote": true}[args[2]]
+		if !allowed {
+			t.Fatalf("non-allowlisted Git argv: %q", args)
+		}
+		for _, forbidden := range []string{"clone", "fetch", "pull", "push", "ls-remote"} {
+			for _, arg := range args {
+				if arg == forbidden {
+					t.Fatalf("network-capable Git argv: %q", args)
+				}
+			}
+		}
+	}
+}
+
 func TestCreateAndValidatePairWithoutCommitOrRemote(t *testing.T) {
 	root := t.TempDir()
 	p, _ := profile.New("Friday", "", "Help", "balanced", "")

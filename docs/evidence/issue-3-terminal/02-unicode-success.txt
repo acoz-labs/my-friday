@@ -10,8 +10,8 @@ Choose 1-4 [b back; q quit]: Step 4 of 7: Locations
 1 One parent with stable names (default)
 2 Two separate targets
 Choose 1-2 [b back; q quit]: Parent directory (default: invocation directory) [b back; q quit]: Step 5 of 7: Preview
-Plan: 553e8976efcd3cf01264cbcee7f5e236d240dc6c9975bda9d8edd3df0e730811
-Assistant: asst-20a117261029197e3e7301ffe1674cc8
+Plan: cb78c2a56069386c0233c1440381fe7e36427590dd0e56a0df5cf6cfd0cc630c
+Assistant: asst-388f3ccb252415b1662f653c556c2add
 Runtime entered: <TEMP>/success/my-friday-runtime
 Runtime canonical: <TEMP>/success/my-friday-runtime
 Memory entered: <TEMP>/success/my-friday-memory
@@ -25,19 +25,19 @@ Runtime symlink mapping: <TEMP>/success/my-friday-runtime -> <TEMP>/success/my-f
 Memory initial state: absent
 Memory symlink mapping: <TEMP>/success/my-friday-memory -> <TEMP>/success/my-friday-memory
 - create parent <TEMP>/success mode 0700
-- temporary support <TEMP>/.my-friday-553e8976efcd3cf0.json (removed after success)
-- temporary support <TEMP>/success/.my-friday-553e8976efcd3cf0-runtime (removed after success)
-- temporary support <TEMP>/success/.my-friday-553e8976efcd3cf0-memory (removed after success)
-- temporary support <TEMP>/.my-friday-reservation-8e449d2535d1ea4e (removed after success)
-- temporary support <TEMP>/.my-friday-reservation-9734ee8f62a94d93 (removed after success)
-- file runtime:.my-friday/manifest.json mode 0600 sha256 362cfdd658ea385cc9e9b3f3fa84c1244980fe24bf620c7ce9025d58c578ee1f
+- temporary support <TEMP>/.my-friday-cb78c2a56069386c.json (removed after success)
+- temporary support <TEMP>/success/.my-friday-cb78c2a56069386c-runtime (removed after success)
+- temporary support <TEMP>/success/.my-friday-cb78c2a56069386c-memory (removed after success)
+- temporary support <TEMP>/.my-friday-reservation-5c7bc29fd8095f92 (removed after success)
+- temporary support <TEMP>/.my-friday-reservation-2966c7046ea981d5 (removed after success)
+- file runtime:.my-friday/manifest.json mode 0600 sha256 a4a997c06b2cf32f342c65285ebe3baeec6d72764a0ef947684b79143bd1770b
 - file runtime:.my-friday/schemas/assistant-profile.v1.schema.json mode 0600 sha256 620d89690ed1f5ba4ff81947c6fe82d5021d215aabb8b37eeb52c9fd64391c33
 - file runtime:.my-friday/schemas/repository-manifest.v1.schema.json mode 0600 sha256 144eee2176933a116d0e844f1f8695e3a5bf68bee8561f108abd2caf6aa0a0a4
 - file runtime:AGENTS.md mode 0600 sha256 c231fcdf65c9a74414a904e46fe5982ff8adc615ded56160ec0165bd8d194a1f
 - file runtime:README.md mode 0600 sha256 ae4bc7f314b39f612b0d54089bee9938569a60c1183b34ffe9b8e59441ed7c15
-- file runtime:assistant/profile.json mode 0600 sha256 a2795cded8deaab91be4f5fd07cfd08080bad54c7aad8f2dfde71c8eab0c2223
+- file runtime:assistant/profile.json mode 0600 sha256 f3a564550651810efbbec0ffa311ea8c484a4c90a31da779874c1f99077e7421
 - file runtime:skills/.gitkeep mode 0600 sha256 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
-- file memory:.my-friday/manifest.json mode 0600 sha256 6d10586f280205a79b82b4e5242bda7ad12449b6a84bfeffd57082f00ba4b1d5
+- file memory:.my-friday/manifest.json mode 0600 sha256 87ab5e5672236932475814efec6fa37f3e19a185b960df3d96165d538607d07a
 - file memory:.my-friday/schemas/repository-manifest.v1.schema.json mode 0600 sha256 144eee2176933a116d0e844f1f8695e3a5bf68bee8561f108abd2caf6aa0a0a4
 - file memory:AGENTS.md mode 0600 sha256 333351f3ba54ce1fa9bc3d0c61568a55b0e781ea1b800b2339c014897aae4c08
 - file memory:README.md mode 0600 sha256 1595391140014536173f2c61e3e118279af0197fed0d241b76f63937b2fddfde
@@ -89,7 +89,7 @@ Step 7 of 7: Result
 Complete
 Runtime: <TEMP>/success/my-friday-runtime mode 0700
 Memory: <TEMP>/success/my-friday-memory mode 0700
-Assistant: asst-20a117261029197e3e7301ffe1674cc8
+Assistant: asst-388f3ccb252415b1662f653c556c2add
 Contracts: repository v1, tool v1
 Git: unborn main; no commits; no remotes
 Next: inspect the repositories, then use my-friday validate when needed

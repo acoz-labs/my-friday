@@ -164,18 +164,29 @@ func TestPreMutationNavigationMatrixHasNoWrites(t *testing.T) {
 		"runtime": "\nFriday\nBoss\nHelp\n2\n2\n", "memory": "\nFriday\nBoss\nHelp\n2\n2\nRUNTIME\n",
 		"confirmation": "\nFriday\nBoss\nHelp\n2\n\nPARENT\n",
 	}
+	backDestination := map[string]string{
+		"name": "Step 1 of 7: Scope", "address": "Assistant display name", "purpose": "How should the assistant address you?",
+		"style": "Step 2 of 7: Identity", "custom": "Step 3 of 7: Communication style",
+		"location-mode": "Step 3 of 7: Communication style", "parent": "Step 4 of 7: Locations",
+		"runtime": "Step 4 of 7: Locations", "memory": "Runtime target", "confirmation": "Step 4 of 7: Locations",
+	}
 	for prompt, prefix := range prefixes {
 		for _, action := range []string{"q\n", "b\nq\n", ""} {
 			name := prompt + "/" + map[string]string{"q\n": "q", "b\nq\n": "b", "": "eof"}[action]
 			t.Run(name, func(t *testing.T) {
 				root := t.TempDir()
 				input := strings.ReplaceAll(strings.ReplaceAll(prefix, "RUNTIME", filepath.Join(root, "runtime")), "PARENT", root) + action
+				before := snapshotTree(t, root)
 				var out bytes.Buffer
-				_, _ = Run(strings.NewReader(input), &out, root)
-				for _, target := range []string{filepath.Join(root, "runtime"), filepath.Join(root, "memory"), filepath.Join(root, "my-friday-runtime"), filepath.Join(root, "my-friday-memory")} {
-					if _, err := os.Lstat(target); !os.IsNotExist(err) {
-						t.Fatalf("%s mutated: %v\n%s", target, err, out.String())
-					}
+				result, err := Run(strings.NewReader(input), &out, root)
+				if err != nil || result != "Exit" || !strings.Contains(out.String(), "No changes made") {
+					t.Fatalf("result=%q err=%v\n%s", result, err, out.String())
+				}
+				if after := snapshotTree(t, root); after != before {
+					t.Fatalf("adjacent filesystem mutated\nbefore=%s\nafter=%s", before, after)
+				}
+				if action == "b\nq\n" && backDestination[prompt] != "" && !strings.Contains(out.String(), backDestination[prompt]) {
+					t.Fatalf("back did not navigate to %q\n%s", backDestination[prompt], out.String())
 				}
 			})
 		}

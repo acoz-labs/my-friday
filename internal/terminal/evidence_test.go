@@ -21,6 +21,7 @@ func TestGenerateTerminalEvidence(t *testing.T) {
 		t.Fatal(err)
 	}
 	root := t.TempDir()
+	snapshot := func() string { return snapshotTree(t, root) }
 	write := func(name, transcript string) {
 		canonical, _ := filepath.EvalSymlinks(root)
 		transcript = strings.ReplaceAll(transcript, canonical, "<TEMP>")
@@ -36,21 +37,36 @@ func TestGenerateTerminalEvidence(t *testing.T) {
 		return "\nFridáy 🦇\nBoss\nKeep local work inspectable\n2\n\n" + parent + "\n" + confirmation + "\n"
 	}
 	var exitOut bytes.Buffer
-	_, _ = Run(strings.NewReader(answers(filepath.Join(root, "exit"), "")), &exitOut, root)
+	beforeExit := snapshot()
+	exitResult, exitErr := Run(strings.NewReader(answers(filepath.Join(root, "exit"), "")), &exitOut, root)
+	if exitErr != nil || exitResult != "Exit" || snapshot() != beforeExit {
+		t.Fatalf("default exit result=%q err=%v\nbefore=%s\nafter=%s", exitResult, exitErr, beforeExit, snapshot())
+	}
 	write("01-default-exit.txt", exitOut.String())
 
 	createdRoot := filepath.Join(root, "success")
 	var successOut bytes.Buffer
-	_, _ = Run(strings.NewReader(answers(createdRoot, "Create")), &successOut, root)
+	successResult, successErr := Run(strings.NewReader(answers(createdRoot, "Create")), &successOut, root)
+	if successErr != nil || successResult != "Complete" {
+		t.Fatalf("success result=%q err=%v", successResult, successErr)
+	}
 	write("02-unicode-success.txt", successOut.String())
 
 	var rerunOut bytes.Buffer
-	_, _ = Run(strings.NewReader(answers(createdRoot, "Create")), &rerunOut, root)
+	beforeRerun := snapshot()
+	rerunResult, rerunErr := Run(strings.NewReader(answers(createdRoot, "Create")), &rerunOut, root)
+	if rerunErr != nil || rerunResult != "Already complete" || snapshot() != beforeRerun {
+		t.Fatalf("rerun result=%q err=%v\nbefore=%s\nafter=%s", rerunResult, rerunErr, beforeRerun, snapshot())
+	}
 	write("06-already-complete.txt", rerunOut.String())
 
 	collisionRoot := filepath.Join(root, "collision")
 	var collisionOut bytes.Buffer
-	_, _ = Run(strings.NewReader("\nFriday\n\nHelp\n\n2\n"+collisionRoot+"\n"+filepath.Join(collisionRoot, "child")+"\nq\n"), &collisionOut, root)
+	beforeCollision := snapshot()
+	collisionResult, collisionErr := Run(strings.NewReader("\nFriday\n\nHelp\n\n2\n"+collisionRoot+"\n"+filepath.Join(collisionRoot, "child")+"\nq\n"), &collisionOut, root)
+	if collisionErr != nil || collisionResult != "Exit" || snapshot() != beforeCollision {
+		t.Fatalf("collision result=%q err=%v", collisionResult, collisionErr)
+	}
 	write("03-path-collision.txt", collisionOut.String())
 
 	originalExecute := executeWithProgress

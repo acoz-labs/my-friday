@@ -15,6 +15,16 @@ import (
 	"github.com/santhosh-tekuri/jsonschema/v6"
 )
 
+var observeGitCommand = func([]string, []string) {}
+
+func gitCommand(args ...string) *exec.Cmd {
+	env := []string{"PATH=" + os.Getenv("PATH"), "HOME=" + os.Getenv("HOME"), "LANG=C.UTF-8"}
+	observeGitCommand(append([]string(nil), args...), append([]string(nil), env...))
+	cmd := exec.Command("git", args...)
+	cmd.Env = env
+	return cmd
+}
+
 func Create(pl plan.CreationPlan, runtime, memory string) error {
 	return CreateWithCheckpoint(pl, runtime, memory, nil)
 }
@@ -49,8 +59,7 @@ func CreateWithCheckpoint(pl plan.CreationPlan, runtime, memory string, checkpoi
 			return err
 		}
 		defer os.RemoveAll(tmpl)
-		cmd := exec.Command("git", "init", "--quiet", "--initial-branch=main", "--template="+tmpl, target.path)
-		cmd.Env = []string{"PATH=" + os.Getenv("PATH"), "HOME=" + os.Getenv("HOME"), "LANG=C.UTF-8"}
+		cmd := gitCommand("init", "--quiet", "--initial-branch=main", "--template="+tmpl, target.path)
 		if out, err := cmd.CombinedOutput(); err != nil {
 			return fmt.Errorf("git init %s: %w: %s", target.role, err, strings.TrimSpace(string(out)))
 		}
@@ -63,8 +72,7 @@ func CreateWithCheckpoint(pl plan.CreationPlan, runtime, memory string, checkpoi
 			{"core.precomposeunicode", "false"},
 		} {
 			key, value := setting[0], setting[1]
-			config := exec.Command("git", "-C", target.path, "config", "--local", key, value)
-			config.Env = cmd.Env
+			config := gitCommand("-C", target.path, "config", "--local", key, value)
 			if out, err := config.CombinedOutput(); err != nil {
 				return fmt.Errorf("git config %s %s: %w: %s", target.role, key, err, strings.TrimSpace(string(out)))
 			}
@@ -197,7 +205,7 @@ func validate(root, role string, allowMarker bool) (string, error) {
 }
 
 func validateGitRepository(root string) error {
-	cmd := exec.Command("git", "-C", root, "rev-parse", "--git-dir")
+	cmd := gitCommand("-C", root, "rev-parse", "--git-dir")
 	if out, err := cmd.Output(); err != nil || strings.TrimSpace(string(out)) != ".git" {
 		return fmt.Errorf("repository is not a local Git repository")
 	}
@@ -205,15 +213,15 @@ func validateGitRepository(root string) error {
 }
 
 func validateFreshGit(root string) error {
-	cmd := exec.Command("git", "-C", root, "symbolic-ref", "--short", "HEAD")
+	cmd := gitCommand("-C", root, "symbolic-ref", "--short", "HEAD")
 	out, e := cmd.Output()
 	if e != nil || strings.TrimSpace(string(out)) != "main" {
 		return fmt.Errorf("repository is not an unborn main branch")
 	}
-	if exec.Command("git", "-C", root, "rev-parse", "--verify", "HEAD").Run() == nil {
+	if gitCommand("-C", root, "rev-parse", "--verify", "HEAD").Run() == nil {
 		return fmt.Errorf("repository must have no commits")
 	}
-	if out, e = exec.Command("git", "-C", root, "remote").Output(); e != nil || len(bytes.TrimSpace(out)) != 0 {
+	if out, e = gitCommand("-C", root, "remote").Output(); e != nil || len(bytes.TrimSpace(out)) != 0 {
 		return fmt.Errorf("repository must have no remotes")
 	}
 	return nil
@@ -274,7 +282,7 @@ func exactFreshGitMetadata(root string) bool {
 		"core.ignorecase":              "false",
 		"core.precomposeunicode":       "false",
 	}
-	out, err := exec.Command("git", "-C", root, "config", "--local", "--null", "--list").Output()
+	out, err := gitCommand("-C", root, "config", "--local", "--null", "--list").Output()
 	if err != nil {
 		return false
 	}

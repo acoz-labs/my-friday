@@ -10,8 +10,8 @@ Choose 1-4 [b back; q quit]: Step 4 of 7: Locations
 1 One parent with stable names (default)
 2 Two separate targets
 Choose 1-2 [b back; q quit]: Parent directory (default: invocation directory) [b back; q quit]: Step 5 of 7: Preview
-Plan: ee21712f28d61027554c5598ea3d185d61041c91b02de39c5859194d78ac3f69
-Assistant: asst-d816adb8d880436025062de8a608cdba
+Plan: 04c269a2d29924530e1c50cdfa43825c9289a72af4ad70d3348ce1085518028b
+Assistant: asst-38aee2f881e6fe796de5fc6771792fd9
 Runtime entered: <TEMP>/rollback/my-friday-runtime
 Runtime canonical: <TEMP>/rollback/my-friday-runtime
 Memory entered: <TEMP>/rollback/my-friday-memory
@@ -25,19 +25,19 @@ Runtime symlink mapping: <TEMP>/rollback/my-friday-runtime -> <TEMP>/rollback/my
 Memory initial state: absent
 Memory symlink mapping: <TEMP>/rollback/my-friday-memory -> <TEMP>/rollback/my-friday-memory
 - create parent <TEMP>/rollback mode 0700
-- temporary support <TEMP>/.my-friday-ee21712f28d61027.json (removed after success)
-- temporary support <TEMP>/rollback/.my-friday-ee21712f28d61027-runtime (removed after success)
-- temporary support <TEMP>/rollback/.my-friday-ee21712f28d61027-memory (removed after success)
-- temporary support <TEMP>/.my-friday-reservation-109919cb52aee424 (removed after success)
-- temporary support <TEMP>/.my-friday-reservation-b44f1df1a0acdf93 (removed after success)
-- file runtime:.my-friday/manifest.json mode 0600 sha256 316a73d5c8f77bbf7e5ca700eb45144b34e9ce207b4215b18d7a94f788750b2f
+- temporary support <TEMP>/.my-friday-04c269a2d2992453.json (removed after success)
+- temporary support <TEMP>/rollback/.my-friday-04c269a2d2992453-runtime (removed after success)
+- temporary support <TEMP>/rollback/.my-friday-04c269a2d2992453-memory (removed after success)
+- temporary support <TEMP>/.my-friday-reservation-beef9f521cba6058 (removed after success)
+- temporary support <TEMP>/.my-friday-reservation-75fd8504c5e39eec (removed after success)
+- file runtime:.my-friday/manifest.json mode 0600 sha256 7f43ead3e221f2c86cf9dc2fcbc2349ea2a6b266eec56cefa70d77505c4f1401
 - file runtime:.my-friday/schemas/assistant-profile.v1.schema.json mode 0600 sha256 620d89690ed1f5ba4ff81947c6fe82d5021d215aabb8b37eeb52c9fd64391c33
 - file runtime:.my-friday/schemas/repository-manifest.v1.schema.json mode 0600 sha256 144eee2176933a116d0e844f1f8695e3a5bf68bee8561f108abd2caf6aa0a0a4
 - file runtime:AGENTS.md mode 0600 sha256 c231fcdf65c9a74414a904e46fe5982ff8adc615ded56160ec0165bd8d194a1f
 - file runtime:README.md mode 0600 sha256 ae4bc7f314b39f612b0d54089bee9938569a60c1183b34ffe9b8e59441ed7c15
-- file runtime:assistant/profile.json mode 0600 sha256 87b1ad5e5a13410dcea738e965bdb9ac346ac626e5754861c2b552ddc3841b70
+- file runtime:assistant/profile.json mode 0600 sha256 71ac9d5a64aeb2045c1f1802f1dbd0a41c7e2749d0c005fb4d3a1b52f69bc063
 - file runtime:skills/.gitkeep mode 0600 sha256 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
-- file memory:.my-friday/manifest.json mode 0600 sha256 61ef6cdeeb070e20f1fd5f108180a4203992985ca79542a4c440da2eaf0b9a35
+- file memory:.my-friday/manifest.json mode 0600 sha256 959876cabb2b6a4a77ba60fcfdab6edf6f0f5e12e54cb9b65150c7bd50d00226
 - file memory:.my-friday/schemas/repository-manifest.v1.schema.json mode 0600 sha256 144eee2176933a116d0e844f1f8695e3a5bf68bee8561f108abd2caf6aa0a0a4
 - file memory:AGENTS.md mode 0600 sha256 333351f3ba54ce1fa9bc3d0c61568a55b0e781ea1b800b2339c014897aae4c08
 - file memory:README.md mode 0600 sha256 1595391140014536173f2c61e3e118279af0197fed0d241b76f63937b2fddfde
@@ -82,7 +82,7 @@ Staged runtime
 Staged memory
 Validated
 Step 7 of 7: Recovery required
-Plan: ee21712f28d61027554c5598ea3d185d61041c91b02de39c5859194d78ac3f69
+Plan: 04c269a2d29924530e1c50cdfa43825c9289a72af4ad70d3348ce1085518028b
 Error: creation failed and was rolled back: injected evidence failure at validated
 Completed phase: see status lines above
 Rollback restored the pre-run state; correct the reported error and run init again.
