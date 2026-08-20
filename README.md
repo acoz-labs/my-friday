@@ -1,6 +1,17 @@
-# Project Name
+# My Friday
 
-Replace this with the project purpose, audience, and primary workflows.
+My Friday is a local-first toolkit for creating and safely maintaining a
+personalized Codex assistant. It gives technically capable users an inspectable,
+version-controlled foundation with separate runtime and governed-memory
+repositories.
+
+The product is designed for people who want to understand, repair, move, and
+extend their assistant rather than depend on an opaque hosted service. Local
+operation is the baseline; hosted source control is optional.
+
+My Friday is currently in product shaping. The approved product direction and
+boundaries are documented in [docs/product.md](docs/product.md). Delivery issues
+track the selected and deliberately deferred outcomes.
 
 ## Development
 
