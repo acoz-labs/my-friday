@@ -14,10 +14,10 @@ MY_FRIDAY_EVIDENCE_DIR="$PWD/docs/evidence/issue-3-terminal" \
 | File | Scenario | Expected result |
 |---|---|---|
 | `01-default-exit.txt` | Return at confirmation | `No changes made`; no target or support writes |
-| `02-unicode-success.txt` | Combined-parent creation with NFC Unicode profile | Ordered preview/progress and a verified pair |
+| `02-unicode-success.txt` | Combined-parent creation with NFC Unicode profile | Ordered preview/progress, exactly two valid targets, and no support residue |
 | `03-path-collision.txt` | Nested separate targets | Field-local rejection before mutation |
-| `04-rollback.txt` | Injected post-validation failure through the wizard adapter | Automatic rollback restores pre-run state; target absence is asserted |
-| `05-partial-promotion-recovery.txt` | Injected verified-phase interruption through the wizard, then shipped `recover` adapter | Retained journal drives verified cleanup recovery; the final pair is validated |
+| `04-rollback.txt` | Injected post-validation failure through the wizard adapter | Automatic rollback restores the full adjacent-root snapshot, including hidden paths |
+| `05-partial-promotion-recovery.txt` | Injected verified-phase interruption through the wizard, then shipped `recover` adapter | Retained journal drives recovery to exactly two valid targets with no transaction residue |
 | `06-already-complete.txt` | Exact completed rerun | Distinct `Already complete` result with no writes |
 
 Environment evidence: generated natively on Apple Silicon macOS/APFS with the
@@ -25,15 +25,17 @@ repository-pinned Go and Git toolchain. Tests exercise the supported contract
 and each architecture, OS, terminal, filesystem, and Git denial. The committed
 evidence test scans every transcript byte for ESC and checks scenario-specific
 receipts. A production-source AST check enforces an exact import boundary and
-permits only literal `git` subprocesses. Repository tests capture every shipped
-Git argv/environment, restrict commands to the fixed local allowlist, and reject
-network-capable operations. The command has no external schema loader,
+permits only literal `git` subprocesses. One shared observer captures every
+shipped Git argv/environment, including the environment preflight version
+probe; tests enumerate each permitted argv shape and value and reject every
+other operation. The command has no external schema loader,
 telemetry, credential, hosted-account, commit, or remote-creation path.
 
 Accessibility evidence: all scenarios use ordinary line input and keyboard-only
 navigation. A table-driven test exercises `b`, `q`, and EOF at every applicable
-pre-mutation prompt, including retained-transaction recovery, and compares
-observable filesystem state. A byte scan rejects every ESC byte, and the
+pre-mutation prompt, including Scope and retained-transaction recovery, proves
+that Back re-emits its destination prompt, continues with sentinel answers to
+creation, and compares the complete adjacent filesystem state. A byte scan rejects every ESC byte, and the
 interface uses no cursor addressing, screen clearing, hidden focus,
 color-required meaning, animation, or time-dependent text. A hands-on VoiceOver
 result is intentionally left for independent candidate acceptance; contributor

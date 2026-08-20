@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"github.com/acoz-labs/my-friday/internal/gitexec"
 	"github.com/acoz-labs/my-friday/internal/plan"
 	"github.com/acoz-labs/my-friday/internal/profile"
 	"os"
@@ -11,10 +12,10 @@ import (
 )
 
 func TestProductionGitCommandsUseExactArgvAndEnvironment(t *testing.T) {
-	original := observeGitCommand
-	defer func() { observeGitCommand = original }()
+	original := gitexec.Observe
+	defer func() { gitexec.Observe = original }()
 	var observed [][]string
-	observeGitCommand = func(args, env []string) {
+	gitexec.Observe = func(args, env []string) {
 		if len(env) != 3 || !strings.HasPrefix(env[0], "PATH=") || !strings.HasPrefix(env[1], "HOME=") || env[2] != "LANG=C.UTF-8" {
 			t.Fatalf("unexpected Git environment: %q", env)
 		}
@@ -33,19 +34,33 @@ func TestProductionGitCommandsUseExactArgvAndEnvironment(t *testing.T) {
 		t.Fatal("no Git commands captured")
 	}
 	for _, args := range observed {
-		allowed := len(args) == 5 && args[0] == "init" && args[1] == "--quiet" && args[2] == "--initial-branch=main" && strings.HasPrefix(args[3], "--template=") ||
-			len(args) >= 3 && args[0] == "-C" && map[string]bool{"config": true, "rev-parse": true, "symbolic-ref": true, "remote": true}[args[2]]
+		allowed := exactAllowedGitArgs(args)
 		if !allowed {
 			t.Fatalf("non-allowlisted Git argv: %q", args)
 		}
-		for _, forbidden := range []string{"clone", "fetch", "pull", "push", "ls-remote"} {
-			for _, arg := range args {
-				if arg == forbidden {
-					t.Fatalf("network-capable Git argv: %q", args)
-				}
-			}
-		}
 	}
+}
+
+func exactAllowedGitArgs(args []string) bool {
+	if len(args) == 5 && args[0] == "init" && args[1] == "--quiet" && args[2] == "--initial-branch=main" && strings.HasPrefix(args[3], "--template=") && args[4] != "" {
+		return true
+	}
+	if len(args) < 3 || args[0] != "-C" || args[1] == "" {
+		return false
+	}
+	tail := strings.Join(args[2:], "\x00")
+	switch tail {
+	case "rev-parse\x00--git-dir", "symbolic-ref\x00--short\x00HEAD", "rev-parse\x00--verify\x00HEAD", "remote", "config\x00--local\x00--null\x00--list":
+		return true
+	}
+	if len(args) == 6 && args[2] == "config" && args[3] == "--local" {
+		expected := map[string]string{
+			"core.repositoryformatversion": "0", "core.filemode": "true", "core.bare": "false",
+			"core.logallrefupdates": "true", "core.ignorecase": "false", "core.precomposeunicode": "false",
+		}
+		return expected[args[4]] == args[5]
+	}
+	return false
 }
 
 func TestCreateAndValidatePairWithoutCommitOrRemote(t *testing.T) {

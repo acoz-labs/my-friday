@@ -5,10 +5,11 @@ package environment
 import (
 	"fmt"
 	"os"
-	"os/exec"
 	"runtime"
 	"syscall"
 	"unsafe"
+
+	"github.com/acoz-labs/my-friday/internal/gitexec"
 )
 
 func Check(path string, input *os.File) error {
@@ -21,8 +22,7 @@ func Check(path string, input *os.File) error {
 		return fmt.Errorf("inspect target filesystem: %w", err)
 	}
 	fs := byteString(stat.Fstypename[:])
-	git := exec.Command("git", "--version")
-	git.Env = []string{"PATH=" + os.Getenv("PATH"), "HOME=" + os.Getenv("HOME"), "LANG=C.UTF-8"}
+	git := gitexec.Command("--version")
 	out, err := git.Output()
 	if err != nil {
 		return fmt.Errorf("Git 2.28 or later is required: %w", err)

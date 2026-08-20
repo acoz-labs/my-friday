@@ -185,11 +185,80 @@ func TestPreMutationNavigationMatrixHasNoWrites(t *testing.T) {
 				if after := snapshotTree(t, root); after != before {
 					t.Fatalf("adjacent filesystem mutated\nbefore=%s\nafter=%s", before, after)
 				}
-				if action == "b\nq\n" && backDestination[prompt] != "" && !strings.Contains(out.String(), backDestination[prompt]) {
-					t.Fatalf("back did not navigate to %q\n%s", backDestination[prompt], out.String())
+				if action == "b\nq\n" && backDestination[prompt] != "" && strings.Count(out.String(), backDestination[prompt]) < 2 {
+					t.Fatalf("back did not re-emit destination %q after navigation\n%s", backDestination[prompt], out.String())
+				}
+				if prompt == "scope" && action == "b\nq\n" && strings.Count(out.String(), "Step 1 of 7: Scope") != 1 {
+					t.Fatalf("back at Scope must exit without re-entering the flow\n%s", out.String())
 				}
 			})
 		}
+	}
+}
+
+func TestBackRoutesCanContinueWithPreservedAndReplacementAnswers(t *testing.T) {
+	tests := map[string]struct {
+		input           func(root string) string
+		expectedRuntime func(root string) string
+		name, purpose   string
+	}{
+		"name-to-scope": {func(root string) string { return "\nb\n\nNáme\nChief\nSentinel purpose\n2\n\n" + root + "\nCreate\n" }, nil, "Náme", "Sentinel purpose"},
+		"address-to-name": {func(root string) string {
+			return "\nOld\nb\nNáme\nChief\nSentinel purpose\n2\n\n" + root + "\nCreate\n"
+		}, nil, "Náme", "Sentinel purpose"},
+		"purpose-to-address": {func(root string) string {
+			return "\nNáme\nOld title\nb\nChief\nSentinel purpose\n2\n\n" + root + "\nCreate\n"
+		}, nil, "Náme", "Sentinel purpose"},
+		"style-to-identity": {func(root string) string {
+			return "\nNáme\nChief\nSentinel purpose\nb\n\n\n\n2\n\n" + root + "\nCreate\n"
+		}, nil, "Náme", "Sentinel purpose"},
+		"locations-to-style":  {func(root string) string { return "\nNáme\nChief\nSentinel purpose\n2\nb\n\n\n" + root + "\nCreate\n" }, nil, "Náme", "Sentinel purpose"},
+		"parent-to-locations": {func(root string) string { return "\nNáme\nChief\nSentinel purpose\n2\n\nb\n1\n" + root + "\nCreate\n" }, nil, "Náme", "Sentinel purpose"},
+		"confirmation-to-locations": {func(root string) string {
+			return "\nNáme\nChief\nSentinel purpose\n2\n\n" + root + "\nb\n\n\nCreate\n"
+		}, nil, "Náme", "Sentinel purpose"},
+		"custom-to-style": {func(root string) string {
+			return "\nNáme\nChief\nSentinel purpose\n4\nb\n4\nSentinel guidance\n\n" + root + "\nCreate\n"
+		}, nil, "Náme", "Sentinel purpose"},
+		"runtime-to-location-mode": {func(root string) string {
+			return "\nNáme\nChief\nSentinel purpose\n2\n2\nb\n2\n" + filepath.Join(root, "runtime-sentinel") + "\n" + filepath.Join(root, "memory-sentinel") + "\nCreate\n"
+		}, func(root string) string { return filepath.Join(root, "runtime-sentinel") }, "Náme", "Sentinel purpose"},
+		"memory-to-runtime": {func(root string) string {
+			return "\nNáme\nChief\nSentinel purpose\n2\n2\n" + filepath.Join(root, "old-runtime") + "\nb\n" + filepath.Join(root, "runtime-sentinel") + "\n" + filepath.Join(root, "memory-sentinel") + "\nCreate\n"
+		}, func(root string) string { return filepath.Join(root, "runtime-sentinel") }, "Náme", "Sentinel purpose"},
+	}
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			root := t.TempDir()
+			var out bytes.Buffer
+			result, err := Run(strings.NewReader(tc.input(root)), &out, root)
+			if err != nil || result != "Complete" {
+				t.Fatalf("result=%q err=%v\n%s", result, err, out.String())
+			}
+			runtimeRoot := filepath.Join(root, "my-friday-runtime")
+			if tc.expectedRuntime != nil {
+				runtimeRoot = tc.expectedRuntime(root)
+			}
+			profileBytes, err := os.ReadFile(filepath.Join(runtimeRoot, "assistant", "profile.json"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			var got struct {
+				Identity struct {
+					DisplayName string `json:"display_name"`
+					Purpose     string `json:"purpose"`
+				} `json:"identity"`
+			}
+			if err := json.Unmarshal(profileBytes, &got); err != nil {
+				t.Fatal(err)
+			}
+			if got.Identity.DisplayName != tc.name || got.Identity.Purpose != tc.purpose {
+				t.Fatalf("normalized answers not preserved/replaced: %+v", got.Identity)
+			}
+			if !strings.Contains(out.String(), "Step 5 of 7: Preview") || !strings.Contains(out.String(), "Normalized identity: "+tc.name) {
+				t.Fatalf("route did not continue through preview\n%s", out.String())
+			}
+		})
 	}
 }
 

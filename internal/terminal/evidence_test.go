@@ -50,6 +50,8 @@ func TestGenerateTerminalEvidence(t *testing.T) {
 	if successErr != nil || successResult != "Complete" {
 		t.Fatalf("success result=%q err=%v", successResult, successErr)
 	}
+	assertExactPairRoot(t, createdRoot)
+	assertNoTransactionResidue(t, root)
 	write("02-unicode-success.txt", successOut.String())
 
 	var rerunOut bytes.Buffer
@@ -86,14 +88,13 @@ func TestGenerateTerminalEvidence(t *testing.T) {
 	}
 
 	rollbackRoot := filepath.Join(root, "rollback")
+	beforeRollback := snapshot()
 	rollbackTranscript, rollbackResult, rollbackErr := runWithFault(rollbackRoot, "validated")
 	if rollbackErr == nil || rollbackResult != "" {
 		t.Fatalf("rollback result=%q err=%v", rollbackResult, rollbackErr)
 	}
-	for _, target := range []string{filepath.Join(rollbackRoot, "my-friday-runtime"), filepath.Join(rollbackRoot, "my-friday-memory")} {
-		if _, err := os.Lstat(target); !os.IsNotExist(err) {
-			t.Fatalf("rollback left target %s: %v", target, err)
-		}
+	if afterRollback := snapshot(); afterRollback != beforeRollback {
+		t.Fatalf("rollback changed adjacent root\nbefore=%s\nafter=%s", beforeRollback, afterRollback)
 	}
 	write("04-rollback.txt", rollbackTranscript)
 
@@ -120,7 +121,39 @@ func TestGenerateTerminalEvidence(t *testing.T) {
 	if err := ValidatePair(filepath.Join(recoveryRoot, "my-friday-runtime"), filepath.Join(recoveryRoot, "my-friday-memory")); err != nil {
 		t.Fatal(err)
 	}
+	assertExactPairRoot(t, recoveryRoot)
+	assertNoTransactionResidue(t, root)
 	write("05-partial-promotion-recovery.txt", recoveryTranscript+"\n--- next invocation ---\n"+resumed.String())
+}
+
+func assertExactPairRoot(t *testing.T, root string) {
+	t.Helper()
+	entries, err := os.ReadDir(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 2 || entries[0].Name() != "my-friday-memory" || entries[1].Name() != "my-friday-runtime" || !entries[0].IsDir() || !entries[1].IsDir() {
+		t.Fatalf("unexpected pair root entries: %v", entries)
+	}
+	if err := ValidatePair(filepath.Join(root, "my-friday-runtime"), filepath.Join(root, "my-friday-memory")); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func assertNoTransactionResidue(t *testing.T, root string) {
+	t.Helper()
+	if err := filepath.WalkDir(root, func(path string, entry os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		name := entry.Name()
+		if strings.HasPrefix(name, ".my-friday-") && (strings.HasSuffix(name, ".json") || strings.Contains(name, "reserve") || strings.Contains(name, "delete") || strings.Contains(name, "stage")) {
+			t.Fatalf("transaction residue remains: %s", path)
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestCommittedTerminalEvidenceHasNoControlBytesAndCoversScenarios(t *testing.T) {

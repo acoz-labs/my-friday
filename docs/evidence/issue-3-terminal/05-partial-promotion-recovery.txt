@@ -10,8 +10,8 @@ Choose 1-4 [b back; q quit]: Step 4 of 7: Locations
 1 One parent with stable names (default)
 2 Two separate targets
 Choose 1-2 [b back; q quit]: Parent directory (default: invocation directory) [b back; q quit]: Step 5 of 7: Preview
-Plan: 9166b0ee511ee1f7a7a43bb05a2dd9eb3c1922fe97daf83462375cc55a632c95
-Assistant: asst-2f99872ee9407aac92567c2b0ad990f1
+Plan: 694dfed48322c96b421f723b810daa1190149d4b653cf5d06206c10c38f85a66
+Assistant: asst-0fd6eeb94fe9eaa83c417ecd220546f9
 Runtime entered: <TEMP>/recover/my-friday-runtime
 Runtime canonical: <TEMP>/recover/my-friday-runtime
 Memory entered: <TEMP>/recover/my-friday-memory
@@ -25,19 +25,19 @@ Runtime symlink mapping: <TEMP>/recover/my-friday-runtime -> <TEMP>/recover/my-f
 Memory initial state: absent
 Memory symlink mapping: <TEMP>/recover/my-friday-memory -> <TEMP>/recover/my-friday-memory
 - create parent <TEMP>/recover mode 0700
-- temporary support <TEMP>/.my-friday-9166b0ee511ee1f7.json (removed after success)
-- temporary support <TEMP>/recover/.my-friday-9166b0ee511ee1f7-runtime (removed after success)
-- temporary support <TEMP>/recover/.my-friday-9166b0ee511ee1f7-memory (removed after success)
-- temporary support <TEMP>/.my-friday-reservation-e7337c1861854936 (removed after success)
-- temporary support <TEMP>/.my-friday-reservation-8a218ba88555bbf6 (removed after success)
-- file runtime:.my-friday/manifest.json mode 0600 sha256 30a630d65518eea42d61780aa2d36509325ca7b0b97fe9666b61a29d0f5c6fcb
+- temporary support <TEMP>/.my-friday-694dfed48322c96b.json (removed after success)
+- temporary support <TEMP>/recover/.my-friday-694dfed48322c96b-runtime (removed after success)
+- temporary support <TEMP>/recover/.my-friday-694dfed48322c96b-memory (removed after success)
+- temporary support <TEMP>/.my-friday-reservation-0f9c1361f40a4566 (removed after success)
+- temporary support <TEMP>/.my-friday-reservation-0540bd94249690ff (removed after success)
+- file runtime:.my-friday/manifest.json mode 0600 sha256 1f9e6f5952e7b336096c91512e5b0e3804597db419ace43ed610afaf7d57c765
 - file runtime:.my-friday/schemas/assistant-profile.v1.schema.json mode 0600 sha256 620d89690ed1f5ba4ff81947c6fe82d5021d215aabb8b37eeb52c9fd64391c33
 - file runtime:.my-friday/schemas/repository-manifest.v1.schema.json mode 0600 sha256 144eee2176933a116d0e844f1f8695e3a5bf68bee8561f108abd2caf6aa0a0a4
 - file runtime:AGENTS.md mode 0600 sha256 c231fcdf65c9a74414a904e46fe5982ff8adc615ded56160ec0165bd8d194a1f
 - file runtime:README.md mode 0600 sha256 ae4bc7f314b39f612b0d54089bee9938569a60c1183b34ffe9b8e59441ed7c15
-- file runtime:assistant/profile.json mode 0600 sha256 e94e0d9138796a935c9daf68225290c1816a282aa0bbc920fbd56000986f44dd
+- file runtime:assistant/profile.json mode 0600 sha256 14f3874ab376ba2f2bd4db8dd71f8e8b7c083dbd2b95cc02b206779adf92d301
 - file runtime:skills/.gitkeep mode 0600 sha256 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
-- file memory:.my-friday/manifest.json mode 0600 sha256 c514ce54f058e98474a3f965c468baaace6ac92304cf2f1a5c81c9a2fbab1239
+- file memory:.my-friday/manifest.json mode 0600 sha256 c16bd64526810e2a731b2f216668c3629534f2120103348ee053839f509cc358
 - file memory:.my-friday/schemas/repository-manifest.v1.schema.json mode 0600 sha256 144eee2176933a116d0e844f1f8695e3a5bf68bee8561f108abd2caf6aa0a0a4
 - file memory:AGENTS.md mode 0600 sha256 333351f3ba54ce1fa9bc3d0c61568a55b0e781ea1b800b2339c014897aae4c08
 - file memory:README.md mode 0600 sha256 1595391140014536173f2c61e3e118279af0197fed0d241b76f63937b2fddfde
@@ -85,12 +85,12 @@ Promoted runtime
 Promoted memory
 Verified
 Step 7 of 7: Recovery required
-Plan: 9166b0ee511ee1f7a7a43bb05a2dd9eb3c1922fe97daf83462375cc55a632c95
+Plan: 694dfed48322c96b421f723b810daa1190149d4b653cf5d06206c10c38f85a66
 Error: injected evidence failure at verified
 Completed phase: see status lines above
 Retained phase: verified
-Recovery command: my-friday recover --transaction <TEMP>/.my-friday-9166b0ee511ee1f7.json
+Recovery command: my-friday recover --transaction <TEMP>/.my-friday-694dfed48322c96b.json
 
 --- next invocation ---
-$ my-friday recover --transaction <TEMP>/.my-friday-9166b0ee511ee1f7.json
+$ my-friday recover --transaction <TEMP>/.my-friday-694dfed48322c96b.json
 Recovered and verified repository pair
