@@ -31,6 +31,8 @@ type CreationPlan struct {
 	Files               []File
 	Actions             []string
 	NegativeActions     []string
+	MissingParents      []string
+	SupportPaths        []string
 	PlanID              string
 }
 
@@ -57,6 +59,7 @@ func Build(p profile.Profile, runtimePath, memoryPath string) (CreationPlan, err
 	aid := "asst-" + hex.EncodeToString(aidHash[:16])
 	p.AssistantID = aid
 	pl := CreationPlan{ContractVersion: 1, ToolContractVersion: 1, AssistantID: aid, Profile: p, Targets: Targets{r, m}, NegativeActions: []string{"No global installation", "No network or hosted account setup", "No secrets or imported private content", "No commits or remotes"}}
+	pl.MissingParents = unique(append(missing(filepath.Dir(r)), missing(filepath.Dir(m))...))
 	pl.Files = append(render("runtime", p), render("memory", p)...)
 	pl.Actions = []string{"create owner-only parent directories when missing", "reserve both canonical targets", "stage and validate runtime repository", "stage and validate memory repository", "initialize both repositories on unborn branch main with an empty Git template", "promote runtime repository", "promote memory repository", "validate the final pair and remove transaction support state"}
 	for _, f := range pl.Files {
@@ -70,15 +73,47 @@ func Build(p profile.Profile, runtimePath, memoryPath string) (CreationPlan, err
 		Targets                  Targets
 		Files                    []File
 		Actions, NegativeActions []string
-	}{1, 1, aid, p, pl.Targets, pl.Files, pl.Actions, pl.NegativeActions}
+		MissingParents           []string
+	}{1, 1, aid, p, pl.Targets, pl.Files, pl.Actions, pl.NegativeActions, pl.MissingParents}
 	b, _ := json.Marshal(basis)
 	h := sha256.Sum256(append([]byte("my-friday-plan-v1\x00"), b...))
 	pl.PlanID = hex.EncodeToString(h[:])
+	pl.SupportPaths = []string{filepath.Join(filepath.Dir(r), ".my-friday-"+pl.PlanID[:16]+".json"), filepath.Join(filepath.Dir(r), ".my-friday-"+pl.PlanID[:16]+"-runtime"), filepath.Join(filepath.Dir(m), ".my-friday-"+pl.PlanID[:16]+"-memory")}
 	return pl, nil
 }
 func nested(parent, child string) bool {
 	rel, err := filepath.Rel(parent, child)
 	return err == nil && rel != "." && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
+}
+func missing(path string) []string {
+	var reverse []string
+	for {
+		if _, err := os.Stat(path); err == nil {
+			break
+		}
+		reverse = append(reverse, path)
+		next := filepath.Dir(path)
+		if next == path {
+			break
+		}
+		path = next
+	}
+	out := make([]string, len(reverse))
+	for i := range reverse {
+		out[len(reverse)-1-i] = reverse[i]
+	}
+	return out
+}
+func unique(values []string) []string {
+	seen := map[string]bool{}
+	out := []string{}
+	for _, v := range values {
+		if !seen[v] {
+			seen[v] = true
+			out = append(out, v)
+		}
+	}
+	return out
 }
 func render(role string, p profile.Profile) []File {
 	manifest := struct {

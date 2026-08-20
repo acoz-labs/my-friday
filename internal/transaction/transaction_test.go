@@ -79,3 +79,21 @@ func TestEmptyShellModeRestoredOnRollback(t *testing.T) {
 		}
 	}
 }
+
+func TestMissingParentsRemovedOnRollback(t *testing.T) {
+	root := t.TempDir()
+	p, _ := profile.New("Friday", "", "Help", "balanced", "")
+	pl, _ := plan.Build(p, filepath.Join(root, "new", "pair", "runtime"), filepath.Join(root, "new", "pair", "memory"))
+	_, err := Execute(pl, func(phase string) error {
+		if phase == "staged" {
+			return os.ErrInvalid
+		}
+		return nil
+	})
+	if err == nil {
+		t.Fatal("expected failure")
+	}
+	if _, err = os.Stat(filepath.Join(root, "new")); !os.IsNotExist(err) {
+		t.Fatal("transaction-owned parent retained")
+	}
+}

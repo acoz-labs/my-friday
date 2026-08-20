@@ -15,6 +15,7 @@ type journal struct {
 	PlanID, Phase, Runtime, Memory, RuntimeStage, MemoryStage string
 	RuntimeExisted, MemoryExisted                             bool
 	RuntimeMode, MemoryMode                                   uint32
+	CreatedParents                                            []string
 }
 
 func Execute(pl plan.CreationPlan, fault Fault) (string, error) {
@@ -35,6 +36,21 @@ func Execute(pl plan.CreationPlan, fault Fault) (string, error) {
 		}
 	}
 	base := filepath.Dir(pl.Targets.Runtime)
+	var parents []string
+	for _, parent := range pl.MissingParents {
+		if _, err := os.Stat(parent); err == nil {
+			continue
+		} else if !os.IsNotExist(err) {
+			return "", err
+		}
+		if err := os.Mkdir(parent, 0700); err != nil {
+			return "", err
+		}
+		if err := os.Chmod(parent, 0700); err != nil {
+			return "", err
+		}
+		parents = append(parents, parent)
+	}
 	support := filepath.Join(base, ".my-friday-"+pl.PlanID[:16])
 	rExists, rMode := shellState(pl.Targets.Runtime)
 	mExists, mMode := shellState(pl.Targets.Memory)
@@ -43,12 +59,11 @@ func Execute(pl plan.CreationPlan, fault Fault) (string, error) {
 		RuntimeStage:   filepath.Join(filepath.Dir(pl.Targets.Runtime), ".my-friday-"+pl.PlanID[:16]+"-runtime"),
 		MemoryStage:    filepath.Join(filepath.Dir(pl.Targets.Memory), ".my-friday-"+pl.PlanID[:16]+"-memory"),
 		RuntimeExisted: rExists, MemoryExisted: mExists, RuntimeMode: uint32(rMode), MemoryMode: uint32(mMode),
+		CreatedParents: parents,
 	}
 	jp := support + ".json"
-	if err := os.MkdirAll(base, 0700); err != nil {
-		return "", err
-	}
-	if err := writeJournal(jp, j); err != nil {
+	if err := createJournal(jp, j); err != nil {
+		removeParents(parents)
 		return "", err
 	}
 	fail := func(phase string) error {
@@ -131,6 +146,7 @@ func rollback(jp string, j journal, cause error) error {
 		_ = os.MkdirAll(j.Memory, 0700)
 		_ = os.Chmod(j.Memory, os.FileMode(j.MemoryMode))
 	}
+	removeParents(j.CreatedParents)
 	return fmt.Errorf("creation failed and was rolled back: %w", cause)
 }
 
@@ -140,6 +156,28 @@ func shellState(path string) (bool, os.FileMode) {
 		return false, 0
 	}
 	return true, info.Mode().Perm()
+}
+
+func removeParents(paths []string) {
+	for i := len(paths) - 1; i >= 0; i-- {
+		_ = os.Remove(paths[i])
+	}
+}
+func createJournal(path string, j journal) error {
+	b, _ := json.Marshal(j)
+	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
+	if err != nil {
+		return fmt.Errorf("another creation owns the plan journal: %w", err)
+	}
+	if _, err = f.Write(b); err != nil {
+		_ = f.Close()
+		return err
+	}
+	if err = f.Sync(); err != nil {
+		_ = f.Close()
+		return err
+	}
+	return f.Close()
 }
 
 func Recover(journalPath string) error {
@@ -154,6 +192,28 @@ func Recover(journalPath string) error {
 	if repository.ValidatePair(j.Runtime, j.Memory) == nil {
 		_ = os.RemoveAll(j.RuntimeStage)
 		_ = os.RemoveAll(j.MemoryStage)
+		return os.Remove(journalPath)
+	}
+	if repository.ValidatePair(j.Runtime, j.MemoryStage) == nil {
+		if err = promote(j.MemoryStage, j.Memory); err != nil {
+			return err
+		}
+		if err = repository.ValidatePair(j.Runtime, j.Memory); err != nil {
+			return err
+		}
+		_ = os.RemoveAll(j.RuntimeStage)
+		return os.Remove(journalPath)
+	}
+	if repository.ValidatePair(j.RuntimeStage, j.MemoryStage) == nil {
+		if err = promote(j.RuntimeStage, j.Runtime); err != nil {
+			return err
+		}
+		if err = promote(j.MemoryStage, j.Memory); err != nil {
+			return err
+		}
+		if err = repository.ValidatePair(j.Runtime, j.Memory); err != nil {
+			return err
+		}
 		return os.Remove(journalPath)
 	}
 	return fmt.Errorf("automatic recovery cannot prove a complete pair; inspect %s", journalPath)

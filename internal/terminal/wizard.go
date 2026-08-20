@@ -116,6 +116,12 @@ func Run(input io.Reader, output io.Writer, invocationDir string) (string, error
 	}
 	fmt.Fprintln(output, "Step 5 of 7: Preview")
 	fmt.Fprintf(output, "Plan: %s\nAssistant: %s\nRuntime: %s\nMemory: %s\n", pl.PlanID, pl.AssistantID, runtime, memory)
+	for _, parent := range pl.MissingParents {
+		fmt.Fprintln(output, "- create parent", parent, "mode 0700")
+	}
+	for _, support := range pl.SupportPaths {
+		fmt.Fprintln(output, "- temporary support", support, "(removed after success)")
+	}
 	for _, f := range pl.Files {
 		fmt.Fprintf(output, "- file %s:%s mode %04o sha256 %s\n", f.Role, f.Path, f.Mode, f.SHA256)
 	}
