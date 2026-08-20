@@ -1,0 +1,12 @@
+Journaled
+Reserved
+Staged runtime
+Staged memory
+Validated
+Promoted runtime
+Promoted memory
+Verified
+Interrupted creation found at phase verified.
+Recovery command: my-friday recover --transaction <TEMP>/.my-friday-2a089db44a8cbfa2.json
+Recovered and verified repository pair
+Error: <nil>

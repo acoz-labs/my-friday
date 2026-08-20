@@ -1,0 +1,16 @@
+Step 1 of 7: Scope
+My Friday creates two separate local Git repositories. It does not install Codex, use the network, access secrets, import content, create commits, or configure remotes.
+Press Return to continue [b back; q quit]: Step 2 of 7: Identity
+Assistant display name [b back; q quit]: How should the assistant address you? (optional) [b back; q quit]: Assistant purpose [b back; q quit]: Step 3 of 7: Communication style
+1 Balanced (default)
+2 Concise
+3 Conversational
+4 Custom
+Choose 1-4 [b back; q quit]: Step 4 of 7: Locations
+1 One parent with stable names (default)
+2 Two separate targets
+Choose 1-2 [b back; q quit]: Runtime target [b back; q quit]: Memory target [b back; q quit]: Invalid input: runtime and memory targets must be distinct and non-nested. Try again.
+Step 4 of 7: Locations
+1 One parent with stable names (default)
+2 Two separate targets
+Choose 1-2 [b back; q quit]: No changes made

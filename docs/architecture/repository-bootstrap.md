@@ -4,8 +4,9 @@
 
 `my-friday init` gathers identity, communication style, and one parent
 location; defaults create `my-friday-runtime` and `my-friday-memory`. The
-line-oriented preview declares the plan ID, assistant ID, normalized absolute
-targets, generated files, and prohibited adjacent effects. Only exact `Create`
+line-oriented preview declares the plan ID, assistant ID, normalized identity
+and style, entered and canonical targets, initial target states and mode
+normalization, symlink mappings, generated files, and prohibited adjacent effects. Only exact `Create`
 mutates disk; every other confirmation input exits.
 
 Profile text is trimmed, NFC-normalized, screened for control/format/line
@@ -18,7 +19,7 @@ or tool policy.
 
 Both targets are owner-only Git repositories on unborn branch `main`, with no
 commit or remote. Git initialization supplies a tool-owned empty template and
-writes one deterministic local configuration: repository format 0, file mode
+writes one deterministic owner-only `.git` tree and local configuration: repository format 0, file mode
 tracking enabled, a non-bare repository, reflog updates enabled, and Git's
 ignore-case and precompose-Unicode switches disabled.
 Each `.my-friday/manifest.json` declares contract version 1, role, shared
@@ -57,7 +58,9 @@ plan-derived quarantine path and complete-tree proof. A pre-existing
 quarantine collision is preserved and blocks deletion. An authorized owned
 tree is then atomically renamed before recursive removal, preserving retry
 authority whether interruption occurs immediately before rename or after only
-part of the quarantined tree is deleted. Untouched pre-existing
+part of the quarantined tree is deleted. If both the original and authorized
+quarantine names are absent, deletion is complete and recovery continues,
+including restoration of an original empty shell. Untouched pre-existing
 empty shells remain original state. Recovery applies the same proof before
 every promotion, re-proves the promoted pair, and rejects support paths that do
 not derive from the stored original anchors and canonical targets. Marker removal and

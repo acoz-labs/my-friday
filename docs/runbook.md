@@ -22,6 +22,9 @@ plan-derived deletion path may briefly remain after interrupted recursive
 cleanup. The journal records its exact path and complete-tree proof before
 rename; rerunning the same command finishes only that authorized deletion. A
 pre-existing foreign collision is preserved and blocks cleanup.
+If both the original target and its journal-authorized deletion path are
+absent, cleanup had already completed; recovery continues and recreates an
+original empty shell with its recorded mode when required.
 
 A pair that still contains `.my-friday/creation-state.json` is incomplete even
 when its other files validate. Run the reported recovery command so cleanup can

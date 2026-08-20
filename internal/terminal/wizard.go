@@ -225,6 +225,9 @@ styleStep:
 		}
 		fmt.Fprintln(output, "Step 5 of 7: Preview")
 		fmt.Fprintf(output, "Plan: %s\nAssistant: %s\nRuntime entered: %s\nRuntime canonical: %s\nMemory entered: %s\nMemory canonical: %s\n", pl.PlanID, pl.AssistantID, runtimeValueOr(runtimeValue, parentValue, runtime), pl.Targets.Runtime, runtimeValueOr(memoryValue, parentValue, memory), pl.Targets.Memory)
+		fmt.Fprintf(output, "Normalized identity: %s\nNormalized address: %s\nNormalized purpose: %s\nNormalized style: %s\n", p.Identity.DisplayName, optionalPreview(p.Identity.AddressUserAs), p.Identity.Purpose, stylePreview(p))
+		printTargetPreview(output, "Runtime", runtime, pl.Targets.Runtime)
+		printTargetPreview(output, "Memory", memory, pl.Targets.Memory)
 		for _, parent := range pl.MissingParents {
 			fmt.Fprintln(output, "- create parent", parent, "mode 0700")
 		}
@@ -299,6 +302,34 @@ func runtimeValueOr(value, parent, fallback string) string {
 		return filepath.Join(parent, filepath.Base(fallback))
 	}
 	return fallback
+}
+func optionalPreview(value *string) string {
+	if value == nil {
+		return "(none)"
+	}
+	return *value
+}
+func stylePreview(p profile.Profile) string {
+	if p.Communication.CustomGuidance == nil {
+		return p.Communication.Preset
+	}
+	return p.Communication.Preset + ": " + *p.Communication.CustomGuidance
+}
+func printTargetPreview(w io.Writer, role, entered, canonical string) {
+	info, err := os.Lstat(canonical)
+	switch {
+	case os.IsNotExist(err):
+		fmt.Fprintf(w, "%s initial state: absent\n", role)
+	case err != nil:
+		fmt.Fprintf(w, "%s initial state: unavailable (%v)\n", role, err)
+	case info.IsDir() && info.Mode()&os.ModeSymlink == 0:
+		fmt.Fprintf(w, "%s initial state: empty directory mode %04o; will normalize to 0700\n", role, info.Mode().Perm())
+	default:
+		fmt.Fprintf(w, "%s initial state: collision (%s)\n", role, info.Mode().Type())
+	}
+	if filepath.Clean(entered) != canonical {
+		fmt.Fprintf(w, "%s symlink mapping: %s -> %s\n", role, filepath.Clean(entered), canonical)
+	}
 }
 func exit(w io.Writer) string { fmt.Fprintln(w, "No changes made"); return "Exit" }
 func resolve(value, cwd string) (string, error) {

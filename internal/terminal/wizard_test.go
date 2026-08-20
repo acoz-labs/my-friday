@@ -85,6 +85,37 @@ func TestExplicitCreate(t *testing.T) {
 			t.Fatalf("missing live status %q\n%s", status, out.String())
 		}
 	}
+	for _, fact := range []string{"Normalized identity: Friday", "Normalized style: concise", "Runtime initial state: absent", "Memory initial state: absent"} {
+		if !strings.Contains(out.String(), fact) {
+			t.Fatalf("missing preview fact %q\n%s", fact, out.String())
+		}
+	}
+}
+
+func TestPreviewShowsModeNormalizationAndSymlinkMapping(t *testing.T) {
+	root := t.TempDir()
+	realParent := filepath.Join(root, "real")
+	if err := os.Mkdir(realParent, 0700); err != nil {
+		t.Fatal(err)
+	}
+	linkParent := filepath.Join(root, "linked")
+	if err := os.Symlink(realParent, linkParent); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(filepath.Join(realParent, "my-friday-runtime"), 0750); err != nil {
+		t.Fatal(err)
+	}
+	in := strings.NewReader("\nFriday\n\nHelp\n\n\n" + linkParent + "\n\n")
+	var out bytes.Buffer
+	result, err := Run(in, &out, root)
+	if err != nil || result != "Exit" {
+		t.Fatalf("result=%s err=%v\n%s", result, err, out.String())
+	}
+	for _, fact := range []string{"Runtime initial state: empty directory mode 0750; will normalize to 0700", "Runtime symlink mapping:", linkParent, realParent} {
+		if !strings.Contains(out.String(), fact) {
+			t.Fatalf("missing preview fact %q\n%s", fact, out.String())
+		}
+	}
 }
 
 func TestAlreadyCompleteIsSeparateNoWriteResult(t *testing.T) {

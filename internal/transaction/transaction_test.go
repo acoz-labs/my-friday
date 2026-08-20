@@ -505,6 +505,33 @@ func TestAuthorizedDeletionRetryCompletesRenameBoundary(t *testing.T) {
 	}
 }
 
+func TestAuthorizedDeletionRetryCompletesAfterQuarantineRemoval(t *testing.T) {
+	pl := testPlan(t)
+	root := pl.Targets.Runtime
+	quarantine := root + ".my-friday-delete-" + pl.PlanID[:16]
+	j := journal{
+		PlanID: pl.PlanID, Runtime: root, Memory: pl.Targets.Memory,
+		RuntimeExisted: true, RuntimeMode: 0750,
+		RuntimeStage: pl.SupportPaths[1], MemoryStage: pl.SupportPaths[2],
+		Reservations: []string{}, Expected: map[string]map[string]string{"runtime": {}, "memory": {}},
+		DeletionPaths:    map[string]string{root: quarantine},
+		DeletionExpected: map[string]map[string]string{root: {}},
+	}
+	if err := createJournal(pl.SupportPaths[0], j); err != nil {
+		t.Fatal(err)
+	}
+	if err := rollback(pl.SupportPaths[0], j, os.ErrInvalid); err == nil || !strings.Contains(err.Error(), "rolled back") {
+		t.Fatalf("rollback: %v", err)
+	}
+	info, err := os.Stat(root)
+	if err != nil || info.Mode().Perm() != 0750 {
+		t.Fatalf("shell not restored after completed deletion: info=%v err=%v", info, err)
+	}
+	if _, err := os.Lstat(pl.SupportPaths[0]); !os.IsNotExist(err) {
+		t.Fatal("journal retained after completed deletion retry")
+	}
+}
+
 func TestTransitionRevalidationPreservesTargetCreatedAfterPreview(t *testing.T) {
 	pl := testPlan(t)
 	_, err := Execute(pl, func(phase string) error {

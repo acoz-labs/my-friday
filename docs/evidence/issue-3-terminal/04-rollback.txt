@@ -1,0 +1,9 @@
+Preflight
+Journaled
+Reserved
+Staged runtime
+Staged memory
+Validated
+Step 7 of 7: Recovery required
+Error: creation failed and was rolled back: injected evidence failure
+Rollback restored the pre-run state.

@@ -511,7 +511,9 @@ func removeOwnedTree(journalPath string, j *journal, root string, expected map[s
 				return err
 			}
 		} else if os.IsNotExist(rootErr) && os.IsNotExist(deletingErr) {
-			return fmt.Errorf("authorized rollback quarantine is missing: %s", deleting)
+			// The durable authorization and absence of both names prove that a
+			// prior attempt completed the recursive deletion before interruption.
+			return nil
 		} else if rootErr != nil && !os.IsNotExist(rootErr) {
 			return rootErr
 		} else if deletingErr != nil && !os.IsNotExist(deletingErr) {

@@ -69,6 +69,18 @@ func CreateWithCheckpoint(pl plan.CreationPlan, runtime, memory string, checkpoi
 				return fmt.Errorf("git config %s %s: %w: %s", target.role, key, err, strings.TrimSpace(string(out)))
 			}
 		}
+		if err := filepath.WalkDir(filepath.Join(target.path, ".git"), func(path string, entry fs.DirEntry, walkErr error) error {
+			if walkErr != nil {
+				return walkErr
+			}
+			mode := os.FileMode(0600)
+			if entry.IsDir() {
+				mode = 0700
+			}
+			return os.Chmod(path, mode)
+		}); err != nil {
+			return fmt.Errorf("normalize Git metadata modes for %s: %w", target.role, err)
+		}
 		if checkpoint != nil {
 			if err := checkpoint(target.role + "-git"); err != nil {
 				return err
@@ -277,24 +289,32 @@ func exactFreshGitMetadata(root string) bool {
 	if len(seen) != len(expectedValues) {
 		return false
 	}
-	allowedPaths := map[string]bool{
-		".": true, "HEAD": true, "config": true, "branches": true, "hooks": true,
-		"info": true, "objects": true, "objects/info": true, "objects/pack": true,
-		"refs": true, "refs/heads": true, "refs/tags": true,
+	expectedPaths := map[string]struct {
+		dir  bool
+		mode fs.FileMode
+	}{
+		".": {true, 0700}, "HEAD": {false, 0600}, "config": {false, 0600},
+		"objects": {true, 0700}, "objects/info": {true, 0700}, "objects/pack": {true, 0700},
+		"refs": {true, 0700}, "refs/heads": {true, 0700}, "refs/tags": {true, 0700},
 	}
 	ok := true
+	seenPaths := map[string]bool{}
 	_ = filepath.WalkDir(filepath.Join(root, ".git"), func(path string, d fs.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			ok = false
 			return walkErr
 		}
 		rel, _ := filepath.Rel(filepath.Join(root, ".git"), path)
-		if !allowedPaths[filepath.ToSlash(rel)] {
+		rel = filepath.ToSlash(rel)
+		expected, exists := expectedPaths[rel]
+		info, infoErr := os.Lstat(path)
+		if !exists || infoErr != nil || info.Mode()&os.ModeSymlink != 0 || info.IsDir() != expected.dir || info.Mode().Perm() != expected.mode {
 			ok = false
 		}
+		seenPaths[rel] = true
 		return nil
 	})
-	return ok
+	return ok && len(seenPaths) == len(expectedPaths)
 }
 func noUnexpected(root string, pl plan.CreationPlan, role string, allowMarker bool) bool {
 	allowed := map[string]bool{".": true, ".git": true}

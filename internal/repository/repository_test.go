@@ -79,3 +79,32 @@ func TestOrdinaryValidationRoutesRetainedCreationMarkerToRecovery(t *testing.T) 
 		t.Fatalf("transaction validation: %v", err)
 	}
 }
+
+func TestExactBaselineRejectsGitTypeAndModeDrift(t *testing.T) {
+	root := t.TempDir()
+	p, _ := profile.New("Friday", "", "Help", "balanced", "")
+	pl, _ := plan.Build(p, filepath.Join(root, "runtime"), filepath.Join(root, "memory"))
+	if err := Create(pl, pl.Targets.Runtime, pl.Targets.Memory); err != nil {
+		t.Fatal(err)
+	}
+	if !ExactBaseline(pl, pl.Targets.Runtime, pl.Targets.Memory) {
+		t.Fatal("fresh repositories did not match exact baseline")
+	}
+	head := filepath.Join(pl.Targets.Runtime, ".git", "HEAD")
+	if err := os.Chmod(head, 0700); err != nil {
+		t.Fatal(err)
+	}
+	if ExactBaseline(pl, pl.Targets.Runtime, pl.Targets.Memory) {
+		t.Fatal("executable Git HEAD accepted as exact baseline")
+	}
+	if err := os.Chmod(head, 0600); err != nil {
+		t.Fatal(err)
+	}
+	hooks := filepath.Join(pl.Targets.Runtime, ".git", "hooks")
+	if err := os.Symlink("objects", hooks); err != nil {
+		t.Fatal(err)
+	}
+	if ExactBaseline(pl, pl.Targets.Runtime, pl.Targets.Memory) {
+		t.Fatal("symlinked Git directory accepted as exact baseline")
+	}
+}
