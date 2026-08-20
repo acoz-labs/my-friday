@@ -198,34 +198,40 @@ func TestPreMutationNavigationMatrixHasNoWrites(t *testing.T) {
 
 func TestBackRoutesCanContinueWithPreservedAndReplacementAnswers(t *testing.T) {
 	tests := map[string]struct {
-		input           func(root string) string
-		expectedRuntime func(root string) string
-		name, purpose   string
+		input                                    func(root string) string
+		expectedRuntime                          func(root string) string
+		expectedMemory                           func(root string) string
+		name, address, purpose, preset, guidance string
 	}{
-		"name-to-scope": {func(root string) string { return "\nb\n\nNáme\nChief\nSentinel purpose\n2\n\n" + root + "\nCreate\n" }, nil, "Náme", "Sentinel purpose"},
+		"name-to-scope": {func(root string) string { return "\nb\n\nNáme\nChief\nSentinel purpose\n2\n\n" + root + "\nCreate\n" }, nil, nil, "Náme", "Chief", "Sentinel purpose", "concise", ""},
 		"address-to-name": {func(root string) string {
 			return "\nOld\nb\nNáme\nChief\nSentinel purpose\n2\n\n" + root + "\nCreate\n"
-		}, nil, "Náme", "Sentinel purpose"},
+		}, nil, nil, "Náme", "Chief", "Sentinel purpose", "concise", ""},
 		"purpose-to-address": {func(root string) string {
 			return "\nNáme\nOld title\nb\nChief\nSentinel purpose\n2\n\n" + root + "\nCreate\n"
-		}, nil, "Náme", "Sentinel purpose"},
+		}, nil, nil, "Náme", "Chief", "Sentinel purpose", "concise", ""},
 		"style-to-identity": {func(root string) string {
 			return "\nNáme\nChief\nSentinel purpose\nb\n\n\n\n2\n\n" + root + "\nCreate\n"
-		}, nil, "Náme", "Sentinel purpose"},
-		"locations-to-style":  {func(root string) string { return "\nNáme\nChief\nSentinel purpose\n2\nb\n\n\n" + root + "\nCreate\n" }, nil, "Náme", "Sentinel purpose"},
-		"parent-to-locations": {func(root string) string { return "\nNáme\nChief\nSentinel purpose\n2\n\nb\n1\n" + root + "\nCreate\n" }, nil, "Náme", "Sentinel purpose"},
+		}, nil, nil, "Náme", "Chief", "Sentinel purpose", "concise", ""},
+		"locations-to-style": {func(root string) string {
+			return "\nNáme\nChief\nSentinel purpose\n4\nSentinel guidance\nb\n\n\n\n" + root + "\nCreate\n"
+		}, nil, nil, "Náme", "Chief", "Sentinel purpose", "custom", "Sentinel guidance"},
+		"parent-to-locations": {func(root string) string { return "\nNáme\nChief\nSentinel purpose\n2\n\nb\n1\n" + root + "\nCreate\n" }, nil, nil, "Náme", "Chief", "Sentinel purpose", "concise", ""},
 		"confirmation-to-locations": {func(root string) string {
 			return "\nNáme\nChief\nSentinel purpose\n2\n\n" + root + "\nb\n\n\nCreate\n"
-		}, nil, "Náme", "Sentinel purpose"},
+		}, nil, nil, "Náme", "Chief", "Sentinel purpose", "concise", ""},
+		"confirmation-to-separate-locations": {func(root string) string {
+			return "\nNáme\nChief\nSentinel purpose\n2\n2\n" + filepath.Join(root, "runtime-sentinel") + "\n" + filepath.Join(root, "memory-sentinel") + "\nb\n\n\n\nCreate\n"
+		}, func(root string) string { return filepath.Join(root, "runtime-sentinel") }, func(root string) string { return filepath.Join(root, "memory-sentinel") }, "Náme", "Chief", "Sentinel purpose", "concise", ""},
 		"custom-to-style": {func(root string) string {
 			return "\nNáme\nChief\nSentinel purpose\n4\nb\n4\nSentinel guidance\n\n" + root + "\nCreate\n"
-		}, nil, "Náme", "Sentinel purpose"},
+		}, nil, nil, "Náme", "Chief", "Sentinel purpose", "custom", "Sentinel guidance"},
 		"runtime-to-location-mode": {func(root string) string {
 			return "\nNáme\nChief\nSentinel purpose\n2\n2\nb\n2\n" + filepath.Join(root, "runtime-sentinel") + "\n" + filepath.Join(root, "memory-sentinel") + "\nCreate\n"
-		}, func(root string) string { return filepath.Join(root, "runtime-sentinel") }, "Náme", "Sentinel purpose"},
+		}, func(root string) string { return filepath.Join(root, "runtime-sentinel") }, func(root string) string { return filepath.Join(root, "memory-sentinel") }, "Náme", "Chief", "Sentinel purpose", "concise", ""},
 		"memory-to-runtime": {func(root string) string {
 			return "\nNáme\nChief\nSentinel purpose\n2\n2\n" + filepath.Join(root, "old-runtime") + "\nb\n" + filepath.Join(root, "runtime-sentinel") + "\n" + filepath.Join(root, "memory-sentinel") + "\nCreate\n"
-		}, func(root string) string { return filepath.Join(root, "runtime-sentinel") }, "Náme", "Sentinel purpose"},
+		}, func(root string) string { return filepath.Join(root, "runtime-sentinel") }, func(root string) string { return filepath.Join(root, "memory-sentinel") }, "Náme", "Chief", "Sentinel purpose", "concise", ""},
 	}
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
@@ -236,8 +242,12 @@ func TestBackRoutesCanContinueWithPreservedAndReplacementAnswers(t *testing.T) {
 				t.Fatalf("result=%q err=%v\n%s", result, err, out.String())
 			}
 			runtimeRoot := filepath.Join(root, "my-friday-runtime")
+			memoryRoot := filepath.Join(root, "my-friday-memory")
 			if tc.expectedRuntime != nil {
 				runtimeRoot = tc.expectedRuntime(root)
+			}
+			if tc.expectedMemory != nil {
+				memoryRoot = tc.expectedMemory(root)
 			}
 			profileBytes, err := os.ReadFile(filepath.Join(runtimeRoot, "assistant", "profile.json"))
 			if err != nil {
@@ -245,15 +255,26 @@ func TestBackRoutesCanContinueWithPreservedAndReplacementAnswers(t *testing.T) {
 			}
 			var got struct {
 				Identity struct {
-					DisplayName string `json:"display_name"`
-					Purpose     string `json:"purpose"`
+					DisplayName   string  `json:"display_name"`
+					AddressUserAs *string `json:"address_user_as"`
+					Purpose       string  `json:"purpose"`
 				} `json:"identity"`
+				Communication struct {
+					Preset         string  `json:"preset"`
+					CustomGuidance *string `json:"custom_guidance"`
+				} `json:"communication"`
 			}
 			if err := json.Unmarshal(profileBytes, &got); err != nil {
 				t.Fatal(err)
 			}
-			if got.Identity.DisplayName != tc.name || got.Identity.Purpose != tc.purpose {
-				t.Fatalf("normalized answers not preserved/replaced: %+v", got.Identity)
+			if got.Identity.DisplayName != tc.name || got.Identity.AddressUserAs == nil || *got.Identity.AddressUserAs != tc.address || got.Identity.Purpose != tc.purpose || got.Communication.Preset != tc.preset {
+				t.Fatalf("normalized answers not preserved/replaced: identity=%+v communication=%+v", got.Identity, got.Communication)
+			}
+			if tc.guidance == "" && got.Communication.CustomGuidance != nil || tc.guidance != "" && (got.Communication.CustomGuidance == nil || *got.Communication.CustomGuidance != tc.guidance) {
+				t.Fatalf("custom guidance nullability/value not preserved: %+v", got.Communication)
+			}
+			if _, err := os.Stat(filepath.Join(memoryRoot, ".my-friday", "manifest.json")); err != nil {
+				t.Fatalf("memory target not preserved/replaced at %s: %v", memoryRoot, err)
 			}
 			if !strings.Contains(out.String(), "Step 5 of 7: Preview") || !strings.Contains(out.String(), "Normalized identity: "+tc.name) {
 				t.Fatalf("route did not continue through preview\n%s", out.String())
