@@ -236,3 +236,26 @@ func TestTransitionRevalidationPreservesTargetCreatedAfterPreview(t *testing.T) 
 		t.Fatal("foreign target was altered")
 	}
 }
+
+func TestInterruptedRecognizesOnlyMatchingPlanState(t *testing.T) {
+	pl := testPlan(t)
+	jp, runtimeStage, memoryStage, reservations, err := derivedPaths(pl.PlanID, pl.Targets.Runtime, pl.Targets.Memory)
+	if err != nil {
+		t.Fatal(err)
+	}
+	j := journal{PlanID: pl.PlanID, Phase: "validated", Runtime: pl.Targets.Runtime, Memory: pl.Targets.Memory, RuntimeStage: runtimeStage, MemoryStage: memoryStage, Reservations: reservations, Expected: expectedFiles(pl)}
+	if err = createJournal(jp, j); err != nil {
+		t.Fatal(err)
+	}
+	gotPath, gotPhase, ok := Interrupted(pl)
+	if !ok || gotPath != jp || gotPhase != "validated" {
+		t.Fatalf("path=%s phase=%s ok=%v", gotPath, gotPhase, ok)
+	}
+	j.RuntimeStage = filepath.Join(t.TempDir(), "foreign")
+	if err = writeJournal(jp, j); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, ok = Interrupted(pl); ok {
+		t.Fatal("accepted mismatched support state")
+	}
+}

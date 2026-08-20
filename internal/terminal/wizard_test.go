@@ -2,6 +2,8 @@ package terminal
 
 import (
 	"bytes"
+	"encoding/json"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -23,6 +25,32 @@ func TestDefaultExitHasNoMutation(t *testing.T) {
 	}
 	if _, err := filepath.Glob(filepath.Join(root, "my-friday-*")); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestBackFromStylePreservesIdentityAnswers(t *testing.T) {
+	root := t.TempDir()
+	in := strings.NewReader("\nFriday\nBoss\nHelp\nb\n\n\n\n2\n\n" + root + "\nCreate\n")
+	var out bytes.Buffer
+	result, err := Run(in, &out, root)
+	if err != nil || result != "Complete" {
+		t.Fatalf("result=%s err=%v\n%s", result, err, out.String())
+	}
+	b, err := os.ReadFile(filepath.Join(root, "my-friday-runtime", "assistant", "profile.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got struct {
+		Identity struct {
+			DisplayName string `json:"display_name"`
+			Purpose     string `json:"purpose"`
+		} `json:"identity"`
+	}
+	if err = json.Unmarshal(b, &got); err != nil {
+		t.Fatal(err)
+	}
+	if got.Identity.DisplayName != "Friday" || got.Identity.Purpose != "Help" {
+		t.Fatalf("answers not preserved: %+v", got.Identity)
 	}
 }
 func TestExplicitCreate(t *testing.T) {

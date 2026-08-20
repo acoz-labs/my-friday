@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"runtime"
+	"strings"
 
 	"github.com/acoz-labs/my-friday/internal/repository"
 	"github.com/acoz-labs/my-friday/internal/terminal"
@@ -12,9 +13,34 @@ import (
 
 func main() {
 	if err := run(); err != nil {
-		fmt.Fprintln(os.Stderr, "Error:", err)
-		os.Exit(1)
+		code, stable := classifyError(os.Args, err)
+		fmt.Fprintf(os.Stderr, "Error [%s]: %v\n", stable, err)
+		os.Exit(code)
 	}
+}
+
+func classifyError(args []string, err error) (int, string) {
+	message := err.Error()
+	command := "init"
+	if len(args) > 1 {
+		command = args[1]
+	}
+	if strings.HasPrefix(message, "usage:") || strings.Contains(message, "supports macOS") || strings.Contains(message, "required") && command == "init" {
+		return 2, "input.invalid"
+	}
+	if command == "validate" {
+		return 6, "contract.validation"
+	}
+	if command == "recover" || strings.Contains(message, "recovery required") {
+		return 5, "transaction.recovery_required"
+	}
+	if strings.Contains(message, "rolled back") {
+		return 4, "transaction.rolled_back"
+	}
+	if strings.Contains(message, "target") || strings.Contains(message, "reserved") || strings.Contains(message, "path") {
+		return 3, "path.denied"
+	}
+	return 2, "input.invalid"
 }
 func run() error {
 	command := "init"

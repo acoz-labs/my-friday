@@ -178,6 +178,24 @@ func Execute(pl plan.CreationPlan, fault Fault) (string, error) {
 	return "Complete", nil
 }
 
+// Interrupted reports only transaction state whose identity and support paths
+// exactly match the supplied immutable plan.
+func Interrupted(pl plan.CreationPlan) (string, string, bool) {
+	journalPath, runtimeStage, memoryStage, reservations, err := derivedPaths(pl.PlanID, pl.Targets.Runtime, pl.Targets.Memory)
+	if err != nil {
+		return "", "", false
+	}
+	b, err := os.ReadFile(journalPath)
+	if err != nil {
+		return "", "", false
+	}
+	var j journal
+	if json.Unmarshal(b, &j) != nil || j.PlanID != pl.PlanID || j.Runtime != pl.Targets.Runtime || j.Memory != pl.Targets.Memory || j.RuntimeStage != runtimeStage || j.MemoryStage != memoryStage || !slices.Equal(j.Reservations, reservations) {
+		return "", "", false
+	}
+	return journalPath, j.Phase, true
+}
+
 func revalidate(j journal) error {
 	for _, reservation := range j.Reservations {
 		if err := revalidateReservation(reservation, j.PlanID); err != nil {

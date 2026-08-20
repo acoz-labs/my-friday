@@ -33,55 +33,69 @@ func Run(input io.Reader, output io.Writer, invocationDir string) (string, error
 	if v == "q" || v == "b" {
 		return exit(output), nil
 	}
+	values := []string{"", "", ""}
+identityStep:
 	fmt.Fprintln(output, "Step 2 of 7: Identity")
-	validatedText := func(prompt string, limit int, required bool) (string, bool, error) {
+	validatedText := func(prompt, current string, limit int, required bool) (string, string, error) {
 		for {
-			value, readErr := line(prompt)
+			displayPrompt := prompt
+			if current != "" {
+				displayPrompt += " (Return keeps current value)"
+			}
+			value, readErr := line(displayPrompt)
 			if readErr != nil && readErr != io.EOF {
-				return "", false, readErr
+				return "", "", readErr
 			}
 			if value == "q" {
-				return "", true, nil
+				return "", "quit", nil
 			}
 			if value == "b" {
-				fmt.Fprintln(output, "Back is unavailable at this field; enter a value or q to quit.")
-				continue
+				return "", "back", nil
+			}
+			if value == "" && current != "" {
+				value = current
 			}
 			normalized, validationErr := profile.Normalize(value, limit, required)
 			if validationErr != nil {
 				fmt.Fprintf(output, "Invalid input: %v. Try again.\n", validationErr)
 				continue
 			}
-			return normalized, false, nil
+			return normalized, "", nil
 		}
 	}
-	name, quit, e := validatedText("Assistant display name", 60, true)
-	if e != nil {
-		return "", e
+	prompts := []string{"Assistant display name", "How should the assistant address you? (optional)", "Assistant purpose"}
+	limits := []int{60, 60, 240}
+	required := []bool{true, false, true}
+	for field := 0; field < len(values); {
+		value, action, readErr := validatedText(prompts[field], values[field], limits[field], required[field])
+		if readErr != nil {
+			return "", readErr
+		}
+		if action == "quit" {
+			return exit(output), nil
+		}
+		if action == "back" {
+			if field == 0 {
+				return exit(output), nil
+			}
+			field--
+			continue
+		}
+		values[field] = value
+		field++
 	}
-	if quit {
-		return exit(output), nil
-	}
-	address, quit, e := validatedText("How should the assistant address you? (optional)", 60, false)
-	if e != nil {
-		return "", e
-	}
-	if quit {
-		return exit(output), nil
-	}
-	purpose, quit, e := validatedText("Assistant purpose", 240, true)
-	if e != nil {
-		return "", e
-	}
-	if quit {
-		return exit(output), nil
-	}
+	name, address, purpose := values[0], values[1], values[2]
+
+styleStep:
 	fmt.Fprintln(output, "Step 3 of 7: Communication style\n1 Balanced (default)\n2 Concise\n3 Conversational\n4 Custom")
 	preset := ""
 	for preset == "" {
 		choice, _ := line("Choose 1-4")
 		if choice == "q" {
 			return exit(output), nil
+		}
+		if choice == "b" {
+			goto identityStep
 		}
 		preset = map[string]string{"": "balanced", "1": "balanced", "2": "concise", "3": "conversational", "4": "custom"}[choice]
 		if preset == "" {
@@ -90,12 +104,16 @@ func Run(input io.Reader, output io.Writer, invocationDir string) (string, error
 	}
 	guidance := ""
 	if preset == "custom" {
-		guidance, quit, e = validatedText("Custom guidance", 240, true)
+		var action string
+		guidance, action, e = validatedText("Custom guidance", guidance, 240, true)
 		if e != nil {
 			return "", e
 		}
-		if quit {
+		if action == "quit" {
 			return exit(output), nil
+		}
+		if action == "back" {
+			goto styleStep
 		}
 	}
 	p, err := profile.New(name, address, purpose, preset, guidance)
@@ -107,6 +125,9 @@ func Run(input io.Reader, output io.Writer, invocationDir string) (string, error
 		locationMode, _ := line("Choose 1-2")
 		if locationMode == "q" {
 			return exit(output), nil
+		}
+		if locationMode == "b" {
+			goto styleStep
 		}
 		var runtime, memory string
 		if locationMode == "" || locationMode == "1" {
@@ -168,6 +189,18 @@ func Run(input io.Reader, output io.Writer, invocationDir string) (string, error
 		}
 		for _, a := range pl.NegativeActions {
 			fmt.Fprintln(output, "-", a)
+		}
+		if journalPath, phase, interrupted := transaction.Interrupted(pl); interrupted {
+			fmt.Fprintf(output, "Interrupted creation found at phase %s.\nRecovery command: my-friday recover --transaction %s\n", phase, journalPath)
+			recoverNow, _ := line("Type r to recover now; default Exit")
+			if recoverNow != "r" {
+				return exit(output), nil
+			}
+			if err := transaction.Recover(journalPath); err != nil {
+				return "", err
+			}
+			fmt.Fprintln(output, "Step 7 of 7: Result\nRecovered and verified")
+			return "Complete", nil
 		}
 		fmt.Fprintln(output, "Step 6 of 7: Creation and verification")
 		confirm, _ := line("Create these two repositories? [type Create; default Exit]")
