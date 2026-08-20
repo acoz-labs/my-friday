@@ -49,9 +49,12 @@ automatic completion cannot be proven. Rollback removes a promoted repository
 only after its marker and an exact snapshot of the complete staged tree,
 including Git configuration, refs, hooks, objects, file types, modes, and
 digests, prove transaction ownership; foreign or changed content is preserved
-with the journal. Recovery applies the same proof before every promotion,
-re-proves the promoted pair, and rejects support paths that do not derive from
-the stored original anchors and canonical targets. Marker removal and
+with the journal. An owned tree is atomically renamed to a plan-derived
+deletion path before recursive removal, preserving retry authority if cleanup
+is interrupted after deleting only part of the tree. Untouched pre-existing
+empty shells remain original state. Recovery applies the same proof before
+every promotion, re-proves the promoted pair, and rejects support paths that do
+not derive from the stored original anchors and canonical targets. Marker removal and
 reservation removal are separate durable, idempotent cleanup phases; original
 shells and empty owned parents are restored before support authority is
 removed. Use `my-friday recover --transaction <journal>`; recovery refuses

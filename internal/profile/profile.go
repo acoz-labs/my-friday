@@ -96,6 +96,9 @@ func Validate(p Profile) error {
 		return fmt.Errorf("purpose is not canonically normalized")
 	}
 	if p.Identity.AddressUserAs != nil {
+		if *p.Identity.AddressUserAs == "" {
+			return fmt.Errorf("form of address must be null or non-empty")
+		}
 		address, e := Normalize(*p.Identity.AddressUserAs, 60, false)
 		if e != nil || address != *p.Identity.AddressUserAs {
 			return fmt.Errorf("form of address is not canonically normalized")

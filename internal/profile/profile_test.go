@@ -33,3 +33,15 @@ func TestProfileRules(t *testing.T) {
 		t.Fatal("custom guidance required")
 	}
 }
+
+func TestValidateRejectsNonNullEmptyAddress(t *testing.T) {
+	p, err := New("Friday", "Boss", "Help", "balanced", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	empty := ""
+	p.Identity.AddressUserAs = &empty
+	if err := Validate(p); err == nil {
+		t.Fatal("non-null empty address must be rejected")
+	}
+}

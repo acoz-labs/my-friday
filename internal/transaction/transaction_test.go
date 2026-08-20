@@ -49,6 +49,28 @@ func TestExactRerunRejectsEvolvedGitMetadata(t *testing.T) {
 		t.Fatalf("result=%q err=%v", result, err)
 	}
 }
+
+func TestExactRerunRejectsChangedAllowedGitValueAndDirectory(t *testing.T) {
+	for _, mutate := range []func(plan.CreationPlan) error{
+		func(pl plan.CreationPlan) error {
+			return exec.Command("git", "-C", pl.Targets.Runtime, "config", "core.bare", "true").Run()
+		},
+		func(pl plan.CreationPlan) error {
+			return os.Mkdir(filepath.Join(pl.Targets.Runtime, ".git", "foreign-empty"), 0700)
+		},
+	} {
+		pl := testPlan(t)
+		if _, err := Execute(pl, nil); err != nil {
+			t.Fatal(err)
+		}
+		if err := mutate(pl); err != nil {
+			t.Fatal(err)
+		}
+		if result, err := Execute(pl, nil); err == nil || result == "Already complete" {
+			t.Fatalf("result=%q err=%v", result, err)
+		}
+	}
+}
 func TestFailureRollsBack(t *testing.T) {
 	pl := testPlan(t)
 	_, err := Execute(pl, func(phase string) error {
@@ -142,6 +164,78 @@ func TestEmptyShellModeRestoredOnRollback(t *testing.T) {
 		}
 		if info.Mode().Perm() != 0750 {
 			t.Fatalf("mode %o", info.Mode().Perm())
+		}
+	}
+}
+
+func TestUntouchedEmptyShellsAreOriginalStateAtEarlyFailure(t *testing.T) {
+	pl := testPlan(t)
+	for _, p := range []string{pl.Targets.Runtime, pl.Targets.Memory} {
+		if err := os.Mkdir(p, 0750); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Chmod(p, 0750); err != nil {
+			t.Fatal(err)
+		}
+	}
+	_, err := Execute(pl, func(phase string) error {
+		if phase == "journaled" {
+			return os.ErrInvalid
+		}
+		return nil
+	})
+	if err == nil || strings.Contains(err.Error(), "recovery required") {
+		t.Fatalf("expected clean rollback, got %v", err)
+	}
+	for _, p := range []string{pl.Targets.Runtime, pl.Targets.Memory} {
+		info, statErr := os.Stat(p)
+		if statErr != nil || info.Mode().Perm() != 0750 {
+			t.Fatalf("shell %s not preserved: info=%v err=%v", p, info, statErr)
+		}
+	}
+}
+
+func TestRecoverRollsBackPrePromotionState(t *testing.T) {
+	pl := testPlan(t)
+	_, err := Execute(pl, func(phase string) error {
+		if phase == "journaled" {
+			return os.ErrInvalid
+		}
+		return nil
+	})
+	if err == nil {
+		t.Fatal("expected injected failure")
+	}
+	// Recreate a crash-like journal with a marker-owned partial stage.
+	j := journal{
+		PlanID: pl.PlanID, Phase: "journaled", Runtime: pl.Targets.Runtime, Memory: pl.Targets.Memory,
+		RuntimeStage: pl.SupportPaths[1], MemoryStage: pl.SupportPaths[2],
+		RuntimeAnchor: existingAncestor(filepath.Dir(pl.Targets.Runtime)), MemoryAnchor: existingAncestor(filepath.Dir(pl.Targets.Memory)),
+		Reservations: pl.ReservationPaths, Expected: expectedFiles(pl),
+	}
+	if err := createJournal(pl.SupportPaths[0], j); err != nil {
+		t.Fatal(err)
+	}
+	for _, reservation := range j.Reservations {
+		if err := createReservation(reservation, pl.PlanID); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.MkdirAll(filepath.Join(j.RuntimeStage, filepath.Dir(ownershipMarker)), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(j.RuntimeStage, ownershipMarker), []byte(pl.PlanID+"\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(j.RuntimeStage, "partial"), []byte("owned"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := Recover(pl.SupportPaths[0]); err != nil {
+		t.Fatal(err)
+	}
+	for _, p := range append([]string{pl.SupportPaths[0], j.RuntimeStage}, j.Reservations...) {
+		if _, statErr := os.Lstat(p); !os.IsNotExist(statErr) {
+			t.Fatalf("recovery residue retained: %s", p)
 		}
 	}
 }

@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 
 	"github.com/acoz-labs/my-friday/internal/plan"
 	"github.com/acoz-labs/my-friday/internal/repository"
@@ -374,15 +375,18 @@ func writeJournal(path string, j journal) error {
 func rollback(jp string, j journal, cause error) error {
 	retained := false
 	removed := map[string]bool{}
-	for i, p := range []string{j.RuntimeStage, j.MemoryStage, j.Runtime, j.Memory} {
-		role := []string{"runtime", "memory", "runtime", "memory"}[i]
-		remove := removeOwnedTree
-		if i < 2 && j.Phase == "stages-owned" {
-			remove = removeMarkedStage
-		}
-		if err := remove(p, j.PlanID, j.Expected[role]); err != nil {
+	for _, p := range []string{j.RuntimeStage, j.MemoryStage} {
+		if err := removeMarkedStage(p, j.PlanID, nil); err != nil {
 			retained = true
-		} else {
+		}
+	}
+	for i, p := range []string{j.Runtime, j.Memory} {
+		role := []string{"runtime", "memory"}[i]
+		existed := []bool{j.RuntimeExisted, j.MemoryExisted}[i]
+		changed, err := removeFinalTarget(p, j.PlanID, j.Expected[role], existed)
+		if err != nil {
+			retained = true
+		} else if changed {
 			removed[p] = true
 		}
 	}
@@ -418,6 +422,26 @@ func rollback(jp string, j journal, cause error) error {
 	return fmt.Errorf("creation failed and was rolled back: %w", cause)
 }
 
+func removeFinalTarget(root, planID string, expected map[string]string, existed bool) (bool, error) {
+	if _, err := os.Lstat(root); os.IsNotExist(err) {
+		return false, nil
+	}
+	if marker, err := os.ReadFile(filepath.Join(root, ownershipMarker)); err == nil && string(marker) == planID+"\n" {
+		return true, removeOwnedTree(root, planID, expected)
+	}
+	if existed {
+		info, err := os.Lstat(root)
+		if err != nil || !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
+			return false, fmt.Errorf("original empty shell changed: %s", root)
+		}
+		entries, err := os.ReadDir(root)
+		if err == nil && len(entries) == 0 {
+			return false, nil
+		}
+	}
+	return false, fmt.Errorf("foreign or changed target prevents rollback: %s", root)
+}
+
 func restoreShell(path string, mode os.FileMode) error {
 	if err := os.Mkdir(path, 0700); err != nil && !os.IsExist(err) {
 		return err
@@ -449,6 +473,18 @@ func removeOwnedMarkerIfPresent(root, planID string) error {
 }
 
 func removeOwnedTree(root, planID string, expected map[string]string) error {
+	deleting := root + ".my-friday-delete-" + planID[:16]
+	if _, err := os.Lstat(deleting); err == nil {
+		if _, rootErr := os.Lstat(root); !os.IsNotExist(rootErr) {
+			return fmt.Errorf("rollback deletion identity is ambiguous: %s", root)
+		}
+		if err := os.RemoveAll(deleting); err != nil {
+			return err
+		}
+		return syncDir(filepath.Dir(deleting))
+	} else if !os.IsNotExist(err) {
+		return err
+	}
 	if _, err := os.Lstat(root); os.IsNotExist(err) {
 		return nil
 	}
@@ -463,13 +499,32 @@ func removeOwnedTree(root, planID string, expected map[string]string) error {
 	if !mapsEqual(actual, expected) {
 		return fmt.Errorf("foreign or changed content prevents rollback: %s", root)
 	}
-	if err := removeOwnedMarker(root, planID); err != nil {
+	// The atomic rename is the durable deletion-authority transition. A retry
+	// may finish removing this derived path even if recursive deletion stopped
+	// after removing the marker or part of the tree.
+	if err := os.Rename(root, deleting); err != nil {
 		return err
 	}
-	return os.RemoveAll(root)
+	if err := syncDir(filepath.Dir(root)); err != nil {
+		return err
+	}
+	if err := os.RemoveAll(deleting); err != nil {
+		return err
+	}
+	return syncDir(filepath.Dir(deleting))
 }
 
 func removeMarkedStage(root, planID string, _ map[string]string) error {
+	deleting := root + ".my-friday-delete-" + planID[:16]
+	if _, err := os.Lstat(deleting); err == nil {
+		if _, rootErr := os.Lstat(root); !os.IsNotExist(rootErr) {
+			return fmt.Errorf("stage deletion identity is ambiguous: %s", root)
+		}
+		if err := os.RemoveAll(deleting); err != nil {
+			return err
+		}
+		return syncDir(filepath.Dir(deleting))
+	}
 	if _, err := os.Lstat(root); os.IsNotExist(err) {
 		return nil
 	}
@@ -477,7 +532,13 @@ func removeMarkedStage(root, planID string, _ map[string]string) error {
 	if err != nil || string(marker) != planID+"\n" {
 		return fmt.Errorf("stage ownership marker missing or changed: %s", root)
 	}
-	if err := os.RemoveAll(root); err != nil {
+	if err := os.Rename(root, deleting); err != nil {
+		return err
+	}
+	if err := syncDir(filepath.Dir(root)); err != nil {
+		return err
+	}
+	if err := os.RemoveAll(deleting); err != nil {
 		return err
 	}
 	return syncDir(filepath.Dir(root))
@@ -698,6 +759,13 @@ func Recover(journalPath string) error {
 			}
 		}
 		return finishRecovery(journalPath, j)
+	}
+	if j.Phase == "journaled" || j.Phase == "stages-owned" {
+		err := rollback(journalPath, j, fmt.Errorf("interrupted before promotion"))
+		if strings.Contains(err.Error(), "was rolled back") {
+			return nil
+		}
+		return err
 	}
 	owned := func(root, role string) bool {
 		marker, markerErr := os.ReadFile(filepath.Join(root, ownershipMarker))

@@ -239,15 +239,28 @@ func exactBaseline(pl plan.CreationPlan, runtime, memory string, allowMarker boo
 }
 
 func exactFreshGitMetadata(root string) bool {
-	allowedKeys := map[string]bool{"core.repositoryformatversion": true, "core.filemode": true, "core.bare": true, "core.logallrefupdates": true, "core.ignorecase": true, "core.precomposeunicode": true}
-	out, err := exec.Command("git", "-C", root, "config", "--local", "--name-only", "--list").Output()
+	allowedValues := map[string]map[string]bool{
+		"core.repositoryformatversion": {"0": true},
+		"core.filemode":                {"true": true, "false": true},
+		"core.bare":                    {"false": true},
+		"core.logallrefupdates":        {"true": true},
+		"core.ignorecase":              {"true": true, "false": true},
+		"core.precomposeunicode":       {"true": true, "false": true},
+	}
+	out, err := exec.Command("git", "-C", root, "config", "--local", "--null", "--list").Output()
 	if err != nil {
 		return false
 	}
-	for _, key := range strings.Fields(string(out)) {
-		if !allowedKeys[key] {
+	for _, entry := range bytes.Split(bytes.TrimSuffix(out, []byte{0}), []byte{0}) {
+		parts := bytes.SplitN(entry, []byte{'\n'}, 2)
+		if len(parts) != 2 || !allowedValues[string(parts[0])][string(parts[1])] {
 			return false
 		}
+	}
+	allowedPaths := map[string]bool{
+		".": true, "HEAD": true, "config": true, "branches": true, "hooks": true,
+		"info": true, "objects": true, "objects/info": true, "objects/pack": true,
+		"refs": true, "refs/heads": true, "refs/tags": true,
 	}
 	ok := true
 	_ = filepath.WalkDir(filepath.Join(root, ".git"), func(path string, d fs.DirEntry, walkErr error) error {
@@ -255,11 +268,8 @@ func exactFreshGitMetadata(root string) bool {
 			ok = false
 			return walkErr
 		}
-		if d.IsDir() {
-			return nil
-		}
 		rel, _ := filepath.Rel(filepath.Join(root, ".git"), path)
-		if rel != "HEAD" && rel != "config" {
+		if !allowedPaths[filepath.ToSlash(rel)] {
 			ok = false
 		}
 		return nil

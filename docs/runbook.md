@@ -16,6 +16,11 @@ Success is either one valid paired baseline with no support journal, or the
 original absent/empty target state. Re-running recovery after validation is
 safe.
 
+Before promotion, recovery removes only marker-owned partial stages, restores
+untouched empty shells and owned parent state, and removes the journal last. A
+plan-derived deletion path may briefly remain after interrupted recursive
+cleanup; rerunning the same command finishes that already-authorized deletion.
+
 A pair that still contains `.my-friday/creation-state.json` is incomplete even
 when its other files validate. Run the reported recovery command so cleanup can
 re-prove the exact pair and remove markers, reservations, and the journal in
