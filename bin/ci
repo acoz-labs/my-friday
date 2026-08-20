@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+bin/validate-solution-plans
+
+if [[ -f package.json ]]; then
+  if command -v npm >/dev/null 2>&1; then
+    npm test
+  else
+    echo "package.json exists but npm is unavailable." >&2
+    exit 1
+  fi
+fi
+
+if [[ -f Gemfile ]]; then
+  if command -v bundle >/dev/null 2>&1; then
+    bundle exec rubocop || true
+    if [[ -f bin/rails ]]; then
+      bundle exec rails test
+    fi
+  else
+    echo "Gemfile exists but bundle is unavailable." >&2
+    exit 1
+  fi
+fi
+
+echo "bin/ci completed. Customize this script for project-specific checks."
