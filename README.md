@@ -9,9 +9,30 @@ The product is designed for people who want to understand, repair, move, and
 extend their assistant rather than depend on an opaque hosted service. Local
 operation is the baseline; hosted source control is optional.
 
-My Friday is currently in product shaping. The approved product direction and
-boundaries are documented in [docs/product.md](docs/product.md). Delivery issues
-track the selected and deliberately deferred outcomes.
+The first command previews and creates the two repositories locally. It does
+not install Codex, contact a hosted service, read secrets, import private
+content, create commits, or configure remotes.
+
+## Quick start
+
+The supported pilot environment is macOS 14 or later on Apple silicon, a local
+APFS volume, an interactive UTF-8 terminal, and Git 2.28 or later.
+
+```sh
+mise install
+go build -o my-friday ./cmd/my-friday
+./my-friday init
+```
+
+Review the complete plan, then type the case-sensitive word `Create` to write
+anything. Return at confirmation safely exits. Validate a generated pair with:
+
+```sh
+./my-friday validate /path/to/my-friday-runtime /path/to/my-friday-memory
+```
+
+The broader product direction and deferred outcomes remain in
+[docs/product.md](docs/product.md).
 
 ## Development
 

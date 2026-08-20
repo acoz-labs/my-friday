@@ -1,51 +1,31 @@
 # Architecture
 
-Describe the system that exists now. Design history belongs in linked issues
-and ADRs; this document and its capability pages describe the shipped contract.
+My Friday is a local native command that compiles normalized wizard answers
+into one deterministic creation plan, previews it, and creates two separate
+user-owned Git repositories. It has no service, database, network integration,
+global installer, or background process.
 
-## Purpose And Scope
+```mermaid
+flowchart LR
+  T[Line-oriented terminal] --> P[Profile and path validation]
+  P --> C[Canonical creation plan]
+  C --> V[Read-only preview]
+  C --> X[Recoverable transaction]
+  X --> R[Runtime repository]
+  X --> M[Memory repository]
+  R --> Z[Pair validator]
+  M --> Z
+```
 
-State what the system does, its primary actors, and the boundary of this
-overview.
+| Component | Responsibility | Boundary |
+|---|---|---|
+| `cmd/my-friday` and `internal/terminal` | Commands and sequential prompts | No repository policy |
+| `internal/profile` and `internal/plan` | NFC text, grapheme limits, IDs, files/actions, plan digest | Pure values; no I/O |
+| `internal/repository` | Render, empty-template Git init, schema/Git validation | Git is the only subprocess |
+| `internal/transaction` | Stage, validate, promote, roll back, recover | No overwrite of non-empty targets |
 
-## System Context
-
-Add the smallest useful Mermaid context or component diagram. Explain any
-boundary, dependency, or invariant that is not visible in the diagram.
-
-## Components And Boundaries
-
-| Component | Responsibility | Owns | Depends on |
-|---|---|---|---|
-| | | | |
-
-## Data And State
-
-Summarize the domain model, storage systems, ownership rules, background work,
-and cross-component consistency boundaries.
-
-## External Services
-
-Record durable integration contracts and failure boundaries without placing
-credentials, volatile inventory, or environment-specific secret values here.
-
-## Deployment Boundaries
-
-Describe which components are built and deployed together. Link
-`docs/deployment.md` for the release and rollback procedure.
-
-## Capability Architecture
-
-Keep an end-to-end capability vertical when it needs more detail than this
-overview can carry. Copy
-`docs/architecture/0000-capability-template.md` to a descriptive filename and
-remove sections that do not apply.
-
-| Capability | Documentation |
-|---|---|
-| | |
-
-## Decisions And Tradeoffs
-
-Link `docs/decisions/` for consequential decisions likely to be questioned
-later. Do not duplicate the complete decision history here.
+Runtime identity and governed memory share only a deterministic non-secret
+assistant identifier. Absolute paths and plan IDs are not written into either
+repository. Profile values remain JSON data and never enter generated Markdown
+policy. See [repository bootstrap](architecture/repository-bootstrap.md) and
+[ADR 0001](decisions/0001-native-bootstrap-command.md).

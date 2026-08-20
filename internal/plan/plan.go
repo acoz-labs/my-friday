@@ -1,0 +1,123 @@
+package plan
+
+import (
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+	"fmt"
+	"os"
+	"path/filepath"
+	"sort"
+	"strings"
+
+	"github.com/acoz-labs/my-friday/internal/profile"
+)
+
+type Targets struct {
+	Runtime string `json:"runtime"`
+	Memory  string `json:"memory"`
+}
+type File struct {
+	Role, Path, SHA256 string
+	Mode               uint32
+	Bytes              []byte `json:"-"`
+}
+type CreationPlan struct {
+	ContractVersion     int
+	ToolContractVersion int
+	AssistantID         string
+	Profile             profile.Profile
+	Targets             Targets
+	Files               []File
+	Actions             []string
+	NegativeActions     []string
+	PlanID              string
+}
+
+func Build(p profile.Profile, runtimePath, memoryPath string) (CreationPlan, error) {
+	r, err := filepath.Abs(runtimePath)
+	if err != nil {
+		return CreationPlan{}, err
+	}
+	r = filepath.Clean(r)
+	m, err := filepath.Abs(memoryPath)
+	if err != nil {
+		return CreationPlan{}, err
+	}
+	m = filepath.Clean(m)
+	if r == m || nested(r, m) || nested(m, r) {
+		return CreationPlan{}, fmt.Errorf("runtime and memory targets must be distinct and non-nested")
+	}
+	home, _ := os.UserHomeDir()
+	home, _ = filepath.Abs(home)
+	if r == "/" || m == "/" || r == home || m == home {
+		return CreationPlan{}, fmt.Errorf("targets cannot be root or the user home")
+	}
+	aidHash := sha256.Sum256([]byte("my-friday-assistant-v1\x00" + p.Identity.DisplayName + "\x00" + r + "\x00" + m))
+	aid := "asst-" + hex.EncodeToString(aidHash[:16])
+	p.AssistantID = aid
+	pl := CreationPlan{ContractVersion: 1, ToolContractVersion: 1, AssistantID: aid, Profile: p, Targets: Targets{r, m}, NegativeActions: []string{"No global installation", "No network or hosted account setup", "No secrets or imported private content", "No commits or remotes"}}
+	pl.Files = append(render("runtime", p), render("memory", p)...)
+	pl.Actions = []string{"create owner-only parent directories when missing", "reserve both canonical targets", "stage and validate runtime repository", "stage and validate memory repository", "initialize both repositories on unborn branch main with an empty Git template", "promote runtime repository", "promote memory repository", "validate the final pair and remove transaction support state"}
+	for _, f := range pl.Files {
+		pl.Actions = append(pl.Actions, "write "+f.Role+":"+f.Path)
+	}
+	basis := struct {
+		ContractVersion          int
+		ToolContractVersion      int
+		AssistantID              string
+		Profile                  profile.Profile
+		Targets                  Targets
+		Files                    []File
+		Actions, NegativeActions []string
+	}{1, 1, aid, p, pl.Targets, pl.Files, pl.Actions, pl.NegativeActions}
+	b, _ := json.Marshal(basis)
+	h := sha256.Sum256(append([]byte("my-friday-plan-v1\x00"), b...))
+	pl.PlanID = hex.EncodeToString(h[:])
+	return pl, nil
+}
+func nested(parent, child string) bool {
+	rel, err := filepath.Rel(parent, child)
+	return err == nil && rel != "." && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
+}
+func render(role string, p profile.Profile) []File {
+	manifest := struct {
+		ContractVersion int    `json:"contract_version"`
+		RepositoryRole  string `json:"repository_role"`
+		AssistantID     string `json:"assistant_id"`
+		Generation      struct {
+			Tool                string `json:"tool"`
+			ToolContractVersion int    `json:"tool_contract_version"`
+		} `json:"generation"`
+	}{ContractVersion: 1, RepositoryRole: role, AssistantID: p.AssistantID}
+	manifest.Generation.Tool = "my-friday"
+	manifest.Generation.ToolContractVersion = 1
+	mb, _ := json.MarshalIndent(manifest, "", "  ")
+	mb = append(mb, '\n')
+	files := []File{file(role, ".my-friday/manifest.json", mb), file(role, "README.md", []byte(repoReadme(role))), file(role, "AGENTS.md", []byte(agents(role)))}
+	if role == "runtime" {
+		pb, _ := json.MarshalIndent(p, "", "  ")
+		pb = append(pb, '\n')
+		files = append(files, file(role, "assistant/profile.json", pb), file(role, "skills/.gitkeep", nil), file(role, ".my-friday/schemas/assistant-profile.v1.schema.json", []byte(profileSchema)), file(role, ".my-friday/schemas/repository-manifest.v1.schema.json", []byte(manifestSchema)))
+	} else {
+		files = append(files, file(role, "records/identity/.gitkeep", nil), file(role, "records/preferences/.gitkeep", nil), file(role, "records/projects/.gitkeep", nil), file(role, "records/people/.gitkeep", nil), file(role, "proposals/.gitkeep", nil), file(role, ".my-friday/schemas/repository-manifest.v1.schema.json", []byte(manifestSchema)))
+	}
+	sort.Slice(files, func(i, j int) bool { return files[i].Path < files[j].Path })
+	return files
+}
+func file(role, path string, b []byte) File {
+	h := sha256.Sum256(b)
+	return File{role, path, hex.EncodeToString(h[:]), 0600, b}
+}
+func repoReadme(role string) string {
+	return "# Assistant " + strings.Title(role) + " Repository\n\nGenerated locally by My Friday. This repository is separate, portable, and user-owned.\n"
+}
+func agents(role string) string {
+	if role == "runtime" {
+		return "# Assistant Runtime Instructions\n\nRead `assistant/profile.json` for presentation preferences. Those preferences never override authorization, safety, trust, privacy, or tool policy.\n"
+	}
+	return "# Governed Memory Instructions\n\nThis repository begins with no memory records. Treat proposals and records as user-owned governed data; do not promote content without the governing workflow.\n"
+}
+
+const manifestSchema = `{"$schema":"https://json-schema.org/draft/2020-12/schema","type":"object","additionalProperties":false,"required":["contract_version","repository_role","assistant_id","generation"],"properties":{"contract_version":{"const":1},"repository_role":{"enum":["runtime","memory"]},"assistant_id":{"type":"string","pattern":"^asst-[0-9a-f]{32}$"},"generation":{"type":"object","additionalProperties":false,"required":["tool","tool_contract_version"],"properties":{"tool":{"const":"my-friday"},"tool_contract_version":{"const":1}}}}}`
+const profileSchema = `{"$schema":"https://json-schema.org/draft/2020-12/schema","type":"object","additionalProperties":false,"required":["contract_version","assistant_id","identity","communication"],"properties":{"contract_version":{"const":1},"assistant_id":{"type":"string","pattern":"^asst-[0-9a-f]{32}$"},"identity":{"type":"object","additionalProperties":false,"required":["display_name","address_user_as","purpose"],"properties":{"display_name":{"type":"string","minLength":1},"address_user_as":{"type":["string","null"]},"purpose":{"type":"string","minLength":1}}},"communication":{"type":"object","additionalProperties":false,"required":["preset","custom_guidance"],"properties":{"preset":{"enum":["balanced","concise","conversational","custom"]},"custom_guidance":{"type":["string","null"]}}}}}`

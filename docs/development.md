@@ -12,8 +12,8 @@ If container support is not ready for this repo yet:
 bin/ci
 ```
 
-Document language runtimes, package managers, environment variables, and local
-service dependencies here as the project becomes concrete.
+My Friday uses Go 1.26.4, pinned by `mise.toml`; `go.mod` declares the module's
+language baseline. Install the exact host toolchain with `mise install`.
 
 When host-local language execution is supported, commit exact versions in a
 root `mise.toml` and install them with:
@@ -22,5 +22,12 @@ root `mise.toml` and install them with:
 mise install
 ```
 
-Container-only repositories may omit host runtime pins. Application packages
-remain owned by the ecosystem manifest and lockfile.
+The complete check runs solution-plan validation, formatting, vet, race-enabled
+tests, and a static Darwin/ARM64 build with `bin/ci`.
+
+`bin/container bin/ci` proves portable source compilation but cannot prove
+APFS, macOS permissions, terminal, or local Git-template behaviour. Run
+`bin/ci` natively on Apple silicon before review and artifact nomination.
+
+Focused commands are `go test ./...`, `go test -race ./...`, and
+`GOOS=darwin GOARCH=arm64 CGO_ENABLED=0 go build ./cmd/my-friday`.
