@@ -34,6 +34,7 @@ func Run(input io.Reader, output io.Writer, invocationDir string) (string, error
 		return exit(output), nil
 	}
 	values := []string{"", "", ""}
+	preset, guidance := "", ""
 identityStep:
 	fmt.Fprintln(output, "Step 2 of 7: Identity")
 	validatedText := func(prompt, current string, limit int, required bool) (string, string, error) {
@@ -88,8 +89,7 @@ identityStep:
 
 styleStep:
 	fmt.Fprintln(output, "Step 3 of 7: Communication style\n1 Balanced (default)\n2 Concise\n3 Conversational\n4 Custom")
-	preset := ""
-	for preset == "" {
+	for {
 		choice, _ := line("Choose 1-4")
 		if choice == "q" {
 			return exit(output), nil
@@ -97,12 +97,20 @@ styleStep:
 		if choice == "b" {
 			goto identityStep
 		}
-		preset = map[string]string{"": "balanced", "1": "balanced", "2": "concise", "3": "conversational", "4": "custom"}[choice]
-		if preset == "" {
-			fmt.Fprintln(output, "Invalid input: choose 1, 2, 3, or 4. Try again.")
+		if choice == "" && preset != "" {
+			break
 		}
+		selected := map[string]string{"": "balanced", "1": "balanced", "2": "concise", "3": "conversational", "4": "custom"}[choice]
+		if selected == "" {
+			fmt.Fprintln(output, "Invalid input: choose 1, 2, 3, or 4. Try again.")
+			continue
+		}
+		preset = selected
+		if preset != "custom" {
+			guidance = ""
+		}
+		break
 	}
-	guidance := ""
 	if preset == "custom" {
 		var action string
 		guidance, action, e = validatedText("Custom guidance", guidance, 240, true)
@@ -158,37 +166,43 @@ styleStep:
 			}
 			runtime, memory = filepath.Join(parent, "my-friday-runtime"), filepath.Join(parent, "my-friday-memory")
 		} else if locationMode == "2" {
-			runtime, _ = line("Runtime target")
-			if runtime == "q" {
-				return exit(output), nil
+			for {
+				runtime, _ = line("Runtime target")
+				if runtime == "q" {
+					return exit(output), nil
+				}
+				if runtime == "b" {
+					locationMode = ""
+					break
+				}
+				if runtime == "" && runtimeValue != "" {
+					runtime = runtimeValue
+				}
+				runtimeValue = runtime
+				runtime, err = resolve(runtime, invocationDir)
+				if err != nil {
+					fmt.Fprintf(output, "Invalid input: %v. Try again.\n", err)
+					continue
+				}
+				memory, _ = line("Memory target")
+				if memory == "q" {
+					return exit(output), nil
+				}
+				if memory == "b" {
+					continue
+				}
+				if memory == "" && memoryValue != "" {
+					memory = memoryValue
+				}
+				memoryValue = memory
+				memory, err = resolve(memory, invocationDir)
+				if err != nil {
+					fmt.Fprintf(output, "Invalid input: %v. Try again.\n", err)
+					continue
+				}
+				break
 			}
-			if runtime == "b" {
-				locationMode = ""
-				continue
-			}
-			if runtime == "" && runtimeValue != "" {
-				runtime = runtimeValue
-			}
-			runtimeValue = runtime
-			runtime, err = resolve(runtime, invocationDir)
-			if err != nil {
-				fmt.Fprintf(output, "Invalid input: %v. Try again.\n", err)
-				continue
-			}
-			memory, _ = line("Memory target")
-			if memory == "q" {
-				return exit(output), nil
-			}
-			if memory == "b" {
-				continue
-			}
-			if memory == "" && memoryValue != "" {
-				memory = memoryValue
-			}
-			memoryValue = memory
-			memory, err = resolve(memory, invocationDir)
-			if err != nil {
-				fmt.Fprintf(output, "Invalid input: %v. Try again.\n", err)
+			if locationMode == "" {
 				continue
 			}
 		} else {
@@ -246,14 +260,23 @@ styleStep:
 			return exit(output), nil
 		}
 		fmt.Fprintln(output, "Preflight")
-		result, err := transaction.Execute(pl, nil)
+		result, err := transaction.ExecuteWithProgress(pl, nil, func(status string) { fmt.Fprintln(output, status) })
 		if err != nil {
+			fmt.Fprintln(output, "Step 7 of 7: Recovery required")
+			fmt.Fprintf(output, "Plan: %s\nError: %v\nCompleted phase: see status lines above\n", pl.PlanID, err)
+			if journalPath, phase, interrupted := transaction.Interrupted(pl); interrupted {
+				fmt.Fprintf(output, "Retained phase: %s\nRecovery command: my-friday recover --transaction %s\n", phase, journalPath)
+			} else {
+				fmt.Fprintln(output, "Rollback restored the pre-run state; correct the reported error and run init again.")
+			}
 			return "", err
 		}
-		fmt.Fprintln(output, "Reserved\nStaged runtime\nStaged memory\nValidated\nPromoted runtime\nPromoted memory\nVerified")
 		fmt.Fprintln(output, "Step 7 of 7: Result")
 		fmt.Fprintln(output, result)
 		fmt.Fprintf(output, "Runtime: %s mode 0700\nMemory: %s mode 0700\nAssistant: %s\nContracts: repository v1, tool v1\nGit: unborn main; no commits; no remotes\nNext: inspect the repositories, then use my-friday validate when needed\n", pl.Targets.Runtime, pl.Targets.Memory, pl.AssistantID)
+		for _, parent := range pl.MissingParents {
+			fmt.Fprintf(output, "Created parent: %s mode 0700\n", parent)
+		}
 		return result, nil
 	}
 }

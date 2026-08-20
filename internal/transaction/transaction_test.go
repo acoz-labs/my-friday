@@ -35,6 +35,20 @@ func TestExecuteAndExactRerun(t *testing.T) {
 		t.Fatalf("%s %v", result, err)
 	}
 }
+
+func TestExactRerunRejectsEvolvedGitMetadata(t *testing.T) {
+	pl := testPlan(t)
+	if _, err := Execute(pl, nil); err != nil {
+		t.Fatal(err)
+	}
+	cmd := exec.Command("git", "-C", pl.Targets.Runtime, "config", "test.evolved", "yes")
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("git config: %v: %s", err, out)
+	}
+	if result, err := Execute(pl, nil); err == nil || result == "Already complete" {
+		t.Fatalf("result=%q err=%v", result, err)
+	}
+}
 func TestFailureRollsBack(t *testing.T) {
 	pl := testPlan(t)
 	_, err := Execute(pl, func(phase string) error {
@@ -54,7 +68,7 @@ func TestFailureRollsBack(t *testing.T) {
 }
 
 func TestFaultMatrixRollsBackEveryPublishedTransition(t *testing.T) {
-	for _, phase := range []string{"journaled", "staged", "validated", "promoted-runtime", "promoted-memory"} {
+	for _, phase := range []string{"journaled", "runtime-files", "runtime-git", "memory-files", "memory-git", "staged", "validated", "promoted-runtime", "promoted-memory"} {
 		t.Run(phase, func(t *testing.T) {
 			pl := testPlan(t)
 			_, err := Execute(pl, func(got string) error {
@@ -70,6 +84,33 @@ func TestFaultMatrixRollsBackEveryPublishedTransition(t *testing.T) {
 				if _, statErr := os.Stat(target); !os.IsNotExist(statErr) {
 					t.Fatalf("target retained: %s", target)
 				}
+			}
+		})
+	}
+}
+
+func TestCleanupFaultsRecoverIdempotently(t *testing.T) {
+	for _, phase := range []string{"verified", "runtime-marker-removed", "memory-marker-removed", "reservations-removed"} {
+		t.Run(phase, func(t *testing.T) {
+			pl := testPlan(t)
+			_, err := Execute(pl, func(got string) error {
+				if got == phase {
+					return os.ErrInvalid
+				}
+				return nil
+			})
+			if err == nil {
+				t.Fatal("expected injected cleanup failure")
+			}
+			jp := pl.SupportPaths[0]
+			if err := Recover(jp); err != nil {
+				t.Fatalf("recover: %v", err)
+			}
+			if err := Recover(jp); err != nil {
+				t.Fatalf("second recover: %v", err)
+			}
+			if err := repository.ValidatePair(pl.Targets.Runtime, pl.Targets.Memory); err != nil {
+				t.Fatal(err)
 			}
 		})
 	}
@@ -141,6 +182,8 @@ func TestRecoverCompletesPartialPromotion(t *testing.T) {
 		t.Fatal(err)
 	}
 	j := journal{PlanID: pl.PlanID, Phase: "promoted-runtime", Runtime: pl.Targets.Runtime, Memory: pl.Targets.Memory, RuntimeStage: runtimeStage, MemoryStage: memoryStage}
+	j.RuntimeAnchor = existingAncestor(filepath.Dir(j.Runtime))
+	j.MemoryAnchor = existingAncestor(filepath.Dir(j.Memory))
 	j.Reservations = pl.ReservationPaths
 	for _, reservation := range j.Reservations {
 		if err := createReservation(reservation, pl.PlanID); err != nil {
@@ -237,6 +280,8 @@ func TestRecoverRejectsJournalSuppliedSupportPath(t *testing.T) {
 	}
 	j := journal{PlanID: pl.PlanID, Runtime: pl.Targets.Runtime, Memory: pl.Targets.Memory,
 		RuntimeStage: foreign, MemoryStage: foreign + "-memory"}
+	j.RuntimeAnchor = existingAncestor(filepath.Dir(j.Runtime))
+	j.MemoryAnchor = existingAncestor(filepath.Dir(j.Memory))
 	jp := filepath.Join(filepath.Dir(pl.Targets.Runtime), ".my-friday-"+pl.PlanID[:16]+".json")
 	if err := createJournal(jp, j); err != nil {
 		t.Fatal(err)
@@ -246,6 +291,18 @@ func TestRecoverRejectsJournalSuppliedSupportPath(t *testing.T) {
 	}
 	if _, err := os.Stat(foreign); err != nil {
 		t.Fatal("foreign path was altered")
+	}
+}
+
+func TestRecoverRejectsShortIdentityWithoutPanicking(t *testing.T) {
+	pl := testPlan(t)
+	jp := filepath.Join(filepath.Dir(pl.Targets.Runtime), ".my-friday-invalid.json")
+	j := journal{PlanID: "short", Runtime: pl.Targets.Runtime, Memory: pl.Targets.Memory, RuntimeAnchor: filepath.Dir(pl.Targets.Runtime), MemoryAnchor: filepath.Dir(pl.Targets.Memory)}
+	if err := createJournal(jp, j); err != nil {
+		t.Fatal(err)
+	}
+	if err := Recover(jp); err == nil || !strings.Contains(err.Error(), "invalid journal transaction identity") {
+		t.Fatalf("err=%v", err)
 	}
 }
 

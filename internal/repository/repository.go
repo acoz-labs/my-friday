@@ -16,6 +16,10 @@ import (
 )
 
 func Create(pl plan.CreationPlan, runtime, memory string) error {
+	return CreateWithCheckpoint(pl, runtime, memory, nil)
+}
+
+func CreateWithCheckpoint(pl plan.CreationPlan, runtime, memory string, checkpoint func(string) error) error {
 	for _, target := range []struct{ role, path string }{{"runtime", runtime}, {"memory", memory}} {
 		if err := os.MkdirAll(target.path, 0700); err != nil {
 			return err
@@ -35,6 +39,11 @@ func Create(pl plan.CreationPlan, runtime, memory string) error {
 				return err
 			}
 		}
+		if checkpoint != nil {
+			if err := checkpoint(target.role + "-files"); err != nil {
+				return err
+			}
+		}
 		tmpl, err := os.MkdirTemp(filepath.Dir(target.path), ".my-friday-empty-template-")
 		if err != nil {
 			return err
@@ -45,26 +54,31 @@ func Create(pl plan.CreationPlan, runtime, memory string) error {
 		if out, err := cmd.CombinedOutput(); err != nil {
 			return fmt.Errorf("git init %s: %w: %s", target.role, err, strings.TrimSpace(string(out)))
 		}
+		if checkpoint != nil {
+			if err := checkpoint(target.role + "-git"); err != nil {
+				return err
+			}
+		}
 	}
 	return nil
 }
 
 func ValidatePair(runtime, memory string) error {
-	_, _, err := validatePair(runtime, memory, false)
+	_, _, err := validatePair(runtime, memory, false, false)
 	return err
 }
 
 func ValidateFreshPair(runtime, memory string) error {
-	_, _, err := validatePair(runtime, memory, true)
+	_, _, err := validatePair(runtime, memory, true, true)
 	return err
 }
 
-func validatePair(runtime, memory string, fresh bool) (string, string, error) {
-	rid, err := validate(runtime, "runtime")
+func validatePair(runtime, memory string, fresh, allowMarker bool) (string, string, error) {
+	rid, err := validate(runtime, "runtime", allowMarker)
 	if err != nil {
 		return "", "", err
 	}
-	mid, err := validate(memory, "memory")
+	mid, err := validate(memory, "memory", allowMarker)
 	if err != nil {
 		return "", "", err
 	}
@@ -81,7 +95,7 @@ func validatePair(runtime, memory string, fresh bool) (string, string, error) {
 	}
 	return rid, mid, nil
 }
-func validate(root, role string) (string, error) {
+func validate(root, role string, allowMarker bool) (string, error) {
 	mb, err := os.ReadFile(filepath.Join(root, ".my-friday/manifest.json"))
 	if err != nil {
 		return "", err
@@ -126,22 +140,14 @@ func validate(root, role string) (string, error) {
 		if e = json.Unmarshal(pb, &p); e != nil || p.AssistantID != m.AssistantID {
 			return "", fmt.Errorf("profile assistant identifier mismatch")
 		}
-		address, guidance := "", ""
-		if p.Identity.AddressUserAs != nil {
-			address = *p.Identity.AddressUserAs
-		}
-		if p.Communication.CustomGuidance != nil {
-			guidance = *p.Communication.CustomGuidance
-		}
-		semantic, e := profile.New(p.Identity.DisplayName, address, p.Identity.Purpose, p.Communication.Preset, guidance)
-		if e != nil {
+		if e = profile.Validate(p); e != nil {
 			return "", fmt.Errorf("profile semantics: %w", e)
 		}
-		if semantic.Identity.DisplayName != p.Identity.DisplayName || semantic.Identity.Purpose != p.Identity.Purpose || pointerValue(semantic.Identity.AddressUserAs) != pointerValue(p.Identity.AddressUserAs) || pointerValue(semantic.Communication.CustomGuidance) != pointerValue(p.Communication.CustomGuidance) {
-			return "", fmt.Errorf("profile is not canonically normalized")
-		}
 	}
-	allowed := map[string]bool{"manifest.json": true, "schemas": true, "schemas/repository-manifest.v1.schema.json": true, "creation-state.json": true}
+	allowed := map[string]bool{"manifest.json": true, "schemas": true, "schemas/repository-manifest.v1.schema.json": true}
+	if allowMarker {
+		allowed["creation-state.json"] = true
+	}
 	if role == "runtime" {
 		allowed["schemas/assistant-profile.v1.schema.json"] = true
 	}
@@ -161,13 +167,6 @@ func validate(root, role string) (string, error) {
 		return "", err
 	}
 	return m.AssistantID, nil
-}
-
-func pointerValue(value *string) string {
-	if value == nil {
-		return ""
-	}
-	return *value
 }
 
 func validateGitRepository(root string) error {
@@ -236,7 +235,36 @@ func exactBaseline(pl plan.CreationPlan, runtime, memory string, allowMarker boo
 			return false
 		}
 	}
-	return noUnexpected(runtime, pl, "runtime", allowMarker) && noUnexpected(memory, pl, "memory", allowMarker)
+	return noUnexpected(runtime, pl, "runtime", allowMarker) && noUnexpected(memory, pl, "memory", allowMarker) && exactFreshGitMetadata(runtime) && exactFreshGitMetadata(memory)
+}
+
+func exactFreshGitMetadata(root string) bool {
+	allowedKeys := map[string]bool{"core.repositoryformatversion": true, "core.filemode": true, "core.bare": true, "core.logallrefupdates": true, "core.ignorecase": true, "core.precomposeunicode": true}
+	out, err := exec.Command("git", "-C", root, "config", "--local", "--name-only", "--list").Output()
+	if err != nil {
+		return false
+	}
+	for _, key := range strings.Fields(string(out)) {
+		if !allowedKeys[key] {
+			return false
+		}
+	}
+	ok := true
+	_ = filepath.WalkDir(filepath.Join(root, ".git"), func(path string, d fs.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			ok = false
+			return walkErr
+		}
+		if d.IsDir() {
+			return nil
+		}
+		rel, _ := filepath.Rel(filepath.Join(root, ".git"), path)
+		if rel != "HEAD" && rel != "config" {
+			ok = false
+		}
+		return nil
+	})
+	return ok
 }
 func noUnexpected(root string, pl plan.CreationPlan, role string, allowMarker bool) bool {
 	allowed := map[string]bool{".": true, ".git": true}

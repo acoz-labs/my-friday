@@ -16,6 +16,7 @@ import (
 type Fault func(string) error
 type journal struct {
 	PlanID, Phase, Runtime, Memory, RuntimeStage, MemoryStage string
+	RuntimeAnchor, MemoryAnchor                               string
 	RuntimeExisted, MemoryExisted                             bool
 	RuntimeMode, MemoryMode                                   uint32
 	CreatedParents                                            []string
@@ -56,6 +57,15 @@ func existingAncestor(path string) string {
 }
 
 func Execute(pl plan.CreationPlan, fault Fault) (string, error) {
+	return ExecuteWithProgress(pl, fault, nil)
+}
+
+func ExecuteWithProgress(pl plan.CreationPlan, fault Fault, progress func(string)) (string, error) {
+	emit := func(phase string) {
+		if progress != nil {
+			progress(phase)
+		}
+	}
 	if repository.ExactBaseline(pl, pl.Targets.Runtime, pl.Targets.Memory) {
 		return "Already complete", nil
 	}
@@ -83,19 +93,27 @@ func Execute(pl plan.CreationPlan, fault Fault) (string, error) {
 		Reservations:   pl.ReservationPaths,
 		Expected:       expectedFiles(pl),
 	}
+	j.RuntimeAnchor = existingAncestor(filepath.Dir(j.Runtime))
+	j.MemoryAnchor = existingAncestor(filepath.Dir(j.Memory))
 	jp := pl.SupportPaths[0]
 	if err := createJournal(jp, j); err != nil {
 		return "", err
 	}
+	emit("Journaled")
 	for _, reservation := range j.Reservations {
 		if err := createReservation(reservation, pl.PlanID); err != nil {
 			return "", rollback(jp, j, err)
 		}
 	}
+	emit("Reserved")
 	for _, parent := range pl.MissingParents {
 		if _, err := os.Stat(parent); err == nil {
 			continue
 		} else if !os.IsNotExist(err) {
+			return "", rollback(jp, j, err)
+		}
+		j.CreatedParents = append(j.CreatedParents, parent)
+		if err := writeJournal(jp, j); err != nil {
 			return "", rollback(jp, j, err)
 		}
 		if err := os.Mkdir(parent, 0700); err != nil {
@@ -104,8 +122,7 @@ func Execute(pl plan.CreationPlan, fault Fault) (string, error) {
 		if err := os.Chmod(parent, 0700); err != nil {
 			return "", rollback(jp, j, err)
 		}
-		j.CreatedParents = append(j.CreatedParents, parent)
-		if err := writeJournal(jp, j); err != nil {
+		if err := syncDir(filepath.Dir(parent)); err != nil {
 			return "", rollback(jp, j, err)
 		}
 	}
@@ -131,8 +148,15 @@ func Execute(pl plan.CreationPlan, fault Fault) (string, error) {
 		if err := os.WriteFile(filepath.Join(stage, ownershipMarker), []byte(pl.PlanID+"\n"), 0600); err != nil {
 			return "", rollback(jp, j, err)
 		}
+		if err := syncDir(filepath.Join(stage, ".my-friday")); err != nil {
+			return "", rollback(jp, j, err)
+		}
 	}
-	if err := repository.Create(pl, j.RuntimeStage, j.MemoryStage); err != nil {
+	j.Phase = "stages-owned"
+	if err := writeJournal(jp, j); err != nil {
+		return "", rollback(jp, j, err)
+	}
+	if err := repository.CreateWithCheckpoint(pl, j.RuntimeStage, j.MemoryStage, fail); err != nil {
 		return "", rollback(jp, j, err)
 	}
 	for role, stage := range map[string]string{"runtime": j.RuntimeStage, "memory": j.MemoryStage} {
@@ -146,6 +170,8 @@ func Execute(pl plan.CreationPlan, fault Fault) (string, error) {
 	if err := writeJournal(jp, j); err != nil {
 		return "", rollback(jp, j, err)
 	}
+	emit("Staged runtime")
+	emit("Staged memory")
 	if err := fail("staged"); err != nil {
 		return "", rollback(jp, j, err)
 	}
@@ -156,6 +182,7 @@ func Execute(pl plan.CreationPlan, fault Fault) (string, error) {
 	if err := writeJournal(jp, j); err != nil {
 		return "", rollback(jp, j, err)
 	}
+	emit("Validated")
 	if err := fail("validated"); err != nil {
 		return "", rollback(jp, j, err)
 	}
@@ -169,6 +196,7 @@ func Execute(pl plan.CreationPlan, fault Fault) (string, error) {
 	if err := writeJournal(jp, j); err != nil {
 		return "", rollback(jp, j, err)
 	}
+	emit("Promoted runtime")
 	if err := fail("promoted-runtime"); err != nil {
 		return "", rollback(jp, j, err)
 	}
@@ -182,6 +210,7 @@ func Execute(pl plan.CreationPlan, fault Fault) (string, error) {
 	if err := writeJournal(jp, j); err != nil {
 		return "", rollback(jp, j, err)
 	}
+	emit("Promoted memory")
 	if err := fail("promoted-memory"); err != nil {
 		return "", rollback(jp, j, err)
 	}
@@ -191,12 +220,34 @@ func Execute(pl plan.CreationPlan, fault Fault) (string, error) {
 	if !repository.ExactTransactionBaseline(pl, j.Runtime, j.Memory) {
 		return "", rollback(jp, j, fmt.Errorf("final repositories differ from the plan"))
 	}
-	for _, target := range []string{j.Runtime, j.Memory} {
+	emit("Verified")
+	j.Phase = "verified"
+	if err := writeJournal(jp, j); err != nil {
+		return "", err
+	}
+	if err := fail("verified"); err != nil {
+		return "", err
+	}
+	for i, target := range []string{j.Runtime, j.Memory} {
 		if err := removeOwnedMarker(target, j.PlanID); err != nil {
 			return "", err
 		}
+		if err := fail([]string{"runtime-marker-removed", "memory-marker-removed"}[i]); err != nil {
+			return "", err
+		}
+	}
+	j.Phase = "markers-removed"
+	if err := writeJournal(jp, j); err != nil {
+		return "", err
 	}
 	if err := removeReservations(j.Reservations, j.PlanID); err != nil {
+		return "", err
+	}
+	if err := fail("reservations-removed"); err != nil {
+		return "", err
+	}
+	j.Phase = "reservations-removed"
+	if err := writeJournal(jp, j); err != nil {
 		return "", err
 	}
 	if err := os.Remove(jp); err != nil {
@@ -205,6 +256,7 @@ func Execute(pl plan.CreationPlan, fault Fault) (string, error) {
 	if err := syncDir(filepath.Dir(jp)); err != nil {
 		return "", err
 	}
+	emit("Complete")
 	return "Complete", nil
 }
 
@@ -324,29 +376,56 @@ func rollback(jp string, j journal, cause error) error {
 	removed := map[string]bool{}
 	for i, p := range []string{j.RuntimeStage, j.MemoryStage, j.Runtime, j.Memory} {
 		role := []string{"runtime", "memory", "runtime", "memory"}[i]
-		if err := removeOwnedTree(p, j.PlanID, j.Expected[role]); err != nil {
+		remove := removeOwnedTree
+		if i < 2 && j.Phase == "stages-owned" {
+			remove = removeMarkedStage
+		}
+		if err := remove(p, j.PlanID, j.Expected[role]); err != nil {
 			retained = true
 		} else {
 			removed[p] = true
 		}
 	}
-	if !retained {
-		_ = os.Remove(jp)
-		_ = removeReservations(j.Reservations, j.PlanID)
-	}
 	if j.RuntimeExisted && removed[j.Runtime] {
-		_ = os.MkdirAll(j.Runtime, 0700)
-		_ = os.Chmod(j.Runtime, os.FileMode(j.RuntimeMode))
+		if err := restoreShell(j.Runtime, os.FileMode(j.RuntimeMode)); err != nil {
+			retained = true
+		}
 	}
 	if j.MemoryExisted && removed[j.Memory] {
-		_ = os.MkdirAll(j.Memory, 0700)
-		_ = os.Chmod(j.Memory, os.FileMode(j.MemoryMode))
+		if err := restoreShell(j.Memory, os.FileMode(j.MemoryMode)); err != nil {
+			retained = true
+		}
 	}
-	removeParents(j.CreatedParents)
+	if err := removeParents(j.CreatedParents); err != nil {
+		retained = true
+	}
+	if !retained {
+		if err := removeReservations(j.Reservations, j.PlanID); err != nil {
+			retained = true
+		}
+	}
+	if !retained {
+		if err := os.Remove(jp); err != nil && !os.IsNotExist(err) {
+			retained = true
+		}
+		if !retained {
+			retained = syncDir(filepath.Dir(jp)) != nil
+		}
+	}
 	if retained {
 		return fmt.Errorf("creation failed; recovery required and evidence retained: %w", cause)
 	}
 	return fmt.Errorf("creation failed and was rolled back: %w", cause)
+}
+
+func restoreShell(path string, mode os.FileMode) error {
+	if err := os.Mkdir(path, 0700); err != nil && !os.IsExist(err) {
+		return err
+	}
+	if err := os.Chmod(path, mode); err != nil {
+		return err
+	}
+	return syncDir(filepath.Dir(path))
 }
 
 func removeOwnedMarker(root, planID string) error {
@@ -355,6 +434,18 @@ func removeOwnedMarker(root, planID string) error {
 		return fmt.Errorf("transaction ownership marker missing or changed: %s", root)
 	}
 	return os.Remove(filepath.Join(root, ownershipMarker))
+}
+
+func removeOwnedMarkerIfPresent(root, planID string) error {
+	path := filepath.Join(root, ownershipMarker)
+	b, err := os.ReadFile(path)
+	if os.IsNotExist(err) {
+		return nil
+	}
+	if err != nil || string(b) != planID+"\n" {
+		return fmt.Errorf("transaction ownership marker changed: %s", root)
+	}
+	return os.Remove(path)
 }
 
 func removeOwnedTree(root, planID string, expected map[string]string) error {
@@ -376,6 +467,20 @@ func removeOwnedTree(root, planID string, expected map[string]string) error {
 		return err
 	}
 	return os.RemoveAll(root)
+}
+
+func removeMarkedStage(root, planID string, _ map[string]string) error {
+	if _, err := os.Lstat(root); os.IsNotExist(err) {
+		return nil
+	}
+	marker, err := os.ReadFile(filepath.Join(root, ownershipMarker))
+	if err != nil || string(marker) != planID+"\n" {
+		return fmt.Errorf("stage ownership marker missing or changed: %s", root)
+	}
+	if err := os.RemoveAll(root); err != nil {
+		return err
+	}
+	return syncDir(filepath.Dir(root))
 }
 
 func treeSnapshot(root string) (map[string]string, error) {
@@ -443,10 +548,16 @@ func shellState(path string) (bool, os.FileMode) {
 	return true, info.Mode().Perm()
 }
 
-func removeParents(paths []string) {
+func removeParents(paths []string) error {
 	for i := len(paths) - 1; i >= 0; i-- {
-		_ = os.Remove(paths[i])
+		if err := os.Remove(paths[i]); err != nil && !os.IsNotExist(err) {
+			return err
+		}
+		if err := syncDir(filepath.Dir(paths[i])); err != nil {
+			return err
+		}
 	}
+	return nil
 }
 func createJournal(path string, j journal) error {
 	b, _ := json.Marshal(j)
@@ -497,13 +608,18 @@ func syncDir(path string) error {
 func removeReservations(paths []string, planID string) error {
 	for _, path := range paths {
 		b, err := os.ReadFile(path)
+		if os.IsNotExist(err) {
+			continue
+		}
 		if err != nil {
 			return err
 		}
 		if string(b) != planID+"\n" {
 			return fmt.Errorf("reservation ownership changed: %s", path)
 		}
-		if err := os.Remove(path); err != nil {
+	}
+	for _, path := range paths {
+		if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
 			return err
 		}
 		if err := syncDir(filepath.Dir(path)); err != nil {
@@ -514,16 +630,28 @@ func removeReservations(paths []string, planID string) error {
 }
 
 func finishRecovery(journalPath string, j journal) error {
-	for _, target := range []string{j.Runtime, j.Memory} {
-		if err := removeOwnedMarker(target, j.PlanID); err != nil {
-			return err
+	if j.Phase != "markers-removed" && j.Phase != "reservations-removed" {
+		for _, target := range []string{j.Runtime, j.Memory} {
+			if err := removeOwnedMarkerIfPresent(target, j.PlanID); err != nil {
+				return err
+			}
+			if err := syncDir(filepath.Join(target, ".my-friday")); err != nil {
+				return err
+			}
 		}
-		if err := syncDir(filepath.Join(target, ".my-friday")); err != nil {
+		j.Phase = "markers-removed"
+		if err := writeJournal(journalPath, j); err != nil {
 			return err
 		}
 	}
-	if err := removeReservations(j.Reservations, j.PlanID); err != nil {
-		return err
+	if j.Phase != "reservations-removed" {
+		if err := removeReservations(j.Reservations, j.PlanID); err != nil {
+			return err
+		}
+		j.Phase = "reservations-removed"
+		if err := writeJournal(journalPath, j); err != nil {
+			return err
+		}
 	}
 	if err := os.Remove(journalPath); err != nil {
 		return err
@@ -543,18 +671,52 @@ func Recover(journalPath string) error {
 	if err = json.Unmarshal(b, &j); err != nil {
 		return err
 	}
+	if len(j.PlanID) < 16 || !filepath.IsAbs(j.Runtime) || !filepath.IsAbs(j.Memory) || !filepath.IsAbs(j.RuntimeAnchor) || !filepath.IsAbs(j.MemoryAnchor) {
+		return fmt.Errorf("invalid journal transaction identity")
+	}
 	runtimeStage := filepath.Join(filepath.Dir(j.Runtime), ".my-friday-"+j.PlanID[:16]+"-runtime")
 	memoryStage := filepath.Join(filepath.Dir(j.Memory), ".my-friday-"+j.PlanID[:16]+"-memory")
-	anchorRuntime := originalAnchor(filepath.Dir(j.Runtime), j.CreatedParents)
-	anchorMemory := originalAnchor(filepath.Dir(j.Memory), j.CreatedParents)
-	derivedJournal := filepath.Join(anchorRuntime, ".my-friday-"+j.PlanID[:16]+".json")
-	reservations := []string{reservationAt(anchorRuntime, j.Runtime), reservationAt(anchorMemory, j.Memory)}
+	derivedJournal := filepath.Join(j.RuntimeAnchor, ".my-friday-"+j.PlanID[:16]+".json")
+	reservations := []string{reservationAt(j.RuntimeAnchor, j.Runtime), reservationAt(j.MemoryAnchor, j.Memory)}
 	if filepath.Clean(journalPath) != derivedJournal || j.RuntimeStage != runtimeStage || j.MemoryStage != memoryStage || !slices.Equal(j.Reservations, reservations) {
 		return fmt.Errorf("journal support paths do not match canonical transaction identity")
 	}
+	if j.Phase == "reservations-removed" {
+		if err := os.Remove(journalPath); err != nil && !os.IsNotExist(err) {
+			return err
+		}
+		return syncDir(filepath.Dir(journalPath))
+	}
+	if j.Phase == "markers-removed" {
+		if err := repository.ValidateFreshPair(j.Runtime, j.Memory); err != nil {
+			return err
+		}
+		for root, role := range map[string]string{j.Runtime: "runtime", j.Memory: "memory"} {
+			actual, snapshotErr := treeSnapshot(root)
+			if snapshotErr != nil || !mapsEqual(actual, j.Expected[role]) {
+				return fmt.Errorf("completed repository changed during cleanup: %s", root)
+			}
+		}
+		return finishRecovery(journalPath, j)
+	}
 	owned := func(root, role string) bool {
+		marker, markerErr := os.ReadFile(filepath.Join(root, ownershipMarker))
 		actual, e := treeSnapshot(root)
-		return e == nil && mapsEqual(actual, j.Expected[role])
+		return markerErr == nil && string(marker) == j.PlanID+"\n" && e == nil && mapsEqual(actual, j.Expected[role])
+	}
+	cleanupOwned := func(root, role string) bool {
+		marker, markerErr := os.ReadFile(filepath.Join(root, ownershipMarker))
+		if markerErr != nil && !os.IsNotExist(markerErr) {
+			return false
+		}
+		if markerErr == nil && string(marker) != j.PlanID+"\n" {
+			return false
+		}
+		actual, snapshotErr := treeSnapshot(root)
+		return snapshotErr == nil && mapsEqual(actual, j.Expected[role])
+	}
+	if j.Phase == "verified" && repository.ValidateFreshPair(j.Runtime, j.Memory) == nil && cleanupOwned(j.Runtime, "runtime") && cleanupOwned(j.Memory, "memory") {
+		return finishRecovery(journalPath, j)
 	}
 	if repository.ValidateFreshPair(j.Runtime, j.Memory) == nil && owned(j.Runtime, "runtime") && owned(j.Memory, "memory") {
 		if err := removeOwnedTree(j.RuntimeStage, j.PlanID, j.Expected["runtime"]); err != nil {
@@ -569,7 +731,10 @@ func Recover(journalPath string) error {
 		if err = promote(j.MemoryStage, j.Memory); err != nil {
 			return err
 		}
-		if err = repository.ValidatePair(j.Runtime, j.Memory); err != nil {
+		if err = repository.ValidateFreshPair(j.Runtime, j.Memory); err != nil || !owned(j.Runtime, "runtime") || !owned(j.Memory, "memory") {
+			if err == nil {
+				err = fmt.Errorf("promoted pair no longer matches transaction snapshot")
+			}
 			return err
 		}
 		if err = removeOwnedTree(j.RuntimeStage, j.PlanID, j.Expected["runtime"]); err != nil {
@@ -584,24 +749,15 @@ func Recover(journalPath string) error {
 		if err = promote(j.MemoryStage, j.Memory); err != nil {
 			return err
 		}
-		if err = repository.ValidatePair(j.Runtime, j.Memory); err != nil {
+		if err = repository.ValidateFreshPair(j.Runtime, j.Memory); err != nil || !owned(j.Runtime, "runtime") || !owned(j.Memory, "memory") {
+			if err == nil {
+				err = fmt.Errorf("promoted pair no longer matches transaction snapshot")
+			}
 			return err
 		}
 		return finishRecovery(journalPath, j)
 	}
 	return fmt.Errorf("automatic recovery cannot prove a complete pair; inspect %s", journalPath)
-}
-
-func originalAnchor(path string, created []string) string {
-	owned := map[string]bool{}
-	for _, p := range created {
-		owned[filepath.Clean(p)] = true
-	}
-	path = filepath.Clean(path)
-	for owned[path] {
-		path = filepath.Dir(path)
-	}
-	return path
 }
 func reservationAt(anchor, target string) string {
 	h := sha256.Sum256([]byte(target))

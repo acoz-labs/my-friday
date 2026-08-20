@@ -81,3 +81,41 @@ func New(name, address, purpose, preset, guidance string) (Profile, error) {
 	}
 	return p, nil
 }
+
+// Validate verifies a decoded profile without collapsing null and empty.
+func Validate(p Profile) error {
+	if p.ContractVersion != 1 {
+		return fmt.Errorf("unsupported profile contract version")
+	}
+	name, err := Normalize(p.Identity.DisplayName, 60, true)
+	if err != nil || name != p.Identity.DisplayName {
+		return fmt.Errorf("display name is not canonically normalized")
+	}
+	purpose, err := Normalize(p.Identity.Purpose, 240, true)
+	if err != nil || purpose != p.Identity.Purpose {
+		return fmt.Errorf("purpose is not canonically normalized")
+	}
+	if p.Identity.AddressUserAs != nil {
+		address, e := Normalize(*p.Identity.AddressUserAs, 60, false)
+		if e != nil || address != *p.Identity.AddressUserAs {
+			return fmt.Errorf("form of address is not canonically normalized")
+		}
+	}
+	switch p.Communication.Preset {
+	case "balanced", "concise", "conversational":
+		if p.Communication.CustomGuidance != nil {
+			return fmt.Errorf("custom guidance must be null unless preset is custom")
+		}
+	case "custom":
+		if p.Communication.CustomGuidance == nil {
+			return fmt.Errorf("custom guidance is required for custom preset")
+		}
+		guidance, e := Normalize(*p.Communication.CustomGuidance, 240, true)
+		if e != nil || guidance != *p.Communication.CustomGuidance {
+			return fmt.Errorf("custom guidance is not canonically normalized")
+		}
+	default:
+		return fmt.Errorf("unknown communication preset")
+	}
+	return nil
+}

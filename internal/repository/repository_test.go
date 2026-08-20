@@ -58,3 +58,24 @@ func TestValidationAuthenticatesSchemaBeforeCompilationAndChecksGit(t *testing.T
 		t.Fatalf("err=%v", err)
 	}
 }
+
+func TestOrdinaryValidationRoutesRetainedCreationMarkerToRecovery(t *testing.T) {
+	root := t.TempDir()
+	p, _ := profile.New("Friday", "", "Help", "balanced", "")
+	pl, _ := plan.Build(p, filepath.Join(root, "runtime"), filepath.Join(root, "memory"))
+	if err := Create(pl, pl.Targets.Runtime, pl.Targets.Memory); err != nil {
+		t.Fatal(err)
+	}
+	for _, target := range []string{pl.Targets.Runtime, pl.Targets.Memory} {
+		marker := filepath.Join(target, ".my-friday", "creation-state.json")
+		if err := os.WriteFile(marker, []byte(pl.PlanID+"\n"), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := ValidatePair(pl.Targets.Runtime, pl.Targets.Memory); err == nil || !strings.Contains(err.Error(), "unknown owned contract path") {
+		t.Fatalf("err=%v", err)
+	}
+	if err := ValidateFreshPair(pl.Targets.Runtime, pl.Targets.Memory); err != nil {
+		t.Fatalf("transaction validation: %v", err)
+	}
+}

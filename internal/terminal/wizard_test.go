@@ -67,6 +67,27 @@ func TestExplicitCreate(t *testing.T) {
 	if err := ValidatePair(filepath.Join(root, "my-friday-runtime"), filepath.Join(root, "my-friday-memory")); err != nil {
 		t.Fatal(err)
 	}
+	for _, status := range []string{"Journaled", "Reserved", "Staged runtime", "Staged memory", "Validated", "Promoted runtime", "Promoted memory", "Verified", "Complete"} {
+		if !strings.Contains(out.String(), status) {
+			t.Fatalf("missing live status %q\n%s", status, out.String())
+		}
+	}
+}
+
+func TestAlreadyCompleteIsSeparateNoWriteResult(t *testing.T) {
+	root := t.TempDir()
+	answers := "\nFriday\nBoss\nHelp me work\n2\n\n" + root + "\nCreate\n"
+	if result, err := Run(strings.NewReader(answers), &bytes.Buffer{}, root); err != nil || result != "Complete" {
+		t.Fatalf("result=%s err=%v", result, err)
+	}
+	var out bytes.Buffer
+	result, err := Run(strings.NewReader(answers), &out, root)
+	if err != nil || result != "Already complete" {
+		t.Fatalf("result=%s err=%v\n%s", result, err, out.String())
+	}
+	if strings.Contains(out.String(), "Promoted runtime") || !strings.Contains(out.String(), "Already complete") {
+		t.Fatal(out.String())
+	}
 }
 
 func TestBackFromConfirmationPreservesProfile(t *testing.T) {
