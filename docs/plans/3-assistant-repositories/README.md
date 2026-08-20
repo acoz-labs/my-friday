@@ -2,7 +2,7 @@
 
 - **Status:** Draft
 - **Issue:** #3
-- **Planning PR:** Pending
+- **Planning PR:** #10
 - **Repository basis:** c669868cb297be51f02e1b6b7824e50b81da318b
 - **Execution envelope:** implementation
 - **Confidence:** Medium-high
@@ -40,6 +40,7 @@ and other operating systems remain unclaimed until separately exercised.
 | Mutation consent | Preview is read-only; the confirmation defaults to `Exit`, and only an explicit `Create` mutates disk. | Repository creation is consequential and must never follow an accidental Return key. |
 | Product boundary | The wizard creates two local repositories only. It performs no Codex installation, remote setup, network call, commit, secret access, import, or global configuration change. | This is the exact O1 outcome and keeps later trust boundaries out of the first slice. |
 | Implementation form | One native Go executable with embedded templates and a pinned JSON Schema validator. | It gives macOS users a runtime-independent command while retaining typed filesystem/error handling and executable schemas; shell and Python alternatives create weaker recovery or runtime contracts. |
+| Harness boundary | The assistant profile, repository roles, planner, and transaction are harness-neutral domain concepts; root `AGENTS.md` files are the only Codex-first projection in O1. No adapter framework or alternate harness ships. | Future Claude Code, pi, or another harness can receive an explicit capability mapping without forcing the owned data model to become a Codex detail or an unhelpful lowest common denominator. |
 | Repository ownership | Runtime and governed memory remain separate and share only a non-secret deterministic assistant identifier. Absolute paths are not written into either repository. | The repositories must be independently movable, shareable, and protectable. |
 | Profile authority | Identity and communication preferences live in runtime `assistant/profile.json`; generated instructions explicitly state they cannot override trust, safety, authorization, or tool policy. | Personality is presentation context, not a policy escalation surface. |
 | Memory baseline | The memory repository contains governance instructions and empty category directories, but zero memory records. | O1 establishes ownership without pretending the governed-memory loop from O3 already exists. |

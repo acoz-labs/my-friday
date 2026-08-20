@@ -96,6 +96,10 @@ Consequences:
   but no abstraction for other operating systems is implemented.
 - A transaction journal is an exceptional failure artifact, not routine local
   state.
+- The domain model and transaction remain independent of Codex, while a small
+  Codex projection renders root `AGENTS.md`. This is a seam, not an adapter
+  framework; every additional harness requires a future product decision and
+  capability mapping.
 
 ## Decisions Ledger
 
@@ -103,15 +107,16 @@ Consequences:
 |---|---|---|---|
 | D1 | Use a native Go 1.26.x command and embedded templates. | Runtime independence plus typed recovery and testability. | H1-H4 comparison; official Go Darwin ARM64 distribution |
 | D2 | Support macOS 14+ ARM64 on local APFS with Git 2.28+. | Narrow first environment; `git init -b`; local rename semantics. | Product decision, Apple APFS docs, Git 2.28 docs |
-| D3 | Use JSON Schema 2020-12 for manifest/profile contracts and one pinned validator. | Machine validation must be inspectable and executable. | Issue acceptance and schema-drift risk |
+| D3 | Use JSON Schema 2020-12 with `github.com/santhosh-tekuri/jsonschema/v6` pinned initially at v6.0.2, configured with embedded in-memory resources only. | It supports draft 2020-12 under Apache-2.0; a restricted loader prevents its optional URL features from becoming a runtime network path. | Issue acceptance; <https://github.com/santhosh-tekuri/jsonschema/tree/v6.0.2> |
 | D4 | Compile one canonical plan; do not let preview and execution re-derive answers. | Prevent preview/execution drift. | Acceptance group 1 |
-| D5 | Derive `assistant_id` from a domain-separated SHA-256 of the exact validated UTF-8 display name and retain 128 bits. | Deterministic cross-repository association without paths, randomness, or personal metadata duplication. It is an identifier, not a global-uniqueness or security claim. | Deterministic preview and portability drivers |
-| D6 | Derive `plan_id` from canonical JSON containing contract/tool version, normalized answers, canonical targets, ordered actions, and rendered content digests. | Same inputs produce the same reviewable plan and recovery namespace. | Deterministic preview requirement |
+| D5 | Derive `assistant_id` from a domain-separated SHA-256 of the exact validated UTF-8 display name plus both initial canonical target paths and retain 128 bits. | Deterministic association distinguishes same-named assistants at different locations. Paths are not stored; the ID remains stable after a later move and is not a credential or registry key. | Deterministic preview, pairing correctness, portability |
+| D6 | Derive `plan_id` from canonical JSON containing contract/tool version, normalized answers, canonical targets, ordered actions, and durable-content digests; exclude it from durable generated files. | Same inputs produce the same recovery namespace without a circular file-digest definition or permanent profile hash in repository metadata. | Deterministic preview and privacy requirements |
 | D7 | Initialize Git with an empty tool-owned template and branch `main`; create no commits/remotes. | Prevent private template import and reserve history/remote choices for the user. | O1 boundary and Git template risk |
 | D8 | Stage and validate both repos before ordered promotion, with reservations and an owner-only journal. | Cross-directory atomicity is impossible; explicit recovery is truthful and testable. | Failure requirement |
 | D9 | Keep profile values out of generated Markdown instructions and transaction state. | Prevent structural/prompt injection and avoid a second sensitive-data store. | Trust and privacy requirements |
 | D10 | Keep UI line-oriented and ANSI-independent. | Accessibility and deterministic evidence. | Supplied product-experience contract |
 | D11 | Use `implementation` execution envelope. | No declared artifact/release contract, naming clearance, or exact-machine evidence yet. | Current `docs/deployment.md` and unknowns U1-U4 |
+| D12 | Keep profile/manifests/planner harness-neutral and render only a Codex `AGENTS.md` projection in O1. | Preserve an extension seam without alternate harnesses, adapter machinery, or lowest-common-denominator semantics. | Product-authority guidance; O1/O2 remain Codex-first |
 
 ## Rejected Mechanisms And Scope
 
@@ -129,3 +134,5 @@ Consequences:
   collision boundaries.
 - Supporting Intel and non-macOS targets “because Go can compile them”: build
   capability is not support evidence.
+- Generic harness adapter registry or alternate harness template: no approved
+  capability mapping or outcome exists yet.

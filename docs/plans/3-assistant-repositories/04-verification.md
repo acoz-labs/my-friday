@@ -14,6 +14,9 @@ explicit temporary APFS roots and assert the complete before/after tree.
   digests, negative actions, stable plan ID, slug fallback, preview model.
 - `internal/contract/*_test.go`: schema compilation, conformance corpus, schema
   copy digests, unknown-version rejection, no profile interpolation.
+- Codex projection tests: root `AGENTS.md` references neutral contracts,
+  contains no user-value interpolation, and no generic adapter or alternate
+  harness ships.
 - `internal/paths/*_test.go`: root/home, absent descendants, same/nested targets,
   symlink ancestors/targets, Unicode paths, empty/non-empty targets, injected
   filesystem/environment results.
@@ -33,7 +36,8 @@ explicit temporary APFS roots and assert the complete before/after tree.
   transition; assert both-valid, pre-run, or recoverable, then recover twice.
 - `test/acceptance/zero_network_test.go`: source import allowlist, injected
   runner rejecting non-allowlisted Git operations, captured argv/environment,
-  empty remotes, and full temp-root diff.
+  schema compiler rejecting `http`, `https`, `file`, and unknown resource
+  schemes, empty remotes, and full temp-root diff.
 - `test/acceptance/unsupported_environment_test.go`: macOS version, architecture,
   Git version, filesystem, non-TTY, and permission failures stop before journal.
 
@@ -46,7 +50,8 @@ explicit temporary APFS roots and assert the complete before/after tree.
 - Global Git template with sentinel private file/hook; generated `.git` must
   not contain it because initialization supplies an empty template.
 - Journal/stderr scans proving purpose, address, and custom guidance are absent.
-- Cleanup refusal after manifest/plan ID/baseline digest change.
+- Cleanup refusal after manifest, transient creation marker, or baseline digest
+  change.
 - Owner-only modes under permissive caller umask and empty-shell mode restore.
 
 ## Red/Green Sequence
@@ -162,6 +167,10 @@ Non-blocking for implementation, blocking before public artifact release:
 5. Dependency review and license notice for JSON Schema validator.
 6. Verified minimum-macOS build target and an ARM64 candidate from the approved
    release path, not a contributor-local binary.
+
+Future harness support is not an O1 release prerequisite. It requires a new
+product decision and capability map rather than a speculative compatibility
+claim.
 
 ## Production Readiness Preflight
 

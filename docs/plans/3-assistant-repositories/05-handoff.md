@@ -22,7 +22,7 @@ contract. Each begins with the red tests in `04-verification.md`.
 |---|---|---|---|
 | 1. Toolchain/environment | `go.mod`, `go.sum`, `mise.toml`, `internal/environment/`, `docs/development.md`, `bin/ci` | None | Pinned Go/dependency; typed macOS/ARM64/APFS/Git/TTY tests pass. |
 | 2. Profile/contracts | `internal/profile/`, `internal/contract/`, embedded assets/schemas | 1 | Schema corpus passes; profile cannot supply trust policy. |
-| 3. Plan/rendering | `internal/plan/`, `internal/templates/`, `testdata/` | 2 | Stable IDs/actions/files/hashes and golden trees. |
+| 3. Plan/rendering | `internal/plan/`, `internal/templates/`, `internal/projection/codex/`, `testdata/` | 2 | Stable IDs/actions/files/hashes and golden trees; Codex projection consumes neutral contracts without an adapter framework. |
 | 4. Wizard/preview | `internal/terminal/`, `cmd/my-friday/` | 3 | Seven steps, retries, Exit/Create, ANSI-free transcripts, zero writes. |
 | 5. Git/validation | `internal/git/`, `internal/repository/` | 3 | Fixed allowlist creates valid stages with no templates/commits/remotes. |
 | 6. Transaction/recovery | `internal/transaction/`, `internal/paths/` | 3, 5 | Reservations, empty-shell preservation, full fault matrix, rollback/recovery. |
@@ -84,7 +84,9 @@ commit/remote/provider/sync/credential/plugin/model setup; non-interactive or
 force/adopt/import creation; Intel/non-macOS/non-APFS abstractions; GUI/TUI
 framework, telemetry, daemon, database, package-manager integration, auto-update,
 signing/notarization/release; general transaction frameworks; and personality
-fields that influence trust or safety.
+fields that influence trust or safety. Also refuse alternate harnesses, generic
+adapter registries, or a lowest-common-denominator schema; Claude Code, pi, or
+another harness needs a future product decision and capability mapping.
 
 ## Exceptions That Reopen Design
 

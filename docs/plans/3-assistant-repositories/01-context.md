@@ -123,6 +123,9 @@ commit.
   (O5-O7).
 - Intel Mac, non-APFS, Linux, Windows, background services, GUI/web UI, model
   access, secrets management, or telemetry.
+- Alternate agent harnesses, a harness adapter framework, or a lowest-common-
+  denominator profile. O1 remains Codex-first; each future harness requires a
+  product decision and explicit capability/projection mapping.
 - Editing, adopting, or merging an existing non-empty repository.
 - Marketing/name clearance or artifact publication.
 
@@ -183,6 +186,7 @@ operations, or production environments in O1.
 | A2 | The first pilot machine is Apple silicon, local APFS, and meets the Git floor. | Environment preflight before first-customer acceptance |
 | A3 | Two repositories remain understandable when their roles and shared identifier are explicit. | Ask users to explain ownership and privacy boundaries after creation |
 | A4 | Owner-only default modes do not conflict with expected local use. | Verify on fresh and pre-existing empty target directories |
+| A5 | Separating owned assistant data from the Codex `AGENTS.md` projection preserves a future harness seam without implementing one. | Review generated contracts; require a future capability map before adding a harness. |
 
 ### Unknowns
 
@@ -193,6 +197,7 @@ operations, or production environments in O1.
 | U3 | Whether Intel Mac support is valuable. | Park with O8; do not claim or build a universal artifact in O1. |
 | U4 | Final code-signing/notarization and distribution channel. | Future artifact-release design; outside the `implementation` envelope. |
 | U5 | Independent setup completion and comprehension. | Product acceptance evidence; not an architecture unknown. |
+| U6 | Whether Claude Code, pi, or another harness should be supported and how its capabilities map. | New product decision; not part of O1/O2 Codex-first scope. |
 
 ### Decisions
 

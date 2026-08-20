@@ -9,6 +9,7 @@
 | `cmd/my-friday` | Parse `init`, `validate`, and `recover`; map typed errors to line-oriented output and exit status. | Domain validation or filesystem policy |
 | terminal wizard | Present the seven approved steps, preserve valid answers, and require explicit confirmation. | Mutation, path canonicalization, template rendering |
 | profile model | Validate identity and communication values and produce canonical JSON. | Trust/safety policy |
+| Codex projection renderer | Render static root `AGENTS.md` files that reference neutral profile/governance contracts. | Generic adapters or alternate-harness mapping |
 | environment/path preflight | Verify OS/architecture/Git/filesystem/TTY and resolve canonical target identities. | Prompting or target content |
 | planner | Build immutable ordered actions, generated file bytes/digests, IDs, support paths, and negative-action declaration. | I/O |
 | template/contract bundle | Embed public-safe starter files and JSON Schemas by contract version. | User paths or imported machine content |
@@ -103,16 +104,21 @@ CreationPlan v1
 ```
 
 Canonical JSON uses UTF-8, lexicographically ordered object keys, declared array
-order, no insignificant whitespace, and no timestamps. `plan_id` is SHA-256 of
-the domain string `my-friday-plan-v1` plus canonical plan material excluding
-`plan_id`. The full digest is displayed and stored. Repeated normalized inputs
-and unchanged embedded contracts produce the same plan and preview.
+order, no insignificant whitespace, and no timestamps. First, a plan basis is
+formed from contract/tool version, assistant/profile, canonical targets,
+ordered durable actions, durable-file digests, and negative actions. `plan_id`
+is SHA-256 of `my-friday-plan-v1` plus that basis. Transaction support paths are
+then derived from the ID and appended to the complete plan. This avoids hashing
+fields derived from the hash itself. The full digest is displayed and retained
+only in transient transaction state. Repeated normalized inputs and unchanged
+contracts produce the same plan and preview.
 
 `assistant_id` is `asst-` plus the first 32 lowercase hex characters of
-SHA-256 over `my-friday-assistant-v1`, NUL, and the exact validated UTF-8 display
-name. It associates the repositories but is not a credential, authorization
-decision, or global uniqueness guarantee. It remains stable if the profile is
-edited later.
+SHA-256 over `my-friday-assistant-v1` and NUL-delimited exact validated UTF-8
+display name, canonical initial runtime target, and canonical initial memory
+target. It distinguishes same-named creations while associating the pair.
+Initial paths are not stored, the ID remains stable after a later move, and it
+is not a credential, authorization decision, or global registry key.
 
 ### Runtime repository v1
 
@@ -133,9 +139,9 @@ edited later.
 ```
 
 `manifest.json` contains only `contract_version`, `repository_role: "runtime"`,
-`assistant_id`, and `generation: {tool: "my-friday", tool_contract_version,
-plan_id}`. It contains no absolute path, username, hostname, timestamp, remote,
-or credential reference.
+`assistant_id`, and `generation: {tool: "my-friday",
+tool_contract_version}`. It contains no plan ID, absolute path, username,
+hostname, timestamp, remote, or credential reference.
 
 `assistant/profile.json` contains:
 
@@ -159,7 +165,9 @@ Preset names are lowercase stable enum values. `Custom` uses preset `custom`
 and non-null guidance. Static `AGENTS.md` points to the profile as user-owned
 presentation guidance and states that it cannot change authorization, safety,
 trust, privacy, or tool constraints. User values are serialized only through
-JSON and never interpolated into Markdown instructions.
+JSON and never interpolated into Markdown instructions. Profile and manifest
+are harness-neutral. Root `AGENTS.md` is the sole Codex projection in O1 and is
+rendered explicitly rather than through an adapter registry.
 
 ### Memory repository v1
 
@@ -181,7 +189,7 @@ JSON and never interpolated into Markdown instructions.
     README.md
 ```
 
-Its manifest has `repository_role: "memory"` and matching assistant/plan IDs.
+Its manifest has `repository_role: "memory"` and the matching assistant ID.
 `AGENTS.md` establishes that ordinary activity must not become durable memory;
 future records require a versioned schema and O3's proposal/promotion flow.
 `schemas/README.md` reserves the location without inventing O3 schemas.
@@ -193,6 +201,10 @@ future records require a versioned schema and O3's proposal/promotion flow.
   `additionalProperties: false` for owned objects.
 - The executable uses embedded schemas as authority and verifies generated
   copies by digest. Generated copies make the contract inspectable.
+- Validation uses pinned `github.com/santhosh-tekuri/jsonschema/v6` v6.0.2.
+  Construct its compiler with only explicitly registered embedded resources;
+  `http`, `https`, `file`, and unknown URI schemes fail. Never use the package's
+  optional URL loaders or command-line tool.
 - Major contract v1 is accepted; unknown versions fail without mutation.
   Additive files outside `.my-friday/` are allowed after creation; unknown
   files inside `.my-friday/` fail validation.
@@ -202,6 +214,9 @@ future records require a versioned schema and O3's proposal/promotion flow.
   that obey then-current contracts.
 - O1 has no migration/backfill. Future contract changes require their own
   compatibility design and must preserve v1 validation or fail deliberately.
+- Another agent harness requires a new product decision and a documented map of
+  profile, instruction, skill, memory, precedence, and safety capabilities.
+  O1 does not assert that all harnesses are equivalent.
 
 ### Filesystem ownership and lifecycle
 
@@ -273,7 +288,7 @@ empty template directory is transaction-owned and removed after completion.
 | Tool | Read machine | OS/arch, home for exact rejection, filesystem, target entries, Git version, embedded assets. | No crawl, import, global Codex read, or secret lookup. |
 | Tool | Execute Git | Fixed local allowlist. | Runner rejects other operations; tests retain argv. |
 | Future assistant | Interpret profile | Communication/purpose guidance only. | Generated instructions state policy precedence. |
-| Network/remote actor | Any action | Denied by absence of interfaces and subprocess allowlist. | Static import check, fake-Git trace, empty remotes. |
+| Network/remote actor | Any action | Denied by application import policy, embedded-only schema loader, and subprocess allowlist. | Loader denial tests, fake-Git trace, empty remotes. |
 
 No privilege elevation is requested. Terminal preview shows user-entered values
 but persists them only in the runtime profile. Transaction state contains IDs,
@@ -290,12 +305,15 @@ purpose, or custom guidance.
 3. Acquire reservation files for both targets in lexical path order with
    `O_EXCL`; each points to the journal. Update/fsync journal after each.
 4. Create sibling stages on each target filesystem. Write files, create an empty
-   Git template, initialize Git, and fsync content/directories.
+   Git template, initialize Git, add a transient
+   `.my-friday/creation-state.json` containing only plan/role IDs, and fsync
+   content/directories.
 5. Validate both staged repositories in fresh mode before promotion.
 6. Recheck parents/targets/reservations. Rename any empty shell to planned
    backup, record/fsync, then rename runtime stage and memory stage to targets,
    updating the journal after each.
-7. Validate final pair. Remove verified backups, reservations, stages, and
+7. Validate final pair, remove both transient creation markers, validate the
+   exact durable pair, then remove verified backups, reservations, stages, and
    journal; fsync parents. Print success only after cleanup.
 
 Journal updates use write-temp, fsync, atomic rename, then parent fsync.
@@ -305,8 +323,9 @@ and recovery can find exactly one state.
 ### Automatic rollback and recovery
 
 - Before promotion, rollback removes only transaction-owned support state.
-- After promotion, rollback verifies manifest, plan ID, and baseline digests.
-  Unknown changes stop deletion and retain recovery-required state.
+- After promotion, rollback verifies assistant/role manifests, any transient
+  creation marker, and exact baseline digests recorded in the journal. Unknown
+  changes stop deletion and retain recovery-required state.
 - Empty-shell backups restore original mode; new targets return to absence.
 - `recover` locks/revalidates the journal and paths. If both final targets
   validate, it cleans up; if one final and its staged counterpart validate, it
