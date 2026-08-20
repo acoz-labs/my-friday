@@ -47,3 +47,7 @@ details use `docs/architecture/0000-capability-template.md` as a scaffold.
 Temporary issue plans use `docs/plans/_template/` and are removed after their
 shipped knowledge is promoted.
 Repository-specific release and rollback truth lives in `docs/deployment.md`.
+
+## License
+
+My Friday is available under the [MIT License](LICENSE).
