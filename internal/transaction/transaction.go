@@ -16,6 +16,7 @@ type journal struct {
 	RuntimeExisted, MemoryExisted                             bool
 	RuntimeMode, MemoryMode                                   uint32
 	CreatedParents                                            []string
+	Reservations                                              []string
 }
 
 func Execute(pl plan.CreationPlan, fault Fault) (string, error) {
@@ -60,11 +61,17 @@ func Execute(pl plan.CreationPlan, fault Fault) (string, error) {
 		MemoryStage:    filepath.Join(filepath.Dir(pl.Targets.Memory), ".my-friday-"+pl.PlanID[:16]+"-memory"),
 		RuntimeExisted: rExists, MemoryExisted: mExists, RuntimeMode: uint32(rMode), MemoryMode: uint32(mMode),
 		CreatedParents: parents,
+		Reservations:   pl.ReservationPaths,
 	}
 	jp := support + ".json"
 	if err := createJournal(jp, j); err != nil {
 		removeParents(parents)
 		return "", err
+	}
+	for _, reservation := range j.Reservations {
+		if err := createReservation(reservation, pl.PlanID); err != nil {
+			return "", rollback(jp, j, err)
+		}
 	}
 	fail := func(phase string) error {
 		if fault != nil {
@@ -79,7 +86,9 @@ func Execute(pl plan.CreationPlan, fault Fault) (string, error) {
 		return "", rollback(jp, j, err)
 	}
 	j.Phase = "staged"
-	_ = writeJournal(jp, j)
+	if err := writeJournal(jp, j); err != nil {
+		return "", rollback(jp, j, err)
+	}
 	if err := fail("staged"); err != nil {
 		return "", rollback(jp, j, err)
 	}
@@ -87,7 +96,9 @@ func Execute(pl plan.CreationPlan, fault Fault) (string, error) {
 		return "", rollback(jp, j, err)
 	}
 	j.Phase = "validated"
-	_ = writeJournal(jp, j)
+	if err := writeJournal(jp, j); err != nil {
+		return "", rollback(jp, j, err)
+	}
 	if err := fail("validated"); err != nil {
 		return "", rollback(jp, j, err)
 	}
@@ -95,7 +106,9 @@ func Execute(pl plan.CreationPlan, fault Fault) (string, error) {
 		return "", rollback(jp, j, err)
 	}
 	j.Phase = "promoted-runtime"
-	_ = writeJournal(jp, j)
+	if err := writeJournal(jp, j); err != nil {
+		return "", rollback(jp, j, err)
+	}
 	if err := fail("promoted-runtime"); err != nil {
 		return "", rollback(jp, j, err)
 	}
@@ -103,14 +116,19 @@ func Execute(pl plan.CreationPlan, fault Fault) (string, error) {
 		return "", rollback(jp, j, err)
 	}
 	j.Phase = "promoted-memory"
-	_ = writeJournal(jp, j)
+	if err := writeJournal(jp, j); err != nil {
+		return "", rollback(jp, j, err)
+	}
 	if err := fail("promoted-memory"); err != nil {
 		return "", rollback(jp, j, err)
 	}
 	if err := repository.ValidatePair(j.Runtime, j.Memory); err != nil {
 		return "", rollback(jp, j, err)
 	}
-	os.Remove(jp)
+	removeReservations(j.Reservations, j.PlanID)
+	if err := os.Remove(jp); err != nil {
+		return "", err
+	}
 	return "Complete", nil
 }
 func promote(stage, target string) error {
@@ -138,6 +156,7 @@ func rollback(jp string, j journal, cause error) error {
 		_ = os.RemoveAll(p)
 	}
 	_ = os.Remove(jp)
+	removeReservations(j.Reservations, j.PlanID)
 	if j.RuntimeExisted {
 		_ = os.MkdirAll(j.Runtime, 0700)
 		_ = os.Chmod(j.Runtime, os.FileMode(j.RuntimeMode))
@@ -179,6 +198,25 @@ func createJournal(path string, j journal) error {
 	}
 	return f.Close()
 }
+func createReservation(path, planID string) error {
+	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
+	if err != nil {
+		return fmt.Errorf("target is reserved by another creation: %w", err)
+	}
+	if _, err = f.WriteString(planID + "\n"); err != nil {
+		_ = f.Close()
+		return err
+	}
+	return f.Close()
+}
+func removeReservations(paths []string, planID string) {
+	for _, path := range paths {
+		b, err := os.ReadFile(path)
+		if err == nil && string(b) == planID+"\n" {
+			_ = os.Remove(path)
+		}
+	}
+}
 
 func Recover(journalPath string) error {
 	b, err := os.ReadFile(journalPath)
@@ -195,6 +233,7 @@ func Recover(journalPath string) error {
 	if repository.ValidatePair(j.Runtime, j.Memory) == nil {
 		_ = os.RemoveAll(j.RuntimeStage)
 		_ = os.RemoveAll(j.MemoryStage)
+		removeReservations(j.Reservations, j.PlanID)
 		return os.Remove(journalPath)
 	}
 	if repository.ValidatePair(j.Runtime, j.MemoryStage) == nil {
@@ -205,6 +244,7 @@ func Recover(journalPath string) error {
 			return err
 		}
 		_ = os.RemoveAll(j.RuntimeStage)
+		removeReservations(j.Reservations, j.PlanID)
 		return os.Remove(journalPath)
 	}
 	if repository.ValidatePair(j.RuntimeStage, j.MemoryStage) == nil {
@@ -217,6 +257,7 @@ func Recover(journalPath string) error {
 		if err = repository.ValidatePair(j.Runtime, j.Memory); err != nil {
 			return err
 		}
+		removeReservations(j.Reservations, j.PlanID)
 		return os.Remove(journalPath)
 	}
 	return fmt.Errorf("automatic recovery cannot prove a complete pair; inspect %s", journalPath)

@@ -33,6 +33,7 @@ type CreationPlan struct {
 	NegativeActions     []string
 	MissingParents      []string
 	SupportPaths        []string
+	ReservationPaths    []string
 	PlanID              string
 }
 
@@ -79,6 +80,8 @@ func Build(p profile.Profile, runtimePath, memoryPath string) (CreationPlan, err
 	h := sha256.Sum256(append([]byte("my-friday-plan-v1\x00"), b...))
 	pl.PlanID = hex.EncodeToString(h[:])
 	pl.SupportPaths = []string{filepath.Join(filepath.Dir(r), ".my-friday-"+pl.PlanID[:16]+".json"), filepath.Join(filepath.Dir(r), ".my-friday-"+pl.PlanID[:16]+"-runtime"), filepath.Join(filepath.Dir(m), ".my-friday-"+pl.PlanID[:16]+"-memory")}
+	pl.ReservationPaths = []string{reservationPath(r), reservationPath(m)}
+	pl.SupportPaths = append(pl.SupportPaths, pl.ReservationPaths...)
 	return pl, nil
 }
 func nested(parent, child string) bool {
@@ -114,6 +117,10 @@ func unique(values []string) []string {
 		}
 	}
 	return out
+}
+func reservationPath(target string) string {
+	h := sha256.Sum256([]byte(target))
+	return filepath.Join(filepath.Dir(target), ".my-friday-reservation-"+hex.EncodeToString(h[:8]))
 }
 func render(role string, p profile.Profile) []File {
 	manifest := struct {

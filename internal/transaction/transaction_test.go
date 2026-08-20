@@ -147,3 +147,20 @@ func TestRecoverCompletesPartialPromotion(t *testing.T) {
 		t.Fatalf("second recovery must be safe: %v", err)
 	}
 }
+
+func TestForeignReservationBlocksBeforeStaging(t *testing.T) {
+	pl := testPlan(t)
+	if err := os.WriteFile(pl.ReservationPaths[0], []byte("foreign\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	_, err := Execute(pl, nil)
+	if err == nil {
+		t.Fatal("expected reservation collision")
+	}
+	if _, statErr := os.Stat(pl.Targets.Runtime); !os.IsNotExist(statErr) {
+		t.Fatal("target mutated")
+	}
+	if b, readErr := os.ReadFile(pl.ReservationPaths[0]); readErr != nil || string(b) != "foreign\n" {
+		t.Fatal("foreign reservation was altered")
+	}
+}
