@@ -10,8 +10,8 @@ Choose 1-4 [b back; q quit]: Step 4 of 7: Locations
 1 One parent with stable names (default)
 2 Two separate targets
 Choose 1-2 [b back; q quit]: Parent directory (default: invocation directory) [b back; q quit]: Step 5 of 7: Preview
-Plan: 9e49e731b2e9dd0307d1b8a5992dce7a097421f86f3562dd461ddc91d4620cab
-Assistant: asst-0eca5b4e33f1190794aeb042522dec54
+Plan: 64507c771ccb944bd984a9ab109f416c2da5d25f1032fe5c3f4ff3a4000a030c
+Assistant: asst-4749913c4e64ea824aef54f1aee3ba88
 Runtime entered: <TEMP>/exit/my-friday-runtime
 Runtime canonical: <TEMP>/exit/my-friday-runtime
 Memory entered: <TEMP>/exit/my-friday-memory
@@ -25,19 +25,19 @@ Runtime symlink mapping: <TEMP>/exit/my-friday-runtime -> <TEMP>/exit/my-friday-
 Memory initial state: absent
 Memory symlink mapping: <TEMP>/exit/my-friday-memory -> <TEMP>/exit/my-friday-memory
 - create parent <TEMP>/exit mode 0700
-- temporary support <TEMP>/.my-friday-9e49e731b2e9dd03.json (removed after success)
-- temporary support <TEMP>/exit/.my-friday-9e49e731b2e9dd03-runtime (removed after success)
-- temporary support <TEMP>/exit/.my-friday-9e49e731b2e9dd03-memory (removed after success)
-- temporary support <TEMP>/.my-friday-reservation-7d4f19d51fb8fd22 (removed after success)
-- temporary support <TEMP>/.my-friday-reservation-638a495c0ac951f0 (removed after success)
-- file runtime:.my-friday/manifest.json mode 0600 sha256 9f16db7a803b2a45bc34e589dfb52eeead9f4bf5c11f1f3f6319f8bc7d264ff2
+- temporary support <TEMP>/.my-friday-64507c771ccb944b.json (removed after success)
+- temporary support <TEMP>/exit/.my-friday-64507c771ccb944b-runtime (removed after success)
+- temporary support <TEMP>/exit/.my-friday-64507c771ccb944b-memory (removed after success)
+- temporary support <TEMP>/.my-friday-reservation-205e097c10d93ea8 (removed after success)
+- temporary support <TEMP>/.my-friday-reservation-d7a075a3336ea965 (removed after success)
+- file runtime:.my-friday/manifest.json mode 0600 sha256 32620c1d51649a04e8dcd975d91e5054aa6571b87cbd4438d77b4e3f5aeb5acd
 - file runtime:.my-friday/schemas/assistant-profile.v1.schema.json mode 0600 sha256 620d89690ed1f5ba4ff81947c6fe82d5021d215aabb8b37eeb52c9fd64391c33
 - file runtime:.my-friday/schemas/repository-manifest.v1.schema.json mode 0600 sha256 144eee2176933a116d0e844f1f8695e3a5bf68bee8561f108abd2caf6aa0a0a4
 - file runtime:AGENTS.md mode 0600 sha256 c231fcdf65c9a74414a904e46fe5982ff8adc615ded56160ec0165bd8d194a1f
 - file runtime:README.md mode 0600 sha256 ae4bc7f314b39f612b0d54089bee9938569a60c1183b34ffe9b8e59441ed7c15
-- file runtime:assistant/profile.json mode 0600 sha256 9838ae02f589d1c74395b63bd9d870ef3a19bba137f70f51b4d2ed99a0d2477d
+- file runtime:assistant/profile.json mode 0600 sha256 4386a92361e8145d42f69ae7e0de7be1ef87fc2a5650a7d10c120d3ad50bf64e
 - file runtime:skills/.gitkeep mode 0600 sha256 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
-- file memory:.my-friday/manifest.json mode 0600 sha256 578178e163ad869f7848c915589b86919f52d872c3c1170686993d6f620821c1
+- file memory:.my-friday/manifest.json mode 0600 sha256 bcc84d7d5773caa3464830c8609cfb2158835cde7cae8a85eef5ef53af43b454
 - file memory:.my-friday/schemas/repository-manifest.v1.schema.json mode 0600 sha256 144eee2176933a116d0e844f1f8695e3a5bf68bee8561f108abd2caf6aa0a0a4
 - file memory:AGENTS.md mode 0600 sha256 333351f3ba54ce1fa9bc3d0c61568a55b0e781ea1b800b2339c014897aae4c08
 - file memory:README.md mode 0600 sha256 1595391140014536173f2c61e3e118279af0197fed0d241b76f63937b2fddfde

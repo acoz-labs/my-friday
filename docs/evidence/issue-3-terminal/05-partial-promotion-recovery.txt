@@ -1,3 +1,81 @@
+Step 1 of 7: Scope
+My Friday creates two separate local Git repositories. It does not install Codex, use the network, access secrets, import content, create commits, or configure remotes.
+Press Return to continue [b back; q quit]: Step 2 of 7: Identity
+Assistant display name [b back; q quit]: How should the assistant address you? (optional) [b back; q quit]: Assistant purpose [b back; q quit]: Step 3 of 7: Communication style
+1 Balanced (default)
+2 Concise
+3 Conversational
+4 Custom
+Choose 1-4 [b back; q quit]: Step 4 of 7: Locations
+1 One parent with stable names (default)
+2 Two separate targets
+Choose 1-2 [b back; q quit]: Parent directory (default: invocation directory) [b back; q quit]: Step 5 of 7: Preview
+Plan: 7fbba2da79bd33a1d911ce8a57faac1a5b7f5373ce79008ef01876921a21ad27
+Assistant: asst-36f7d157d3d65a8e1a26b890af532d31
+Runtime entered: <TEMP>/recover/my-friday-runtime
+Runtime canonical: <TEMP>/recover/my-friday-runtime
+Memory entered: <TEMP>/recover/my-friday-memory
+Memory canonical: <TEMP>/recover/my-friday-memory
+Normalized identity: Fridáy 🦇
+Normalized address: Boss
+Normalized purpose: Keep local work inspectable
+Normalized style: concise
+Runtime initial state: absent
+Runtime symlink mapping: <TEMP>/recover/my-friday-runtime -> <TEMP>/recover/my-friday-runtime
+Memory initial state: absent
+Memory symlink mapping: <TEMP>/recover/my-friday-memory -> <TEMP>/recover/my-friday-memory
+- create parent <TEMP>/recover mode 0700
+- temporary support <TEMP>/.my-friday-7fbba2da79bd33a1.json (removed after success)
+- temporary support <TEMP>/recover/.my-friday-7fbba2da79bd33a1-runtime (removed after success)
+- temporary support <TEMP>/recover/.my-friday-7fbba2da79bd33a1-memory (removed after success)
+- temporary support <TEMP>/.my-friday-reservation-87318bdb291176d5 (removed after success)
+- temporary support <TEMP>/.my-friday-reservation-567547ce0d6030b3 (removed after success)
+- file runtime:.my-friday/manifest.json mode 0600 sha256 14986f77a28993c311efa44798364e505a1adea31981dee4487d1395ef9d9f13
+- file runtime:.my-friday/schemas/assistant-profile.v1.schema.json mode 0600 sha256 620d89690ed1f5ba4ff81947c6fe82d5021d215aabb8b37eeb52c9fd64391c33
+- file runtime:.my-friday/schemas/repository-manifest.v1.schema.json mode 0600 sha256 144eee2176933a116d0e844f1f8695e3a5bf68bee8561f108abd2caf6aa0a0a4
+- file runtime:AGENTS.md mode 0600 sha256 c231fcdf65c9a74414a904e46fe5982ff8adc615ded56160ec0165bd8d194a1f
+- file runtime:README.md mode 0600 sha256 ae4bc7f314b39f612b0d54089bee9938569a60c1183b34ffe9b8e59441ed7c15
+- file runtime:assistant/profile.json mode 0600 sha256 9f6b4c7c83f7de74c0fedafa2eca748f784ab68ac43b7add2ee93f0aa3aa0d20
+- file runtime:skills/.gitkeep mode 0600 sha256 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+- file memory:.my-friday/manifest.json mode 0600 sha256 09c03ba1dc036df25f8a7d0ab0573802b061ef2044a5e7b4854f0eec1e353f22
+- file memory:.my-friday/schemas/repository-manifest.v1.schema.json mode 0600 sha256 144eee2176933a116d0e844f1f8695e3a5bf68bee8561f108abd2caf6aa0a0a4
+- file memory:AGENTS.md mode 0600 sha256 333351f3ba54ce1fa9bc3d0c61568a55b0e781ea1b800b2339c014897aae4c08
+- file memory:README.md mode 0600 sha256 1595391140014536173f2c61e3e118279af0197fed0d241b76f63937b2fddfde
+- file memory:data/journals/.gitkeep mode 0600 sha256 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+- file memory:data/memories/.gitkeep mode 0600 sha256 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+- file memory:data/observations/.gitkeep mode 0600 sha256 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+- file memory:data/proposals/.gitkeep mode 0600 sha256 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+- file memory:schemas/README.md mode 0600 sha256 f4b8b81e7d83fcefcd5c554a9c72b9e23d29d9975f930ab8a7d4cb4a4023677e
+- create owner-only parent directories when missing
+- reserve both canonical targets
+- stage and validate runtime repository
+- stage and validate memory repository
+- initialize both repositories on unborn branch main with an empty Git template
+- promote runtime repository
+- promote memory repository
+- validate the final pair and remove transaction support state
+- write runtime:.my-friday/manifest.json
+- write runtime:.my-friday/schemas/assistant-profile.v1.schema.json
+- write runtime:.my-friday/schemas/repository-manifest.v1.schema.json
+- write runtime:AGENTS.md
+- write runtime:README.md
+- write runtime:assistant/profile.json
+- write runtime:skills/.gitkeep
+- write memory:.my-friday/manifest.json
+- write memory:.my-friday/schemas/repository-manifest.v1.schema.json
+- write memory:AGENTS.md
+- write memory:README.md
+- write memory:data/journals/.gitkeep
+- write memory:data/memories/.gitkeep
+- write memory:data/observations/.gitkeep
+- write memory:data/proposals/.gitkeep
+- write memory:schemas/README.md
+- No global installation
+- No network or hosted account setup
+- No secrets or imported private content
+- No commits or remotes
+Step 6 of 7: Creation and verification
+Create these two repositories? [type Create; default Exit] [b back; q quit]: Preflight
 Journaled
 Reserved
 Staged runtime
@@ -6,7 +84,13 @@ Validated
 Promoted runtime
 Promoted memory
 Verified
-Interrupted creation found at phase verified.
-Recovery command: my-friday recover --transaction <TEMP>/.my-friday-2a089db44a8cbfa2.json
+Step 7 of 7: Recovery required
+Plan: 7fbba2da79bd33a1d911ce8a57faac1a5b7f5373ce79008ef01876921a21ad27
+Error: injected evidence failure at verified
+Completed phase: see status lines above
+Retained phase: verified
+Recovery command: my-friday recover --transaction <TEMP>/.my-friday-7fbba2da79bd33a1.json
+
+--- next invocation ---
+$ my-friday recover --transaction <TEMP>/.my-friday-7fbba2da79bd33a1.json
 Recovered and verified repository pair
-Error: <nil>

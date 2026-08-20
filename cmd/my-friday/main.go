@@ -8,7 +8,6 @@ import (
 
 	"github.com/acoz-labs/my-friday/internal/repository"
 	"github.com/acoz-labs/my-friday/internal/terminal"
-	"github.com/acoz-labs/my-friday/internal/transaction"
 )
 
 func main() {
@@ -71,10 +70,7 @@ func run() error {
 		if len(os.Args) != 4 || os.Args[2] != "--transaction" {
 			return fmt.Errorf("usage: my-friday recover --transaction PATH")
 		}
-		result, e := transaction.RecoverWithResult(os.Args[3])
-		if e == nil {
-			fmt.Fprintln(os.Stdout, result)
-		}
+		_, e := terminal.Recover(os.Args[3], os.Stdout)
 		return e
 	case "version":
 		if len(os.Args) != 2 {

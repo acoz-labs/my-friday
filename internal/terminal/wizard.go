@@ -15,6 +15,9 @@ import (
 	"github.com/acoz-labs/my-friday/internal/transaction"
 )
 
+var executeWithProgress = transaction.ExecuteWithProgress
+var recoverWithResult = transaction.RecoverWithResult
+
 func Run(input io.Reader, output io.Writer, invocationDir string) (string, error) {
 	r := bufio.NewReader(input)
 	line := func(prompt string) (string, error) {
@@ -226,8 +229,9 @@ styleStep:
 		fmt.Fprintln(output, "Step 5 of 7: Preview")
 		fmt.Fprintf(output, "Plan: %s\nAssistant: %s\nRuntime entered: %s\nRuntime canonical: %s\nMemory entered: %s\nMemory canonical: %s\n", pl.PlanID, pl.AssistantID, runtimeValueOr(runtimeValue, parentValue, runtime), pl.Targets.Runtime, runtimeValueOr(memoryValue, parentValue, memory), pl.Targets.Memory)
 		fmt.Fprintf(output, "Normalized identity: %s\nNormalized address: %s\nNormalized purpose: %s\nNormalized style: %s\n", p.Identity.DisplayName, optionalPreview(p.Identity.AddressUserAs), p.Identity.Purpose, stylePreview(p))
-		printTargetPreview(output, "Runtime", runtime, pl.Targets.Runtime)
-		printTargetPreview(output, "Memory", memory, pl.Targets.Memory)
+		exactComplete := repository.ExactBaseline(pl, pl.Targets.Runtime, pl.Targets.Memory)
+		printTargetPreview(output, "Runtime", runtime, pl.Targets.Runtime, exactComplete)
+		printTargetPreview(output, "Memory", memory, pl.Targets.Memory, exactComplete)
 		for _, parent := range pl.MissingParents {
 			fmt.Fprintln(output, "- create parent", parent, "mode 0700")
 		}
@@ -249,7 +253,7 @@ styleStep:
 			if recoverNow != "r" {
 				return exit(output), nil
 			}
-			recoveryResult, err := transaction.RecoverWithResult(journalPath)
+			recoveryResult, err := recoverWithResult(journalPath)
 			if err != nil {
 				return "", err
 			}
@@ -265,7 +269,7 @@ styleStep:
 			return exit(output), nil
 		}
 		fmt.Fprintln(output, "Preflight")
-		result, err := transaction.ExecuteWithProgress(pl, nil, func(status string) { fmt.Fprintln(output, status) })
+		result, err := executeWithProgress(pl, nil, func(status string) { fmt.Fprintln(output, status) })
 		if err != nil {
 			fmt.Fprintln(output, "Step 7 of 7: Recovery required")
 			fmt.Fprintf(output, "Plan: %s\nError: %v\nCompleted phase: see status lines above\n", pl.PlanID, err)
@@ -315,21 +319,29 @@ func stylePreview(p profile.Profile) string {
 	}
 	return p.Communication.Preset + ": " + *p.Communication.CustomGuidance
 }
-func printTargetPreview(w io.Writer, role, entered, canonical string) {
+func printTargetPreview(w io.Writer, role, entered, canonical string, exactComplete bool) {
 	info, err := os.Lstat(canonical)
 	switch {
 	case os.IsNotExist(err):
 		fmt.Fprintf(w, "%s initial state: absent\n", role)
 	case err != nil:
 		fmt.Fprintf(w, "%s initial state: unavailable (%v)\n", role, err)
-	case info.IsDir() && info.Mode()&os.ModeSymlink == 0:
+	case exactComplete:
+		fmt.Fprintf(w, "%s initial state: exact completed repository mode %04o; no write needed\n", role, info.Mode().Perm())
+	case info.IsDir() && info.Mode()&os.ModeSymlink == 0 && directoryEmpty(canonical):
 		fmt.Fprintf(w, "%s initial state: empty directory mode %04o; will normalize to 0700\n", role, info.Mode().Perm())
+	case info.IsDir() && info.Mode()&os.ModeSymlink == 0:
+		fmt.Fprintf(w, "%s initial state: unrelated non-empty collision mode %04o\n", role, info.Mode().Perm())
 	default:
 		fmt.Fprintf(w, "%s initial state: collision (%s)\n", role, info.Mode().Type())
 	}
 	if filepath.Clean(entered) != canonical {
 		fmt.Fprintf(w, "%s symlink mapping: %s -> %s\n", role, filepath.Clean(entered), canonical)
 	}
+}
+func directoryEmpty(path string) bool {
+	entries, err := os.ReadDir(path)
+	return err == nil && len(entries) == 0
 }
 func exit(w io.Writer) string { fmt.Fprintln(w, "No changes made"); return "Exit" }
 func resolve(value, cwd string) (string, error) {
@@ -361,3 +373,11 @@ func existingAncestor(path string) string {
 	}
 }
 func ValidatePair(runtime, memory string) error { return repository.ValidatePair(runtime, memory) }
+
+func Recover(transactionPath string, output io.Writer) (string, error) {
+	result, err := recoverWithResult(transactionPath)
+	if err == nil {
+		fmt.Fprintln(output, result)
+	}
+	return result, err
+}
