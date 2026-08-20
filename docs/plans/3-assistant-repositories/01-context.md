@@ -93,15 +93,16 @@ commit.
 
 1. **Complete deterministic preview:** normalized inputs produce one canonical
    plan identifier, assistant identifier, exact target paths, ordered actions,
-   exact generated file list, content digests, temporary-support policy, and an
-   explicit list of actions that will not occur.
+   every missing parent segment, exact generated file list, content digests,
+   resulting modes, temporary-support policy, and actions that will not occur.
 2. **Valid separate repositories:** runtime and memory targets are independent
    Git worktrees on `main`; their embedded v1 manifests and schemas validate;
    assistant identifiers match; runtime profile matches the answers; memory
    contains zero records.
 3. **No adjacent effects:** no global Codex or Git configuration, remote,
    commit, credential access, network call, imported content, telemetry, or
-   write outside the declared targets and transaction support paths.
+   write outside declared targets, planned missing parents, and transaction
+   support paths.
 4. **Safe paths and collisions:** canonical targets are distinct, non-nested,
    not `/` or the home directory, reside on supported local APFS, and are not
    symlink or non-empty collisions.
@@ -177,6 +178,7 @@ operations, or production environments in O1.
 | E3 | The repository has no implementation/runtime and does have managed validation and planning conventions. | Current source paths listed above |
 | E4 | Git 2.28 exposes `--initial-branch`; Go supports native Darwin ARM64 binaries; APFS is the modern Mac default. | Official Git, Go, and Apple documentation linked above |
 | E5 | No representative user has yet completed the flow independently. | `docs/product.md` validation signals and discovery unknowns |
+| E6 | `rivo/uniseg` v0.4.7 implements Unicode extended grapheme segmentation and has no non-standard-library dependencies. | <https://github.com/rivo/uniseg/tree/v0.4.7> |
 
 ### Assumptions
 

@@ -11,7 +11,8 @@ explicit temporary APFS roots and assert the complete before/after tree.
 - `internal/profile/*_test.go`: Unicode lengths, trimming, style/custom rules,
   control/format rejection, deterministic assistant ID.
 - `internal/plan/*_test.go`: canonical serialization, ordered actions, content
-  digests, negative actions, stable plan ID, slug fallback, preview model.
+  digests, negative actions, stable plan ID, stable location defaults, preview
+  model, and exact missing-parent action order.
 - `internal/contract/*_test.go`: schema compilation, conformance corpus, schema
   copy digests, unknown-version rejection, no profile interpolation.
 - Codex projection tests: root `AGENTS.md` references neutral contracts,
@@ -52,7 +53,12 @@ explicit temporary APFS roots and assert the complete before/after tree.
 - Journal/stderr scans proving purpose, address, and custom guidance are absent.
 - Cleanup refusal after manifest, transient creation marker, or baseline digest
   change.
-- Owner-only modes under permissive caller umask and empty-shell mode restore.
+- Extended-grapheme boundaries for combining text, emoji, flags, and ZWJ
+  sequences at 60/240 limits, with schema/semantic fixture agreement.
+- Owner-only modes under permissive caller umask; empty-shell normalization to
+  `0700` on success and original-mode restore on rollback.
+- Missing-parent creation order, success retention, reverse empty rollback, and
+  populated-parent refusal.
 
 ## Red/Green Sequence
 
@@ -164,7 +170,8 @@ Non-blocking for implementation, blocking before public artifact release:
 3. Durable artifact delivery profile, immutable binary digest, build provenance,
    signing/notarization/distribution decision, and rollback procedure.
 4. Configured nomination/acceptance/release variables and independent acceptor.
-5. Dependency review and license notice for JSON Schema validator.
+5. Dependency review and license notices for the Apache-2.0 JSON Schema
+   validator and MIT grapheme-segmentation library.
 6. Verified minimum-macOS build target and an ARM64 candidate from the approved
    release path, not a contributor-local binary.
 

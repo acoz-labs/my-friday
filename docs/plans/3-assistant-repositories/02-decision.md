@@ -25,8 +25,8 @@ Create one `my-friday` executable. Pure packages own answers, normalized
 profile values, path resolution, plan construction, template rendering,
 validation, and transaction state. A thin terminal adapter owns prompts and
 line output. Versioned templates and JSON Schemas are embedded in the binary.
-One pinned JSON Schema implementation validates both generated documents and
-the conformance fixtures.
+Pinned JSON Schema and Unicode-segmentation libraries validate generated
+documents and user-perceived character limits over shared fixtures.
 
 The repository pins Go 1.26.x in `mise.toml`, `go.mod`, and CI. The delivered
 runtime binary has no language-runtime or service dependency; official Go
@@ -74,8 +74,9 @@ Select H1 with Medium-high confidence.
 
 The implementation is a small Go module using standard-library packages for
 the terminal, JSON, hashing, embedded templates, path handling, subprocesses,
-and file operations. One reviewed and pinned JSON Schema validator is allowed;
-no CLI framework, telemetry SDK, database, daemon, network client, template
+and file operations. Two reviewed dependencies are allowed: the JSON Schema
+validator and `github.com/rivo/uniseg` v0.4.7 for extended grapheme clusters.
+No CLI framework, telemetry SDK, database, daemon, network client, template
 repository fetch, or plugin system is introduced.
 
 The core boundary is a canonical `CreationPlan`. Prompt answers are normalized
@@ -117,6 +118,7 @@ Consequences:
 | D10 | Keep UI line-oriented and ANSI-independent. | Accessibility and deterministic evidence. | Supplied product-experience contract |
 | D11 | Use `implementation` execution envelope. | No declared artifact/release contract, naming clearance, or exact-machine evidence yet. | Current `docs/deployment.md` and unknowns U1-U4 |
 | D12 | Keep profile/manifests/planner harness-neutral and render only a Codex `AGENTS.md` projection in O1. | Preserve an extension seam without alternate harnesses, adapter machinery, or lowest-common-denominator semantics. | Product-authority guidance; O1/O2 remain Codex-first |
+| D13 | Count user text limits with `github.com/rivo/uniseg` v0.4.7 extended grapheme clusters; cap custom guidance at 240. | User-perceived characters treat combining sequences/emoji coherently and preserve the approved profile boundary. | Product-experience contract; <https://github.com/rivo/uniseg/tree/v0.4.7> |
 
 ## Rejected Mechanisms And Scope
 

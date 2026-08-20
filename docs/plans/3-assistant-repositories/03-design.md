@@ -61,17 +61,18 @@ handling requests rollback; an uncatchable interruption is resolved by
   color is optional decoration only and disabled when output is not a TTY.
 - Earlier answers remain visible. Validation errors identify field, rule, and
   corrective action without clearing the screen.
-- Name is 1-60 Unicode scalar values; optional form of address is 0-60; purpose
-  is 1-240. Leading/trailing Unicode whitespace is trimmed.
+- Name is 1-60 extended grapheme clusters (user-perceived characters); optional
+  form of address is 0-60; purpose is 1-240. Leading/trailing Unicode
+  whitespace is trimmed before counting.
 - Style is `Balanced`, `Concise`, `Conversational`, or `Custom`. Custom guidance
-  is required only for `Custom` and is 1-500 Unicode scalar values.
+  is required only for `Custom` and is 1-240 extended grapheme clusters.
 - Profile fields reject NUL, control characters, Unicode format characters,
   and line/paragraph separators. Ordinary Unicode remains valid without
   permitting terminal or structured-output control injection.
-- Location mode is one existing parent (derive `<slug>-ai` and
-  `<slug>-memory`) or two explicit targets. Slug generation lowercases ASCII
-  letters/digits, maps other runs to `-`, trims separators, and falls back to
-  `assistant`; preview exposes the result for editing.
+- Location mode is one selected parent with stable editable child defaults
+  `my-friday-runtime` and `my-friday-memory`, or two explicit targets. The
+  assistant name is never transliterated into a path. Parent directories may
+  be missing; every segment to create is listed in Preview.
 - Confirmation is `Create these two repositories? [type Create; default Exit]`.
   Only case-sensitive `Create` proceeds; every other input exits without disk
   mutation.
@@ -199,6 +200,11 @@ future records require a versioned schema and O3's proposal/promotion flow.
 
 - Schemas use JSON Schema draft 2020-12, stable public `$id` values, and
   `additionalProperties: false` for owned objects.
+- JSON Schema `maxLength` counts code points rather than user-perceived
+  characters, so profile schemas carry the documented annotation
+  `x-my-friday-max-graphemes`. The semantic profile validator uses pinned
+  `github.com/rivo/uniseg` v0.4.7 to enforce those limits; schema and semantic
+  validators share the same conformance corpus.
 - The executable uses embedded schemas as authority and verifies generated
   copies by digest. Generated copies make the contract inspectable.
 - Validation uses pinned `github.com/santhosh-tekuri/jsonschema/v6` v6.0.2.
@@ -220,16 +226,23 @@ future records require a versioned schema and O3's proposal/promotion flow.
 
 ### Filesystem ownership and lifecycle
 
-- New target/stage/support directories are `0700`; files are `0600`. The
-  process applies umask `077` while creating owned state and restores it before
-  exit. An existing empty shell's original mode is preserved/restored.
+- New parent/target/stage/support directories are `0700`; files are `0600`.
+  The process applies umask `077` while creating owned state and restores it
+  before exit. Adopting an existing empty target shell is previewed as a mode
+  normalization: the completed repository is `0700`. Rollback restores the
+  original empty shell and its original mode.
 - A target may be absent or an existing real empty directory. Symlink targets,
   non-directories, and non-empty directories are collisions.
 - Canonicalization resolves every existing ancestor, appends nonexistent
   components, cleans separators, and compares canonical identities. Targets
   must be distinct and neither may contain the other.
-- `/` and the exact resolved home are forbidden. Parents must already exist,
-  be writable local APFS, and remain unchanged at mutation recheck.
+- `/` and the exact resolved home are forbidden. For each target, the nearest
+  existing ancestor must be a writable local APFS directory. Every missing
+  parent segment is canonicalized from that ancestor, de-duplicated across
+  targets, ordered parent-before-child in the plan, created as `0700` only after
+  confirmation, and removed in reverse only when this transaction created it
+  and it remains empty during rollback. Ancestors and created parents are
+  rechecked at every mutation.
 - Starter files persist until the user changes them. No successful-run registry
   creates hidden retention or deletion behavior.
 
@@ -239,7 +252,7 @@ future records require a versioned schema and O3's proposal/promotion flow.
 
 | Command | Inputs | Success | Errors / idempotency |
 |---|---|---|---|
-| `my-friday init` (and no-argument alias) | Interactive wizard | Exit 0; prints verified paths/IDs, no-commit/no-remote statement, and next action. | Exit 0 on pre-create Exit; typed non-zero errors. Repeated plan collides and recommends `validate`, never merges. |
+| `my-friday init` (and no-argument alias) | Interactive wizard | Exit 0; prints verified paths/IDs, resulting `0700` repository modes, any created parent paths, no-commit/no-remote statement, and next action. | Exit 0 on pre-create Exit; typed non-zero errors. Repeated plan collides and recommends `validate`, never merges. |
 | `my-friday validate --runtime PATH --memory PATH` | Explicit pair | Exit 0 with versions, roles, matching assistant ID, and summary. | Read-only/repeatable; unknown contract, schema, role, Git, or path errors are non-zero. |
 | `my-friday recover --transaction PATH` | Exact journal path | Exit 0 after finishing a valid pair/cleanup or restoring both original states. | Idempotent; corrupt/mismatched/foreign state causes no mutation and prints bounded manual evidence. |
 | `my-friday version` | None | Tool and contract versions. | Read-only. |
@@ -282,7 +295,7 @@ empty template directory is transaction-owned and removed after completion.
 | Subject | Action / resource | Decision and enforcement | Denial / evidence |
 |---|---|---|---|
 | Local user | Supply profile values | Allowed after validation; values written only to runtime profile. | Re-prompt; no mutation. |
-| Local user | Select targets | Allowed only for supported canonical paths with writable APFS parents and absent/empty real targets. | Preflight error; no mutation. |
+| Local user | Select targets | Allowed only when each nearest existing ancestor is writable APFS and each target is absent/empty real; missing segments must be explicit planned actions. | Preflight error; no mutation. |
 | Local user | Create | Allowed only by exact `Create` after preview. | Default Exit; transcript proves no mutation. |
 | Tool | Write target/support paths | Limited to exact plan paths with reservations/ownership markers. | Recheck or reservation mismatch aborts/recovers. |
 | Tool | Read machine | OS/arch, home for exact rejection, filesystem, target entries, Git version, embedded assets. | No crawl, import, global Codex read, or secret lookup. |
@@ -300,18 +313,22 @@ purpose, or custom guidance.
 ### Transaction protocol
 
 1. Complete read-only preflight and render both repositories in memory.
-2. After `Create`, create the journal with `O_EXCL`, `0600`, phase `journaled`,
-   and fsync it and parent.
-3. Acquire reservation files for both targets in lexical path order with
-   `O_EXCL`; each points to the journal. Update/fsync journal after each.
-4. Create sibling stages on each target filesystem. Write files, create an empty
+2. After `Create`, create the journal with `O_EXCL`, `0600`, in the runtime
+   target's nearest existing ancestor and fsync it and that ancestor.
+3. Acquire reservation files in each target's nearest existing ancestor in
+   lexical canonical-target order with `O_EXCL`; each points to the journal.
+   Update/fsync journal after each.
+4. Create every planned missing parent segment in parent-before-child order as
+   `0700`, recording/fsyncing each transition. Create sibling stages on each
+   target filesystem. Write files, create an empty
    Git template, initialize Git, add a transient
    `.my-friday/creation-state.json` containing only plan/role IDs, and fsync
    content/directories.
 5. Validate both staged repositories in fresh mode before promotion.
-6. Recheck parents/targets/reservations. Rename any empty shell to planned
-   backup, record/fsync, then rename runtime stage and memory stage to targets,
-   updating the journal after each.
+6. Recheck parents/targets/reservations. Rename any empty shell to a planned
+   backup that retains its original mode, record/fsync, then rename the runtime
+   and memory stages to targets and enforce `0700` on each completed target,
+   updating the journal after every transition.
 7. Validate final pair, remove both transient creation markers, validate the
    exact durable pair, then remove verified backups, reservations, stages, and
    journal; fsync parents. Print success only after cleanup.
@@ -322,11 +339,15 @@ and recovery can find exactly one state.
 
 ### Automatic rollback and recovery
 
-- Before promotion, rollback removes only transaction-owned support state.
+- Before promotion, rollback removes only transaction-owned support state and
+  then removes transaction-created parent segments in child-before-parent order
+  only while they remain empty.
 - After promotion, rollback verifies assistant/role manifests, any transient
   creation marker, and exact baseline digests recorded in the journal. Unknown
   changes stop deletion and retain recovery-required state.
-- Empty-shell backups restore original mode; new targets return to absence.
+- Empty-shell backups restore original mode; new targets return to absence;
+  owned empty parents return to absence. A populated created parent is retained
+  and reported rather than removed speculatively.
 - `recover` locks/revalidates the journal and paths. If both final targets
   validate, it cleans up; if one final and its staged counterpart validate, it
   completes promotion; otherwise it restores the original state.
