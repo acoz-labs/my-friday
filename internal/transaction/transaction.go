@@ -183,6 +183,9 @@ func createJournal(path string, j journal) error {
 func Recover(journalPath string) error {
 	b, err := os.ReadFile(journalPath)
 	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
 		return err
 	}
 	var j journal

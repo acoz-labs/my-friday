@@ -3,6 +3,7 @@ package transaction
 import (
 	"github.com/acoz-labs/my-friday/internal/plan"
 	"github.com/acoz-labs/my-friday/internal/profile"
+	"github.com/acoz-labs/my-friday/internal/repository"
 	"os"
 	"path/filepath"
 	"testing"
@@ -47,6 +48,28 @@ func TestFailureRollsBack(t *testing.T) {
 		if _, e := os.Stat(p); !os.IsNotExist(e) {
 			t.Fatalf("target retained: %s", p)
 		}
+	}
+}
+
+func TestFaultMatrixRollsBackEveryPublishedTransition(t *testing.T) {
+	for _, phase := range []string{"journaled", "staged", "validated", "promoted-runtime", "promoted-memory"} {
+		t.Run(phase, func(t *testing.T) {
+			pl := testPlan(t)
+			_, err := Execute(pl, func(got string) error {
+				if got == phase {
+					return os.ErrInvalid
+				}
+				return nil
+			})
+			if err == nil {
+				t.Fatal("expected failure")
+			}
+			for _, target := range []string{pl.Targets.Runtime, pl.Targets.Memory} {
+				if _, statErr := os.Stat(target); !os.IsNotExist(statErr) {
+					t.Fatalf("target retained: %s", target)
+				}
+			}
+		})
 	}
 }
 
@@ -95,5 +118,32 @@ func TestMissingParentsRemovedOnRollback(t *testing.T) {
 	}
 	if _, err = os.Stat(filepath.Join(root, "new")); !os.IsNotExist(err) {
 		t.Fatal("transaction-owned parent retained")
+	}
+}
+
+func TestRecoverCompletesPartialPromotion(t *testing.T) {
+	pl := testPlan(t)
+	support := filepath.Join(filepath.Dir(pl.Targets.Runtime), ".my-friday-recovery-test")
+	runtimeStage := support + "-runtime"
+	memoryStage := support + "-memory"
+	if err := repository.Create(pl, runtimeStage, memoryStage); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Rename(runtimeStage, pl.Targets.Runtime); err != nil {
+		t.Fatal(err)
+	}
+	jp := support + ".json"
+	j := journal{PlanID: pl.PlanID, Phase: "promoted-runtime", Runtime: pl.Targets.Runtime, Memory: pl.Targets.Memory, RuntimeStage: runtimeStage, MemoryStage: memoryStage}
+	if err := createJournal(jp, j); err != nil {
+		t.Fatal(err)
+	}
+	if err := Recover(jp); err != nil {
+		t.Fatal(err)
+	}
+	if err := repository.ValidatePair(pl.Targets.Runtime, pl.Targets.Memory); err != nil {
+		t.Fatal(err)
+	}
+	if err := Recover(jp); err != nil {
+		t.Fatalf("second recovery must be safe: %v", err)
 	}
 }

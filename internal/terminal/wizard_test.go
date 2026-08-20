@@ -40,3 +40,19 @@ func TestExplicitCreate(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestBackFromConfirmationPreservesProfile(t *testing.T) {
+	root := t.TempDir()
+	in := strings.NewReader("\nFriday\nBoss\nHelp me work\n2\n\n" + root + "\nb\n\n" + root + "\nCreate\n")
+	var out bytes.Buffer
+	result, err := Run(in, &out, root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result != "Complete" {
+		t.Fatal(result)
+	}
+	if strings.Count(out.String(), "Step 4 of 7: Locations") != 2 {
+		t.Fatal("confirmation back did not return to locations")
+	}
+}

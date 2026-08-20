@@ -66,87 +66,92 @@ func Run(input io.Reader, output io.Writer, invocationDir string) (string, error
 	if err != nil {
 		return "", err
 	}
-	fmt.Fprintln(output, "Step 4 of 7: Locations\n1 One parent with stable names (default)\n2 Two separate targets")
-	locationMode, _ := line("Choose 1-2")
-	if locationMode == "q" {
-		return exit(output), nil
-	}
-	var runtime, memory string
-	if locationMode == "" || locationMode == "1" {
-		parent, _ := line("Parent directory (default: invocation directory)")
-		if parent == "q" {
+	for {
+		fmt.Fprintln(output, "Step 4 of 7: Locations\n1 One parent with stable names (default)\n2 Two separate targets")
+		locationMode, _ := line("Choose 1-2")
+		if locationMode == "q" {
 			return exit(output), nil
 		}
-		if parent == "" {
-			parent = invocationDir
+		var runtime, memory string
+		if locationMode == "" || locationMode == "1" {
+			parent, _ := line("Parent directory (default: invocation directory)")
+			if parent == "q" {
+				return exit(output), nil
+			}
+			if parent == "" {
+				parent = invocationDir
+			}
+			parent, err = resolve(parent, invocationDir)
+			if err != nil {
+				return "", err
+			}
+			runtime, memory = filepath.Join(parent, "my-friday-runtime"), filepath.Join(parent, "my-friday-memory")
+		} else if locationMode == "2" {
+			runtime, _ = line("Runtime target")
+			memory, _ = line("Memory target")
+			if runtime == "q" || memory == "q" {
+				return exit(output), nil
+			}
+			runtime, err = resolve(runtime, invocationDir)
+			if err != nil {
+				return "", err
+			}
+			memory, err = resolve(memory, invocationDir)
+			if err != nil {
+				return "", err
+			}
+		} else {
+			return "", fmt.Errorf("location mode: choose 1 or 2")
 		}
-		parent, err = resolve(parent, invocationDir)
+		if f, ok := input.(*os.File); ok {
+			if err := environment.Check(existingAncestor(runtime), f); err != nil {
+				return "", err
+			}
+			if err := environment.Check(existingAncestor(memory), f); err != nil {
+				return "", err
+			}
+		}
+		pl, err := plan.Build(p, runtime, memory)
 		if err != nil {
 			return "", err
 		}
-		runtime, memory = filepath.Join(parent, "my-friday-runtime"), filepath.Join(parent, "my-friday-memory")
-	} else if locationMode == "2" {
-		runtime, _ = line("Runtime target")
-		memory, _ = line("Memory target")
-		if runtime == "q" || memory == "q" {
+		fmt.Fprintln(output, "Step 5 of 7: Preview")
+		fmt.Fprintf(output, "Plan: %s\nAssistant: %s\nRuntime: %s\nMemory: %s\n", pl.PlanID, pl.AssistantID, runtime, memory)
+		for _, parent := range pl.MissingParents {
+			fmt.Fprintln(output, "- create parent", parent, "mode 0700")
+		}
+		for _, support := range pl.SupportPaths {
+			fmt.Fprintln(output, "- temporary support", support, "(removed after success)")
+		}
+		for _, f := range pl.Files {
+			fmt.Fprintf(output, "- file %s:%s mode %04o sha256 %s\n", f.Role, f.Path, f.Mode, f.SHA256)
+		}
+		for _, a := range pl.Actions {
+			fmt.Fprintln(output, "-", a)
+		}
+		for _, a := range pl.NegativeActions {
+			fmt.Fprintln(output, "-", a)
+		}
+		fmt.Fprintln(output, "Step 6 of 7: Creation and verification")
+		confirm, _ := line("Create these two repositories? [type Create; default Exit]")
+		if confirm == "b" {
+			continue
+		}
+		if confirm != "Create" {
 			return exit(output), nil
 		}
-		runtime, err = resolve(runtime, invocationDir)
+		fmt.Fprintln(output, "Preflight")
+		result, err := transaction.Execute(pl, nil)
 		if err != nil {
 			return "", err
 		}
-		memory, err = resolve(memory, invocationDir)
-		if err != nil {
-			return "", err
-		}
-	} else {
-		return "", fmt.Errorf("location mode: choose 1 or 2")
+		fmt.Fprintln(output, "Reserved\nStaged runtime\nStaged memory\nValidated\nPromoted runtime\nPromoted memory\nVerified")
+		fmt.Fprintln(output, "Step 7 of 7: Result")
+		fmt.Fprintln(output, result)
+		fmt.Fprintln(output, runtime)
+		fmt.Fprintln(output, memory)
+		return result, nil
 	}
-	if f, ok := input.(*os.File); ok {
-		if err := environment.Check(existingAncestor(runtime), f); err != nil {
-			return "", err
-		}
-		if err := environment.Check(existingAncestor(memory), f); err != nil {
-			return "", err
-		}
-	}
-	pl, err := plan.Build(p, runtime, memory)
-	if err != nil {
-		return "", err
-	}
-	fmt.Fprintln(output, "Step 5 of 7: Preview")
-	fmt.Fprintf(output, "Plan: %s\nAssistant: %s\nRuntime: %s\nMemory: %s\n", pl.PlanID, pl.AssistantID, runtime, memory)
-	for _, parent := range pl.MissingParents {
-		fmt.Fprintln(output, "- create parent", parent, "mode 0700")
-	}
-	for _, support := range pl.SupportPaths {
-		fmt.Fprintln(output, "- temporary support", support, "(removed after success)")
-	}
-	for _, f := range pl.Files {
-		fmt.Fprintf(output, "- file %s:%s mode %04o sha256 %s\n", f.Role, f.Path, f.Mode, f.SHA256)
-	}
-	for _, a := range pl.Actions {
-		fmt.Fprintln(output, "-", a)
-	}
-	for _, a := range pl.NegativeActions {
-		fmt.Fprintln(output, "-", a)
-	}
-	fmt.Fprintln(output, "Step 6 of 7: Creation and verification")
-	confirm, _ := line("Create these two repositories? [type Create; default Exit]")
-	if confirm != "Create" {
-		return exit(output), nil
-	}
-	fmt.Fprintln(output, "Preflight")
-	result, err := transaction.Execute(pl, nil)
-	if err != nil {
-		return "", err
-	}
-	fmt.Fprintln(output, "Reserved\nStaged runtime\nStaged memory\nValidated\nPromoted runtime\nPromoted memory\nVerified")
-	fmt.Fprintln(output, "Step 7 of 7: Result")
-	fmt.Fprintln(output, result)
-	fmt.Fprintln(output, runtime)
-	fmt.Fprintln(output, memory)
-	return result, nil
 }
 func exit(w io.Writer) string { fmt.Fprintln(w, "No changes made"); return "Exit" }
 func resolve(value, cwd string) (string, error) {
