@@ -28,7 +28,7 @@ Review the complete plan, then type the case-sensitive word `Create` to write
 anything. Return at confirmation safely exits. Validate a generated pair with:
 
 ```sh
-./my-friday validate /path/to/my-friday-runtime /path/to/my-friday-memory
+./my-friday validate --runtime /path/to/my-friday-runtime --memory /path/to/my-friday-memory
 ```
 
 The broader product direction and deferred outcomes remain in

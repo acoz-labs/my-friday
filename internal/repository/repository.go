@@ -49,18 +49,36 @@ func Create(pl plan.CreationPlan, runtime, memory string) error {
 }
 
 func ValidatePair(runtime, memory string) error {
+	_, _, err := validatePair(runtime, memory, false)
+	return err
+}
+
+func ValidateFreshPair(runtime, memory string) error {
+	_, _, err := validatePair(runtime, memory, true)
+	return err
+}
+
+func validatePair(runtime, memory string, fresh bool) (string, string, error) {
 	rid, err := validate(runtime, "runtime")
 	if err != nil {
-		return err
+		return "", "", err
 	}
 	mid, err := validate(memory, "memory")
 	if err != nil {
-		return err
+		return "", "", err
 	}
 	if rid != mid {
-		return fmt.Errorf("assistant identifiers do not match")
+		return "", "", fmt.Errorf("assistant identifiers do not match")
 	}
-	return nil
+	if fresh {
+		if err = validateFreshGit(runtime); err != nil {
+			return "", "", err
+		}
+		if err = validateFreshGit(memory); err != nil {
+			return "", "", err
+		}
+	}
+	return rid, mid, nil
 }
 func validate(root, role string) (string, error) {
 	mb, err := os.ReadFile(filepath.Join(root, ".my-friday/manifest.json"))
@@ -73,6 +91,9 @@ func validate(root, role string) (string, error) {
 	}
 	if err = validateJSON(sb, mb); err != nil {
 		return "", fmt.Errorf("manifest schema: %w", err)
+	}
+	if !bytes.Equal(sb, []byte(plan.ManifestSchema())) {
+		return "", fmt.Errorf("repository manifest schema differs from the embedded v1 contract")
 	}
 	var m struct {
 		ContractVersion int    `json:"contract_version"`
@@ -97,6 +118,9 @@ func validate(root, role string) (string, error) {
 		if e = validateJSON(ps, pb); e != nil {
 			return "", fmt.Errorf("profile schema: %w", e)
 		}
+		if !bytes.Equal(ps, []byte(plan.ProfileSchema())) {
+			return "", fmt.Errorf("assistant profile schema differs from the embedded v1 contract")
+		}
 		var p struct {
 			AssistantID string `json:"assistant_id"`
 		}
@@ -104,18 +128,38 @@ func validate(root, role string) (string, error) {
 			return "", fmt.Errorf("profile assistant identifier mismatch")
 		}
 	}
+	allowed := map[string]bool{"manifest.json": true, "schemas": true, "schemas/repository-manifest.v1.schema.json": true, "creation-state.json": true}
+	if role == "runtime" {
+		allowed["schemas/assistant-profile.v1.schema.json"] = true
+	}
+	if err = filepath.WalkDir(filepath.Join(root, ".my-friday"), func(path string, entry fs.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		rel, _ := filepath.Rel(filepath.Join(root, ".my-friday"), path)
+		if rel != "." && !allowed[filepath.ToSlash(rel)] {
+			return fmt.Errorf("unknown owned contract path: .my-friday/%s", filepath.ToSlash(rel))
+		}
+		return nil
+	}); err != nil {
+		return "", err
+	}
+	return m.AssistantID, nil
+}
+
+func validateFreshGit(root string) error {
 	cmd := exec.Command("git", "-C", root, "symbolic-ref", "--short", "HEAD")
 	out, e := cmd.Output()
 	if e != nil || strings.TrimSpace(string(out)) != "main" {
-		return "", fmt.Errorf("repository is not an unborn main branch")
+		return fmt.Errorf("repository is not an unborn main branch")
 	}
 	if exec.Command("git", "-C", root, "rev-parse", "--verify", "HEAD").Run() == nil {
-		return "", fmt.Errorf("repository must have no commits")
+		return fmt.Errorf("repository must have no commits")
 	}
 	if out, e = exec.Command("git", "-C", root, "remote").Output(); e != nil || len(bytes.TrimSpace(out)) != 0 {
-		return "", fmt.Errorf("repository must have no remotes")
+		return fmt.Errorf("repository must have no remotes")
 	}
-	return m.AssistantID, nil
+	return nil
 }
 func validateJSON(schema, doc []byte) error {
 	var schemaValue any
@@ -138,7 +182,17 @@ func validateJSON(schema, doc []byte) error {
 }
 
 func ExactBaseline(pl plan.CreationPlan, runtime, memory string) bool {
-	if ValidatePair(runtime, memory) != nil {
+	return exactBaseline(pl, runtime, memory, false)
+}
+
+// ExactTransactionBaseline proves that both repositories contain only the
+// planned baseline plus the transaction ownership marker used before cleanup.
+func ExactTransactionBaseline(pl plan.CreationPlan, runtime, memory string) bool {
+	return exactBaseline(pl, runtime, memory, true)
+}
+
+func exactBaseline(pl plan.CreationPlan, runtime, memory string, allowMarker bool) bool {
+	if ValidateFreshPair(runtime, memory) != nil {
 		return false
 	}
 	for _, f := range pl.Files {
@@ -151,10 +205,13 @@ func ExactBaseline(pl plan.CreationPlan, runtime, memory string) bool {
 			return false
 		}
 	}
-	return noUnexpected(runtime, pl, "runtime") && noUnexpected(memory, pl, "memory")
+	return noUnexpected(runtime, pl, "runtime", allowMarker) && noUnexpected(memory, pl, "memory", allowMarker)
 }
-func noUnexpected(root string, pl plan.CreationPlan, role string) bool {
+func noUnexpected(root string, pl plan.CreationPlan, role string, allowMarker bool) bool {
 	allowed := map[string]bool{".": true, ".git": true}
+	if allowMarker {
+		allowed[".my-friday/creation-state.json"] = true
+	}
 	for _, f := range pl.Files {
 		if f.Role != role {
 			continue

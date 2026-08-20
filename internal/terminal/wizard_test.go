@@ -56,3 +56,19 @@ func TestBackFromConfirmationPreservesProfile(t *testing.T) {
 		t.Fatal("confirmation back did not return to locations")
 	}
 }
+
+func TestInvalidProfileAndChoicesRepromptWithoutMutation(t *testing.T) {
+	root := t.TempDir()
+	in := strings.NewReader("\n\nFriday\n\nHelp\n9\n2\n9\n\n" + root + "\n\n")
+	var out bytes.Buffer
+	result, err := Run(in, &out, root)
+	if err != nil || result != "Exit" {
+		t.Fatalf("result=%s err=%v", result, err)
+	}
+	if strings.Count(out.String(), "Invalid input:") < 3 {
+		t.Fatal(out.String())
+	}
+	if matches, _ := filepath.Glob(filepath.Join(root, "my-friday-*")); len(matches) != 0 {
+		t.Fatalf("unexpected writes: %v", matches)
+	}
+}

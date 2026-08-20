@@ -38,22 +38,20 @@ type CreationPlan struct {
 }
 
 func Build(p profile.Profile, runtimePath, memoryPath string) (CreationPlan, error) {
-	r, err := filepath.Abs(runtimePath)
+	r, err := canonicalTarget(runtimePath)
 	if err != nil {
 		return CreationPlan{}, err
 	}
-	r = filepath.Clean(r)
-	m, err := filepath.Abs(memoryPath)
+	m, err := canonicalTarget(memoryPath)
 	if err != nil {
 		return CreationPlan{}, err
 	}
-	m = filepath.Clean(m)
-	if r == m || nested(r, m) || nested(m, r) {
+	if strings.EqualFold(r, m) || nestedFold(r, m) || nestedFold(m, r) {
 		return CreationPlan{}, fmt.Errorf("runtime and memory targets must be distinct and non-nested")
 	}
 	home, _ := os.UserHomeDir()
-	home, _ = filepath.Abs(home)
-	if r == "/" || m == "/" || r == home || m == home {
+	home, _ = canonicalTarget(home)
+	if r == "/" || m == "/" || strings.EqualFold(r, home) || strings.EqualFold(m, home) {
 		return CreationPlan{}, fmt.Errorf("targets cannot be root or the user home")
 	}
 	aidHash := sha256.Sum256([]byte("my-friday-assistant-v1\x00" + p.Identity.DisplayName + "\x00" + r + "\x00" + m))
@@ -83,6 +81,40 @@ func Build(p profile.Profile, runtimePath, memoryPath string) (CreationPlan, err
 	pl.ReservationPaths = []string{reservationPath(r), reservationPath(m)}
 	pl.SupportPaths = append(pl.SupportPaths, pl.ReservationPaths...)
 	return pl, nil
+}
+func canonicalTarget(value string) (string, error) {
+	abs, err := filepath.Abs(value)
+	if err != nil {
+		return "", err
+	}
+	abs = filepath.Clean(abs)
+	ancestor := abs
+	var suffix []string
+	for {
+		if _, err = os.Lstat(ancestor); err == nil {
+			break
+		}
+		if !os.IsNotExist(err) {
+			return "", err
+		}
+		suffix = append(suffix, filepath.Base(ancestor))
+		next := filepath.Dir(ancestor)
+		if next == ancestor {
+			return "", fmt.Errorf("no existing ancestor for %s", value)
+		}
+		ancestor = next
+	}
+	resolved, err := filepath.EvalSymlinks(ancestor)
+	if err != nil {
+		return "", err
+	}
+	for i := len(suffix) - 1; i >= 0; i-- {
+		resolved = filepath.Join(resolved, suffix[i])
+	}
+	return filepath.Clean(resolved), nil
+}
+func nestedFold(parent, child string) bool {
+	return nested(strings.ToLower(parent), strings.ToLower(child))
 }
 func nested(parent, child string) bool {
 	rel, err := filepath.Rel(parent, child)
@@ -142,7 +174,7 @@ func render(role string, p profile.Profile) []File {
 		pb = append(pb, '\n')
 		files = append(files, file(role, "assistant/profile.json", pb), file(role, "skills/.gitkeep", nil), file(role, ".my-friday/schemas/assistant-profile.v1.schema.json", []byte(profileSchema)), file(role, ".my-friday/schemas/repository-manifest.v1.schema.json", []byte(manifestSchema)))
 	} else {
-		files = append(files, file(role, "records/identity/.gitkeep", nil), file(role, "records/preferences/.gitkeep", nil), file(role, "records/projects/.gitkeep", nil), file(role, "records/people/.gitkeep", nil), file(role, "proposals/.gitkeep", nil), file(role, ".my-friday/schemas/repository-manifest.v1.schema.json", []byte(manifestSchema)))
+		files = append(files, file(role, "data/observations/.gitkeep", nil), file(role, "data/journals/.gitkeep", nil), file(role, "data/proposals/.gitkeep", nil), file(role, "data/memories/.gitkeep", nil), file(role, "schemas/README.md", []byte("# Memory schemas\n\nReserved for versioned governed-memory schemas in a future outcome.\n")), file(role, ".my-friday/schemas/repository-manifest.v1.schema.json", []byte(manifestSchema)))
 	}
 	sort.Slice(files, func(i, j int) bool { return files[i].Path < files[j].Path })
 	return files
@@ -163,3 +195,6 @@ func agents(role string) string {
 
 const manifestSchema = `{"$schema":"https://json-schema.org/draft/2020-12/schema","type":"object","additionalProperties":false,"required":["contract_version","repository_role","assistant_id","generation"],"properties":{"contract_version":{"const":1},"repository_role":{"enum":["runtime","memory"]},"assistant_id":{"type":"string","pattern":"^asst-[0-9a-f]{32}$"},"generation":{"type":"object","additionalProperties":false,"required":["tool","tool_contract_version"],"properties":{"tool":{"const":"my-friday"},"tool_contract_version":{"const":1}}}}}`
 const profileSchema = `{"$schema":"https://json-schema.org/draft/2020-12/schema","type":"object","additionalProperties":false,"required":["contract_version","assistant_id","identity","communication"],"properties":{"contract_version":{"const":1},"assistant_id":{"type":"string","pattern":"^asst-[0-9a-f]{32}$"},"identity":{"type":"object","additionalProperties":false,"required":["display_name","address_user_as","purpose"],"properties":{"display_name":{"type":"string","minLength":1},"address_user_as":{"type":["string","null"]},"purpose":{"type":"string","minLength":1}}},"communication":{"type":"object","additionalProperties":false,"required":["preset","custom_guidance"],"properties":{"preset":{"enum":["balanced","concise","conversational","custom"]},"custom_guidance":{"type":["string","null"]}}}}}`
+
+func ManifestSchema() string { return manifestSchema }
+func ProfileSchema() string  { return profileSchema }

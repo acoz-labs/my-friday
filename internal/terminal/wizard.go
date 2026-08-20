@@ -34,33 +34,69 @@ func Run(input io.Reader, output io.Writer, invocationDir string) (string, error
 		return exit(output), nil
 	}
 	fmt.Fprintln(output, "Step 2 of 7: Identity")
-	name, e := line("Assistant display name")
-	if e != nil && e != io.EOF {
+	validatedText := func(prompt string, limit int, required bool) (string, bool, error) {
+		for {
+			value, readErr := line(prompt)
+			if readErr != nil && readErr != io.EOF {
+				return "", false, readErr
+			}
+			if value == "q" {
+				return "", true, nil
+			}
+			if value == "b" {
+				fmt.Fprintln(output, "Back is unavailable at this field; enter a value or q to quit.")
+				continue
+			}
+			normalized, validationErr := profile.Normalize(value, limit, required)
+			if validationErr != nil {
+				fmt.Fprintf(output, "Invalid input: %v. Try again.\n", validationErr)
+				continue
+			}
+			return normalized, false, nil
+		}
+	}
+	name, quit, e := validatedText("Assistant display name", 60, true)
+	if e != nil {
 		return "", e
 	}
-	if name == "q" {
+	if quit {
 		return exit(output), nil
 	}
-	address, _ := line("How should the assistant address you? (optional)")
-	if address == "q" {
+	address, quit, e := validatedText("How should the assistant address you? (optional)", 60, false)
+	if e != nil {
+		return "", e
+	}
+	if quit {
 		return exit(output), nil
 	}
-	purpose, _ := line("Assistant purpose")
-	if purpose == "q" {
+	purpose, quit, e := validatedText("Assistant purpose", 240, true)
+	if e != nil {
+		return "", e
+	}
+	if quit {
 		return exit(output), nil
 	}
 	fmt.Fprintln(output, "Step 3 of 7: Communication style\n1 Balanced (default)\n2 Concise\n3 Conversational\n4 Custom")
-	choice, _ := line("Choose 1-4")
-	if choice == "q" {
-		return exit(output), nil
-	}
-	preset := map[string]string{"": "balanced", "1": "balanced", "2": "concise", "3": "conversational", "4": "custom"}[choice]
-	if preset == "" {
-		return "", fmt.Errorf("communication style: choose 1, 2, 3, or 4")
+	preset := ""
+	for preset == "" {
+		choice, _ := line("Choose 1-4")
+		if choice == "q" {
+			return exit(output), nil
+		}
+		preset = map[string]string{"": "balanced", "1": "balanced", "2": "concise", "3": "conversational", "4": "custom"}[choice]
+		if preset == "" {
+			fmt.Fprintln(output, "Invalid input: choose 1, 2, 3, or 4. Try again.")
+		}
 	}
 	guidance := ""
 	if preset == "custom" {
-		guidance, _ = line("Custom guidance")
+		guidance, quit, e = validatedText("Custom guidance", 240, true)
+		if e != nil {
+			return "", e
+		}
+		if quit {
+			return exit(output), nil
+		}
 	}
 	p, err := profile.New(name, address, purpose, preset, guidance)
 	if err != nil {
@@ -101,7 +137,8 @@ func Run(input io.Reader, output io.Writer, invocationDir string) (string, error
 				return "", err
 			}
 		} else {
-			return "", fmt.Errorf("location mode: choose 1 or 2")
+			fmt.Fprintln(output, "Invalid input: choose 1 or 2. Try again.")
+			continue
 		}
 		if f, ok := input.(*os.File); ok {
 			if err := environment.Check(existingAncestor(runtime), f); err != nil {

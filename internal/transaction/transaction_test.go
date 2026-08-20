@@ -123,17 +123,24 @@ func TestMissingParentsRemovedOnRollback(t *testing.T) {
 
 func TestRecoverCompletesPartialPromotion(t *testing.T) {
 	pl := testPlan(t)
-	support := filepath.Join(filepath.Dir(pl.Targets.Runtime), ".my-friday-recovery-test")
-	runtimeStage := support + "-runtime"
-	memoryStage := support + "-memory"
+	jp, runtimeStage, memoryStage, _, err := derivedPaths(pl.PlanID, pl.Targets.Runtime, pl.Targets.Memory)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if err := repository.Create(pl, runtimeStage, memoryStage); err != nil {
 		t.Fatal(err)
+	}
+	for _, stage := range []string{runtimeStage, memoryStage} {
+		if err := os.WriteFile(filepath.Join(stage, ownershipMarker), []byte(pl.PlanID+"\n"), 0600); err != nil {
+			t.Fatal(err)
+		}
 	}
 	if err := os.Rename(runtimeStage, pl.Targets.Runtime); err != nil {
 		t.Fatal(err)
 	}
-	jp := support + ".json"
 	j := journal{PlanID: pl.PlanID, Phase: "promoted-runtime", Runtime: pl.Targets.Runtime, Memory: pl.Targets.Memory, RuntimeStage: runtimeStage, MemoryStage: memoryStage}
+	j.Reservations = pl.ReservationPaths
+	j.Expected = expectedFiles(pl)
 	if err := createJournal(jp, j); err != nil {
 		t.Fatal(err)
 	}
@@ -162,5 +169,70 @@ func TestForeignReservationBlocksBeforeStaging(t *testing.T) {
 	}
 	if b, readErr := os.ReadFile(pl.ReservationPaths[0]); readErr != nil || string(b) != "foreign\n" {
 		t.Fatal("foreign reservation was altered")
+	}
+}
+
+func TestRollbackPreservesForeignChangesAndJournal(t *testing.T) {
+	pl := testPlan(t)
+	_, err := Execute(pl, func(phase string) error {
+		if phase != "promoted-runtime" {
+			return nil
+		}
+		if writeErr := os.WriteFile(filepath.Join(pl.Targets.Runtime, "foreign.txt"), []byte("keep me"), 0600); writeErr != nil {
+			t.Fatal(writeErr)
+		}
+		return os.ErrInvalid
+	})
+	if err == nil {
+		t.Fatal("expected recovery-required failure")
+	}
+	if b, readErr := os.ReadFile(filepath.Join(pl.Targets.Runtime, "foreign.txt")); readErr != nil || string(b) != "keep me" {
+		t.Fatal("foreign target change was removed")
+	}
+	journalPath := filepath.Join(filepath.Dir(pl.Targets.Runtime), ".my-friday-"+pl.PlanID[:16]+".json")
+	if _, statErr := os.Stat(journalPath); statErr != nil {
+		t.Fatal("recovery journal was not retained")
+	}
+}
+
+func TestRecoverRejectsJournalSuppliedSupportPath(t *testing.T) {
+	pl := testPlan(t)
+	foreign := filepath.Join(t.TempDir(), "foreign")
+	if err := os.Mkdir(foreign, 0700); err != nil {
+		t.Fatal(err)
+	}
+	j := journal{PlanID: pl.PlanID, Runtime: pl.Targets.Runtime, Memory: pl.Targets.Memory,
+		RuntimeStage: foreign, MemoryStage: foreign + "-memory"}
+	jp := filepath.Join(filepath.Dir(pl.Targets.Runtime), ".my-friday-"+pl.PlanID[:16]+".json")
+	if err := createJournal(jp, j); err != nil {
+		t.Fatal(err)
+	}
+	if err := Recover(jp); err == nil {
+		t.Fatal("expected untrusted support path rejection")
+	}
+	if _, err := os.Stat(foreign); err != nil {
+		t.Fatal("foreign path was altered")
+	}
+}
+
+func TestTransitionRevalidationPreservesTargetCreatedAfterPreview(t *testing.T) {
+	pl := testPlan(t)
+	_, err := Execute(pl, func(phase string) error {
+		if phase != "validated" {
+			return nil
+		}
+		if mkdirErr := os.Mkdir(pl.Targets.Runtime, 0700); mkdirErr != nil {
+			t.Fatal(mkdirErr)
+		}
+		if writeErr := os.WriteFile(filepath.Join(pl.Targets.Runtime, "foreign"), []byte("keep"), 0600); writeErr != nil {
+			t.Fatal(writeErr)
+		}
+		return nil
+	})
+	if err == nil {
+		t.Fatal("expected changed-target denial")
+	}
+	if b, readErr := os.ReadFile(filepath.Join(pl.Targets.Runtime, "foreign")); readErr != nil || string(b) != "keep" {
+		t.Fatal("foreign target was altered")
 	}
 }
