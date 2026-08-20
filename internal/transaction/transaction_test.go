@@ -400,6 +400,111 @@ func TestRecoverRejectsShortIdentityWithoutPanicking(t *testing.T) {
 	}
 }
 
+func TestDeletionQuarantineRequiresJournalAuthorization(t *testing.T) {
+	pl := testPlan(t)
+	root := pl.Targets.Runtime
+	if err := os.MkdirAll(filepath.Join(root, filepath.Dir(ownershipMarker)), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, ownershipMarker), []byte(pl.PlanID+"\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	expected, err := treeSnapshot(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	quarantine := root + ".my-friday-delete-" + pl.PlanID[:16]
+	if err := os.Mkdir(quarantine, 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(quarantine, "foreign"), []byte("keep"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	j := journal{PlanID: pl.PlanID, DeletionPaths: map[string]string{}}
+	if err := createJournal(pl.SupportPaths[0], j); err != nil {
+		t.Fatal(err)
+	}
+	if err := removeOwnedTree(pl.SupportPaths[0], &j, root, expected); err == nil {
+		t.Fatal("expected foreign quarantine collision")
+	}
+	if b, err := os.ReadFile(filepath.Join(quarantine, "foreign")); err != nil || string(b) != "keep" {
+		t.Fatal("foreign quarantine was altered")
+	}
+}
+
+func TestAuthorizedDeletionRetryRestoresOriginalEmptyShell(t *testing.T) {
+	pl := testPlan(t)
+	root := pl.Targets.Runtime
+	if err := os.MkdirAll(filepath.Join(root, filepath.Dir(ownershipMarker)), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, ownershipMarker), []byte(pl.PlanID+"\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	expected, err := treeSnapshot(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	quarantine := root + ".my-friday-delete-" + pl.PlanID[:16]
+	if err := os.Rename(root, quarantine); err != nil {
+		t.Fatal(err)
+	}
+	j := journal{
+		PlanID: pl.PlanID, Runtime: root, Memory: pl.Targets.Memory,
+		RuntimeExisted: true, RuntimeMode: 0750,
+		RuntimeStage: pl.SupportPaths[1], MemoryStage: pl.SupportPaths[2],
+		Reservations: []string{}, Expected: map[string]map[string]string{"runtime": expected, "memory": {}},
+		DeletionPaths:    map[string]string{root: quarantine},
+		DeletionExpected: map[string]map[string]string{root: expected},
+	}
+	if err := createJournal(pl.SupportPaths[0], j); err != nil {
+		t.Fatal(err)
+	}
+	if err := rollback(pl.SupportPaths[0], j, os.ErrInvalid); err == nil || !strings.Contains(err.Error(), "rolled back") {
+		t.Fatalf("rollback: %v", err)
+	}
+	info, err := os.Stat(root)
+	if err != nil || info.Mode().Perm() != 0750 {
+		t.Fatalf("shell not restored: info=%v err=%v", info, err)
+	}
+	if _, err := os.Lstat(quarantine); !os.IsNotExist(err) {
+		t.Fatal("authorized quarantine retained")
+	}
+}
+
+func TestAuthorizedDeletionRetryCompletesRenameBoundary(t *testing.T) {
+	pl := testPlan(t)
+	root := pl.Targets.Runtime
+	if err := os.MkdirAll(filepath.Join(root, filepath.Dir(ownershipMarker)), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, ownershipMarker), []byte(pl.PlanID+"\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	expected, err := treeSnapshot(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	quarantine := root + ".my-friday-delete-" + pl.PlanID[:16]
+	j := journal{
+		PlanID:           pl.PlanID,
+		DeletionPaths:    map[string]string{root: quarantine},
+		DeletionExpected: map[string]map[string]string{root: expected},
+	}
+	if err := createJournal(pl.SupportPaths[0], j); err != nil {
+		t.Fatal(err)
+	}
+	if err := removeOwnedTree(pl.SupportPaths[0], &j, root, expected); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Lstat(root); !os.IsNotExist(err) {
+		t.Fatal("root retained after authorized retry")
+	}
+	if _, err := os.Lstat(quarantine); !os.IsNotExist(err) {
+		t.Fatal("quarantine retained after authorized retry")
+	}
+}
+
 func TestTransitionRevalidationPreservesTargetCreatedAfterPreview(t *testing.T) {
 	pl := testPlan(t)
 	_, err := Execute(pl, func(phase string) error {

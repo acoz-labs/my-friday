@@ -23,6 +23,8 @@ type journal struct {
 	CreatedParents                                            []string
 	Reservations                                              []string
 	Expected                                                  map[string]map[string]string
+	DeletionPaths                                             map[string]string
+	DeletionExpected                                          map[string]map[string]string
 }
 
 const ownershipMarker = ".my-friday/creation-state.json"
@@ -90,9 +92,11 @@ func ExecuteWithProgress(pl plan.CreationPlan, fault Fault, progress func(string
 		RuntimeStage:   filepath.Join(filepath.Dir(pl.Targets.Runtime), ".my-friday-"+pl.PlanID[:16]+"-runtime"),
 		MemoryStage:    filepath.Join(filepath.Dir(pl.Targets.Memory), ".my-friday-"+pl.PlanID[:16]+"-memory"),
 		RuntimeExisted: rExists, MemoryExisted: mExists, RuntimeMode: uint32(rMode), MemoryMode: uint32(mMode),
-		CreatedParents: []string{},
-		Reservations:   pl.ReservationPaths,
-		Expected:       expectedFiles(pl),
+		CreatedParents:   []string{},
+		Reservations:     pl.ReservationPaths,
+		Expected:         expectedFiles(pl),
+		DeletionPaths:    map[string]string{},
+		DeletionExpected: map[string]map[string]string{},
 	}
 	j.RuntimeAnchor = existingAncestor(filepath.Dir(j.Runtime))
 	j.MemoryAnchor = existingAncestor(filepath.Dir(j.Memory))
@@ -376,14 +380,14 @@ func rollback(jp string, j journal, cause error) error {
 	retained := false
 	removed := map[string]bool{}
 	for _, p := range []string{j.RuntimeStage, j.MemoryStage} {
-		if err := removeMarkedStage(p, j.PlanID, nil); err != nil {
+		if err := removeMarkedStage(jp, &j, p); err != nil {
 			retained = true
 		}
 	}
 	for i, p := range []string{j.Runtime, j.Memory} {
 		role := []string{"runtime", "memory"}[i]
 		existed := []bool{j.RuntimeExisted, j.MemoryExisted}[i]
-		changed, err := removeFinalTarget(p, j.PlanID, j.Expected[role], existed)
+		changed, err := removeFinalTarget(jp, &j, p, j.Expected[role], existed)
 		if err != nil {
 			retained = true
 		} else if changed {
@@ -422,12 +426,15 @@ func rollback(jp string, j journal, cause error) error {
 	return fmt.Errorf("creation failed and was rolled back: %w", cause)
 }
 
-func removeFinalTarget(root, planID string, expected map[string]string, existed bool) (bool, error) {
+func removeFinalTarget(journalPath string, j *journal, root string, expected map[string]string, existed bool) (bool, error) {
+	if _, authorized := j.DeletionPaths[root]; authorized {
+		return true, removeOwnedTree(journalPath, j, root, expected)
+	}
 	if _, err := os.Lstat(root); os.IsNotExist(err) {
 		return false, nil
 	}
-	if marker, err := os.ReadFile(filepath.Join(root, ownershipMarker)); err == nil && string(marker) == planID+"\n" {
-		return true, removeOwnedTree(root, planID, expected)
+	if marker, err := os.ReadFile(filepath.Join(root, ownershipMarker)); err == nil && string(marker) == j.PlanID+"\n" {
+		return true, removeOwnedTree(journalPath, j, root, expected)
 	}
 	if existed {
 		info, err := os.Lstat(root)
@@ -472,16 +479,51 @@ func removeOwnedMarkerIfPresent(root, planID string) error {
 	return os.Remove(path)
 }
 
-func removeOwnedTree(root, planID string, expected map[string]string) error {
-	deleting := root + ".my-friday-delete-" + planID[:16]
-	if _, err := os.Lstat(deleting); err == nil {
-		if _, rootErr := os.Lstat(root); !os.IsNotExist(rootErr) {
+func removeOwnedTree(journalPath string, j *journal, root string, expected map[string]string) error {
+	deleting := root + ".my-friday-delete-" + j.PlanID[:16]
+	authorized, hasAuthorization := j.DeletionPaths[root]
+	if hasAuthorization && authorized != deleting {
+		return fmt.Errorf("rollback deletion authorization changed: %s", root)
+	}
+	if hasAuthorization {
+		authorizedExpected, ok := j.DeletionExpected[root]
+		if !ok {
+			return fmt.Errorf("rollback deletion proof missing: %s", root)
+		}
+		_, rootErr := os.Lstat(root)
+		_, deletingErr := os.Lstat(deleting)
+		if rootErr == nil && deletingErr == nil {
 			return fmt.Errorf("rollback deletion identity is ambiguous: %s", root)
+		}
+		if rootErr == nil && os.IsNotExist(deletingErr) {
+			marker, err := os.ReadFile(filepath.Join(root, ownershipMarker))
+			if err != nil || string(marker) != j.PlanID+"\n" {
+				return fmt.Errorf("transaction ownership marker missing or changed: %s", root)
+			}
+			actual, err := treeSnapshot(root)
+			if err != nil || !mapsEqual(actual, authorizedExpected) {
+				return fmt.Errorf("foreign or changed content prevents rollback: %s", root)
+			}
+			if err := os.Rename(root, deleting); err != nil {
+				return err
+			}
+			if err := syncDir(filepath.Dir(root)); err != nil {
+				return err
+			}
+		} else if os.IsNotExist(rootErr) && os.IsNotExist(deletingErr) {
+			return fmt.Errorf("authorized rollback quarantine is missing: %s", deleting)
+		} else if rootErr != nil && !os.IsNotExist(rootErr) {
+			return rootErr
+		} else if deletingErr != nil && !os.IsNotExist(deletingErr) {
+			return deletingErr
 		}
 		if err := os.RemoveAll(deleting); err != nil {
 			return err
 		}
 		return syncDir(filepath.Dir(deleting))
+	}
+	if _, err := os.Lstat(deleting); err == nil {
+		return fmt.Errorf("foreign rollback quarantine collision: %s", deleting)
 	} else if !os.IsNotExist(err) {
 		return err
 	}
@@ -489,7 +531,7 @@ func removeOwnedTree(root, planID string, expected map[string]string) error {
 		return nil
 	}
 	marker, err := os.ReadFile(filepath.Join(root, ownershipMarker))
-	if err != nil || string(marker) != planID+"\n" {
+	if err != nil || string(marker) != j.PlanID+"\n" {
 		return fmt.Errorf("transaction ownership marker missing or changed: %s", root)
 	}
 	actual, err := treeSnapshot(root)
@@ -499,9 +541,19 @@ func removeOwnedTree(root, planID string, expected map[string]string) error {
 	if !mapsEqual(actual, expected) {
 		return fmt.Errorf("foreign or changed content prevents rollback: %s", root)
 	}
-	// The atomic rename is the durable deletion-authority transition. A retry
-	// may finish removing this derived path even if recursive deletion stopped
-	// after removing the marker or part of the tree.
+	if j.DeletionPaths == nil {
+		j.DeletionPaths = map[string]string{}
+	}
+	if j.DeletionExpected == nil {
+		j.DeletionExpected = map[string]map[string]string{}
+	}
+	j.DeletionPaths[root] = deleting
+	j.DeletionExpected[root] = expected
+	if err := writeJournal(journalPath, *j); err != nil {
+		delete(j.DeletionPaths, root)
+		delete(j.DeletionExpected, root)
+		return err
+	}
 	if err := os.Rename(root, deleting); err != nil {
 		return err
 	}
@@ -514,34 +566,22 @@ func removeOwnedTree(root, planID string, expected map[string]string) error {
 	return syncDir(filepath.Dir(deleting))
 }
 
-func removeMarkedStage(root, planID string, _ map[string]string) error {
-	deleting := root + ".my-friday-delete-" + planID[:16]
-	if _, err := os.Lstat(deleting); err == nil {
-		if _, rootErr := os.Lstat(root); !os.IsNotExist(rootErr) {
-			return fmt.Errorf("stage deletion identity is ambiguous: %s", root)
-		}
-		if err := os.RemoveAll(deleting); err != nil {
-			return err
-		}
-		return syncDir(filepath.Dir(deleting))
+func removeMarkedStage(journalPath string, j *journal, root string) error {
+	if _, authorized := j.DeletionPaths[root]; authorized {
+		return removeOwnedTree(journalPath, j, root, nil)
 	}
 	if _, err := os.Lstat(root); os.IsNotExist(err) {
 		return nil
 	}
 	marker, err := os.ReadFile(filepath.Join(root, ownershipMarker))
-	if err != nil || string(marker) != planID+"\n" {
+	if err != nil || string(marker) != j.PlanID+"\n" {
 		return fmt.Errorf("stage ownership marker missing or changed: %s", root)
 	}
-	if err := os.Rename(root, deleting); err != nil {
+	actual, err := treeSnapshot(root)
+	if err != nil {
 		return err
 	}
-	if err := syncDir(filepath.Dir(root)); err != nil {
-		return err
-	}
-	if err := os.RemoveAll(deleting); err != nil {
-		return err
-	}
-	return syncDir(filepath.Dir(root))
+	return removeOwnedTree(journalPath, j, root, actual)
 }
 
 func treeSnapshot(root string) (map[string]string, error) {
@@ -721,15 +761,35 @@ func finishRecovery(journalPath string, j journal) error {
 }
 
 func Recover(journalPath string) error {
+	_, err := RecoverWithResult(journalPath)
+	return err
+}
+
+func RecoverWithResult(journalPath string) (string, error) {
 	b, err := os.ReadFile(journalPath)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil
-		}
-		return err
+	if os.IsNotExist(err) {
+		return "No recovery needed", nil
 	}
+	if err != nil {
+		return "", err
+	}
+	var before journal
+	if err := json.Unmarshal(b, &before); err != nil {
+		return "", err
+	}
+	if err := recoverJournal(journalPath, b); err != nil {
+		return "", err
+	}
+	if before.Phase == "journaled" || before.Phase == "stages-owned" {
+		return "Rolled back to the pre-run state", nil
+	}
+	return "Recovered and verified repository pair", nil
+}
+
+func recoverJournal(journalPath string, b []byte) error {
 	var j journal
-	if err = json.Unmarshal(b, &j); err != nil {
+	var err error
+	if err := json.Unmarshal(b, &j); err != nil {
 		return err
 	}
 	if len(j.PlanID) < 16 || !filepath.IsAbs(j.Runtime) || !filepath.IsAbs(j.Memory) || !filepath.IsAbs(j.RuntimeAnchor) || !filepath.IsAbs(j.MemoryAnchor) {
@@ -787,10 +847,10 @@ func Recover(journalPath string) error {
 		return finishRecovery(journalPath, j)
 	}
 	if repository.ValidateFreshPair(j.Runtime, j.Memory) == nil && owned(j.Runtime, "runtime") && owned(j.Memory, "memory") {
-		if err := removeOwnedTree(j.RuntimeStage, j.PlanID, j.Expected["runtime"]); err != nil {
+		if err := removeOwnedTree(journalPath, &j, j.RuntimeStage, j.Expected["runtime"]); err != nil {
 			return err
 		}
-		if err := removeOwnedTree(j.MemoryStage, j.PlanID, j.Expected["memory"]); err != nil {
+		if err := removeOwnedTree(journalPath, &j, j.MemoryStage, j.Expected["memory"]); err != nil {
 			return err
 		}
 		return finishRecovery(journalPath, j)
@@ -805,7 +865,7 @@ func Recover(journalPath string) error {
 			}
 			return err
 		}
-		if err = removeOwnedTree(j.RuntimeStage, j.PlanID, j.Expected["runtime"]); err != nil {
+		if err = removeOwnedTree(journalPath, &j, j.RuntimeStage, j.Expected["runtime"]); err != nil {
 			return err
 		}
 		return finishRecovery(journalPath, j)

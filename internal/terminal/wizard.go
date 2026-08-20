@@ -25,6 +25,9 @@ func Run(input io.Reader, output io.Writer, invocationDir string) (string, error
 		}
 		return strings.TrimSuffix(strings.TrimSuffix(s, "\n"), "\r"), e
 	}
+	values := []string{"", "", ""}
+	preset, guidance := "", ""
+scopeStep:
 	fmt.Fprintln(output, "Step 1 of 7: Scope\nMy Friday creates two separate local Git repositories. It does not install Codex, use the network, access secrets, import content, create commits, or configure remotes.")
 	v, e := line("Press Return to continue")
 	if e != nil && e != io.EOF {
@@ -33,8 +36,6 @@ func Run(input io.Reader, output io.Writer, invocationDir string) (string, error
 	if v == "q" || v == "b" {
 		return exit(output), nil
 	}
-	values := []string{"", "", ""}
-	preset, guidance := "", ""
 identityStep:
 	fmt.Fprintln(output, "Step 2 of 7: Identity")
 	validatedText := func(prompt, current string, limit int, required bool) (string, string, error) {
@@ -77,7 +78,7 @@ identityStep:
 		}
 		if action == "back" {
 			if field == 0 {
-				return exit(output), nil
+				goto scopeStep
 			}
 			field--
 			continue
@@ -245,11 +246,12 @@ styleStep:
 			if recoverNow != "r" {
 				return exit(output), nil
 			}
-			if err := transaction.Recover(journalPath); err != nil {
+			recoveryResult, err := transaction.RecoverWithResult(journalPath)
+			if err != nil {
 				return "", err
 			}
-			fmt.Fprintln(output, "Step 7 of 7: Result\nRecovered and verified")
-			return "Complete", nil
+			fmt.Fprintln(output, "Step 7 of 7: Result\n"+recoveryResult)
+			return recoveryResult, nil
 		}
 		fmt.Fprintln(output, "Step 6 of 7: Creation and verification")
 		confirm, _ := line("Create these two repositories? [type Create; default Exit]")
@@ -273,12 +275,21 @@ styleStep:
 		}
 		fmt.Fprintln(output, "Step 7 of 7: Result")
 		fmt.Fprintln(output, result)
-		fmt.Fprintf(output, "Runtime: %s mode 0700\nMemory: %s mode 0700\nAssistant: %s\nContracts: repository v1, tool v1\nGit: unborn main; no commits; no remotes\nNext: inspect the repositories, then use my-friday validate when needed\n", pl.Targets.Runtime, pl.Targets.Memory, pl.AssistantID)
+		runtimeMode := actualMode(pl.Targets.Runtime)
+		memoryMode := actualMode(pl.Targets.Memory)
+		fmt.Fprintf(output, "Runtime: %s mode %04o\nMemory: %s mode %04o\nAssistant: %s\nContracts: repository v1, tool v1\nGit: unborn main; no commits; no remotes\nNext: inspect the repositories, then use my-friday validate when needed\n", pl.Targets.Runtime, runtimeMode, pl.Targets.Memory, memoryMode, pl.AssistantID)
 		for _, parent := range pl.MissingParents {
-			fmt.Fprintf(output, "Created parent: %s mode 0700\n", parent)
+			fmt.Fprintf(output, "Created parent: %s mode %04o\n", parent, actualMode(parent))
 		}
 		return result, nil
 	}
+}
+func actualMode(path string) os.FileMode {
+	info, err := os.Stat(path)
+	if err != nil {
+		return 0
+	}
+	return info.Mode().Perm()
 }
 func runtimeValueOr(value, parent, fallback string) string {
 	if value != "" {

@@ -53,6 +53,19 @@ func TestBackFromStylePreservesIdentityAnswers(t *testing.T) {
 		t.Fatalf("answers not preserved: %+v", got.Identity)
 	}
 }
+
+func TestBackFromFirstIdentityReturnsToScope(t *testing.T) {
+	root := t.TempDir()
+	in := strings.NewReader("\nb\nq\n")
+	var out bytes.Buffer
+	result, err := Run(in, &out, root)
+	if err != nil || result != "Exit" {
+		t.Fatalf("result=%s err=%v", result, err)
+	}
+	if strings.Count(out.String(), "Step 1 of 7: Scope") != 2 {
+		t.Fatal(out.String())
+	}
+}
 func TestExplicitCreate(t *testing.T) {
 	root := t.TempDir()
 	in := strings.NewReader("\nFriday\nBoss\nHelp me work\n2\n\n" + root + "\nCreate\n")

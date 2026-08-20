@@ -17,7 +17,10 @@ or tool policy.
 ## Repository contracts
 
 Both targets are owner-only Git repositories on unborn branch `main`, with no
-commit or remote. Git initialization supplies a tool-owned empty template.
+commit or remote. Git initialization supplies a tool-owned empty template and
+writes one deterministic local configuration: repository format 0, file mode
+tracking enabled, a non-bare repository, reflog updates enabled, and Git's
+ignore-case and precompose-Unicode switches disabled.
 Each `.my-friday/manifest.json` declares contract version 1, role, shared
 `assistant_id`, and generator version. Runtime additionally owns
 `assistant/profile.json`; memory starts with empty `data/observations`,
@@ -49,9 +52,12 @@ automatic completion cannot be proven. Rollback removes a promoted repository
 only after its marker and an exact snapshot of the complete staged tree,
 including Git configuration, refs, hooks, objects, file types, modes, and
 digests, prove transaction ownership; foreign or changed content is preserved
-with the journal. An owned tree is atomically renamed to a plan-derived
-deletion path before recursive removal, preserving retry authority if cleanup
-is interrupted after deleting only part of the tree. Untouched pre-existing
+with the journal. Before rename, the journal durably records the exact
+plan-derived quarantine path and complete-tree proof. A pre-existing
+quarantine collision is preserved and blocks deletion. An authorized owned
+tree is then atomically renamed before recursive removal, preserving retry
+authority whether interruption occurs immediately before rename or after only
+part of the quarantined tree is deleted. Untouched pre-existing
 empty shells remain original state. Recovery applies the same proof before
 every promotion, re-proves the promoted pair, and rejects support paths that do
 not derive from the stored original anchors and canonical targets. Marker removal and

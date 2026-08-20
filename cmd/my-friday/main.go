@@ -71,7 +71,11 @@ func run() error {
 		if len(os.Args) != 4 || os.Args[2] != "--transaction" {
 			return fmt.Errorf("usage: my-friday recover --transaction PATH")
 		}
-		return transaction.Recover(os.Args[3])
+		result, e := transaction.RecoverWithResult(os.Args[3])
+		if e == nil {
+			fmt.Fprintln(os.Stdout, result)
+		}
+		return e
 	case "version":
 		if len(os.Args) != 2 {
 			return fmt.Errorf("usage: my-friday version")

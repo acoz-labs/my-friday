@@ -12,14 +12,16 @@ journal. Do not move, edit, or merge either target before diagnosis.
    and ask a maintainer to inspect them. Never manually delete a non-empty
    target.
 
-Success is either one valid paired baseline with no support journal, or the
-original absent/empty target state. Re-running recovery after validation is
-safe.
+The command receipt says `Recovered and verified repository pair`, `Rolled
+back to the pre-run state`, or `No recovery needed`. Re-running recovery after
+validation is safe.
 
 Before promotion, recovery removes only marker-owned partial stages, restores
 untouched empty shells and owned parent state, and removes the journal last. A
 plan-derived deletion path may briefly remain after interrupted recursive
-cleanup; rerunning the same command finishes that already-authorized deletion.
+cleanup. The journal records its exact path and complete-tree proof before
+rename; rerunning the same command finishes only that authorized deletion. A
+pre-existing foreign collision is preserved and blocks cleanup.
 
 A pair that still contains `.my-friday/creation-state.json` is incomplete even
 when its other files validate. Run the reported recovery command so cleanup can

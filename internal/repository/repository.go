@@ -54,6 +54,21 @@ func CreateWithCheckpoint(pl plan.CreationPlan, runtime, memory string, checkpoi
 		if out, err := cmd.CombinedOutput(); err != nil {
 			return fmt.Errorf("git init %s: %w: %s", target.role, err, strings.TrimSpace(string(out)))
 		}
+		for _, setting := range [][2]string{
+			{"core.repositoryformatversion", "0"},
+			{"core.filemode", "true"},
+			{"core.bare", "false"},
+			{"core.logallrefupdates", "true"},
+			{"core.ignorecase", "false"},
+			{"core.precomposeunicode", "false"},
+		} {
+			key, value := setting[0], setting[1]
+			config := exec.Command("git", "-C", target.path, "config", "--local", key, value)
+			config.Env = cmd.Env
+			if out, err := config.CombinedOutput(); err != nil {
+				return fmt.Errorf("git config %s %s: %w: %s", target.role, key, err, strings.TrimSpace(string(out)))
+			}
+		}
 		if checkpoint != nil {
 			if err := checkpoint(target.role + "-git"); err != nil {
 				return err
@@ -239,23 +254,28 @@ func exactBaseline(pl plan.CreationPlan, runtime, memory string, allowMarker boo
 }
 
 func exactFreshGitMetadata(root string) bool {
-	allowedValues := map[string]map[string]bool{
-		"core.repositoryformatversion": {"0": true},
-		"core.filemode":                {"true": true, "false": true},
-		"core.bare":                    {"false": true},
-		"core.logallrefupdates":        {"true": true},
-		"core.ignorecase":              {"true": true, "false": true},
-		"core.precomposeunicode":       {"true": true, "false": true},
+	expectedValues := map[string]string{
+		"core.repositoryformatversion": "0",
+		"core.filemode":                "true",
+		"core.bare":                    "false",
+		"core.logallrefupdates":        "true",
+		"core.ignorecase":              "false",
+		"core.precomposeunicode":       "false",
 	}
 	out, err := exec.Command("git", "-C", root, "config", "--local", "--null", "--list").Output()
 	if err != nil {
 		return false
 	}
+	seen := map[string]bool{}
 	for _, entry := range bytes.Split(bytes.TrimSuffix(out, []byte{0}), []byte{0}) {
 		parts := bytes.SplitN(entry, []byte{'\n'}, 2)
-		if len(parts) != 2 || !allowedValues[string(parts[0])][string(parts[1])] {
+		if len(parts) != 2 || seen[string(parts[0])] || expectedValues[string(parts[0])] != string(parts[1]) {
 			return false
 		}
+		seen[string(parts[0])] = true
+	}
+	if len(seen) != len(expectedValues) {
+		return false
 	}
 	allowedPaths := map[string]bool{
 		".": true, "HEAD": true, "config": true, "branches": true, "hooks": true,
