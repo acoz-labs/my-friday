@@ -23,8 +23,8 @@ func TestDefaultExitHasNoMutation(t *testing.T) {
 	if !strings.Contains(out.String(), "No changes made") || strings.Contains(out.String(), "\x1b[") {
 		t.Fatal(out.String())
 	}
-	if _, err := filepath.Glob(filepath.Join(root, "my-friday-*")); err != nil {
-		t.Fatal(err)
+	if matches, err := filepath.Glob(filepath.Join(root, "my-friday-*")); err != nil || len(matches) != 0 {
+		t.Fatalf("unexpected writes: %v err=%v", matches, err)
 	}
 }
 

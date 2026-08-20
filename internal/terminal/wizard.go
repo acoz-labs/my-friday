@@ -120,9 +120,14 @@ styleStep:
 	if err != nil {
 		return "", err
 	}
+	locationMode, parentValue, runtimeValue, memoryValue := "", "", "", ""
 	for {
 		fmt.Fprintln(output, "Step 4 of 7: Locations\n1 One parent with stable names (default)\n2 Two separate targets")
-		locationMode, _ := line("Choose 1-2")
+		choice, _ := line("Choose 1-2")
+		if choice == "" && locationMode != "" {
+			choice = locationMode
+		}
+		locationMode = choice
 		if locationMode == "q" {
 			return exit(output), nil
 		}
@@ -135,27 +140,56 @@ styleStep:
 			if parent == "q" {
 				return exit(output), nil
 			}
+			if parent == "b" {
+				locationMode = ""
+				continue
+			}
+			if parent == "" && parentValue != "" {
+				parent = parentValue
+			}
 			if parent == "" {
 				parent = invocationDir
 			}
+			parentValue = parent
 			parent, err = resolve(parent, invocationDir)
 			if err != nil {
-				return "", err
+				fmt.Fprintf(output, "Invalid input: %v. Try again.\n", err)
+				continue
 			}
 			runtime, memory = filepath.Join(parent, "my-friday-runtime"), filepath.Join(parent, "my-friday-memory")
 		} else if locationMode == "2" {
 			runtime, _ = line("Runtime target")
-			memory, _ = line("Memory target")
-			if runtime == "q" || memory == "q" {
+			if runtime == "q" {
 				return exit(output), nil
 			}
+			if runtime == "b" {
+				locationMode = ""
+				continue
+			}
+			if runtime == "" && runtimeValue != "" {
+				runtime = runtimeValue
+			}
+			runtimeValue = runtime
 			runtime, err = resolve(runtime, invocationDir)
 			if err != nil {
-				return "", err
+				fmt.Fprintf(output, "Invalid input: %v. Try again.\n", err)
+				continue
 			}
+			memory, _ = line("Memory target")
+			if memory == "q" {
+				return exit(output), nil
+			}
+			if memory == "b" {
+				continue
+			}
+			if memory == "" && memoryValue != "" {
+				memory = memoryValue
+			}
+			memoryValue = memory
 			memory, err = resolve(memory, invocationDir)
 			if err != nil {
-				return "", err
+				fmt.Fprintf(output, "Invalid input: %v. Try again.\n", err)
+				continue
 			}
 		} else {
 			fmt.Fprintln(output, "Invalid input: choose 1 or 2. Try again.")
@@ -171,10 +205,11 @@ styleStep:
 		}
 		pl, err := plan.Build(p, runtime, memory)
 		if err != nil {
-			return "", err
+			fmt.Fprintf(output, "Invalid input: %v. Try again.\n", err)
+			continue
 		}
 		fmt.Fprintln(output, "Step 5 of 7: Preview")
-		fmt.Fprintf(output, "Plan: %s\nAssistant: %s\nRuntime: %s\nMemory: %s\n", pl.PlanID, pl.AssistantID, runtime, memory)
+		fmt.Fprintf(output, "Plan: %s\nAssistant: %s\nRuntime entered: %s\nRuntime canonical: %s\nMemory entered: %s\nMemory canonical: %s\n", pl.PlanID, pl.AssistantID, runtimeValueOr(runtimeValue, parentValue, runtime), pl.Targets.Runtime, runtimeValueOr(memoryValue, parentValue, memory), pl.Targets.Memory)
 		for _, parent := range pl.MissingParents {
 			fmt.Fprintln(output, "- create parent", parent, "mode 0700")
 		}
@@ -218,10 +253,18 @@ styleStep:
 		fmt.Fprintln(output, "Reserved\nStaged runtime\nStaged memory\nValidated\nPromoted runtime\nPromoted memory\nVerified")
 		fmt.Fprintln(output, "Step 7 of 7: Result")
 		fmt.Fprintln(output, result)
-		fmt.Fprintln(output, runtime)
-		fmt.Fprintln(output, memory)
+		fmt.Fprintf(output, "Runtime: %s mode 0700\nMemory: %s mode 0700\nAssistant: %s\nContracts: repository v1, tool v1\nGit: unborn main; no commits; no remotes\nNext: inspect the repositories, then use my-friday validate when needed\n", pl.Targets.Runtime, pl.Targets.Memory, pl.AssistantID)
 		return result, nil
 	}
+}
+func runtimeValueOr(value, parent, fallback string) string {
+	if value != "" {
+		return value
+	}
+	if parent != "" {
+		return filepath.Join(parent, filepath.Base(fallback))
+	}
+	return fallback
 }
 func exit(w io.Writer) string { fmt.Fprintln(w, "No changes made"); return "Exit" }
 func resolve(value, cwd string) (string, error) {

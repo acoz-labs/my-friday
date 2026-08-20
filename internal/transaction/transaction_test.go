@@ -5,7 +5,9 @@ import (
 	"github.com/acoz-labs/my-friday/internal/profile"
 	"github.com/acoz-labs/my-friday/internal/repository"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -140,7 +142,14 @@ func TestRecoverCompletesPartialPromotion(t *testing.T) {
 	}
 	j := journal{PlanID: pl.PlanID, Phase: "promoted-runtime", Runtime: pl.Targets.Runtime, Memory: pl.Targets.Memory, RuntimeStage: runtimeStage, MemoryStage: memoryStage}
 	j.Reservations = pl.ReservationPaths
-	j.Expected = expectedFiles(pl)
+	for _, reservation := range j.Reservations {
+		if err := createReservation(reservation, pl.PlanID); err != nil {
+			t.Fatal(err)
+		}
+	}
+	runtimeExpected, _ := treeSnapshot(pl.Targets.Runtime)
+	memoryExpected, _ := treeSnapshot(memoryStage)
+	j.Expected = map[string]map[string]string{"runtime": runtimeExpected, "memory": memoryExpected}
 	if err := createJournal(jp, j); err != nil {
 		t.Fatal(err)
 	}
@@ -188,6 +197,31 @@ func TestRollbackPreservesForeignChangesAndJournal(t *testing.T) {
 	}
 	if b, readErr := os.ReadFile(filepath.Join(pl.Targets.Runtime, "foreign.txt")); readErr != nil || string(b) != "keep me" {
 		t.Fatal("foreign target change was removed")
+	}
+	journalPath := filepath.Join(filepath.Dir(pl.Targets.Runtime), ".my-friday-"+pl.PlanID[:16]+".json")
+	if _, statErr := os.Stat(journalPath); statErr != nil {
+		t.Fatal("recovery journal was not retained")
+	}
+}
+
+func TestRollbackPreservesForeignGitChangesAndJournal(t *testing.T) {
+	pl := testPlan(t)
+	_, err := Execute(pl, func(phase string) error {
+		if phase != "promoted-runtime" {
+			return nil
+		}
+		cmd := exec.Command("git", "-C", pl.Targets.Runtime, "config", "test.foreign", "keep")
+		if output, runErr := cmd.CombinedOutput(); runErr != nil {
+			t.Fatalf("git config: %v: %s", runErr, output)
+		}
+		return os.ErrInvalid
+	})
+	if err == nil || !strings.Contains(err.Error(), "recovery required") {
+		t.Fatalf("err=%v", err)
+	}
+	cmd := exec.Command("git", "-C", pl.Targets.Runtime, "config", "--get", "test.foreign")
+	if output, runErr := cmd.Output(); runErr != nil || strings.TrimSpace(string(output)) != "keep" {
+		t.Fatal("foreign Git state was removed")
 	}
 	journalPath := filepath.Join(filepath.Dir(pl.Targets.Runtime), ".my-friday-"+pl.PlanID[:16]+".json")
 	if _, statErr := os.Stat(journalPath); statErr != nil {

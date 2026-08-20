@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/acoz-labs/my-friday/internal/plan"
+	"github.com/acoz-labs/my-friday/internal/profile"
 	"github.com/santhosh-tekuri/jsonschema/v6"
 )
 
@@ -89,11 +90,11 @@ func validate(root, role string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if err = validateJSON(sb, mb); err != nil {
-		return "", fmt.Errorf("manifest schema: %w", err)
-	}
 	if !bytes.Equal(sb, []byte(plan.ManifestSchema())) {
 		return "", fmt.Errorf("repository manifest schema differs from the embedded v1 contract")
+	}
+	if err = validateJSON([]byte(plan.ManifestSchema()), mb); err != nil {
+		return "", fmt.Errorf("manifest schema: %w", err)
 	}
 	var m struct {
 		ContractVersion int    `json:"contract_version"`
@@ -115,17 +116,29 @@ func validate(root, role string) (string, error) {
 		if e != nil {
 			return "", e
 		}
-		if e = validateJSON(ps, pb); e != nil {
-			return "", fmt.Errorf("profile schema: %w", e)
-		}
 		if !bytes.Equal(ps, []byte(plan.ProfileSchema())) {
 			return "", fmt.Errorf("assistant profile schema differs from the embedded v1 contract")
 		}
-		var p struct {
-			AssistantID string `json:"assistant_id"`
+		if e = validateJSON([]byte(plan.ProfileSchema()), pb); e != nil {
+			return "", fmt.Errorf("profile schema: %w", e)
 		}
+		var p profile.Profile
 		if e = json.Unmarshal(pb, &p); e != nil || p.AssistantID != m.AssistantID {
 			return "", fmt.Errorf("profile assistant identifier mismatch")
+		}
+		address, guidance := "", ""
+		if p.Identity.AddressUserAs != nil {
+			address = *p.Identity.AddressUserAs
+		}
+		if p.Communication.CustomGuidance != nil {
+			guidance = *p.Communication.CustomGuidance
+		}
+		semantic, e := profile.New(p.Identity.DisplayName, address, p.Identity.Purpose, p.Communication.Preset, guidance)
+		if e != nil {
+			return "", fmt.Errorf("profile semantics: %w", e)
+		}
+		if semantic.Identity.DisplayName != p.Identity.DisplayName || semantic.Identity.Purpose != p.Identity.Purpose || pointerValue(semantic.Identity.AddressUserAs) != pointerValue(p.Identity.AddressUserAs) || pointerValue(semantic.Communication.CustomGuidance) != pointerValue(p.Communication.CustomGuidance) {
+			return "", fmt.Errorf("profile is not canonically normalized")
 		}
 	}
 	allowed := map[string]bool{"manifest.json": true, "schemas": true, "schemas/repository-manifest.v1.schema.json": true, "creation-state.json": true}
@@ -144,7 +157,25 @@ func validate(root, role string) (string, error) {
 	}); err != nil {
 		return "", err
 	}
+	if err = validateGitRepository(root); err != nil {
+		return "", err
+	}
 	return m.AssistantID, nil
+}
+
+func pointerValue(value *string) string {
+	if value == nil {
+		return ""
+	}
+	return *value
+}
+
+func validateGitRepository(root string) error {
+	cmd := exec.Command("git", "-C", root, "rev-parse", "--git-dir")
+	if out, err := cmd.Output(); err != nil || strings.TrimSpace(string(out)) != ".git" {
+		return fmt.Errorf("repository is not a local Git repository")
+	}
+	return nil
 }
 
 func validateFreshGit(root string) error {

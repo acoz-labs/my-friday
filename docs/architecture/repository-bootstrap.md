@@ -24,6 +24,11 @@ Each `.my-friday/manifest.json` declares contract version 1, role, shared
 `data/journals`, `data/proposals`, and `data/memories` scaffolds plus a reserved
 `schemas/README.md`, and no records.
 Generated copies under `.my-friday/schemas/` are the authoritative v1 contracts.
+The executable embedded schemas are authoritative: validation compares copied
+schema bytes before compilation, then applies semantic NFC, grapheme, style,
+and custom-guidance rules in addition to JSON Schema. Ordinary validation also
+requires each target to remain a local Git repository, while permitting later
+commits, branches, and remotes.
 
 Targets must be distinct, non-nested, non-symlink, and empty or absent. Root
 and the current home are prohibited. Existing exact pairs report `Already
@@ -37,8 +42,10 @@ initializes and validates both, then promotes runtime followed by memory. A
 handled failure removes transaction-owned state; pre-existing empty shells are
 recreated with their original modes. A journal is retained only when safe
 automatic completion cannot be proven. Rollback removes a promoted repository
-only after its marker, planned file set, and content digests prove transaction
-ownership; foreign or changed content is preserved with the journal. Recovery
+only after its marker and an exact snapshot of the complete staged tree,
+including Git configuration, refs, hooks, objects, file types, modes, and
+digests, prove transaction ownership; foreign or changed content is preserved
+with the journal. Recovery applies the same proof before every promotion and
 rejects journal-supplied paths that do not derive from the plan and canonical
 targets. Use `my-friday recover --transaction <journal>`; recovery refuses
 speculative mutation.

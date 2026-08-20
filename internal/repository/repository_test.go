@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -30,5 +31,30 @@ func TestCreateAndValidatePairWithoutCommitOrRemote(t *testing.T) {
 		if exec.Command("git", "-C", dir, "rev-parse", "HEAD").Run() == nil {
 			t.Fatal("unexpected commit")
 		}
+	}
+}
+
+func TestValidationAuthenticatesSchemaBeforeCompilationAndChecksGit(t *testing.T) {
+	root := t.TempDir()
+	p, _ := profile.New("Friday", "", "Help", "balanced", "")
+	pl, _ := plan.Build(p, filepath.Join(root, "runtime"), filepath.Join(root, "memory"))
+	if err := Create(pl, pl.Targets.Runtime, pl.Targets.Memory); err != nil {
+		t.Fatal(err)
+	}
+	schemaPath := filepath.Join(pl.Targets.Runtime, ".my-friday/schemas/repository-manifest.v1.schema.json")
+	if err := os.WriteFile(schemaPath, []byte(`{"$ref":"https://example.invalid/foreign.json"}`), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := ValidatePair(pl.Targets.Runtime, pl.Targets.Memory); err == nil || !strings.Contains(err.Error(), "differs from the embedded") {
+		t.Fatalf("err=%v", err)
+	}
+	if err := os.WriteFile(schemaPath, []byte(plan.ManifestSchema()), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.RemoveAll(filepath.Join(pl.Targets.Runtime, ".git")); err != nil {
+		t.Fatal(err)
+	}
+	if err := ValidatePair(pl.Targets.Runtime, pl.Targets.Memory); err == nil || !strings.Contains(err.Error(), "not a local Git") {
+		t.Fatalf("err=%v", err)
 	}
 }

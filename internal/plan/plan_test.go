@@ -75,3 +75,19 @@ func TestBuildRejectsNestedTargets(t *testing.T) {
 		t.Fatal("expected nesting rejection")
 	}
 }
+
+func TestBuildRejectsExactTargetSymlink(t *testing.T) {
+	root := t.TempDir()
+	real := filepath.Join(root, "real")
+	if err := os.Mkdir(real, 0700); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(root, "runtime")
+	if err := os.Symlink(real, link); err != nil {
+		t.Fatal(err)
+	}
+	p, _ := profile.New("Friday", "", "Help", "balanced", "")
+	if _, err := Build(p, link, filepath.Join(root, "memory")); err == nil {
+		t.Fatal("exact target symlink accepted")
+	}
+}

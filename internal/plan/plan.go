@@ -77,7 +77,7 @@ func Build(p profile.Profile, runtimePath, memoryPath string) (CreationPlan, err
 	b, _ := json.Marshal(basis)
 	h := sha256.Sum256(append([]byte("my-friday-plan-v1\x00"), b...))
 	pl.PlanID = hex.EncodeToString(h[:])
-	pl.SupportPaths = []string{filepath.Join(filepath.Dir(r), ".my-friday-"+pl.PlanID[:16]+".json"), filepath.Join(filepath.Dir(r), ".my-friday-"+pl.PlanID[:16]+"-runtime"), filepath.Join(filepath.Dir(m), ".my-friday-"+pl.PlanID[:16]+"-memory")}
+	pl.SupportPaths = []string{filepath.Join(existingAncestor(filepath.Dir(r)), ".my-friday-"+pl.PlanID[:16]+".json"), filepath.Join(filepath.Dir(r), ".my-friday-"+pl.PlanID[:16]+"-runtime"), filepath.Join(filepath.Dir(m), ".my-friday-"+pl.PlanID[:16]+"-memory")}
 	pl.ReservationPaths = []string{reservationPath(r), reservationPath(m)}
 	pl.SupportPaths = append(pl.SupportPaths, pl.ReservationPaths...)
 	return pl, nil
@@ -88,6 +88,11 @@ func canonicalTarget(value string) (string, error) {
 		return "", err
 	}
 	abs = filepath.Clean(abs)
+	if info, statErr := os.Lstat(abs); statErr == nil && info.Mode()&os.ModeSymlink != 0 {
+		return "", fmt.Errorf("target is a symlink: %s", value)
+	} else if statErr != nil && !os.IsNotExist(statErr) {
+		return "", statErr
+	}
 	ancestor := abs
 	var suffix []string
 	for {
@@ -152,7 +157,20 @@ func unique(values []string) []string {
 }
 func reservationPath(target string) string {
 	h := sha256.Sum256([]byte(target))
-	return filepath.Join(filepath.Dir(target), ".my-friday-reservation-"+hex.EncodeToString(h[:8]))
+	return filepath.Join(existingAncestor(filepath.Dir(target)), ".my-friday-reservation-"+hex.EncodeToString(h[:8]))
+}
+
+func existingAncestor(path string) string {
+	for {
+		if _, err := os.Lstat(path); err == nil {
+			return path
+		}
+		next := filepath.Dir(path)
+		if next == path {
+			return path
+		}
+		path = next
+	}
 }
 func render(role string, p profile.Profile) []File {
 	manifest := struct {
