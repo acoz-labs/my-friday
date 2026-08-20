@@ -1,6 +1,6 @@
 # Solution Design: Preview and create the assistant repositories
 
-- **Status:** Draft
+- **Status:** Final
 - **Issue:** #3
 - **Planning PR:** #10
 - **Repository basis:** c669868cb297be51f02e1b6b7824e50b81da318b
