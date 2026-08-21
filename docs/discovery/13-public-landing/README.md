@@ -2,7 +2,7 @@
 
 - **Status:** Final candidate
 - **Discovery issue:** #13
-- **Discovery PR:** #pending
+- **Discovery PR:** #14
 - **Repository basis:** 5bc309226d2c40e1473a4011c1bd8552c995919d
 - **Recommended decision:** approve
 - **Gate 1:** awaiting-authority
