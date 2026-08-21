@@ -26,7 +26,8 @@ fi
 download="$(mktemp -d)"
 trap 'rm -rf "$download"' EXIT
 gh run download "$run_id" --repo "$repo" --name "$artifact_name" --dir "$download"
-mapfile -d '' entries < <(find "$download" -mindepth 1 -maxdepth 1 -print0)
+shopt -s nullglob dotglob
+entries=("$download"/*)
 if [[ "${#entries[@]}" != 1 || ! -f "${entries[0]}" || -L "${entries[0]}" ]]; then
   echo "Accepted Actions artifact must contain exactly one regular file." >&2
   exit 1

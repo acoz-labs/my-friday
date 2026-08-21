@@ -26,8 +26,8 @@ source_digest="$(sha256sum "$work/$source_name" | awk '{print $1}')"
 checksum_count="$(awk -v name="$source_name" '$2 == name { count++ } END { print count+0 }' "$work/SHA256SUMS")"
 checksum_digest="$(awk -v name="$source_name" '$2 == name { print $1 }' "$work/SHA256SUMS")"
 [[ "$checksum_count" == 1 && "$checksum_digest" == "$source_digest" ]] || { echo "Source archive checksum mismatch or ambiguity." >&2; exit 1; }
-mapfile -t listing < <(tar -tzf "$work/$source_name")
-[[ "${#listing[@]}" == 1 && "${listing[0]#./}" == my-friday ]] || { echo "Source archive must contain exactly my-friday." >&2; exit 1; }
+listing="$(tar -tzf "$work/$source_name")"
+[[ "${listing#./}" == my-friday ]] || { echo "Source archive must contain exactly my-friday." >&2; exit 1; }
 tar -xzf "$work/$source_name" -C "$work" --no-same-owner
 [[ -f "$work/my-friday" && ! -L "$work/my-friday" ]] || { echo "Unsafe source archive content." >&2; exit 1; }
 [[ "$(sha256sum "$work/my-friday" | awk '{print $1}')" == "$expected_executable" ]] || { echo "Contained executable digest mismatch." >&2; exit 1; }
