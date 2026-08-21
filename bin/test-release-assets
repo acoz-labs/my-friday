@@ -96,14 +96,85 @@ legacy_entry="my-friday-darwin-arm64-5bc3092"
 legacy_source="my-friday-darwin-arm64-5bc3092.tar.gz"
 mkdir "$tmp/legacy-stage"
 install -m 0755 "$fixture" "$tmp/legacy-stage/$legacy_entry"
-tar -czf "$tmp/$legacy_source" -C "$tmp/legacy-stage" "$legacy_entry"
+printf 'AppleDouble fixture metadata\n' > "$tmp/legacy-stage/._$legacy_entry"
+real_tar="$(command -v tar)"
+COPYFILE_DISABLE=1 "$real_tar" -czf "$tmp/$legacy_source" -C "$tmp/legacy-stage" \
+  "._$legacy_entry" "$legacy_entry"
+cat > "$tmp/mock-bin/tar" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+if [[ "${1:-}" == "-tvzf" && "$(basename "${2:-}")" == "${BACKFILL_SOURCE_NAME:-}" ]]; then
+  case "${TAR_LIST_MODE:-pair}" in
+    pair)
+      printf '%s\n' \
+        "-rw-r--r-- user/group 29 2026-08-21 00:00 ._${LEGACY_ENTRY:?}" \
+        "-rwxr-xr-x user/group 24 2026-08-21 00:00 $LEGACY_ENTRY"
+      ;;
+    extra)
+      printf '%s\n' \
+        "-rw-r--r-- user/group 29 2026-08-21 00:00 ._${LEGACY_ENTRY:?}" \
+        "-rwxr-xr-x user/group 24 2026-08-21 00:00 $LEGACY_ENTRY" \
+        "-rw-r--r-- user/group 1 2026-08-21 00:00 unexpected"
+      ;;
+    nested)
+      printf '%s\n' "-rwxr-xr-x user/group 24 2026-08-21 00:00 nested/$LEGACY_ENTRY"
+      ;;
+    symlink)
+      printf '%s\n' "lrwxr-xr-x user/group 0 2026-08-21 00:00 $LEGACY_ENTRY -> target"
+      ;;
+    ambiguous)
+      printf '%s\n' \
+        "-rwxr-xr-x user/group 24 2026-08-21 00:00 my-friday" \
+        "-rwxr-xr-x user/group 24 2026-08-21 00:00 $LEGACY_ENTRY"
+      ;;
+    mismatched-companion)
+      printf '%s\n' \
+        "-rw-r--r-- user/group 29 2026-08-21 00:00 ._my-friday" \
+        "-rwxr-xr-x user/group 24 2026-08-21 00:00 $LEGACY_ENTRY"
+      ;;
+  esac
+  exit 0
+fi
+if [[ "${1:-}" == "-xzf" && "$(basename "${2:-}")" == "${BACKFILL_SOURCE_NAME:-}" ]]; then
+  printf '%s\n' "$*" >> "${TAR_MOCK_LOG:?}"
+  destination=""
+  previous=""
+  for argument in "$@"; do
+    if [[ "$previous" == "-C" ]]; then
+      destination="$argument"
+    fi
+    previous="$argument"
+  done
+  selected="${@: -1}"
+  [[ -n "$destination" && "$selected" == "${LEGACY_ENTRY:?}" ]] || exit 2
+  install -m 0755 "${BACKFILL_EXECUTABLE_FIXTURE:?}" "$destination/$selected"
+  exit 0
+fi
+printf '%s\n' "$*" >> "${TAR_MOCK_LOG:?}"
+exec "${REAL_TAR:?}" "$@"
+EOF
+chmod +x "$tmp/mock-bin/tar"
 legacy_source_digest="$(sha256sum "$tmp/$legacy_source" | awk '{print $1}')"
 printf '%s  %s\n%s  %s\n' \
   "$legacy_source_digest" "$legacy_source" "$digest" "$legacy_entry" > "$tmp/SHA256SUMS"
 BACKFILL_SOURCE_NAME="$legacy_source"
-export BACKFILL_SOURCE_NAME
+export BACKFILL_SOURCE_NAME LEGACY_ENTRY="$legacy_entry" REAL_TAR="$real_tar" TAR_MOCK_LOG="$tmp/tar.log" TAR_LIST_MODE=pair BACKFILL_EXECUTABLE_FIXTURE="$fixture"
+: > "$TAR_MOCK_LOG"
 "$root/bin/backfill-stable-release-asset" "$BACKFILL_TAG" "$legacy_source" "$digest"
 [[ "$(grep -c backfill-upload "$GH_MOCK_LOG")" == 2 ]]
+if grep -Fq "._$legacy_entry" "$TAR_MOCK_LOG"; then
+  echo "Backfill extracted the AppleDouble companion." >&2
+  exit 1
+fi
+for TAR_LIST_MODE in extra nested symlink ambiguous mismatched-companion; do
+  export TAR_LIST_MODE
+  if "$root/bin/backfill-stable-release-asset" "$BACKFILL_TAG" "$legacy_source" "$digest" 2>/dev/null; then
+    echo "Backfill accepted unsafe archive listing mode: $TAR_LIST_MODE" >&2
+    exit 1
+  fi
+done
+TAR_LIST_MODE=pair
+export TAR_LIST_MODE
 
 BACKFILL_BODY="- Artifact: \`sha256:$(printf '0%.0s' {1..64})\`"
 export BACKFILL_BODY

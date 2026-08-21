@@ -21,6 +21,12 @@ name, nested path, symlink, non-executable file, or additional entry is valid.
 The workflow copies the verified source archive unchanged rather than renaming
 its internal executable.
 
+The same retained archive may expose one top-level AppleDouble metadata member
+named exactly `._<executable-name>` on GNU tar runners. It is valid only as the
+sole companion to that executable and must be a regular member. The guard
+extracts only the executable; it neither extracts nor uploads the AppleDouble
+member separately.
+
 ## Recover an interrupted repository creation
 
 Use this only when `my-friday init` reports a retained owner-only transaction
