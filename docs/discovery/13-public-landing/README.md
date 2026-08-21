@@ -1,6 +1,6 @@
 # Discovery: public landing page and stable download surface
 
-- **Status:** Final candidate
+- **Status:** Final
 - **Discovery issue:** #13
 - **Discovery PR:** #14
 - **Repository basis:** 5bc309226d2c40e1473a4011c1bd8552c995919d
