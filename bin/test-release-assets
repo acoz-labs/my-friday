@@ -91,19 +91,33 @@ export BACKFILL_BODY="- Artifact: \`sha256:$digest\`"
 : > "$GH_MOCK_LOG"
 "$root/bin/backfill-stable-release-asset" "$BACKFILL_TAG" "$source_name" "$digest"
 [[ "$(grep -c backfill-upload "$GH_MOCK_LOG")" == 1 ]]
+
+legacy_entry="my-friday-darwin-arm64-5bc3092"
+legacy_source="my-friday-darwin-arm64-5bc3092.tar.gz"
+mkdir "$tmp/legacy-stage"
+install -m 0755 "$fixture" "$tmp/legacy-stage/$legacy_entry"
+tar -czf "$tmp/$legacy_source" -C "$tmp/legacy-stage" "$legacy_entry"
+legacy_source_digest="$(sha256sum "$tmp/$legacy_source" | awk '{print $1}')"
+printf '%s  %s\n%s  %s\n' \
+  "$legacy_source_digest" "$legacy_source" "$digest" "$legacy_entry" > "$tmp/SHA256SUMS"
+BACKFILL_SOURCE_NAME="$legacy_source"
+export BACKFILL_SOURCE_NAME
+"$root/bin/backfill-stable-release-asset" "$BACKFILL_TAG" "$legacy_source" "$digest"
+[[ "$(grep -c backfill-upload "$GH_MOCK_LOG")" == 2 ]]
+
 BACKFILL_BODY="- Artifact: \`sha256:$(printf '0%.0s' {1..64})\`"
 export BACKFILL_BODY
-if "$root/bin/backfill-stable-release-asset" "$BACKFILL_TAG" "$source_name" "$digest" 2>/dev/null; then
+if "$root/bin/backfill-stable-release-asset" "$BACKFILL_TAG" "$legacy_source" "$digest" 2>/dev/null; then
   echo "Backfill accepted a Release-ledger digest mismatch." >&2
   exit 1
 fi
 BACKFILL_BODY="- Artifact: \`sha256:$digest\`\\n- Artifact: \`sha256:$digest\`"
 export BACKFILL_BODY
-if "$root/bin/backfill-stable-release-asset" "$BACKFILL_TAG" "$source_name" "$digest" 2>/dev/null; then
+if "$root/bin/backfill-stable-release-asset" "$BACKFILL_TAG" "$legacy_source" "$digest" 2>/dev/null; then
   echo "Backfill accepted ambiguous Release-ledger authority." >&2
   exit 1
 fi
-if "$root/bin/backfill-stable-release-asset" "$BACKFILL_TAG" "$source_name" "$(printf '0%.0s' {1..64})" 2>/dev/null; then
+if "$root/bin/backfill-stable-release-asset" "$BACKFILL_TAG" "$legacy_source" "$(printf '0%.0s' {1..64})" 2>/dev/null; then
   echo "Backfill accepted a mismatched contained executable." >&2
   exit 1
 fi

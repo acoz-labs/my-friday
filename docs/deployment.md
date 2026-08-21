@@ -48,6 +48,12 @@ asset, verifies the source archive checksum and its sole safe executable, then
 uploads the unchanged archive bytes under the stable name. An equal existing
 alias is an idempotent success; a mismatch fails without replacement.
 
+Future archives contain the canonical top-level executable `my-friday`. The
+one retained pre-contract archive is also valid for backfill when its sole
+top-level regular executable uses the historical
+`my-friday-darwin-arm64-<hex>` name. This compatibility does not rename or
+repackage the archive: the stable alias receives the original archive bytes.
+
 If an incorrect stable alias is proven, resolve its exact asset ID and delete
 only `my-friday-darwin-arm64.tar.gz` from that release. Retain the tag, release
 notes, commit-suffixed archive, `SHA256SUMS`, and acceptance evidence. Re-run the

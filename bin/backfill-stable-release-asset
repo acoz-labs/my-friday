@@ -34,10 +34,15 @@ checksum_count="$(awk -v name="$source_name" '$2 == name { count++ } END { print
 checksum_digest="$(awk -v name="$source_name" '$2 == name { print $1 }' "$work/SHA256SUMS")"
 [[ "$checksum_count" == 1 && "$checksum_digest" == "$source_digest" ]] || { echo "Source archive checksum mismatch or ambiguity." >&2; exit 1; }
 listing="$(tar -tzf "$work/$source_name")"
-[[ "${listing#./}" == my-friday ]] || { echo "Source archive must contain exactly my-friday." >&2; exit 1; }
+entry_name="${listing#./}"
+if [[ "$entry_name" != my-friday && ! "$entry_name" =~ ^my-friday-darwin-arm64-[0-9a-f]+$ ]]; then
+  echo "Source archive must contain exactly one supported top-level executable." >&2
+  exit 1
+fi
 tar -xzf "$work/$source_name" -C "$work" --no-same-owner
-[[ -f "$work/my-friday" && ! -L "$work/my-friday" ]] || { echo "Unsafe source archive content." >&2; exit 1; }
-[[ "$(sha256sum "$work/my-friday" | awk '{print $1}')" == "$expected_executable" ]] || { echo "Contained executable digest mismatch." >&2; exit 1; }
+executable_path="$work/$entry_name"
+[[ -f "$executable_path" && ! -L "$executable_path" && -x "$executable_path" ]] || { echo "Unsafe source archive content." >&2; exit 1; }
+[[ "$(sha256sum "$executable_path" | awk '{print $1}')" == "$expected_executable" ]] || { echo "Contained executable digest mismatch." >&2; exit 1; }
 cp "$work/$source_name" "$work/$stable_name"
 bin/release-assets "$tag" "$work/$stable_name"
 echo "Verified stable alias $stable_name from $source_name on $tag."
