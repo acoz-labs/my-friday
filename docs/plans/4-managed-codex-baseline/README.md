@@ -28,6 +28,10 @@ remain outside My Friday's ownership.
   later, local APFS, and Git 2.28 or later under a disposable non-admin macOS
   user/home. A verified VM or APFS volume boundary is acceptable only if it
   provides an equally fresh user identity, home, keychain, and Codex home.
+- Acceptance has one physical gate: Anthony or the operator authenticates as an
+  administrator to create and remove the unique, marker-bounded disposable
+  non-admin user. Elevation is never stored or passed to My Friday; a marker,
+  UID, home, owner, or content mismatch refuses deletion.
 - Automated lifecycle tests must use injected temporary home and Codex roots.
   Destructive install, repair, uninstall, rollback, or recovery tests must
   never target Alfred's live `~/.codex`, a developer's real Codex home, or a
@@ -64,11 +68,12 @@ remain outside My Friday's ownership.
   prior generation; repair never rotates it or stores drifted bytes. Rollback is explicit,
   previewed, single-step, and idempotent; My Friday is not a general backup or
   configuration-history service.
-- **No daemon, privilege escalation, or network.** Lifecycle work is a
-  foreground local transaction, refuses root/admin elevation, does not invoke
-  `sudo`, and makes no network request. A fresh Codex discovery smoke may use a
-  separately authorized test account during independent acceptance, never as
-  part of installation.
+- **No lifecycle escalation; one acceptance-only physical gate.** My Friday
+  lifecycle work is unprivileged, foreground-only, and makes no network request.
+  Through-production acceptance alone requires operator physical admin
+  authentication to create/remove the unique marker-bounded test user.
+  Elevation and credentials never reach My Friday; mismatched identity/home
+  evidence refuses deletion. Codex auth is sensitive disposable teardown state.
 
 ## Plan Map
 
