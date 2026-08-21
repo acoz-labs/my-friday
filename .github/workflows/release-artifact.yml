@@ -61,6 +61,12 @@ jobs:
           RELEASE_SUMMARY: ${{ inputs.summary }}
         run: bin/finalize-release artifact --preflight
 
+      - name: Retrieve and package accepted executable
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_INPUT_ARTIFACT: ${{ inputs.artifact }}
+        run: bin/prepare-release-artifact "$RELEASE_INPUT_ARTIFACT" release-assets
+
       - name: Publish artifact ledger
         env:
           GH_TOKEN: ${{ github.token }}
@@ -68,4 +74,8 @@ jobs:
           RELEASE_ISSUES: ${{ inputs.issues }}
           RELEASE_SHA: ${{ inputs.sha }}
           RELEASE_SUMMARY: ${{ inputs.summary }}
+          RELEASE_ASSET_PATHS: release-assets/my-friday-darwin-arm64.tar.gz:release-assets/SHA256SUMS
         run: bin/finalize-release artifact
+
+      - name: Record release checksums
+        run: cat release-assets/SHA256SUMS >> "$GITHUB_STEP_SUMMARY"

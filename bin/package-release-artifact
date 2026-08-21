@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+executable="${1:-}"
+expected_digest="${2:-}"
+output_dir="${3:-}"
+stable_name="my-friday-darwin-arm64.tar.gz"
+
+if [[ ! -f "$executable" || -L "$executable" || ! "$expected_digest" =~ ^[0-9a-f]{64}$ || -z "$output_dir" ]]; then
+  echo "Usage: bin/package-release-artifact <executable> <sha256> <output-dir>" >&2
+  exit 64
+fi
+
+actual_digest="$(sha256sum "$executable" | awk '{print $1}')"
+if [[ "$actual_digest" != "$expected_digest" ]]; then
+  echo "Accepted executable digest mismatch." >&2
+  exit 1
+fi
+
+mkdir -p "$output_dir"
+stage="$(mktemp -d)"
+trap 'rm -rf "$stage"' EXIT
+install -m 0755 "$executable" "$stage/my-friday"
+TZ=UTC touch -t 197001010000 "$stage/my-friday"
+
+archive="$output_dir/$stable_name"
+if tar --version 2>/dev/null | grep -q 'GNU tar'; then
+  tar --sort=name --format=gnu --owner=0 --group=0 --numeric-owner \
+    --mtime='UTC 1970-01-01' -C "$stage" -cf - my-friday
+else
+  tar --format ustar --uid 0 --gid 0 --uname root --gname root \
+    -C "$stage" -cf - my-friday
+fi | gzip -n -9 > "$archive"
+archive_digest="$(sha256sum "$archive" | awk '{print $1}')"
+cat > "$output_dir/SHA256SUMS" <<EOF
+$archive_digest  $stable_name
+$expected_digest  my-friday
+EOF
+
+printf '%s\n' "$archive_digest"
