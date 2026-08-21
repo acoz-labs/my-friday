@@ -152,10 +152,10 @@ into a changelog, documentation portal, or CMS.
 
 ### O1 — Ship the public landing page and stable download contract
 
-- **Disposition:** selected
-- **Outcome:** A public visitor can evaluate and download the latest accepted
+- Disposition: selected
+- Outcome: A public visitor can evaluate and download the latest accepted
   My Friday artifact from one trustworthy product-owned page.
-- **Acceptance:** `https://my-friday.acoz.dev` serves one accessible,
+- Acceptance: `https://my-friday.acoz.dev` serves one accessible,
   responsive static page; its primary download resolves without page-managed
   release metadata to a stable-named asset whose bytes match the accepted
   artifact in the latest public GitHub Release; the page accurately states
@@ -163,11 +163,11 @@ into a changelog, documentation portal, or CMS.
   licence, and canonical instructions are directly reachable; no changelog or
   duplicated release ledger is present; and deployment plus rollback are
   verified under the repository's release policy.
-- **Dependencies:** Cloudflare Pages project and custom-domain configuration;
+- Dependencies: Cloudflare Pages project and custom-domain configuration;
   a release publication path for the stable asset name; product-design review;
   and a Solution Design that reconciles the new public service surface with the
   existing artifact delivery profile.
-- **Sequence:** next, before broader public promotion of the pilot.
+- Sequence: next, before broader public promotion of the pilot.
 
 ## Privacy and evidence handling
 
