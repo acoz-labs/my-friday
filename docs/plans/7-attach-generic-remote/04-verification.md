@@ -202,14 +202,15 @@ capabilities on the recorded supported macOS build. If SIP, permissions, PF
 layout, or probe availability prevents the positive control, through-production
 acceptance cannot claim no-network behavior and the candidate is rejected.
 
-The evidence bundle contains policy/trace-script digests, run ID and sanitized
-UID, initial/final PF state, enable-reference acquired/released status (the
-token value is excluded), dry-run parse transcript/digest, direct-child anchor
-attachment/read-back, rule label, positive-control phase/event-class and counter
-totals, candidate zero-event/counter totals, tracer start/stop health, process-
-tree quiescence, command window timestamps, and exact cleanup verdict. It
-contains no packet payload, unrelated host event, private hostname, address, or
-credential.
+The evidence bundle contains policy/trace-script digests, the exact enabled
+DTrace probe manifest for the recorded macOS build, run ID and sanitized UID,
+initial/final PF state, enable-reference acquired/released status (the token
+value is excluded), dry-run parse transcript/digest, direct-child anchor
+attachment/read-back, rule label, positive-control phase/event-class and
+counter totals, candidate zero-event/counter totals, tracer start/stop health,
+process-tree quiescence, command window timestamps, and exact cleanup verdict.
+It contains no packet payload, unrelated host event, private hostname, address,
+or credential.
 
 Implementation retains sanitized exact-head evidence for:
 
@@ -239,8 +240,9 @@ against the nominated immutable Darwin/ARM64 artifact. The manifest records:
   workflow commit;
 - macOS/architecture/APFS/Git versions, locale, terminal width, sanitized
   disposable UID/home identity, and acceptor;
-- PF/DTrace policy and script digests, positive-control proof, candidate
-  zero-event/counter window, supervisor health, and exact cleanup receipt;
+- PF/DTrace policy and script digests, exact enabled-probe manifest, positive-
+  control proof, candidate zero-event/counter window, supervisor health, and
+  exact cleanup receipt;
 - scenario/action/expected/result/verdict rows and openable transcript/manifest
   artifact links;
 - proof that Alfred's live Codex home, operator home, source checkout, global
