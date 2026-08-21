@@ -14,11 +14,12 @@ import (
 func TestProductionNetworkAndSubprocessBoundary(t *testing.T) {
 	root := filepath.Join("..", "..")
 	allowedImports := map[string]bool{
-		"bufio": true, "bytes": true, "crypto/sha256": true, "encoding/hex": true, "encoding/json": true,
-		"fmt": true, "io": true, "io/fs": true, "os": true, "os/exec": true, "path/filepath": true,
+		"bufio": true, "bytes": true, "crypto/rand": true, "crypto/sha256": true, "encoding/hex": true, "encoding/json": true,
+		"errors": true, "fmt": true, "io": true, "io/fs": true, "os": true, "os/exec": true, "path/filepath": true,
 		"runtime": true, "slices": true, "sort": true, "strconv": true, "strings": true, "syscall": true,
 		"unicode": true, "unicode/utf8": true, "unsafe": true,
 		"github.com/acoz-labs/my-friday/internal/environment": true,
+		"github.com/acoz-labs/my-friday/internal/codexhome":   true,
 		"github.com/acoz-labs/my-friday/internal/gitexec":     true,
 		"github.com/acoz-labs/my-friday/internal/plan":        true,
 		"github.com/acoz-labs/my-friday/internal/profile":     true,
@@ -27,6 +28,7 @@ func TestProductionNetworkAndSubprocessBoundary(t *testing.T) {
 		"github.com/acoz-labs/my-friday/internal/transaction": true,
 		"github.com/rivo/uniseg":                              true, "github.com/santhosh-tekuri/jsonschema/v6": true,
 		"golang.org/x/text/unicode/norm": true,
+		"golang.org/x/sys/unix":          true,
 	}
 	err := filepath.WalkDir(root, func(path string, entry os.DirEntry, walkErr error) error {
 		if walkErr != nil {

@@ -1,11 +1,15 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
+	"io"
 	"os"
+	"path/filepath"
 	"runtime"
 	"strings"
 
+	"github.com/acoz-labs/my-friday/internal/codexhome"
 	"github.com/acoz-labs/my-friday/internal/repository"
 	"github.com/acoz-labs/my-friday/internal/terminal"
 )
@@ -33,6 +37,12 @@ func classifyError(args []string, err error) (int, string) {
 	if command == "recover" || strings.Contains(message, "recovery required") {
 		return 5, "transaction.recovery_required"
 	}
+	if command == "codex" {
+		if strings.Contains(message, "collision") || strings.Contains(message, "drift") || strings.Contains(message, "refused") || strings.Contains(message, "unhealthy") {
+			return 3, "codex.state_denied"
+		}
+		return 2, "codex.input_invalid"
+	}
 	if strings.Contains(message, "rolled back") {
 		return 4, "transaction.rolled_back"
 	}
@@ -41,6 +51,22 @@ func classifyError(args []string, err error) (int, string) {
 	}
 	return 2, "input.invalid"
 }
+
+func verifyStatus(status codexhome.Status) error {
+	if status.State != codexhome.StateHealthy {
+		return fmt.Errorf("Codex baseline unhealthy: %s — %s", status.State, status.Detail)
+	}
+	return nil
+}
+
+func readConfirmation(input io.Reader, token string) (bool, error) {
+	line, err := bufio.NewReader(input).ReadString('\n')
+	if err != nil {
+		return false, err
+	}
+	return line == token+"\n", nil
+}
+
 func run() error {
 	command := "init"
 	if len(os.Args) >= 2 {
@@ -72,6 +98,8 @@ func run() error {
 		}
 		_, e := terminal.Recover(os.Args[3], os.Stdout)
 		return e
+	case "codex":
+		return runCodex()
 	case "version":
 		if len(os.Args) != 2 {
 			return fmt.Errorf("usage: my-friday version")
@@ -81,4 +109,97 @@ func run() error {
 	default:
 		return fmt.Errorf("unknown command %q", os.Args[1])
 	}
+}
+
+func codexHome() (string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	home, err = filepath.EvalSymlinks(home)
+	if err != nil {
+		return "", err
+	}
+	if value := os.Getenv("CODEX_HOME"); value != "" {
+		absolute, err := filepath.Abs(value)
+		if err != nil {
+			return "", err
+		}
+		relative, err := filepath.Rel(home, absolute)
+		if err != nil || relative == "." || relative == ".." || strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
+			return "", fmt.Errorf("CODEX_HOME must be a descendant of the current user's real home")
+		}
+		return absolute, nil
+	}
+	return filepath.Join(home, ".codex"), nil
+}
+
+func runCodex() error {
+	if runtime.GOOS != "darwin" || runtime.GOARCH != "arm64" {
+		return fmt.Errorf("Codex baseline lifecycle supports macOS on Apple silicon only")
+	}
+	if len(os.Args) < 3 {
+		return fmt.Errorf("usage: my-friday codex <install|verify|repair|upgrade|rollback|uninstall|recover>")
+	}
+	home, err := codexHome()
+	if err != nil {
+		return err
+	}
+	sub := os.Args[2]
+	if sub == "verify" {
+		if len(os.Args) != 3 {
+			return fmt.Errorf("usage: my-friday codex verify")
+		}
+		status, err := codexhome.Inspect("", home)
+		if err != nil {
+			return err
+		}
+		fmt.Fprintf(os.Stdout, "Codex baseline: %s — %s\n", status.State, status.Detail)
+		return verifyStatus(status)
+	}
+	if sub == "recover" {
+		if len(os.Args) != 5 || os.Args[3] != "--transaction" {
+			return fmt.Errorf("usage: my-friday codex recover --transaction PATH")
+		}
+		expected := filepath.Join(home, ".my-friday", "transaction.json")
+		provided, _ := filepath.Abs(os.Args[4])
+		if filepath.Clean(provided) != filepath.Clean(expected) {
+			return fmt.Errorf("recovery refused: transaction path is not the effective Codex-home journal")
+		}
+		if err := codexhome.Recover(home); err != nil {
+			return err
+		}
+		fmt.Fprintln(os.Stdout, "Codex baseline recovery complete")
+		return nil
+	}
+	action := codexhome.Action(sub)
+	runtimePath := ""
+	if sub == "install" || sub == "upgrade" {
+		if len(os.Args) != 5 || os.Args[3] != "--runtime" {
+			return fmt.Errorf("usage: my-friday codex %s --runtime PATH", sub)
+		}
+		runtimePath = os.Args[4]
+	} else if len(os.Args) != 3 {
+		return fmt.Errorf("usage: my-friday codex %s", sub)
+	}
+	p, err := codexhome.Plan(action, runtimePath, home)
+	if err != nil {
+		return err
+	}
+	fmt.Fprint(os.Stdout, p.String())
+	token := strings.ToUpper(sub[:1]) + sub[1:]
+	fmt.Fprintf(os.Stdout, "Type %s to continue: ", token)
+	confirmed, err := readConfirmation(os.Stdin, token)
+	if err != nil {
+		return err
+	}
+	if !confirmed {
+		fmt.Fprintln(os.Stdout, "No changes made")
+		return nil
+	}
+	if err := codexhome.Execute(p); err != nil {
+		return err
+	}
+	fmt.Fprintf(os.Stdout, "Codex baseline %s complete\n", sub)
+	return nil
 }

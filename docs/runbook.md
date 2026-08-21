@@ -57,3 +57,42 @@ A pair that still contains `.my-friday/creation-state.json` is incomplete even
 when its other files validate. Run the reported recovery command so cleanup can
 re-prove the exact pair and remove markers, reservations, and the journal in
 their recorded order.
+
+## Recover or remove an installed Codex baseline
+
+Run `my-friday codex verify` first. A healthy or source-drifted installation
+can be removed with `my-friday codex uninstall` after reviewing its exact
+paths. Managed drift refuses deletion; use `my-friday codex repair` only when
+the recorded runtime source is still the intended assistant.
+
+For interruption, run only the exact command printed by the failure:
+
+```sh
+my-friday codex recover --transaction "$CODEX_HOME/.my-friday/transaction.json"
+```
+
+Recovery recognizes a complete manifest-consistent operation or restores the
+stored projection, manifest, canonical, and previous generations. If exact
+proof is unavailable,
+preserve `.my-friday` and `AGENTS.md` for diagnosis. Never manually adopt or
+delete a foreign file, shadowing override, symlink, hard link, or control tree.
+Any unrecognized entry inside `.my-friday` blocks both mutation and recovery;
+preserve it for diagnosis rather than deleting the control directory.
+During a committed uninstall, recovery may report the reserved
+`.my-friday-removing` namespace. Do not rename or delete it manually: the
+embedded committed journal authorizes the same recovery command to finish
+deletion. The same namespace can hold an interrupted initial-install rollback;
+its embedded journal must remain present until cleanup completes. When both
+`transaction.json` and `transaction.json.next` exist, recovery accepts only
+adjacent phases of the same pinned-root transaction. Either slot may contain the
+newer phase depending on whether interruption happened before or after the
+atomic swap. Recovery validates both slots before promoting or removing either.
+A malformed, non-adjacent, wrong-root staging file, journal, or deletion
+namespace is retained and refused for maintainer diagnosis.
+Recovery also re-proves every journal entry after an atomic promotion, swap, or
+move to cleanup. If a same-user process replaces an entry between validation
+and mutation, recovery restores the moved entry when safe or retains both
+locations and refuses. Preserve `transaction.json.discard` or
+`.my-friday-removal.json.discard` if reported; rerunning recovery restores a
+valid interrupted cleanup stage before proceeding. Either name makes verify
+report `interrupted` and prevents another lifecycle plan until recovery finishes.

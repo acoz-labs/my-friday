@@ -31,6 +31,22 @@ anything. Return at confirmation safely exits. Validate a generated pair with:
 ./my-friday validate --runtime /path/to/my-friday-runtime --memory /path/to/my-friday-memory
 ```
 
+## Managed Codex baseline
+
+Install the generated runtime's global instructions after reviewing the full
+preview:
+
+```sh
+./my-friday codex install --runtime /path/to/my-friday-runtime
+./my-friday codex verify
+```
+
+The confirmation word is the exact case-sensitive action name followed by
+Return; surrounding whitespace and unterminated input are refused. My Friday owns only
+`$CODEX_HOME/AGENTS.md` and `$CODEX_HOME/.my-friday`; it never edits Codex
+configuration, authentication, sessions, logs, skills, packages, or project
+configuration. See [the installed-baseline contract](docs/architecture/installed-codex-baseline.md).
+
 The broader product direction and deferred outcomes remain in
 [docs/product.md](docs/product.md).
 

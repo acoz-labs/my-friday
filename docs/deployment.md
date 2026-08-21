@@ -67,6 +67,14 @@ Every new candidate still requires successful CI, exact-candidate nomination,
 independent Apple silicon acceptance, and the artifact release gate. No
 configuration or secrets are used at runtime.
 
+Installed-baseline acceptance additionally runs the nominated executable under
+a disposable non-admin macOS 14+ Apple-silicon user with a fresh home, keychain,
+and `CODEX_HOME`. The operator supplies admin authentication only to create and
+remove that marker-bounded user. Acceptance exercises install, collision,
+verify, repair, upgrade, rollback, interruption recovery, uninstall reversal,
+real Codex instruction discovery, unrelated canaries, logout, and complete
+identity/home teardown. Evidence excludes `auth.json` and secret values.
+
 Rollback of source is a Git revert. It must never delete repositories already
 created by a user. Contract-v1 validation must remain available after a future
 release even if creation evolves.
