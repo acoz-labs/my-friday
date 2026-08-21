@@ -60,7 +60,7 @@ no-adjacent-effect evidence.
 | Recognized one-repository role | 2 | Runtime/memory/evolved/tamper/path tests and transcripts |
 | Credential-free generic address | 1 | Table/fuzz tests and no-Git boundary proof |
 | Consequence disclosure and exact confirmation | 4 | Runtime/memory PTY transcripts and accessibility review |
-| Canonical local `origin` and read-back | 3, 5 | Exact argv/env/config-delta tests and native Git evidence |
+| Canonical local `origin` and read-back | 3, 5 | Exact argv/env/read-back tests, adjacent-name checks, and native Git evidence |
 | Idempotency/collision/failure recovery | 3, 5 | Repeat, lock, corruption, fault, race, and rerun matrix |
 | No adjacent effects/privacy leakage | 1-5 | Observer trace, pair/global/home snapshots, sanitized artifacts |
 | Exact candidate acceptance/release | 6 | Candidate digest, independent evidence, tag/asset receipt |

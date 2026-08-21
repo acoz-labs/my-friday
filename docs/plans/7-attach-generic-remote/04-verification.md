@@ -43,9 +43,12 @@ Likely files: `internal/remoteconfig/config_test.go` and
   system canaries in the invoking test environment and prove they are unread,
   unchanged, and unable to influence origin classification.
 - Exact success adds one URL and one canonical fetch refspec while preserving
-  every non-origin local key/value and repository content/ref/index/object/hook
-  snapshot. System/global canaries remain unread and byte-identical.
-- Existing exact state performs no write and preserves config digest/mtime.
+  every non-origin fixture byte and repository content/ref/index/object/hook
+  snapshot. Production inspection requests only adjacent key names; generated
+  credential-shaped adjacent values never cross subprocess output or enter
+  errors/evidence. System/global canaries remain unread and byte-identical.
+- Existing exact state performs no write and preserves config identity/size/
+  mtime and the selected-origin state.
 - Add local/global `insteadOf` and `pushInsteadOf` canaries. Prove the stored
   value remains exact, no expanded endpoint is queried, and preview/receipt
   explicitly state that future resolved endpoints are unverified.
@@ -132,8 +135,8 @@ Implementation retains sanitized exact-head evidence for:
 | Runtime + HTTPS fixture | Role, full disclosure, exact add/read-back, receipt | Transcript; before/after config/tree/ref manifest; observer trace |
 | Memory + SSH/SCP fixture | Memory disclosure and exact config | Transcript and manifests |
 | Return, `q`, EOF, wrong case/space | `No changes made`; byte-identical state | Combined PTY transcript and snapshots |
-| Exact repeat | `Already attached`; digest/mtime unchanged | Transcript and config metadata |
-| Different/partial origin | Collision; original preserved and unsafe value redacted | Transcript and before/after digest, never raw value |
+| Exact repeat | `Already attached`; identity/size/mtime unchanged | Transcript and config metadata |
+| Different/partial origin | Collision; original preserved and unsafe value redacted | Transcript and selected-state/metadata proof, never raw value or digest |
 | Other remote only | Names disclosed; only `origin` added | Transcript and exact config delta |
 | Unsafe/credential/helper/local inputs | Reject before Git; generated value absent everywhere | Boundary assertion and sanitized category counts |
 | Invalid/tampered/non-My-Friday repo | Refusal before mutation | Transcript and filesystem snapshot |

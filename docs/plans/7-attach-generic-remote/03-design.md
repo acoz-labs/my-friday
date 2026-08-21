@@ -18,7 +18,7 @@ flowchart TD
   RECHECK -->|changed| RACE[Refuse and rerun]
   RECHECK -->|unchanged| GIT[git remote add -- origin address]
   GIT --> READBACK[Read direct local config]
-  READBACK -->|exact expected delta| RECEIPT[Attached receipt]
+  READBACK -->|canonical origin; adjacent key names unchanged| RECEIPT[Attached receipt]
   READBACK -->|absent, partial, or different| PENDING[Verification pending; inspect and rerun]
   GIT -->|lock/write/error| DIAG[Re-read; never delete or roll back uncertain state]
   DIAG --> PENDING
@@ -31,7 +31,7 @@ lock. Cancel paths perform no config subprocess capable of writing.
 The command revalidates after confirmation: entered-to-canonical mapping,
 working-tree and `.git` device/inode/type/owner, contract files and role,
 address classification, complete direct-local config snapshot, config file
-identity/digest/mode, and absence of a config lock at the observed instant.
+identity/mode/size/mtime, and absence of a config lock at the observed instant.
 Any change refuses. Git remains authoritative for lock acquisition; My Friday
 never creates, steals, waits on, or removes `.git/config.lock` itself.
 
@@ -78,15 +78,20 @@ derived digest. The process retains the CLI argument only for its lifetime.
 `remoteconfig.Snapshot` is an in-memory NUL-safe parse of direct local config
 with includes disabled. It records:
 
-- config file identity, mode, and whole-file digest for revalidation;
-- all key/value pairs in exact order for before/after delta comparison;
-- local include/includeIf presence;
-- safely printable remote names; and
-- the complete `remote.origin.*` multivalue shape.
+- config file identity, mode, byte length, and modification time for ordinary
+  change detection;
+- direct local key names only, in exact order, for include detection, remote-name
+  extraction, and before/after adjacent-name comparison;
+- safely printable remote subsection names; and
+- only the `remote.origin.*` values required to classify its complete
+  multivalue shape.
 
-It never records system/global config. It is not serialized or logged. A direct
-include directive, invalid/corrupt config, duplicate key ambiguity, unsafe
-remote name, or unreadable config is a refusal.
+It never requests, hashes, or retains values from other remote subsections or
+non-origin keys. Git necessarily parses the selected local config internally,
+but name-only inspection prevents adjacent values from crossing the subprocess
+output boundary. System/global config is never read. The snapshot is not
+serialized or logged. A direct include directive, invalid/corrupt config,
+duplicate key ambiguity, unsafe remote name, or unreadable config is a refusal.
 
 `origin` has three states:
 
@@ -106,9 +111,10 @@ The capability owns no state after the Git command. The canonical pair in
 2. No shell parses a repository path, address, remote name, or config value.
 3. A write is attempted only from exact absent `origin` after exact `Attach` and
    a matching post-confirmation snapshot.
-4. Success requires the before/after config delta to be exactly the canonical
-   pair, unchanged non-origin local config, matching repository identity, and
-   exact URL read-back.
+4. Success requires the canonical pair, unchanged adjacent key-name inventory,
+   matching config/repository identity metadata, and exact URL read-back. Git's
+   own command contract plus fixture byte comparisons prove that adjacent values
+   are preserved without production code reading them.
 5. The other repository is neither discovered nor addressable by the command.
 6. Repository contents, index, refs, objects, HEAD, hooks, attributes, modes,
    global/system Git config, and credentials remain unchanged.
@@ -188,8 +194,9 @@ git -C <canonical> remote add -- origin <accepted-address>
 
 Read-back uses direct local config, not `git remote get-url`, because Git can
 expand `insteadOf` values. It verifies one exact URL and the canonical fetch
-refspec. The adapter separately checks the observed whole config delta and
-repository identity before emitting success.
+refspec. The adapter separately checks adjacent key names and config/repository
+identity metadata before emitting success; it does not pull unrelated values
+across the subprocess boundary for comparison.
 
 This verifies the value stored in the selected repository, not the endpoint a
 future Git operation will resolve. Later user-directed Git may apply local,
@@ -318,7 +325,7 @@ enter CI annotations, issue comments, acceptance manifests, or release receipts.
 | One recognized role per invocation | `InspectOne` identity | explicit `--repository` | contract validation; no sibling discovery |
 | Generic credential-free address | pure bounded parser | explicit `--url` | reject before Git; unsafe value suppressed |
 | Complete disclosure | role-first preview | terminal flow | exact `Attach`; safe default |
-| Local `origin` only | direct-local absent snapshot | literal `remote add --` | no `-f`; exact delta/read-back |
+| Local `origin` only | direct-local absent snapshot | literal `remote add --` | no `-f`; canonical read-back and adjacent-name preservation |
 | Repeat/collision | canonical/absent/collision states | preflight and rerun | read-only repeat; refuse overwrite |
 | Lock/interruption/TOCTOU | Git lock plus before/after identity | adapter | preserve state; inspect and rerun |
 | No adjacent effects | fixed argv/env and single selected root | observer/manifest evidence | no network/credential/global/other repo |
