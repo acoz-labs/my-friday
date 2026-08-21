@@ -20,19 +20,21 @@ import (
 )
 
 const (
-	controlDir    = ".my-friday"
-	manifestFile  = "installed-baseline.json"
-	previousFile  = "previous-AGENTS.md"
-	canonicalFile = "canonical-AGENTS.md"
-	journalFile   = "transaction.json"
-	journalNext   = "transaction.json.next"
-	removingDir   = ".my-friday-removing"
-	removalMarker = ".my-friday-removal.json"
+	controlDir     = ".my-friday"
+	manifestFile   = "installed-baseline.json"
+	previousFile   = "previous-AGENTS.md"
+	canonicalFile  = "canonical-AGENTS.md"
+	journalFile    = "transaction.json"
+	journalNext    = "transaction.json.next"
+	journalDiscard = "transaction.json.discard"
+	removingDir    = ".my-friday-removing"
+	removalMarker  = ".my-friday-removal.json"
+	removalDiscard = ".my-friday-removal.json.discard"
 )
 
 var managedControlNames = map[string]bool{
 	manifestFile: true, previousFile: true, canonicalFile: true, journalFile: true,
-	journalNext: true, manifestFile + ".next": true, previousFile + ".next": true, canonicalFile + ".next": true,
+	journalNext: true, journalDiscard: true, manifestFile + ".next": true, previousFile + ".next": true, canonicalFile + ".next": true,
 }
 
 type Action string
@@ -121,6 +123,9 @@ var faultHook func(string) error
 
 // transitionHook is test-only deterministic race injection inside swap recovery.
 var transitionHook func(string) error
+
+// recoveryHook is test-only deterministic replacement at recovery mutation boundaries.
+var recoveryHook func(string) error
 
 func digest(b []byte) string { h := sha256.Sum256(b); return hex.EncodeToString(h[:]) }
 func validDigest(s string) bool {
@@ -740,6 +745,68 @@ func proofMatches(fd int, name string, want fileProof) bool {
 	got, e := proofAt(fd, name)
 	return e == nil && got.Exists == want.Exists && got.SHA256 == want.SHA256 && bytes.Equal(got.Bytes, want.Bytes)
 }
+
+func runRecoveryHook(point string) error {
+	if recoveryHook != nil {
+		return recoveryHook(point)
+	}
+	return nil
+}
+
+func moveProvenEntry(srcfd int, src string, dstfd int, dst string, want fileProof, point string) error {
+	if e := runRecoveryHook(point); e != nil {
+		return e
+	}
+	if e := renameExclusive(srcfd, src, dstfd, dst); e != nil {
+		return e
+	}
+	if proofMatches(dstfd, dst, want) {
+		return nil
+	}
+	if e := renameExclusive(dstfd, dst, srcfd, src); e != nil {
+		return fmt.Errorf("recovery refused: moved entry changed; displaced evidence retained at %s: %w", dst, e)
+	}
+	return fmt.Errorf("recovery refused: moved entry changed; evidence restored at %s", src)
+}
+
+func swapProvenEntries(fd int, a string, wantA fileProof, b string, wantB fileProof, point string) error {
+	if e := runRecoveryHook(point); e != nil {
+		return e
+	}
+	if e := renameSwap(fd, a, fd, b); e != nil {
+		return e
+	}
+	if proofMatches(fd, a, wantB) && proofMatches(fd, b, wantA) {
+		return nil
+	}
+	if e := renameSwap(fd, a, fd, b); e != nil {
+		return fmt.Errorf("recovery refused: swapped entries changed; displaced evidence retained: %w", e)
+	}
+	return errors.New("recovery refused: swapped entries changed; evidence restored")
+}
+
+func discardProvenEntry(fd int, name string, want fileProof, point string) error {
+	return discardProvenEntryTo(fd, name, journalDiscard, want, point)
+}
+
+func discardProvenEntryTo(fd int, name, discard string, want fileProof, point string) error {
+	if e := moveProvenEntry(fd, name, fd, discard, want, point+"-move"); e != nil {
+		return e
+	}
+	if e := runRecoveryHook(point + "-unlink"); e != nil {
+		return e
+	}
+	if !proofMatches(fd, discard, want) {
+		if e := renameExclusive(fd, discard, fd, name); e != nil {
+			return fmt.Errorf("recovery refused: discard entry changed; evidence retained at %s: %w", discard, e)
+		}
+		return fmt.Errorf("recovery refused: discard entry changed; evidence restored at %s", name)
+	}
+	if e := removeAt(fd, discard); e != nil {
+		return e
+	}
+	return unix.Fsync(fd)
+}
 func applyTransition(fd int, name string, before, after fileProof) error {
 	tmp := name + ".next"
 	if after.Exists {
@@ -1160,6 +1227,26 @@ func Recover(home string) error {
 	defer r.close()
 	_, removingErr := lstatAt(r.fd, removingDir)
 	_, markerErr := lstatAt(r.fd, removalMarker)
+	if _, discardErr := lstatAt(r.fd, removalDiscard); discardErr == nil {
+		if markerErr == nil {
+			return errors.New("recovery refused: duplicate detached journal evidence")
+		}
+		b, x := readRegularAt(r.fd, removalDiscard)
+		if x != nil {
+			return x
+		}
+		j, x := decodeJournalForRoot(b, r.proof)
+		if x != nil || !validDetachedJournal(j) {
+			return errors.New("recovery refused: detached discard authority is incompatible")
+		}
+		proof := fileProof{Exists: true, SHA256: digest(b), Bytes: b}
+		if x = moveProvenEntry(r.fd, removalDiscard, r.fd, removalMarker, proof, "detached-discard-before-restore"); x != nil {
+			return x
+		}
+		markerErr = nil
+	} else if !errors.Is(discardErr, unix.ENOENT) {
+		return discardErr
+	}
 	if removingErr == nil || markerErr == nil {
 		return recoverDetached(r)
 	}
@@ -1183,6 +1270,32 @@ func Recover(home string) error {
 	if e = bindControl(r, cfd); e != nil {
 		return e
 	}
+	if discarded, dx := readRegularAt(cfd, journalDiscard); dx == nil {
+		discardedJournal, vx := decodeJournalForRoot(discarded, r.proof)
+		if vx != nil {
+			return errors.New("recovery refused: discarded journal authority is incompatible")
+		}
+		discardedProof := fileProof{Exists: true, SHA256: digest(discarded), Bytes: discarded}
+		current, cx := readRegularAt(cfd, journalFile)
+		switch {
+		case errors.Is(cx, unix.ENOENT):
+			if vx = moveProvenEntry(cfd, journalDiscard, cfd, journalFile, discardedProof, "discarded-journal-before-restore"); vx != nil {
+				return vx
+			}
+		case cx != nil:
+			return cx
+		default:
+			currentJournal, ex := decodeJournalForRoot(current, r.proof)
+			if ex != nil || !sameJournalTransaction(currentJournal, discardedJournal) || !adjacentJournalPhases(currentJournal.Phase, discardedJournal.Phase) {
+				return errors.New("recovery refused: discarded journal does not prove an adjacent transaction phase")
+			}
+			if vx = moveProvenEntry(cfd, journalDiscard, cfd, journalNext, discardedProof, "discarded-journal-before-stage-restore"); vx != nil {
+				return vx
+			}
+		}
+	} else if !errors.Is(dx, unix.ENOENT) {
+		return dx
+	}
 	b, e := readRegularAt(cfd, journalFile)
 	if errors.Is(e, unix.ENOENT) {
 		next, x := readRegularAt(cfd, journalNext)
@@ -1195,7 +1308,8 @@ func Recover(home string) error {
 		if _, x = decodeJournalForRoot(next, r.proof); x != nil {
 			return errors.New("recovery refused: unproven staged journal retained")
 		}
-		if x = renameExclusive(cfd, journalNext, cfd, journalFile); x != nil {
+		nextProof := fileProof{Exists: true, SHA256: digest(next), Bytes: next}
+		if x = moveProvenEntry(cfd, journalNext, cfd, journalFile, nextProof, "stage-only-before-promote"); x != nil {
 			return x
 		}
 		if x = unix.Fsync(cfd); x != nil {
@@ -1216,16 +1330,18 @@ func Recover(home string) error {
 		if sx != nil || !sameJournalTransaction(j, staged) || !adjacentJournalPhases(j.Phase, staged.Phase) {
 			return errors.New("recovery refused: staged journal does not prove an adjacent transaction phase")
 		}
+		currentProof := fileProof{Exists: true, SHA256: digest(b), Bytes: b}
+		stagedProof := fileProof{Exists: true, SHA256: digest(next), Bytes: next}
+		discardProof := stagedProof
 		if journalPhaseRank(staged.Phase) > journalPhaseRank(j.Phase) {
-			if x = renameSwap(cfd, journalNext, cfd, journalFile); x != nil {
+			if x = swapProvenEntries(cfd, journalNext, stagedProof, journalFile, currentProof, "dual-slot-before-swap"); x != nil {
 				return x
 			}
 			j = staged
+			b = next
+			discardProof = currentProof
 		}
-		if x = removeAt(cfd, journalNext); x != nil {
-			return x
-		}
-		if x = unix.Fsync(cfd); x != nil {
+		if x = discardProvenEntry(cfd, journalNext, discardProof, "dual-slot-before-discard"); x != nil {
 			return x
 		}
 	} else if !errors.Is(nextErr, unix.ENOENT) {
@@ -1268,10 +1384,8 @@ func Recover(home string) error {
 		}
 		return recoverDetached(r)
 	}
-	if e = removeAt(cfd, journalFile); e != nil {
-		return e
-	}
-	if e = unix.Fsync(cfd); e != nil {
+	journalProof := fileProof{Exists: true, SHA256: digest(b), Bytes: b}
+	if e = discardProvenEntry(cfd, journalFile, journalProof, "final-journal-before-discard"); e != nil {
 		return e
 	}
 	names, e := controlNames(cfd)
@@ -1317,7 +1431,8 @@ func recoverDetached(r *homeRoot) error {
 		if x != nil || !validDetachedJournal(j) {
 			return errors.New("recovery refused: detached deletion authority is incompatible")
 		}
-		if e = renameExclusive(fd, journalFile, r.fd, removalMarker); e != nil {
+		journalProof := fileProof{Exists: true, SHA256: digest(b), Bytes: b}
+		if e = moveProvenEntry(fd, journalFile, r.fd, removalMarker, journalProof, "detached-before-promote"); e != nil {
 			return e
 		}
 		if e = unix.Fsync(r.fd); e != nil {
@@ -1350,10 +1465,11 @@ func recoverDetached(r *homeRoot) error {
 			return e
 		}
 	}
-	if e := removeAt(r.fd, removalMarker); e != nil {
+	markerProof := fileProof{Exists: true, SHA256: digest(b), Bytes: b}
+	if e := discardProvenEntryTo(r.fd, removalMarker, removalDiscard, markerProof, "detached-marker-before-discard"); e != nil {
 		return e
 	}
-	return unix.Fsync(r.fd)
+	return nil
 }
 
 func validDetachedJournal(j journal) bool {

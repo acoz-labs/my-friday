@@ -62,3 +62,9 @@ newer phase depending on whether interruption happened before or after the
 atomic swap. Recovery validates both slots before promoting or removing either.
 A malformed, non-adjacent, wrong-root staging file, journal, or deletion
 namespace is retained and refused for maintainer diagnosis.
+Recovery also re-proves every journal entry after an atomic promotion, swap, or
+move to cleanup. If a same-user process replaces an entry between validation
+and mutation, recovery restores the moved entry when safe or retains both
+locations and refuses. Preserve `transaction.json.discard` or
+`.my-friday-removal.json.discard` if reported; rerunning recovery restores a
+valid interrupted cleanup stage before proceeding.

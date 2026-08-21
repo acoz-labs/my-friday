@@ -690,6 +690,198 @@ func TestDetachedRecoveryPreservesJournalWhenPinnedRootDiffers(t *testing.T) {
 	}
 }
 
+func TestStageOnlyRecoveryPreservesConcurrentJournalReplacement(t *testing.T) {
+	runtime, codex := fixture(t)
+	if err := os.MkdirAll(codex, 0700); err != nil {
+		t.Fatal(err)
+	}
+	p, err := Plan(ActionInstall, runtime, codex)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = os.Mkdir(filepath.Join(codex, controlDir), 0700); err != nil {
+		t.Fatal(err)
+	}
+	nextPath := filepath.Join(codex, controlDir, journalNext)
+	j := journal{ContractVersion: 1, Action: ActionInstall, Phase: "prepared", Root: p.root, Before: p.before, After: afterProofs(p)}
+	if err = os.WriteFile(nextPath, journalBytes(j), 0600); err != nil {
+		t.Fatal(err)
+	}
+	foreign := []byte("concurrent foreign staged journal")
+	recoveryHook = func(point string) error {
+		if point == "stage-only-before-promote" {
+			if err := os.Remove(nextPath); err != nil {
+				return err
+			}
+			return os.WriteFile(nextPath, foreign, 0600)
+		}
+		return nil
+	}
+	t.Cleanup(func() { recoveryHook = nil })
+	if err = Recover(codex); err == nil {
+		t.Fatal("concurrent stage-only replacement was accepted")
+	}
+	got, readErr := os.ReadFile(nextPath)
+	if readErr != nil || !bytes.Equal(got, foreign) {
+		t.Fatalf("foreign staged journal was not retained: %q, %v", got, readErr)
+	}
+	if _, statErr := os.Stat(filepath.Join(codex, controlDir, journalFile)); !os.IsNotExist(statErr) {
+		t.Fatalf("stale authority was promoted: %v", statErr)
+	}
+}
+
+func TestDualSlotRecoveryPreservesConcurrentSwapReplacement(t *testing.T) {
+	runtime, codex := installFixture(t)
+	mutatePurpose(t, runtime, "Dual-slot race")
+	p, err := Plan(ActionUpgrade, runtime, codex)
+	if err != nil {
+		t.Fatal(err)
+	}
+	faultHook = func(phase string) error {
+		if phase == "journal-committed-staged" {
+			return errors.New("leave newer staged journal")
+		}
+		return nil
+	}
+	if err = Execute(p); err == nil {
+		t.Fatal("journal staging interruption did not fire")
+	}
+	faultHook = nil
+	nextPath := filepath.Join(codex, controlDir, journalNext)
+	foreign := []byte("concurrent foreign dual-slot journal")
+	recoveryHook = func(point string) error {
+		if point == "dual-slot-before-swap" {
+			if err := os.Remove(nextPath); err != nil {
+				return err
+			}
+			return os.WriteFile(nextPath, foreign, 0600)
+		}
+		return nil
+	}
+	t.Cleanup(func() { faultHook = nil; recoveryHook = nil })
+	if err = Recover(codex); err == nil {
+		t.Fatal("concurrent dual-slot replacement was accepted")
+	}
+	got, readErr := os.ReadFile(nextPath)
+	if readErr != nil || !bytes.Equal(got, foreign) {
+		t.Fatalf("foreign dual-slot journal was not retained: %q, %v", got, readErr)
+	}
+}
+
+func TestDualSlotRecoveryPreservesConcurrentDiscardReplacement(t *testing.T) {
+	runtime, codex := installFixture(t)
+	mutatePurpose(t, runtime, "Dual-slot discard race")
+	p, err := Plan(ActionUpgrade, runtime, codex)
+	if err != nil {
+		t.Fatal(err)
+	}
+	faultHook = func(phase string) error {
+		if phase == "journal-committed-swapped" {
+			return errors.New("leave prior journal staged")
+		}
+		return nil
+	}
+	if err = Execute(p); err == nil {
+		t.Fatal("journal swap interruption did not fire")
+	}
+	faultHook = nil
+	discardPath := filepath.Join(codex, controlDir, journalDiscard)
+	foreign := []byte("concurrent foreign discard journal")
+	recoveryHook = func(point string) error {
+		if point == "dual-slot-before-discard-unlink" {
+			if err := os.Remove(discardPath); err != nil {
+				return err
+			}
+			return os.WriteFile(discardPath, foreign, 0600)
+		}
+		return nil
+	}
+	t.Cleanup(func() { faultHook = nil; recoveryHook = nil })
+	if err = Recover(codex); err == nil {
+		t.Fatal("concurrent discard replacement was accepted")
+	}
+	got, readErr := os.ReadFile(filepath.Join(codex, controlDir, journalNext))
+	if readErr != nil || !bytes.Equal(got, foreign) {
+		t.Fatalf("foreign discard journal was not restored: %q, %v", got, readErr)
+	}
+}
+
+func TestInterruptedRecoveryDiscardStageResumes(t *testing.T) {
+	runtime, codex := installFixture(t)
+	mutatePurpose(t, runtime, "Interrupted recovery discard")
+	p, err := Plan(ActionUpgrade, runtime, codex)
+	if err != nil {
+		t.Fatal(err)
+	}
+	faultHook = func(phase string) error {
+		if phase == "journal-committed-swapped" {
+			return errors.New("leave prior journal staged")
+		}
+		return nil
+	}
+	if err = Execute(p); err == nil {
+		t.Fatal("journal swap interruption did not fire")
+	}
+	faultHook = nil
+	recoveryHook = func(point string) error {
+		if point == "dual-slot-before-discard-unlink" {
+			return errors.New("interrupt discard cleanup")
+		}
+		return nil
+	}
+	if err = Recover(codex); err == nil {
+		t.Fatal("discard cleanup interruption did not fire")
+	}
+	recoveryHook = nil
+	t.Cleanup(func() { faultHook = nil; recoveryHook = nil })
+	if err = Recover(codex); err != nil {
+		t.Fatalf("interrupted discard cleanup did not resume: %v", err)
+	}
+	if err = Recover(codex); err != nil {
+		t.Fatalf("repeat recovery failed: %v", err)
+	}
+}
+
+func TestDetachedRecoveryPreservesConcurrentJournalReplacement(t *testing.T) {
+	runtime, codex := fixture(t)
+	if err := os.MkdirAll(codex, 0700); err != nil {
+		t.Fatal(err)
+	}
+	p, err := Plan(ActionInstall, runtime, codex)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = os.Mkdir(filepath.Join(codex, removingDir), 0700); err != nil {
+		t.Fatal(err)
+	}
+	journalPath := filepath.Join(codex, removingDir, journalFile)
+	j := journal{ContractVersion: 1, Action: ActionInstall, Phase: "prepared", Root: p.root, Before: p.before, After: afterProofs(p)}
+	if err = os.WriteFile(journalPath, journalBytes(j), 0600); err != nil {
+		t.Fatal(err)
+	}
+	foreign := []byte("concurrent foreign detached journal")
+	recoveryHook = func(point string) error {
+		if point == "detached-before-promote" {
+			if err := os.Remove(journalPath); err != nil {
+				return err
+			}
+			return os.WriteFile(journalPath, foreign, 0600)
+		}
+		return nil
+	}
+	t.Cleanup(func() { recoveryHook = nil })
+	if err = Recover(codex); err == nil {
+		t.Fatal("concurrent detached replacement was accepted")
+	}
+	got, readErr := os.ReadFile(journalPath)
+	if readErr != nil || !bytes.Equal(got, foreign) {
+		t.Fatalf("foreign detached journal was not retained: %q, %v", got, readErr)
+	}
+	if _, statErr := os.Stat(filepath.Join(codex, removalMarker)); !os.IsNotExist(statErr) {
+		t.Fatalf("foreign detached journal was promoted: %v", statErr)
+	}
+}
+
 func TestCommittedUninstallRecoversWithPriorJournalPhaseStaged(t *testing.T) {
 	_, codex := installFixture(t)
 	p, err := Plan(ActionUninstall, "", codex)
