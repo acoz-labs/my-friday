@@ -83,8 +83,9 @@ published. Never delete or rewrite accepted source artifacts, tags, or ledgers.
 
 ## Production Readiness Preflight
 
-The existing `GITHUB_TOKEN` injection and `contents: write` permission are the
-only publication credential path. Implementation must demonstrate exact
+The existing `GITHUB_TOKEN` secret injection and `contents: write` permission
+are the only deployment/publication credential path. Implementation must
+demonstrate exact
 Actions artifact retrieval, executable digest verification, deterministic
 packaging, retry-safe release lookup/upload, and dry fixture rollback before
 the final implementation review. Activation is an explicit guarded workflow
