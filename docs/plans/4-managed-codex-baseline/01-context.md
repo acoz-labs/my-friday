@@ -167,14 +167,15 @@ and outcomes O3 through O8.
 - A self-contained renderer can preserve the validated profile's presentation
   semantics without including arbitrary repository prose.
 
-### Unknowns resolved during implementation or acceptance
+### Known release capability gaps
 
 - The exact Codex CLI patch version present in the disposable acceptance user
   is recorded as evidence; expanding a tested compatibility range is a later
   evidence-backed change, not a blocker to this plan.
-- The host mechanism for provisioning the disposable acceptance user may vary.
-  The invariant is a distinct non-admin UID, fresh home and keychain, isolated
-  `CODEX_HOME`, and auditable teardown.
+- No configured macOS harness currently creates a disposable UID, home,
+  keychain, isolated `CODEX_HOME`, named test-credential injection, evidence,
+  and teardown; current acceptance automation only records a decision.
 
-No unknown changes the approved product outcome or requires a product-authority
-decision before this plan can become final.
+These gaps do not block implementation, but they prohibit acceptance/release.
+A later design must name the host, commands, secret slot/source, immutable
+package store, digest checks, upload/download path, teardown, and receipt.

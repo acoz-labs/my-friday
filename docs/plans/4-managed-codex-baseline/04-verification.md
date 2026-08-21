@@ -105,8 +105,9 @@ UI change under `docs/operations/ui-acceptance.md`; screenshot or visual
 baseline evidence is not required. Exact terminal transcripts and filesystem
 manifests are required.
 
-The candidate is the nominated full Git commit and SHA-256 digest of the one
-Darwin/ARM64 binary built from it. The independent acceptor records:
+This envelope stops before candidate acceptance. A later delivery plan must
+make the following evidence executable against one packaged Darwin/ARM64 binary
+identified by full commit and SHA-256 digest:
 
 - macOS version, Apple silicon architecture, local APFS proof, Git version,
   Codex CLI version, non-admin UID evidence, disposable home identifier in
@@ -115,8 +116,9 @@ Darwin/ARM64 binary built from it. The independent acceptor records:
   including unrelated canaries but no credential contents;
 - install preview/cancel, install/verify, a real Codex discovery smoke using a
   sanitized test profile and separately authorized test account, collision
-  denial, injected interruption/recovery using acceptance-safe hooks or a
-  purpose-built test candidate mode, source upgrade, rollback, drift/repair,
+  denial, production-candidate-safe interruption (for example terminating the
+  unmodified process at an externally observed published phase), recovery,
+  source upgrade, rollback, drift/repair,
   uninstall, repeated uninstall/verify, and final tree equivalence;
 - proof that `/Users/batcomputer/.codex`, the accepting operator's real home,
   and deployed `batcomputer-ai` projections were outside the candidate process
@@ -132,69 +134,47 @@ temporary directory under Alfred's account is insufficient for acceptance.
 
 ## Rollout
 
-1. Merge the independently reviewed implementation only after reconciliation
-   promotes durable docs and removes this temporary plan.
-2. Nominate the exact successful `main` commit and immutable Darwin/ARM64
-   artifact through the existing staging-free artifact workflow.
-3. Provision the disposable acceptance identity and install the supported Codex
-   CLI without importing personal config, auth, sessions, or keychain state.
-4. Exercise the acceptance matrix and record an artifact-bound decision by an
-   acceptor other than the contributor.
-5. If accepted, run the existing artifact release workflow against the same
-   digest. Do not rebuild.
-6. Verify the release ledger, tag, downloadable digest, documentation, and issue
-   lifecycle before declaring completion.
+1. Complete code, tests, docs, and a reviewed implementation PR.
+2. Stop at the `implementation` envelope. Merge, nomination, acceptance, and
+   release are not authorized by this plan.
+3. A later plan must name executable packaging/upload/download/digest commands,
+   the macOS host, disposable-user create/delete commands, fresh home/keychain
+   checks, `CODEX_TEST_ACCESS_TOKEN` secret slot and approved injection source,
+   sanitized evidence collection, and teardown verification.
 
 There is no feature flag or background activation. Installing the released
 artifact does not mutate Codex; the user still invokes the explicit lifecycle.
 
 ## Rollback And Recovery
 
-- Before release, reject the candidate or revert its implementation commit.
-- After release, publish a corrected immutable artifact through the same
-  nomination/acceptance path; never replace existing release bytes.
+- Before any later release, reject the candidate or revert its implementation.
 - A user can run `my-friday codex rollback` for the prior managed generation or
   `uninstall` for complete reversal. Drift or ambiguous state fails closed and
   retains the transaction journal for diagnosis.
 - Source rollback does not delete installed state. A compatible older runtime
   may be supplied through explicit `upgrade` only when the assistant identity
   and renderer contract permit it.
-- The release runbook must include disposable-user teardown after evidence is
-  preserved and must verify that no test credential or home remains.
+- A later release runbook must remove the injected test credential, delete the
+  disposable user/home/keychain, and verify no residue after evidence capture.
 
 ## Release Prerequisites
 
-- Exact candidate passes container CI and native Apple silicon/APFS/Git tests.
+- A later exact candidate passes container CI and native Apple silicon/APFS/Git tests.
 - All mutation tests prove explicit injected roots and the live-home guard.
 - Independent acceptance evidence opens successfully and is bound to the
   candidate SHA and artifact digest.
 - `docs/architecture.md`, a new installed-baseline capability document,
   `docs/development.md`, `docs/deployment.md`, and `docs/runbook.md` describe
   shipped behavior and correct stale release text.
-- Existing artifact nomination, acceptance, and release workflows remain green
-  for the exact implementation commit.
+- Executable packaging/transport/upload and macOS acceptance automation are
+  designed and verified before a broader envelope is requested.
 
 ## Production Readiness Preflight
 
-- **Secrets:** My Friday installation uses none. If the independent Codex
-  discovery smoke needs authentication, the acceptance workflow injects a
-  test-only credential into the disposable identity without exposing it to My
-  Friday or evidence; release publishing continues to use existing repository
-  workflow permissions.
-- **Deploy/promote:** `bin/nominate-release-candidate` and the existing
-  staging-free artifact workflows nominate and promote the exact Darwin/ARM64
-  binary. No service deploy or staging environment is invented.
-- **Activation:** release publication is the artifact activation. User-level
-  Codex mutation remains an explicit foreground `my-friday codex install` after
-  download; release automation never installs into an operator's home.
-- **Verification:** native CI plus disposable-user acceptance verify the exact
-  candidate; post-release verification downloads or identifies the published
-  bytes and checks the recorded SHA-256 digest, tag, GitHub Release, and issue
-  ledger.
-- **Rollback:** repository rollback is a Git revert followed by a new immutable
-  candidate. User rollback/uninstall is acceptance-tested; existing released
-  artifacts are never overwritten.
-- **Receipt:** the release workflow records application SHA, artifact digest,
-  release/tag identifier, included issue #4, acceptance evidence/workflow,
-  control workflow SHA, and rollback target. Finalization must reject a rebuilt
-  or differently accepted artifact.
+Not applicable to the `implementation` envelope. Runtime installation uses no
+secret, but production readiness is not proved: current automation lacks a
+digest-verified executable package/transport/upload chain and a macOS harness
+for disposable UID/home/keychain provisioning, named test-credential injection,
+evidence, and teardown. A broader plan must provide executable deploy or
+publication, activation, verification, rollback, and exact-candidate receipt
+contracts rather than treating an opaque artifact string as the bytes.

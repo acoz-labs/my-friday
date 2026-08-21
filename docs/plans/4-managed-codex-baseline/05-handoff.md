@@ -98,9 +98,9 @@ draft. The temporary plan is not copied wholesale into permanent docs.
   `~/.codex`, a contributor's actual home, or deployed Batcomputer runtime.
 - Keep the PR draft until reconciliation binds the exact head, durable docs are
   promoted, this plan is removed, and evidence is openable.
-- After merge, nominate the exact artifact, run independent disposable-user
-  acceptance, and release only the accepted bytes under the approved
-  `through-production` envelope and repository policy.
+- Stop after the reviewed implementation PR. Merge, nomination, acceptance,
+  and release require later authority backed by executable candidate transport
+  and disposable-macOS harness design.
 
 ## Explicit Non-Goals And YAGNI Boundary
 

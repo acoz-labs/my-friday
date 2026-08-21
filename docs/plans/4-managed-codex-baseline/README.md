@@ -4,7 +4,7 @@
 - **Issue:** #4
 - **Planning PR:** Pending
 - **Repository basis:** 5bc309226d2c40e1473a4011c1bd8552c995919d
-- **Execution envelope:** Pending
+- **Execution envelope:** implementation
 
 ## Decision
 
@@ -32,10 +32,9 @@ remain outside My Friday's ownership.
   Destructive install, repair, uninstall, rollback, or recovery tests must
   never target Alfred's live `~/.codex`, a developer's real Codex home, or a
   deployed `batcomputer-ai` release projection.
-- The durable deployment guide still describes public-release prerequisites
-  that are inconsistent with the repository's existing accepted artifact
-  release. Implementation reconciliation must correct that stale contract
-  before this change is released.
+- Existing artifact workflows record an opaque artifact identifier and ledger;
+  they do not package, transport, digest-verify, or upload executable bytes.
+  Disposable-user acceptance and publication need a later delivery design.
 
 ## Decision Spotlight
 
@@ -83,5 +82,5 @@ remain outside My Friday's ownership.
 
 The plan becomes final only after the draft planning PR is linked to issue #4,
 the complete pack has no blocking maintainer finding, plan validation passes,
-and the exact PR number and `through-production` envelope are recorded. Product
+and the exact PR number and `implementation` envelope are recorded. Product
 authority must then approve the exact final head before merge.

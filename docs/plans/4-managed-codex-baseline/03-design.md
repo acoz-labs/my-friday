@@ -99,6 +99,12 @@ prior generation. If neither is provable, it preserves the journal and refuses.
 6. Journals and manifests are durable before the transition they authorize.
 7. Repeating a completed command is read-only and reports already installed,
    healthy, already repaired/upgraded, already rolled back, or not installed.
+8. Before replacement or deletion, every path is opened relative to the pinned
+   Codex-home descriptor with no-follow semantics; managed files must be regular,
+   single-link, current-UID-owned, expected-mode entries, and the complete
+   control tree must match the allowlisted manifest/journal layout. Revalidate
+   device, inode, link count, owner, mode, type, digest, and directory entries
+   immediately before mutation.
 
 ## Interfaces And Contracts
 
@@ -113,22 +119,25 @@ reported only through a valid manifest, never inferred from equal foreign bytes.
 ### `my-friday codex verify`
 
 Read-only and requires no confirmation. It reports a stable status and exit
-code for `healthy`, `not-installed`, `interrupted`, `shadowed`, `collision`,
+code for `installed-healthy`, `not-installed`, `interrupted`, `shadowed`, `collision`,
 `projection-drift`, `source-drift`, `source-missing`, `contract-incompatible`,
-or `environment-unsupported`. Healthy means the active manifest, generation,
-projection, renderer contract, pinned home, and current source profile all
-validate and no global override shadows the projection.
+or `environment-unsupported`. Installed integrity is separate from source
+freshness: `installed-healthy` means manifest, stored active generation,
+projection, renderer contract, and pinned home agree with no shadowing override;
+`source-current`, `source-drift`, or `source-missing` is reported independently.
 
 ### `my-friday codex repair`
 
 Uses the manifest's runtime source. It is permitted only when the control
-manifest proves ownership and the failure is repairable. It may replace a
-drifted/missing managed projection or rebuild damaged owned generation state,
+manifest proves ownership and the failure is repairable. It may restore a
+drifted/missing projection from the exact verified active generation or rebuild
+derived metadata from agreeing manifest/generation proofs,
 but never a foreign control namespace, incompatible manifest, changed root, or
 shadowing override. Preview names old and desired digests and requires `Repair`.
-The pre-repair active bytes become the single previous generation only when
-their ownership and bounded size are provable; otherwise recovery evidence is
-retained and repair refuses.
+Repair never rotates the previous slot and never promotes drifted target bytes
+into history. If the active generation is invalid, repair requires a matching
+manifest and journal-proven desired stage; otherwise it retains evidence and
+refuses. Source drift is handled by `upgrade`.
 
 ### `my-friday codex upgrade --runtime PATH`
 
@@ -139,15 +148,17 @@ assistant identity is uninstall/install, not upgrade.
 
 ### `my-friday codex rollback`
 
-Requires a healthy active generation and one valid previous generation.
+Requires exact installed-state integrity and one valid previous stored
+generation; the runtime source need not exist or be current.
 Previews both generation IDs/digests and requires `Rollback`. It swaps previous
 into active transactionally and consumes the rollback slot so repeating the
 command reports no rollback available.
 
 ### `my-friday codex uninstall`
 
-Requires an exact healthy projection and control manifest with no active
-transaction. It previews every removed owned path and requires `Uninstall`.
+Requires exact projection/control proofs with no active transaction and does
+not read or require the runtime source. It previews every removed owned path
+and requires `Uninstall`.
 It removes projection first only after durable deletion authorization, then
 removes generation/control state and the empty tool-owned directory. On drift
 it refuses; it does not preserve or delete unknown bytes under its namespace.
