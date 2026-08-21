@@ -1,0 +1,51 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+test_dir="$(mktemp -d)"
+trap 'rm -rf "$test_dir"' EXIT
+
+# Load the production verifier without executing finalize-release's command path.
+function_source="$(sed -n '/^verify_release_asset() {$/,/^}$/p' "$repo_root/bin/finalize-release")"
+eval "$function_source"
+
+# shellcheck disable=SC2034 # consumed by the verifier loaded dynamically above
+repo="example/my-friday"
+# shellcheck disable=SC2034 # consumed by the verifier loaded dynamically above
+release_tag="artifact-test"
+# shellcheck disable=SC2034 # consumed by the verifier loaded dynamically above
+release_asset_name="my-friday-darwin-arm64"
+release_bytes="accepted release bytes"
+# shellcheck disable=SC2034 # consumed by the verifier loaded dynamically above
+release_artifact_sha256="$(printf '%s' "$release_bytes" | sha256sum | awk '{print $1}')"
+
+gh() {
+  [[ "$1" == "api" ]]
+  printf '%s' "${STUB_RELEASE_BYTES:-$release_bytes}"
+}
+
+assert_rejected() {
+  local description="$1"
+  local release_json="$2"
+  if verify_release_asset "$release_json" >/dev/null 2>&1; then
+    echo "Expected rejection: $description" >&2
+    exit 1
+  fi
+}
+
+matching_json="$(jq -cn --arg name "$release_asset_name" \
+  '{assets: [{apiUrl: "https://api.github.com/repos/example/my-friday/releases/assets/101", name: $name}]}')"
+verify_release_asset "$matching_json"
+verify_release_asset "$matching_json"
+
+assert_rejected "missing release asset" '{"assets":[]}'
+assert_rejected "duplicate release assets" "$(jq -cn --arg name "$release_asset_name" \
+  '{assets: [
+    {apiUrl: "https://api.github.com/repos/example/my-friday/releases/assets/101", name: $name},
+    {apiUrl: "https://api.github.com/repos/example/my-friday/releases/assets/102", name: $name}
+  ]}')"
+
+STUB_RELEASE_BYTES="different bytes"
+assert_rejected "release asset digest mismatch" "$matching_json"
+
+echo "bin/test-finalize-release-assets completed."

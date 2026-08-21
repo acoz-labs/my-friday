@@ -2,6 +2,7 @@
 set -euo pipefail
 
 bin/validate-solution-plans
+bin/test-finalize-release-assets
 
 unformatted="$(gofmt -l cmd internal)"
 if [[ -n "$unformatted" ]]; then

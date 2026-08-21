@@ -62,12 +62,29 @@ jobs:
           IFS=: read -r scheme run_id artifact_id digest_scheme digest extra <<< "$RELEASE_ARTIFACT"
           [[ "$scheme" == actions && "$run_id" =~ ^[0-9]+$ && "$artifact_id" =~ ^[0-9]+$ && "$digest_scheme" == sha256 && "$digest" =~ ^[0-9a-f]{64}$ && -z "$extra" ]]
           echo "run-id=$run_id" >> "$GITHUB_OUTPUT"
+          echo "artifact-id=$artifact_id" >> "$GITHUB_OUTPUT"
           echo "digest=$digest" >> "$GITHUB_OUTPUT"
+
+      - name: Bind accepted artifact identity
+        id: artifact_identity
+        env:
+          ACCEPTED_RUN_ID: ${{ steps.artifact.outputs.run-id }}
+          ACCEPTED_ARTIFACT_ID: ${{ steps.artifact.outputs.artifact-id }}
+          ACCEPTED_ARTIFACT_NAME: my-friday-darwin-arm64-${{ inputs.sha }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          artifact_json="$(gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${ACCEPTED_ARTIFACT_ID}")"
+          [[ "$(jq -r '.id' <<< "$artifact_json")" == "$ACCEPTED_ARTIFACT_ID" ]]
+          [[ "$(jq -r '.workflow_run.id' <<< "$artifact_json")" == "$ACCEPTED_RUN_ID" ]]
+          [[ "$(jq -r '.name' <<< "$artifact_json")" == "$ACCEPTED_ARTIFACT_NAME" ]]
+          [[ "$(jq -r '.expired' <<< "$artifact_json")" == "false" ]]
+          echo "name=$ACCEPTED_ARTIFACT_NAME" >> "$GITHUB_OUTPUT"
 
       - name: Download accepted bytes
         uses: actions/download-artifact@v4
         with:
-          name: my-friday-darwin-arm64-${{ inputs.sha }}
+          name: ${{ steps.artifact_identity.outputs.name }}
           path: dist
           github-token: ${{ github.token }}
           run-id: ${{ steps.artifact.outputs.run-id }}
@@ -84,6 +101,9 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_ARTIFACT: ${{ inputs.artifact }}
+          RELEASE_ARTIFACT_ID: ${{ steps.artifact.outputs.artifact-id }}
+          RELEASE_ARTIFACT_NAME: ${{ steps.artifact_identity.outputs.name }}
+          RELEASE_ARTIFACT_SHA256: ${{ steps.artifact.outputs.digest }}
           RELEASE_ISSUES: ${{ inputs.issues }}
           RELEASE_SHA: ${{ inputs.sha }}
           RELEASE_SUMMARY: ${{ inputs.summary }}
@@ -93,6 +113,9 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_ARTIFACT: ${{ inputs.artifact }}
+          RELEASE_ARTIFACT_ID: ${{ steps.artifact.outputs.artifact-id }}
+          RELEASE_ARTIFACT_NAME: ${{ steps.artifact_identity.outputs.name }}
+          RELEASE_ARTIFACT_SHA256: ${{ steps.artifact.outputs.digest }}
           RELEASE_ISSUES: ${{ inputs.issues }}
           RELEASE_SHA: ${{ inputs.sha }}
           RELEASE_SUMMARY: ${{ inputs.summary }}

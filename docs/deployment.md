@@ -9,8 +9,11 @@ artifact merely by merging.
 Artifact nomination builds one `my-friday-darwin-arm64` binary from the exact
 successful commit, uploads it as a named Actions artifact, and records the run,
 artifact ID, and SHA-256 digest. Acceptance is bound to that authority string.
-Release downloads the same run's artifact, re-verifies its digest, and uploads
-those exact bytes as the GitHub Release asset; it never rebuilds the candidate.
+Release binds the Actions run, artifact ID, and exact artifact name; downloads
+those bytes and re-verifies their digest; then uploads them as the sole named
+GitHub Release asset. Initial publication and every idempotent retry download
+and hash that Release asset, refusing missing, duplicate, or mismatched assets.
+It never rebuilds the candidate.
 
 Installed-baseline acceptance must use the nominated binary under a disposable
 non-admin macOS 14+ Apple-silicon user with a fresh home, keychain, and
