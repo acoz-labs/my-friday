@@ -1,8 +1,8 @@
 # Solution Design: Safely manage the installed Codex baseline
 
-- **Status:** Draft
+- **Status:** Final
 - **Issue:** #4
-- **Planning PR:** Pending
+- **Planning PR:** #15
 - **Repository basis:** 5bc309226d2c40e1473a4011c1bd8552c995919d
 - **Execution envelope:** through-production
 
