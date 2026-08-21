@@ -2,7 +2,7 @@
 
 - **Status:** Draft
 - **Issue:** #5
-- **Planning PR:** Pending
+- **Planning PR:** #20
 - **Repository basis:** 359a2dc4c94f050775b93c4dfc366dfe0976d6a4
 - **Execution envelope:** through-production
 
@@ -27,9 +27,6 @@ memories never appear.
 
 ## Needs Attention
 
-- The planning pull request number remains pending because this local design
-  task is expressly not authorized to publish. It must be recorded before the
-  pack can become `Final`.
 - Exact-candidate acceptance must use the immutable Darwin/ARM64 artifact on a
   supported disposable non-admin macOS identity and a generated fixture memory
   repository. It must never read or mutate an operator's live Codex home,
@@ -85,7 +82,7 @@ memories never appear.
 
 ## Final Gate
 
-The plan may become `Final` after a draft planning PR is opened and linked to
-issue #5, the PR number is recorded here, independent maintainer review has no
-blocking finding, validation passes on its exact head, and product authority
-approves that exact head with the `through-production` envelope.
+The plan may become `Final` after this draft planning PR is linked to issue #5,
+independent maintainer review has no blocking finding, and validation passes on
+its exact head. Product authority must then approve that exact final head with
+the `through-production` envelope before merge.
