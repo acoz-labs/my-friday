@@ -1,5 +1,32 @@
 # Runbook
 
+## Remove an incorrect stable release alias
+
+First download the stable asset and compare its GitHub asset digest, local
+SHA-256, retained commit-suffixed archive, and contained executable against the
+release ledger. If the alias is incorrect, identify the one release asset whose
+name is exactly `my-friday-darwin-arm64.tar.gz` and delete only that asset by
+exact ID. Do not delete or replace the release, tag, `SHA256SUMS`, retained
+commit-suffixed archive, or acceptance evidence.
+
+Confirm the permanent latest-download URL no longer serves the bad alias. Then
+use the guarded `Backfill stable release asset` workflow with the exact latest
+tag, retained source archive name, and accepted executable digest. The workflow
+fails closed if the release is no longer latest or any digest/content check is
+ambiguous. It is safe to retry after an interrupted upload.
+
+The retained historical archive may contain its sole top-level executable as
+`my-friday-darwin-arm64-<hex>`; future archives use `my-friday`. No other entry
+name, nested path, symlink, non-executable file, or additional entry is valid.
+The workflow copies the verified source archive unchanged rather than renaming
+its internal executable.
+
+The same retained archive may expose one top-level AppleDouble metadata member
+named exactly `._<executable-name>` on GNU tar runners. It is valid only as the
+sole companion to that executable and must be a regular member. The guard
+extracts only the executable; it neither extracts nor uploads the AppleDouble
+member separately.
+
 ## Recover an interrupted repository creation
 
 Use this only when `my-friday init` reports a retained owner-only transaction

@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+tag="${1:-}"
+shift || true
+repo="${GITHUB_REPOSITORY:-}"
+if [[ -z "$repo" || -z "$tag" || "$#" -eq 0 ]]; then
+  echo "Usage: GITHUB_REPOSITORY=OWNER/REPO bin/release-assets <tag> <asset>..." >&2
+  exit 64
+fi
+release="$(gh release view "$tag" --repo "$repo" --json assets)"
+for path in "$@"; do
+  [[ -f "$path" && ! -L "$path" ]] || { echo "Missing release asset: $path" >&2; exit 1; }
+  name="$(basename "$path")"
+  local_digest="sha256:$(sha256sum "$path" | awk '{print $1}')"
+  matches="$(jq --arg name "$name" '[.assets[] | select(.name == $name)] | length' <<< "$release")"
+  if [[ "$matches" -gt 1 ]]; then
+    echo "Release contains ambiguous duplicate asset: $name" >&2
+    exit 1
+  elif [[ "$matches" -eq 1 ]]; then
+    remote_digest="$(jq -r --arg name "$name" '.assets[] | select(.name == $name) | .digest // ""' <<< "$release")"
+    [[ "$remote_digest" == "$local_digest" ]] || { echo "Existing release asset digest mismatch: $name" >&2; exit 1; }
+  else
+    gh release upload "$tag" "$path" --repo "$repo"
+  fi
+done

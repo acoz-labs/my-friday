@@ -39,11 +39,7 @@ rollback="${RELEASE_ROLLBACK:-}"
 smoke_summary="${SMOKE_SUMMARY:-}"
 production_deployment_id="${PRODUCTION_DEPLOYMENT_ID:-}"
 control_sha="${RELEASE_CONTROL_SHA:-}"
-release_asset_path="${RELEASE_ASSET_PATH:-}"
-release_asset_name="my-friday-darwin-arm64"
-release_artifact_id="${RELEASE_ARTIFACT_ID:-}"
-release_artifact_name="${RELEASE_ARTIFACT_NAME:-}"
-release_artifact_sha256="${RELEASE_ARTIFACT_SHA256:-}"
+asset_paths="${RELEASE_ASSET_PATHS:-}"
 
 if [[ -z "$repo" || ! "$repo" =~ ^[^/]+/[^/]+$ || ! "$sha" =~ ^[0-9a-f]{40}$ ||
   -z "$artifact" || -z "${requested_issues// }" || -z "${summary// }" ]]; then
@@ -59,66 +55,26 @@ if [[ "$preflight_only" == "0" && "$mode" == "production" &&
   echo "Production finalization requires RELEASE_ROLLBACK and SMOKE_SUMMARY." >&2
   exit 64
 fi
-if [[ "$preflight_only" == "0" && "$mode" == "artifact" &&
-  (! -f "$release_asset_path" || -L "$release_asset_path") ]]; then
-  echo "Artifact finalization requires a regular RELEASE_ASSET_PATH." >&2
+if [[ "$preflight_only" == "0" && "$mode" == "artifact" && -z "$asset_paths" ]]; then
+  echo "Artifact finalization requires RELEASE_ASSET_PATHS." >&2
   exit 64
 fi
-if [[ "$preflight_only" == "0" && "$mode" == "artifact" &&
-  (! "$release_artifact_id" =~ ^[0-9]+$ || -z "$release_artifact_name" ||
-    ! "$release_artifact_sha256" =~ ^[0-9a-f]{64}$) ]]; then
-  echo "Artifact finalization requires RELEASE_ARTIFACT_ID, RELEASE_ARTIFACT_NAME, and RELEASE_ARTIFACT_SHA256." >&2
-  exit 64
-fi
-if [[ "$mode" == "artifact" && -n "$release_artifact_id" ]]; then
-  IFS=: read -r artifact_scheme artifact_run_id accepted_artifact_id \
-    artifact_digest_scheme accepted_artifact_sha256 artifact_extra <<< "$artifact"
-  if [[ "$artifact_scheme" != "actions" || ! "$artifact_run_id" =~ ^[0-9]+$ ||
-    "$accepted_artifact_id" != "$release_artifact_id" ||
-    "$artifact_digest_scheme" != "sha256" ||
-    "$accepted_artifact_sha256" != "$release_artifact_sha256" || -n "$artifact_extra" ]]; then
-    echo "Artifact finalization identity does not match RELEASE_ARTIFACT authority." >&2
+release_asset_paths=()
+if [[ "$preflight_only" == "0" && "$mode" == "artifact" ]]; then
+  IFS=':' read -r -a release_asset_paths <<< "$asset_paths"
+  if [[ "${#release_asset_paths[@]}" != 2 ||
+    "$(basename "${release_asset_paths[0]}")" != "my-friday-darwin-arm64.tar.gz" ||
+    "$(basename "${release_asset_paths[1]}")" != "SHA256SUMS" ]]; then
+    echo "RELEASE_ASSET_PATHS must name the stable archive and SHA256SUMS." >&2
     exit 64
   fi
+  for release_asset_path in "${release_asset_paths[@]}"; do
+    if [[ ! -f "$release_asset_path" || -L "$release_asset_path" ]]; then
+      echo "Release asset path must be a regular file: $release_asset_path" >&2
+      exit 64
+    fi
+  done
 fi
-if [[ "$preflight_only" == "0" && "$mode" == "artifact" ]]; then
-  release_asset_sha256="$(sha256sum "$release_asset_path" | awk '{print $1}')"
-  if [[ "$release_asset_sha256" != "$release_artifact_sha256" ]]; then
-    echo "RELEASE_ASSET_PATH digest does not match the accepted artifact." >&2
-    exit 1
-  fi
-fi
-
-verify_release_asset() {
-  local release_json="$1"
-  local asset_api_url asset_name download_dir download_path actual_digest
-  if ! jq -e --arg name "$release_asset_name" \
-    --arg api_prefix "https://api.github.com/repos/$repo/releases/assets/" '
-    (.assets // []) as $assets |
-    ($assets | length) == 1 and
-    ($assets[0].name // "") == $name and
-    (($assets[0].apiUrl // "") | startswith($api_prefix))
-  ' <<< "$release_json" >/dev/null; then
-    echo "GitHub Release $release_tag must contain exactly one asset named $release_asset_name." >&2
-    return 1
-  fi
-  asset_api_url="$(jq -r '.assets[0].apiUrl' <<< "$release_json")"
-  asset_name="$(jq -r '.assets[0].name' <<< "$release_json")"
-  download_dir="$(mktemp -d)"
-  download_path="$download_dir/$asset_name"
-  if ! gh api -H "Accept: application/octet-stream" \
-    "$asset_api_url" > "$download_path"; then
-    rm -rf "$download_dir"
-    echo "Unable to download GitHub Release asset $asset_name." >&2
-    return 1
-  fi
-  actual_digest="$(sha256sum "$download_path" | awk '{print $1}')"
-  rm -rf "$download_dir"
-  if [[ "$actual_digest" != "$release_artifact_sha256" ]]; then
-    echo "GitHub Release asset $asset_name digest does not match the accepted artifact." >&2
-    return 1
-  fi
-}
 if [[ "$preflight_only" == "0" && "$mode" == "production" &&
   (! "$production_deployment_id" =~ ^[0-9]+$ || ! "$control_sha" =~ ^[0-9a-f]{40}$) ]]; then
   echo "Production finalization requires PRODUCTION_DEPLOYMENT_ID and a full RELEASE_CONTROL_SHA." >&2
@@ -174,15 +130,9 @@ fi
 
 release_ledger_matches_artifact() {
   local release_json="$1"
-  jq -e --arg tag "$release_tag" --arg artifact_line "- Artifact: \`$artifact\`" \
-    --arg artifact_id_line "- Actions artifact ID: \`$release_artifact_id\`" \
-    --arg artifact_name_line "- Actions artifact name: \`$release_artifact_name\`" '
+  jq -e --arg tag "$release_tag" --arg artifact_line "- Artifact: \`$artifact\`" '
     ((.body // "") | split("\n") | map(select(startswith("- Artifact:")))) as $artifact_lines |
-    ((.body // "") | split("\n") | map(select(startswith("- Actions artifact ID:")))) as $artifact_id_lines |
-    ((.body // "") | split("\n") | map(select(startswith("- Actions artifact name:")))) as $artifact_name_lines |
-    .tagName == $tag and $artifact_lines == [$artifact_line] and
-    ($artifact_id_line == "- Actions artifact ID: \`\`" or $artifact_id_lines == [$artifact_id_line]) and
-    ($artifact_name_line == "- Actions artifact name: \`\`" or $artifact_name_lines == [$artifact_name_line])
+    .tagName == $tag and $artifact_lines == [$artifact_line]
   ' <<< "$release_json" >/dev/null
 }
 
@@ -322,16 +272,13 @@ for issue_number in "${issue_numbers[@]}"; do
       echo "Issue #$issue_number claims release without an exact local release tag." >&2
       exit 1
     fi
-    if ! prior_release_json="$(gh release view "$release_tag" --repo "$repo" --json tagName,url,body,assets 2>/dev/null)"; then
+    if ! prior_release_json="$(gh release view "$release_tag" --repo "$repo" --json tagName,url,body 2>/dev/null)"; then
       echo "Issue #$issue_number claims release without an authoritative GitHub Release." >&2
       exit 1
     fi
     if ! release_ledger_matches_artifact "$prior_release_json"; then
       echo "Issue #$issue_number release evidence does not match artifact $artifact." >&2
       exit 1
-    fi
-    if [[ "$mode" == "artifact" && -n "$release_artifact_name" ]]; then
-      verify_release_asset "$prior_release_json"
     fi
     prior_release_url="$(jq -r '.url' <<< "$prior_release_json")"
     release_prefix="Released in [${release_tag}](${prior_release_url}) from \`${sha}\`."
@@ -343,16 +290,13 @@ for issue_number in "${issue_numbers[@]}"; do
   elif jq -e --arg body "$release_comment" \
     'any(.[][]; (.user.login // "") == "github-actions[bot]" and .body == $body)' \
     <<< "$comments_json" >/dev/null; then
-    if ! prior_release_json="$(gh release view "$release_tag" --repo "$repo" --json tagName,url,body,assets 2>/dev/null)"; then
+    if ! prior_release_json="$(gh release view "$release_tag" --repo "$repo" --json tagName,url,body 2>/dev/null)"; then
       echo "Issue #$issue_number has release-comment text without an authoritative GitHub Release." >&2
       exit 1
     fi
     if ! release_ledger_matches_artifact "$prior_release_json"; then
       echo "Issue #$issue_number release comment points to a different artifact." >&2
       exit 1
-    fi
-    if [[ "$mode" == "artifact" && -n "$release_artifact_name" ]]; then
-      verify_release_asset "$prior_release_json"
     fi
     continue
   fi
@@ -373,11 +317,6 @@ notes="$(printf '%s\n\n%s\n%s\n%s\n%s\n' \
   "- Artifact: \`$artifact\`" \
   "- Issues: $requested_issues" \
   "- Workflow: $workflow_url")"
-if [[ "$mode" == "artifact" ]]; then
-  # shellcheck disable=SC2016 # backticks are literal Markdown in the printf template
-  notes+="$(printf '\n- Actions artifact ID: `%s`\n- Actions artifact name: `%s`\n' \
-    "$release_artifact_id" "$release_artifact_name")"
-fi
 if [[ "$mode" == "production" ]]; then
   # shellcheck disable=SC2016 # backticks are literal Markdown in the printf template
   notes+="$(printf '\n- Rollback: %s\n\n## Production smoke\n\n```text\n%s\n```\n' \
@@ -387,14 +326,11 @@ if [[ "$mode" == "production" ]]; then
     "$production_deployment_id" "$control_sha")"
 fi
 
-if release_json="$(gh release view "$release_tag" --repo "$repo" --json tagName,url,body,assets 2>/dev/null)"; then
+if release_json="$(gh release view "$release_tag" --repo "$repo" --json tagName,url,body 2>/dev/null)"; then
   release_url="$(jq -r '.url' <<< "$release_json")"
   if ! release_ledger_matches_artifact "$release_json"; then
     echo "Existing GitHub Release $release_tag does not match artifact $artifact." >&2
     exit 1
-  fi
-  if [[ "$mode" == "artifact" ]]; then
-    verify_release_asset "$release_json"
   fi
   release_comment="Released in [${release_tag}](${release_url}) from \`${sha}\`."
   if [[ "$mode" == "production" ]]; then
@@ -408,24 +344,21 @@ else
     --notes "$notes"
     --generate-notes
   )
-	if [[ "$mode" == "artifact" ]]; then
-		create_args+=("$release_asset_path#my-friday-darwin-arm64")
-	fi
   if git rev-parse -q --verify "refs/tags/$release_tag" >/dev/null; then
     create_args+=(--verify-tag)
   else
     create_args+=(--target "$sha")
   fi
   gh "${create_args[@]}" >/dev/null
-  release_json="$(gh release view "$release_tag" --repo "$repo" --json tagName,url,body,assets)"
+  release_json="$(gh release view "$release_tag" --repo "$repo" --json tagName,url,body)"
   if ! release_ledger_matches_artifact "$release_json"; then
     echo "New GitHub Release $release_tag does not contain one exact artifact ledger entry." >&2
     exit 1
   fi
-  if [[ "$mode" == "artifact" ]]; then
-    verify_release_asset "$release_json"
-  fi
   release_url="$(jq -r '.url' <<< "$release_json")"
+fi
+if [[ "$mode" == "artifact" ]]; then
+  bin/release-assets "$release_tag" "${release_asset_paths[@]}"
 fi
 release_comment="Released in [${release_tag}](${release_url}) from \`${sha}\`."
 if [[ "$mode" == "production" ]]; then
