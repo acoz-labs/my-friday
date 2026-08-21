@@ -32,6 +32,26 @@ func TestDefaultExitHasNoMutation(t *testing.T) {
 	}
 }
 
+func TestParentPromptShowsConcreteInvocationDirectoryDefault(t *testing.T) {
+	invocationDir := filepath.Join(t.TempDir(), "invocation directory with spaces")
+	if err := os.Mkdir(invocationDir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	in := strings.NewReader("\nFriday\n\nHelp me work\n\n\nq\n")
+	var out bytes.Buffer
+	result, err := Run(in, &out, invocationDir)
+	if err != nil || result != "Exit" {
+		t.Fatalf("result=%q err=%v\n%s", result, err, out.String())
+	}
+	want := "Parent directory (default: " + invocationDir + ") [b back; q quit]:"
+	if !strings.Contains(out.String(), want) {
+		t.Fatalf("missing concrete parent default %q\n%s", want, out.String())
+	}
+	if strings.Contains(out.String(), "default: invocation directory") {
+		t.Fatalf("abstract parent default remains visible\n%s", out.String())
+	}
+}
+
 func TestBackFromStylePreservesIdentityAnswers(t *testing.T) {
 	root := t.TempDir()
 	in := strings.NewReader("\nFriday\nBoss\nHelp\nb\n\n\n\n2\n\n" + root + "\nCreate\n")
