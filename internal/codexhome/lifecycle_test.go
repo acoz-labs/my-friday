@@ -12,6 +12,7 @@ import (
 	bootstrap "github.com/acoz-labs/my-friday/internal/plan"
 	"github.com/acoz-labs/my-friday/internal/profile"
 	"github.com/acoz-labs/my-friday/internal/repository"
+	"golang.org/x/sys/unix"
 )
 
 func fixture(t *testing.T) (string, string) {
@@ -539,13 +540,144 @@ func TestPartialInitialJournalPublicationRecoversWithoutMutation(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(codex, controlDir, journalNext), []byte("{\"contract_version\":"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	if err := Recover(codex); err != nil {
-		t.Fatal(err)
+	if err := Recover(codex); err == nil || !strings.Contains(err.Error(), "unproven staged journal") {
+		t.Fatalf("malformed staged authority was not retained: %v", err)
 	}
-	if _, err := os.Stat(filepath.Join(codex, controlDir)); !os.IsNotExist(err) {
-		t.Fatalf("empty control namespace remains: %v", err)
+	if got, err := os.ReadFile(filepath.Join(codex, controlDir, journalNext)); err != nil || string(got) != "{\"contract_version\":" {
+		t.Fatalf("staged authority changed: %q, %v", got, err)
 	}
 	if _, err := os.Stat(filepath.Join(codex, "AGENTS.md")); !os.IsNotExist(err) {
 		t.Fatalf("projection was mutated: %v", err)
+	}
+}
+
+func TestRecoveryUsesNewerJournalWhenPriorPhaseRemainsStaged(t *testing.T) {
+	runtime, codex := installFixture(t)
+	mutatePurpose(t, runtime, "Journal swap interruption")
+	p, err := Plan(ActionUpgrade, runtime, codex)
+	if err != nil {
+		t.Fatal(err)
+	}
+	faultHook = func(phase string) error {
+		if phase == "journal-committed-swapped" {
+			return errors.New("injected journal swap interruption")
+		}
+		return nil
+	}
+	t.Cleanup(func() { faultHook = nil })
+	if err = Execute(p); err == nil {
+		t.Fatal("journal swap interruption did not fire")
+	}
+	faultHook = nil
+	if err = Recover(codex); err != nil {
+		t.Fatal(err)
+	}
+	if err = Recover(codex); err != nil {
+		t.Fatalf("second recovery reversed the committed result: %v", err)
+	}
+	got, err := os.ReadFile(filepath.Join(codex, "AGENTS.md"))
+	if err != nil || digest(got) != p.manifest.ProjectionSHA256 {
+		t.Fatalf("committed projection was not retained: %v", err)
+	}
+}
+
+func TestCommittedUninstallRecoversWithPriorJournalPhaseStaged(t *testing.T) {
+	_, codex := installFixture(t)
+	p, err := Plan(ActionUninstall, "", codex)
+	if err != nil {
+		t.Fatal(err)
+	}
+	faultHook = func(phase string) error {
+		if phase == "journal-committed-swapped" {
+			return errors.New("injected journal swap interruption")
+		}
+		return nil
+	}
+	t.Cleanup(func() { faultHook = nil })
+	if err = Execute(p); err == nil {
+		t.Fatal("journal swap interruption did not fire")
+	}
+	faultHook = nil
+	if err = Recover(codex); err != nil {
+		t.Fatal(err)
+	}
+	if s, _ := Inspect("", codex); s.State != StateNotInstalled {
+		t.Fatalf("state=%s", s.State)
+	}
+}
+
+func TestInterruptedInitialInstallRollbackCannotLeaveEmptyControlDirectory(t *testing.T) {
+	runtime, codex := fixture(t)
+	if err := os.MkdirAll(codex, 0700); err != nil {
+		t.Fatal(err)
+	}
+	p, err := Plan(ActionInstall, runtime, codex)
+	if err != nil {
+		t.Fatal(err)
+	}
+	faultHook = func(phase string) error {
+		if phase == "prepared" || phase == "rollback-control-detached" {
+			return errors.New("injected interruption")
+		}
+		return nil
+	}
+	t.Cleanup(func() { faultHook = nil })
+	if err = Execute(p); err == nil {
+		t.Fatal("install interruption did not fire")
+	}
+	faultHook = nil
+	faultHook = func(phase string) error {
+		if phase == "rollback-control-detached" {
+			return errors.New("injected cleanup interruption")
+		}
+		return nil
+	}
+	if err = Recover(codex); err == nil {
+		t.Fatal("cleanup interruption did not fire")
+	}
+	faultHook = nil
+	if err = Recover(codex); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = os.Stat(filepath.Join(codex, controlDir)); !os.IsNotExist(err) {
+		t.Fatalf("empty control directory remains: %v", err)
+	}
+	if s, _ := Inspect("", codex); s.State != StateNotInstalled {
+		t.Fatalf("state=%s", s.State)
+	}
+}
+
+func TestFailedSwapRestorationPreservesDisplacedBytes(t *testing.T) {
+	_, codex := installFixture(t)
+	fd, err := unix.Open(filepath.Join(codex, controlDir), unix.O_RDONLY|unix.O_DIRECTORY|unix.O_CLOEXEC, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer unix.Close(fd)
+	before, err := proofAt(fd, canonicalFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	afterBytes := []byte("replacement generation")
+	after := fileProof{Exists: true, SHA256: digest(afterBytes), Bytes: afterBytes}
+	transitionHook = func(point string) error {
+		switch point {
+		case "after-swap":
+			if err := removeAt(fd, canonicalFile+".next"); err != nil {
+				return err
+			}
+			return writeStageAt(fd, canonicalFile+".next", []byte("displaced foreign bytes"))
+		case "before-swap-restore":
+			return removeAt(fd, canonicalFile)
+		}
+		return nil
+	}
+	t.Cleanup(func() { transitionHook = nil })
+	if err = applyTransition(fd, canonicalFile, before, after); err == nil {
+		t.Fatal("concurrent displaced-entry replacement was accepted")
+	}
+	got, err := os.ReadFile(filepath.Join(codex, controlDir, canonicalFile+".next"))
+	if err != nil || string(got) != "displaced foreign bytes" {
+		t.Fatalf("displaced foreign bytes were not preserved: %q, %v", got, err)
 	}
 }

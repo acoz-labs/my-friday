@@ -119,6 +119,9 @@ type journal struct {
 // faultHook is test-only deterministic crash injection after durable phases.
 var faultHook func(string) error
 
+// transitionHook is test-only deterministic race injection inside swap recovery.
+var transitionHook func(string) error
+
 func digest(b []byte) string { h := sha256.Sum256(b); return hex.EncodeToString(h[:]) }
 func validDigest(s string) bool {
 	_, e := hex.DecodeString(s)
@@ -651,30 +654,6 @@ func writeStageAt(fd int, tmp string, b []byte) error {
 	}
 	return unix.Fsync(fd)
 }
-func atomicWriteAt(fd int, name string, b []byte) error {
-	tmp := name + ".next"
-	if e := writeStageAt(fd, tmp, b); e != nil {
-		return e
-	}
-	if _, e := lstatAt(fd, name); errors.Is(e, unix.ENOENT) {
-		if e = renameExclusive(fd, tmp, fd, name); e != nil {
-			_ = removeAt(fd, tmp)
-			return e
-		}
-	} else if e != nil {
-		_ = removeAt(fd, tmp)
-		return e
-	} else {
-		if e = renameSwap(fd, tmp, fd, name); e != nil {
-			_ = removeAt(fd, tmp)
-			return e
-		}
-		if e = removeAt(fd, tmp); e != nil {
-			return e
-		}
-	}
-	return unix.Fsync(fd)
-}
 func writeExclusiveAt(fd int, name string, b []byte) error {
 	tmp := name + ".next"
 	if e := writeStageAt(fd, tmp, b); e != nil {
@@ -703,14 +682,41 @@ func afterProofs(p PlanResult) map[string]fileProof {
 	return map[string]fileProof{"projection": mk(p.projection), "manifest": mk(manifestBytes(p.manifest)), "canonical": mk(p.projection), "previous": prev}
 }
 func setPhase(fd int, j *journal, phase string) error {
+	prior := *j
 	j.Phase = phase
-	if e := atomicWriteAt(fd, journalFile, journalBytes(*j)); e != nil {
+	if e := replaceJournalAt(fd, journalBytes(prior), journalBytes(*j), phase); e != nil {
 		return e
 	}
 	if faultHook != nil {
 		return faultHook(phase)
 	}
 	return nil
+}
+
+func replaceJournalAt(fd int, prior, next []byte, phase string) error {
+	if e := writeStageAt(fd, journalNext, next); e != nil {
+		return e
+	}
+	if e := renameSwap(fd, journalNext, fd, journalFile); e != nil {
+		_ = removeAt(fd, journalNext)
+		return e
+	}
+	if faultHook != nil {
+		if e := faultHook("journal-" + phase + "-swapped"); e != nil {
+			return e
+		}
+	}
+	want := fileProof{Exists: true, SHA256: digest(prior), Bytes: prior}
+	if !proofMatches(fd, journalNext, want) {
+		if e := restoreSwap(fd, journalFile, journalNext, fileProof{Exists: true, SHA256: digest(next), Bytes: next}); e != nil {
+			return fmt.Errorf("journal phase publication refused and displaced entry retained: %w", e)
+		}
+		return errors.New("journal phase publication refused: displaced journal changed")
+	}
+	if e := removeAt(fd, journalNext); e != nil {
+		return e
+	}
+	return unix.Fsync(fd)
 }
 func applyPhase(cfd int, j *journal, phase string, apply func() error) error {
 	if e := apply(); e != nil {
@@ -743,9 +749,16 @@ func applyTransition(fd int, name string, before, after fileProof) error {
 				_ = removeAt(fd, tmp)
 				return fmt.Errorf("managed state changed before mutation: %s", name)
 			}
+			if transitionHook != nil {
+				_ = transitionHook("after-swap")
+			}
 			if !proofMatches(fd, tmp, before) {
-				_ = renameSwap(fd, tmp, fd, name)
-				_ = removeAt(fd, tmp)
+				if transitionHook != nil {
+					_ = transitionHook("before-swap-restore")
+				}
+				if e := restoreSwap(fd, name, tmp, after); e != nil {
+					return fmt.Errorf("managed state changed before mutation; displaced entry retained: %s: %w", name, e)
+				}
 				return fmt.Errorf("managed state changed before mutation: %s", name)
 			}
 			if e := removeAt(fd, tmp); e != nil {
@@ -769,6 +782,19 @@ func applyTransition(fd int, name string, before, after fileProof) error {
 		if e := removeAt(fd, tmp); e != nil {
 			return e
 		}
+	}
+	return unix.Fsync(fd)
+}
+
+func restoreSwap(fd int, name, tmp string, installed fileProof) error {
+	if e := renameSwap(fd, tmp, fd, name); e != nil {
+		return e
+	}
+	if !proofMatches(fd, tmp, installed) {
+		return errors.New("swap restoration could not prove removable stage")
+	}
+	if e := removeAt(fd, tmp); e != nil {
+		return e
 	}
 	return unix.Fsync(fd)
 }
@@ -961,12 +987,7 @@ func Execute(p PlanResult) error {
 	return nil
 }
 func validJournal(j journal) error {
-	validPhase := map[string]bool{
-		"prepared": true, "mutating": true, "projection-written": true,
-		"canonical-written": true, "previous-written": true,
-		"manifest-written": true, "final-verified": true, "committed": true,
-	}
-	if j.ContractVersion != 1 || !validPhase[j.Phase] {
+	if j.ContractVersion != 1 || journalPhaseRank(j.Phase) < 0 {
 		return errors.New("incompatible phase")
 	}
 	switch j.Action {
@@ -993,6 +1014,28 @@ func validJournal(j journal) error {
 		}
 	}
 	return validateJournalTransition(j)
+}
+
+func journalPhaseRank(phase string) int {
+	for i, candidate := range []string{"prepared", "mutating", "projection-written", "canonical-written", "previous-written", "manifest-written", "final-verified", "committed"} {
+		if phase == candidate {
+			return i
+		}
+	}
+	return -1
+}
+
+func sameJournalTransaction(a, b journal) bool {
+	return a.ContractVersion == b.ContractVersion && a.Action == b.Action && a.Root == b.Root &&
+		proofsEqual(a.Before, b.Before) && proofsEqual(a.After, b.After)
+}
+
+func decodeJournal(b []byte) (journal, error) {
+	var j journal
+	if strictJSON(b, &j) != nil || validJournal(j) != nil {
+		return journal{}, errors.New("incompatible or ambiguous journal")
+	}
+	return j, nil
 }
 func manifestFromProof(p fileProof) (manifest, error) {
 	if !p.Exists {
@@ -1128,28 +1171,8 @@ func Recover(home string) error {
 		if x != nil {
 			return x
 		}
-		var staged journal
-		if strictJSON(next, &staged) != nil || validJournal(staged) != nil {
-			// The authoritative journal is published only after its staged bytes
-			// are complete and durable. Without journalFile no mutation started,
-			// so an incomplete reserved stage can be removed conservatively.
-			if x = removeAt(cfd, journalNext); x != nil {
-				return x
-			}
-			if x = unix.Fsync(cfd); x != nil {
-				return x
-			}
-			names, nx := controlNames(cfd)
-			if nx != nil {
-				return nx
-			}
-			if len(names) == 0 {
-				if nx = unix.Unlinkat(r.fd, controlDir, unix.AT_REMOVEDIR); nx != nil {
-					return nx
-				}
-				return unix.Fsync(r.fd)
-			}
-			return nil
+		if _, x = decodeJournal(next); x != nil {
+			return errors.New("recovery refused: unproven staged journal retained")
 		}
 		if x = renameExclusive(cfd, journalNext, cfd, journalFile); x != nil {
 			return x
@@ -1162,9 +1185,24 @@ func Recover(home string) error {
 	if e != nil {
 		return e
 	}
-	var j journal
-	if strictJSON(b, &j) != nil || validJournal(j) != nil {
-		return errors.New("recovery refused: incompatible or ambiguous journal")
+	j, x := decodeJournal(b)
+	if x != nil {
+		return fmt.Errorf("recovery refused: %w", x)
+	}
+	next, nextErr := readRegularAt(cfd, journalNext)
+	if nextErr == nil {
+		staged, sx := decodeJournal(next)
+		if sx != nil || !sameJournalTransaction(j, staged) || journalPhaseRank(j.Phase) <= journalPhaseRank(staged.Phase) {
+			return errors.New("recovery refused: staged journal does not prove the prior transaction phase")
+		}
+		if x = removeAt(cfd, journalNext); x != nil {
+			return x
+		}
+		if x = unix.Fsync(cfd); x != nil {
+			return x
+		}
+	} else if !errors.Is(nextErr, unix.ENOENT) {
+		return nextErr
 	}
 	if j.Root != r.proof {
 		return errors.New("recovery refused: Codex home identity changed")
@@ -1192,12 +1230,17 @@ func Recover(home string) error {
 	if e != nil || !proofsEqual(final, target) {
 		return errors.New("recovery refused: final managed state does not match journal")
 	}
-	if j.Action == ActionUninstall && j.Phase == "committed" {
+	if (j.Action == ActionUninstall && j.Phase == "committed") || (j.Action == ActionInstall && j.Phase != "committed" && allAbsent(target)) {
 		if e = renameExclusive(r.fd, controlDir, r.fd, removingDir); e != nil {
 			return e
 		}
 		if e = unix.Fsync(r.fd); e != nil {
 			return e
+		}
+		if faultHook != nil && j.Action == ActionInstall {
+			if e = faultHook("rollback-control-detached"); e != nil {
+				return fmt.Errorf("transaction cleanup interrupted; recovery required: %w", e)
+			}
 		}
 		return recoverDetached(r)
 	}
@@ -1254,11 +1297,16 @@ func recoverDetached(r *homeRoot) error {
 		}
 	}
 	var j journal
-	if strictJSON(b, &j) != nil || validJournal(j) != nil || j.Action != ActionUninstall || j.Phase != "committed" || j.Root != r.proof {
-		return errors.New("recovery refused: detached uninstall authority is incompatible")
+	if strictJSON(b, &j) != nil || validJournal(j) != nil || j.Root != r.proof ||
+		!((j.Action == ActionUninstall && j.Phase == "committed") || (j.Action == ActionInstall && j.Phase != "committed" && allAbsent(j.Before))) {
+		return errors.New("recovery refused: detached deletion authority is incompatible")
 	}
-	if !proofMatches(r.fd, "AGENTS.md", j.After["projection"]) {
-		return errors.New("recovery refused: detached uninstall state disagrees with journal")
+	target := j.After
+	if j.Action == ActionInstall {
+		target = j.Before
+	}
+	if !proofMatches(r.fd, "AGENTS.md", target["projection"]) {
+		return errors.New("recovery refused: detached deletion state disagrees with journal")
 	}
 	if fd >= 0 {
 		names, e := controlNames(fd)

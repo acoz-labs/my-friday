@@ -36,6 +36,10 @@ root identity plus exact before/after proofs for projection, manifest,
 canonical, and previous generations. Fixed staging names are part of the
 control-tree allowlist, journal publication is exclusive and atomic, and
 recovery validates the action-specific relationship between both generations.
+Phase publication swaps the new journal with its proven predecessor. If an
+interruption leaves both slots, recovery accepts the current slot only when the
+staged slot proves the same transaction at an earlier phase; ambiguous or
+malformed staged authority is retained and refused.
 File replacement uses an atomic swap or exclusive rename so the displaced
 entry can be proved before deletion. Each mutation boundary is durably phased,
 and the complete result is reproved before commit.
@@ -47,7 +51,9 @@ Upgrade retains one verified prior projection. Repair never rotates it or
 stores drifted bytes. Rollback consumes it. Uninstall removes only a
 digest-verified projection and atomically renames the journal-bearing control
 directory to a reserved deletion namespace before final cleanup, so interruption
-cannot leave an unauthoritative empty control directory.
+cannot leave an unauthoritative empty control directory. An interrupted initial
+install uses the same journal-bearing detached deletion protocol when rollback
+returns the control tree to absence.
 
 Implementation: `internal/codexhome/lifecycle.go`; command grammar:
 `cmd/my-friday/main.go`; tests: `internal/codexhome/lifecycle_test.go`.

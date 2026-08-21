@@ -54,5 +54,9 @@ preserve it for diagnosis rather than deleting the control directory.
 During a committed uninstall, recovery may report the reserved
 `.my-friday-removing` namespace. Do not rename or delete it manually: the
 embedded committed journal authorizes the same recovery command to finish
-deletion. A malformed staging file, journal, or deletion namespace is retained
-and refused for maintainer diagnosis.
+deletion. The same namespace can hold an interrupted initial-install rollback;
+its embedded journal must remain present until cleanup completes. When both
+`transaction.json` and `transaction.json.next` exist, recovery removes the
+staged slot only if it proves the same transaction at an earlier phase. A
+malformed staging file, journal, or deletion namespace is retained and refused
+for maintainer diagnosis.
