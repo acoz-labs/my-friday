@@ -53,6 +53,10 @@ one retained pre-contract archive is also valid for backfill when its sole
 top-level regular executable uses the historical
 `my-friday-darwin-arm64-<hex>` name. This compatibility does not rename or
 repackage the archive: the stable alias receives the original archive bytes.
+That legacy macOS archive may also contain one exact top-level AppleDouble
+companion named `._<executable-name>`. The guard permits only that paired
+regular metadata member, extracts only the executable for digest verification,
+and still copies the complete original archive bytes to the stable alias.
 
 If an incorrect stable alias is proven, resolve its exact asset ID and delete
 only `my-friday-darwin-arm64.tar.gz` from that release. Retain the tag, release
