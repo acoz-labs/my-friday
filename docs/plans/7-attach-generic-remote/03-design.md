@@ -294,7 +294,7 @@ stack trace, raw unsafe address, config contents, or credential-shaped value.
 | My Friday process | Inspect direct local config | Repository identity pinned; includes/system/global disabled | Invalid/include/collision refusal |
 | My Friday process | Add local `origin` | Absent snapshot, exact disclosure/confirmation, matching revalidation | Git lock/write error preserved |
 | Independent acceptor | Observe candidate effects | Fixture repos/addresses under disposable identity | Sanitized transcript/manifests only |
-| Acceptance supervisor | Deny/trace disposable-UID network use | Physical operator admin authentication; unique marker-bound UID/run anchor; candidate remains unprivileged | PF/DTrace positive control, zero candidate events/counters, exact cleanup receipt |
+| Acceptance supervisor | Deny/trace disposable-UID network use | Physical operator admin authentication; parsed direct-child PF anchor; global UID-filtered syscall trace; candidate remains unprivileged | Resolver/IPv4/IPv6 positive control, zero candidate events/counters, exact cleanup receipt |
 
 The command requests no admin, network, provider, keychain, credential helper,
 global Git, filesystem permission, or second-repository authority. The
@@ -327,8 +327,9 @@ enter CI annotations, issue comments, acceptance manifests, or release receipts.
 - Observability is the terminal receipt, stable category, Git inspection
   command, scrubbed subprocess observer in tests, and sanitized exact-head/
   candidate evidence. The observer proves argv/environment only. Acceptance PF
-  counters and DTrace resolver/IPv4/IPv6 socket events provide the separate
-  child-inclusive network proof. There is no product log or background report.
+  counters and global UID-filtered DTrace socket/connect/send events provide the
+  separate child-inclusive network proof after the resolver/IPv4/IPv6 positive
+  control. There is no product log or background report.
 - Output is plain UTF-8 with no ANSI, cursor movement, spinner, animation, or
   timing-only state. Values occupy labeled lines, wrap naturally at 80 columns,
   and remain understandable in screen-reader order. English-only is the pilot

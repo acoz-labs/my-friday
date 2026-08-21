@@ -145,32 +145,47 @@ syscall guard around the exact artifact:
 
 1. The root supervisor proves the disposable non-admin UID is marker-bound and
    quiescent, records PF enabled/reference state and existing anchors, and
-   verifies the host main ruleset already evaluates the `com.apple/*` anchor.
-   It does not reload or flush the main ruleset.
-2. With physical operator authentication, it obtains a PF enable-reference
-   token using `pfctl -E` and loads one unique
-   `com.apple/my-friday-acceptance/<run-id>` anchor. The labeled IPv4/IPv6 rule
-   is `block return out log quick user <disposable-uid> all`. The token is held
-   by the supervisor; it is never passed to the candidate.
-3. The supervisor starts DTrace as administrator before the candidate. The
-   trace filters the quiescent disposable effective UID and records process/
-   child lifecycle, resolver-entry probes, and IPv4/IPv6 `socket`, `connect`,
-   `sendto`, and `sendmsg` attempts. It records event type, executable identity,
-   PID lineage, and monotonic time only—never buffers, addresses, packet payload,
-   environment, or config values. UID scope includes the candidate's Git child;
-   the non-admin candidate cannot change UID.
-4. A disposable-UID child positive control attempts one high-entropy `.invalid`
+   verifies the host main ruleset already evaluates direct children of the
+   `com.apple/*` anchor. It does not reload or flush the main ruleset or add an
+   intermediate dispatcher.
+2. Before any privileged mutation, the supervisor renders one rule for the
+   numeric UID and bounded run label, then requires unprivileged
+   `pfctl -vnf -` to parse the exact bytes successfully. The grammar is:
+   `block return out log quick all user <disposable-uid> label
+   "my-friday-acceptance-<run-id>"`. Parse warnings, normalized output drift,
+   unexpected rules, or unsafe label/UID substitution refuse setup.
+3. With physical operator authentication, the supervisor obtains a PF enable-
+   reference token using `pfctl -E` and loads the already parsed bytes into one
+   unique direct-child anchor:
+   `com.apple/my-friday-acceptance-<run-id>`. It first proves that exact anchor
+   absent, then reads the loaded rule back and proves the direct child is
+   attached/evaluated beneath `com.apple/*`. The token is held by the supervisor;
+   it is never passed to the candidate.
+4. The supervisor starts DTrace as administrator before the candidate. It uses
+   global syscall/process providers filtered by the quiescent disposable UID,
+   rather than PID-provider probes that could miss a newly exec'd Git child. It
+   records process/child lifecycle plus `socket`, `connect`, `sendto`, and
+   `sendmsg` entries for every address family. This catches direct IPv4/IPv6 and
+   any socket-based resolver IPC without trying to parse arguments or payloads.
+   It records event type, executable identity, PID lineage, and monotonic time
+   only—never buffers, addresses, packet payload, environment, or config values.
+   UID scope includes the candidate's Git child; the non-admin candidate cannot
+   change UID.
+5. A disposable-UID child positive control attempts one high-entropy `.invalid`
    resolution plus direct reserved-address IPv4 and IPv6 TCP/UDP operations.
-   Acceptance proceeds only when DTrace records every expected resolver/socket
-   class, the labeled PF counters increase, the operations fail, and supervisor/
-   tracer health remains good. The trace/counters are then reset for the
-   candidate window.
-5. The exact candidate runs all scenarios with only high-entropy `.invalid` or
+   Resolver and direct-network phases use distinct supervisor timestamps.
+   Acceptance proceeds only when the resolver phase produces the expected
+   socket/IPC syscall class on that macOS build, direct phases produce their
+   expected socket classes, labeled PF counters increase, all operations fail,
+   and supervisor/tracer health remains good. If the system resolver uses an
+   unobserved non-socket path, the positive control fails and no no-network claim
+   is permitted. The trace/counters are then reset for the candidate window.
+6. The exact candidate runs all scenarios with only high-entropy `.invalid` or
    numeric fixture hosts. Approval requires zero resolver/network events for the
    disposable UID/process tree and zero PF counter delta, alongside the separate
    expected Git argv trace. Any event, counter, tracer loss, PID/UID ambiguity,
    or incomplete window is rejection—not a warning.
-6. After the candidate exits, the supervisor proves no descendant or other
+7. After the candidate exits, the supervisor proves no descendant or other
    disposable-UID process survives the monitored window. Cleanup then stops and
    verifies DTrace, flushes only the exact marker-bound anchor, releases only the
    recorded PF enable token using `pfctl -X`, and proves the initial PF enabled/
@@ -189,11 +204,12 @@ acceptance cannot claim no-network behavior and the candidate is rejected.
 
 The evidence bundle contains policy/trace-script digests, run ID and sanitized
 UID, initial/final PF state, enable-reference acquired/released status (the
-token value is excluded), anchor/rule label, positive-control event-class and
-counter totals, candidate zero-event/counter totals, tracer start/stop health,
-process-tree quiescence, command window timestamps, and exact cleanup verdict.
-It contains no packet payload, unrelated host event, private hostname, address,
-or credential.
+token value is excluded), dry-run parse transcript/digest, direct-child anchor
+attachment/read-back, rule label, positive-control phase/event-class and counter
+totals, candidate zero-event/counter totals, tracer start/stop health, process-
+tree quiescence, command window timestamps, and exact cleanup verdict. It
+contains no packet payload, unrelated host event, private hostname, address, or
+credential.
 
 Implementation retains sanitized exact-head evidence for:
 

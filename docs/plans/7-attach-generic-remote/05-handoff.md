@@ -101,7 +101,8 @@ leaves draft.
   symlink/inode/TOCTOU limits, read-back, uncertain recovery, redaction, and
   prohibited side effects, including the stored-address/future-rewrite boundary.
 - Require acceptance-harness review of disposable-UID quiescence, PF anchor and
-  enable-token scope, DTrace child/resolver/socket coverage, positive controls,
+  enable-token scope, PF dry-run grammar/direct-child evaluation, global UID-
+  filtered DTrace syscall coverage, resolver/IPv4/IPv6 positive controls,
   counter/event reset, tracer-loss refusal, candidate isolation, and exact
   cleanup without global PF disable/flush.
 - Require product-design review of the final exact-head runtime/memory/cancel/

@@ -146,4 +146,4 @@ candidate may be accepted.
 | No durable My Friday registry | Git config already owns the fact; duplication adds drift/privacy risk | YAGNI and data minimization |
 | Full accepted address only in foreground output | User must verify destination; unsafe/durable surfaces must not leak it | Product-experience privacy rules |
 | Through-production with enabling work | User asked for released completion; artifact profile has no staging | Repository release policy and PR #15 contract |
-| PF deny plus UID-scoped DTrace acceptance | Argv cannot prove network non-use; kernel rule counters and resolver/socket events cover the candidate and Git children | macOS `pfctl` enable references/anchors and DTrace probes, verified by positive control |
+| PF deny plus UID-scoped DTrace acceptance | Argv cannot prove network non-use; parsed kernel rules/counters and global UID-filtered socket syscalls cover the candidate and Git children | macOS `pfctl` enable references/direct-child anchors and DTrace syscall probes, verified by positive control |

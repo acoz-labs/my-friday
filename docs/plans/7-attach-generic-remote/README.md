@@ -78,8 +78,9 @@ or discovers or changes the user's other My Friday repository.
 - **No-network acceptance uses kernel and syscall evidence.** The argv observer
   proves command selection only. Exact-candidate acceptance separately runs the
   quiescent disposable UID under a temporary outbound-blocking PF anchor while
-  a privileged DTrace monitor records resolver and IPv4/IPv6 socket attempts by
-  that UID and descendants. A positive control must be blocked and observed;
+  a privileged DTrace monitor uses global UID-filtered syscall probes to record
+  socket/connect/send attempts by that UID and descendants. A resolver plus
+  IPv4/IPv6 positive control must be blocked and observed;
   candidate counters/events must remain zero; exact cleanup is receipt-bound.
 
 ## Plan Map
