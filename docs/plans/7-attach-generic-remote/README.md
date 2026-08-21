@@ -1,10 +1,10 @@
 # Solution Design: Attach an existing generic Git remote
 
-- **Status:** Draft
+- **Status:** Final
 - **Issue:** #7
-- **Planning PR:** Pending
+- **Planning PR:** #16
 - **Repository basis:** 5bc309226d2c40e1473a4011c1bd8552c995919d
-- **Execution envelope:** Pending
+- **Execution envelope:** through-production
 
 ## Decision
 
