@@ -3,11 +3,13 @@
 ## User contract
 
 `my-friday init` gathers identity, communication style, and one parent
-location; defaults create `my-friday-runtime` and `my-friday-memory`. The
-line-oriented preview declares the plan ID, assistant ID, normalized identity
-and style, entered and canonical targets, initial target states and mode
-normalization, symlink mappings, generated files, and prohibited adjacent effects. Only exact `Create`
-mutates disk; every other confirmation input exits.
+location. The parent prompt displays the concrete captured invocation directory
+as its default; accepting it creates `my-friday-runtime` and
+`my-friday-memory` there. The line-oriented preview declares the plan ID,
+assistant ID, normalized identity and style, entered and canonical targets,
+initial target states and mode normalization, symlink mappings, generated
+files, and prohibited adjacent effects. Only exact `Create` mutates disk; every
+other confirmation input exits.
 
 Profile text is trimmed, NFC-normalized, screened for control/format/line
 separator characters, and counted as extended grapheme clusters. Display name

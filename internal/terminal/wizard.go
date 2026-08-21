@@ -148,7 +148,7 @@ styleStep:
 		}
 		var runtime, memory string
 		if locationMode == "" || locationMode == "1" {
-			parent, _ := line("Parent directory (default: invocation directory)")
+			parent, _ := line(fmt.Sprintf("Parent directory (default: %s)", invocationDir))
 			if parent == "q" {
 				return exit(output), nil
 			}
