@@ -15,6 +15,12 @@ tag, retained source archive name, and accepted executable digest. The workflow
 fails closed if the release is no longer latest or any digest/content check is
 ambiguous. It is safe to retry after an interrupted upload.
 
+The retained historical archive may contain its sole top-level executable as
+`my-friday-darwin-arm64-<hex>`; future archives use `my-friday`. No other entry
+name, nested path, symlink, non-executable file, or additional entry is valid.
+The workflow copies the verified source archive unchanged rather than renaming
+its internal executable.
+
 ## Recover an interrupted repository creation
 
 Use this only when `my-friday init` reports a retained owner-only transaction
