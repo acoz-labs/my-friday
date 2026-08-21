@@ -12,7 +12,6 @@ import (
 	bootstrap "github.com/acoz-labs/my-friday/internal/plan"
 	"github.com/acoz-labs/my-friday/internal/profile"
 	"github.com/acoz-labs/my-friday/internal/repository"
-	"golang.org/x/sys/unix"
 )
 
 func fixture(t *testing.T) (string, string) {
@@ -515,19 +514,19 @@ func TestSupportedHomeEnvironmentRequiresNonRootLocalAPFS(t *testing.T) {
 		name  string
 		euid  int
 		fs    string
-		flags uint32
+		local bool
 	}{
-		{"root", 0, "apfs", unix.MNT_LOCAL},
-		{"network apfs", 501, "apfs", 0},
-		{"local non-apfs", 501, "nfs", unix.MNT_LOCAL},
+		{"root", 0, "apfs", true},
+		{"network apfs", 501, "apfs", false},
+		{"local non-apfs", 501, "nfs", true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			if err := validateHomeEnvironment(tc.euid, tc.fs, tc.flags); err == nil {
+			if err := validateHomeEnvironment(tc.euid, tc.fs, tc.local); err == nil {
 				t.Fatal("unsupported environment accepted")
 			}
 		})
 	}
-	if err := validateHomeEnvironment(501, "apfs", unix.MNT_LOCAL); err != nil {
+	if err := validateHomeEnvironment(501, "apfs", true); err != nil {
 		t.Fatalf("supported environment refused: %v", err)
 	}
 }

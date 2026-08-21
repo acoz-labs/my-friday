@@ -179,23 +179,17 @@ func openHome(home string) (*homeRoot, error) {
 		_ = unix.Close(fd)
 		return nil, errors.New("Codex home must be owned by current user")
 	}
-	var fs unix.Statfs_t
-	if e = unix.Fstatfs(fd, &fs); e != nil {
-		_ = unix.Close(fd)
-		return nil, e
-	}
-	fsType := strings.TrimRight(string(fs.Fstypename[:]), "\x00")
-	if e = validateHomeEnvironment(os.Geteuid(), fsType, fs.Flags); e != nil {
+	if e = validatePlatformHome(fd, os.Geteuid()); e != nil {
 		_ = unix.Close(fd)
 		return nil, e
 	}
 	return &homeRoot{fd, abs, rootProof{uint64(st.Dev), uint64(st.Ino)}}, nil
 }
-func validateHomeEnvironment(euid int, fsType string, fsFlags uint32) error {
+func validateHomeEnvironment(euid int, fsType string, local bool) error {
 	if euid == 0 {
 		return errors.New("Codex baseline lifecycle refuses root")
 	}
-	if fsType != "apfs" || fsFlags&unix.MNT_LOCAL == 0 {
+	if fsType != "apfs" || !local {
 		return fmt.Errorf("Codex home must be on a local APFS volume (found %s)", fsType)
 	}
 	return nil
@@ -663,7 +657,7 @@ func atomicWriteAt(fd int, name string, b []byte) error {
 		return e
 	}
 	if _, e := lstatAt(fd, name); errors.Is(e, unix.ENOENT) {
-		if e = unix.RenameatxNp(fd, tmp, fd, name, unix.RENAME_EXCL); e != nil {
+		if e = renameExclusive(fd, tmp, fd, name); e != nil {
 			_ = removeAt(fd, tmp)
 			return e
 		}
@@ -671,7 +665,7 @@ func atomicWriteAt(fd int, name string, b []byte) error {
 		_ = removeAt(fd, tmp)
 		return e
 	} else {
-		if e = unix.RenameatxNp(fd, tmp, fd, name, unix.RENAME_SWAP); e != nil {
+		if e = renameSwap(fd, tmp, fd, name); e != nil {
 			_ = removeAt(fd, tmp)
 			return e
 		}
@@ -686,7 +680,7 @@ func writeExclusiveAt(fd int, name string, b []byte) error {
 	if e := writeStageAt(fd, tmp, b); e != nil {
 		return fmt.Errorf("another transaction or recovery is active: %w", e)
 	}
-	if e := unix.RenameatxNp(fd, tmp, fd, name, unix.RENAME_EXCL); e != nil {
+	if e := renameExclusive(fd, tmp, fd, name); e != nil {
 		_ = removeAt(fd, tmp)
 		return fmt.Errorf("another transaction or recovery is active: %w", e)
 	}
@@ -745,19 +739,19 @@ func applyTransition(fd int, name string, before, after fileProof) error {
 			return e
 		}
 		if before.Exists {
-			if e := unix.RenameatxNp(fd, tmp, fd, name, unix.RENAME_SWAP); e != nil {
+			if e := renameSwap(fd, tmp, fd, name); e != nil {
 				_ = removeAt(fd, tmp)
 				return fmt.Errorf("managed state changed before mutation: %s", name)
 			}
 			if !proofMatches(fd, tmp, before) {
-				_ = unix.RenameatxNp(fd, tmp, fd, name, unix.RENAME_SWAP)
+				_ = renameSwap(fd, tmp, fd, name)
 				_ = removeAt(fd, tmp)
 				return fmt.Errorf("managed state changed before mutation: %s", name)
 			}
 			if e := removeAt(fd, tmp); e != nil {
 				return e
 			}
-		} else if e := unix.RenameatxNp(fd, tmp, fd, name, unix.RENAME_EXCL); e != nil {
+		} else if e := renameExclusive(fd, tmp, fd, name); e != nil {
 			_ = removeAt(fd, tmp)
 			return fmt.Errorf("managed state changed before mutation: %s", name)
 		}
@@ -765,11 +759,11 @@ func applyTransition(fd int, name string, before, after fileProof) error {
 		if !before.Exists {
 			return nil
 		}
-		if e := unix.RenameatxNp(fd, name, fd, tmp, unix.RENAME_EXCL); e != nil {
+		if e := renameExclusive(fd, name, fd, tmp); e != nil {
 			return fmt.Errorf("managed state changed before mutation: %s", name)
 		}
 		if !proofMatches(fd, tmp, before) {
-			_ = unix.RenameatxNp(fd, tmp, fd, name, unix.RENAME_EXCL)
+			_ = renameExclusive(fd, tmp, fd, name)
 			return fmt.Errorf("managed state changed before mutation: %s", name)
 		}
 		if e := removeAt(fd, tmp); e != nil {
@@ -922,7 +916,7 @@ func Execute(p PlanResult) error {
 		if len(names) != 1 || names[0] != journalFile {
 			return fmt.Errorf("uninstall refused: committed control tree is not journal-only: %v", names)
 		}
-		if x = unix.RenameatxNp(r.fd, controlDir, r.fd, removingDir, unix.RENAME_EXCL); x != nil {
+		if x = renameExclusive(r.fd, controlDir, r.fd, removingDir); x != nil {
 			return x
 		}
 		if x = unix.Fsync(r.fd); x != nil {
@@ -933,7 +927,7 @@ func Execute(p PlanResult) error {
 				return fmt.Errorf("transaction interrupted; recovery required: %w", x)
 			}
 		}
-		if x = unix.RenameatxNp(cfd, journalFile, r.fd, removalMarker, unix.RENAME_EXCL); x != nil {
+		if x = renameExclusive(cfd, journalFile, r.fd, removalMarker); x != nil {
 			return x
 		}
 		if x = unix.Fsync(r.fd); x != nil {
@@ -1157,7 +1151,7 @@ func Recover(home string) error {
 			}
 			return nil
 		}
-		if x = unix.RenameatxNp(cfd, journalNext, cfd, journalFile, unix.RENAME_EXCL); x != nil {
+		if x = renameExclusive(cfd, journalNext, cfd, journalFile); x != nil {
 			return x
 		}
 		if x = unix.Fsync(cfd); x != nil {
@@ -1199,7 +1193,7 @@ func Recover(home string) error {
 		return errors.New("recovery refused: final managed state does not match journal")
 	}
 	if j.Action == ActionUninstall && j.Phase == "committed" {
-		if e = unix.RenameatxNp(r.fd, controlDir, r.fd, removingDir, unix.RENAME_EXCL); e != nil {
+		if e = renameExclusive(r.fd, controlDir, r.fd, removingDir); e != nil {
 			return e
 		}
 		if e = unix.Fsync(r.fd); e != nil {
@@ -1252,7 +1246,7 @@ func recoverDetached(r *homeRoot) error {
 		if e != nil {
 			return errors.New("recovery refused: detached control directory lacks committed journal")
 		}
-		if e = unix.RenameatxNp(fd, journalFile, r.fd, removalMarker, unix.RENAME_EXCL); e != nil {
+		if e = renameExclusive(fd, journalFile, r.fd, removalMarker); e != nil {
 			return e
 		}
 		if e = unix.Fsync(r.fd); e != nil {
