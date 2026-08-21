@@ -11,7 +11,7 @@ flowchart TD
   ADDR --> SNAP
   SNAP -->|exact canonical origin| ALREADY[Already attached; no write]
   SNAP -->|partial/different origin or include| COLLIDE[Refuse; preserve state]
-  SNAP -->|origin absent| PREVIEW[Role-first disclosure and preview]
+  SNAP -->|origin key-semantically absent| PREVIEW[Role-first disclosure and preview]
   PREVIEW --> CONFIRM{Exact Attach?}
   CONFIRM -->|no| EXIT[No changes made]
   CONFIRM -->|yes| RECHECK[Re-resolve identity, contract, address, config]
@@ -82,7 +82,7 @@ with includes disabled. It records:
   change detection;
 - direct local key names only, in exact order, for include detection, remote-name
   extraction, and before/after adjacent-name comparison;
-- safely printable remote subsection names; and
+- safely printable semantic remote names derived from Git/key names; and
 - only the `remote.origin.*` values required to classify its complete
   multivalue shape.
 
@@ -93,14 +93,23 @@ output boundary. System/global config is never read. The snapshot is not
 serialized or logged. A direct include directive, invalid/corrupt config,
 duplicate key ambiguity, unsafe remote name, or unreadable config is a refusal.
 
+Empty, comment-only, or duplicate-empty `[remote "origin"]` sections emit no
+key and do not make `git remote` report `origin`; they are deliberately outside
+the semantic state model. My Friday neither discovers nor parses that text. Git
+may reuse it when adding the canonical keys. Native fixtures bind the supported
+Git floor/current versions to exact semantic read-back and preservation of all
+pre-existing comments and adjacent fixture bytes.
+
 `origin` has three states:
 
-1. `absent`: no direct local `remote.origin.*` key;
+1. `absent`: no direct local `remote.origin.*` key and no semantic `origin` in
+   Git's remote-name output; empty/comment-only section text is permitted;
 2. `canonical`: exactly one URL equal to the supplied accepted address, exactly
    one fetch refspec `+refs/heads/*:refs/remotes/origin/*`, and no other
    `remote.origin.*` key; or
-3. `collision`: every other shape, including URL-only partial state, duplicates,
-   push URL, a different address, extra origin controls, or unsafe value.
+3. `collision`: every other key-semantic shape, including URL-only partial
+   state, duplicated URL/fetch keys, push URL, a different address, extra origin
+   controls, or unsafe value.
 
 The capability owns no state after the Git command. The canonical pair in
 `.git/config` is the complete durable result.
@@ -124,6 +133,8 @@ The capability owns no state after the Git command. The canonical pair in
    terminal/shell history controlled by the user.
 9. Verification of the literal stored address is never represented as
    verification of a future Git-resolved endpoint.
+10. Textual section count or formatting is never treated as ownership or
+    collision evidence; only Git-visible direct-local keys/remotes decide state.
 
 ## Interfaces And Contracts
 
@@ -283,11 +294,14 @@ stack trace, raw unsafe address, config contents, or credential-shaped value.
 | My Friday process | Inspect direct local config | Repository identity pinned; includes/system/global disabled | Invalid/include/collision refusal |
 | My Friday process | Add local `origin` | Absent snapshot, exact disclosure/confirmation, matching revalidation | Git lock/write error preserved |
 | Independent acceptor | Observe candidate effects | Fixture repos/addresses under disposable identity | Sanitized transcript/manifests only |
+| Acceptance supervisor | Deny/trace disposable-UID network use | Physical operator admin authentication; unique marker-bound UID/run anchor; candidate remains unprivileged | PF/DTrace positive control, zero candidate events/counters, exact cleanup receipt |
 
 The command requests no admin, network, provider, keychain, credential helper,
-global Git, filesystem permission, or second-repository authority. The operator
-may use admin authority only outside My Friday to provision/tear down the
-marker-bounded disposable acceptance identity.
+global Git, filesystem permission, or second-repository authority. The
+acceptance supervisor uses physical operator admin authentication outside My
+Friday to provision/tear down the marker-bounded disposable identity, load and
+remove its one PF anchor, and run DTrace. It starts the candidate as the
+non-admin UID without privileged file descriptors, tokens, or environment.
 
 No telemetry exists. Foreground output may contain accepted fixture/user
 addresses; durable repository evidence must contain only `example.invalid`
@@ -312,7 +326,9 @@ enter CI annotations, issue comments, acceptance manifests, or release receipts.
   owns its one-file lock/update and ambiguous state is never auto-deleted.
 - Observability is the terminal receipt, stable category, Git inspection
   command, scrubbed subprocess observer in tests, and sanitized exact-head/
-  candidate evidence. There is no log file or background report.
+  candidate evidence. The observer proves argv/environment only. Acceptance PF
+  counters and DTrace resolver/IPv4/IPv6 socket events provide the separate
+  child-inclusive network proof. There is no product log or background report.
 - Output is plain UTF-8 with no ANSI, cursor movement, spinner, animation, or
   timing-only state. Values occupy labeled lines, wrap naturally at 80 columns,
   and remain understandable in screen-reader order. English-only is the pilot
@@ -326,9 +342,10 @@ enter CI annotations, issue comments, acceptance manifests, or release receipts.
 | Generic credential-free address | pure bounded parser | explicit `--url` | reject before Git; unsafe value suppressed |
 | Complete disclosure | role-first preview | terminal flow | exact `Attach`; safe default |
 | Local `origin` only | direct-local absent snapshot | literal `remote add --` | no `-f`; canonical read-back and adjacent-name preservation |
+| Empty/comment-only origin text | key-semantic absence | native Git add/read-back | no raw parser; comments/adjacent bytes preserved in fixtures |
 | Repeat/collision | canonical/absent/collision states | preflight and rerun | read-only repeat; refuse overwrite |
 | Lock/interruption/TOCTOU | Git lock plus before/after identity | adapter | preserve state; inspect and rerun |
-| No adjacent effects | fixed argv/env and single selected root | observer/manifest evidence | no network/credential/global/other repo |
+| No adjacent effects | fixed argv/env and single selected root | observer/manifests plus PF/DTrace acceptance | argv proof distinct from child-inclusive network proof |
 | Privacy-safe output | accepted vs unsafe display policy | errors/transcripts | no raw unsafe or durable real address |
 | Address rewrite boundary | literal local read-back | preview and receipt | future Git resolution remains user-owned/unverified |
 | Accessible terminal flow | line-oriented copy and PTY | all states | 80-column/screen-reader review |

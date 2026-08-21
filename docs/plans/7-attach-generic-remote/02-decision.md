@@ -142,7 +142,8 @@ candidate may be accepted.
 | Literal `git remote add --` without `-f` | Git owns config locking; end-of-options blocks option injection; no fetch occurs | Official `git remote` docs and local argv verification |
 | Direct local config, includes disabled | No global/user/include access or ambiguous inherited state | Official `git config` scopes |
 | Stored value distinct from future resolved endpoint | User Git rewrites remain outside My Friday authority and may alter later transport | Official `insteadOf`/`pushInsteadOf` behavior |
-| Canonical pair or collision | Exact repeat is read-only; partial/duplicated state is never repaired implicitly | Failure and idempotency criteria |
+| Git-key-semantic absence/canonical/collision | Empty/comment-only section text has no remote semantics; partial/duplicated keys are never repaired implicitly | Native Git behavior and idempotency criteria |
 | No durable My Friday registry | Git config already owns the fact; duplication adds drift/privacy risk | YAGNI and data minimization |
 | Full accepted address only in foreground output | User must verify destination; unsafe/durable surfaces must not leak it | Product-experience privacy rules |
 | Through-production with enabling work | User asked for released completion; artifact profile has no staging | Repository release policy and PR #15 contract |
+| PF deny plus UID-scoped DTrace acceptance | Argv cannot prove network non-use; kernel rule counters and resolver/socket events cover the candidate and Git children | macOS `pfctl` enable references/anchors and DTrace probes, verified by positive control |

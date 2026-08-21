@@ -29,8 +29,9 @@ or discovers or changes the user's other My Friday repository.
   and before/after manifests while using only fixture addresses and paths.
 - Acceptance uses a disposable non-admin macOS identity with marker-bounded
   creation and teardown. Creating/removing that identity may require one
-  physical administrator authentication; no authority or credential reaches
-  My Friday.
+  physical administrator authentication. The same operator boundary loads the
+  temporary UID-scoped PF rule and DTrace monitor used for child-inclusive
+  no-network acceptance; no authority or credential reaches My Friday.
 - The current artifact workflows identify a candidate with an input string but
   do not yet carry a built archive through nomination, acceptance, and release.
   Implementation must either reuse the exact-byte chain delivered from issue
@@ -61,10 +62,12 @@ or discovers or changes the user's other My Friday repository.
   `url.*.insteadOf` or `pushInsteadOf` rules from configuration this command
   deliberately does not inspect. The preview makes that boundary explicit;
   My Friday never claims to verify the future transport endpoint.
-- **Ambiguity fails closed.** A different, duplicated, incomplete, included, or
-  otherwise non-canonical `origin` is never adopted or overwritten. Lock and
-  uncertain-write failures preserve state and direct the user to inspect and
-  rerun.
+- **Ambiguity fails closed at Git's key-semantic boundary.** A different,
+  duplicated-key, incomplete-key, included, or otherwise non-canonical `origin`
+  is never adopted or overwritten. Empty, comment-only, or duplicate-empty
+  `[remote "origin"]` text has no Git key/value semantics and is allowed as
+  absence; native fixtures prove Git's resulting canonical state and comment
+  preservation. Lock and uncertain-write failures preserve state.
 - **Accepted values are visible; unsafe values are not.** A validated address is
   shown in the interactive preview so the user can verify it. Rejected input,
   unsafe existing configuration, stable errors, CI annotations, and durable
@@ -72,6 +75,12 @@ or discovers or changes the user's other My Friday repository.
 - **No attachment registry.** Git's repository-local config is the only durable
   state. My Friday adds no manifest, journal, telemetry, credential store, or
   record in the runtime/memory content.
+- **No-network acceptance uses kernel and syscall evidence.** The argv observer
+  proves command selection only. Exact-candidate acceptance separately runs the
+  quiescent disposable UID under a temporary outbound-blocking PF anchor while
+  a privileged DTrace monitor records resolver and IPv4/IPv6 socket attempts by
+  that UID and descendants. A positive control must be blocked and observed;
+  candidate counters/events must remain zero; exact cleanup is receipt-bound.
 
 ## Plan Map
 

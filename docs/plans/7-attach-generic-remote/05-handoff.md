@@ -31,7 +31,8 @@ prohibited-effect evidence, and independent acceptance of the immutable bytes.
      snapshots, including includes/corruption/global canaries.
    - Exit: deterministic plans inspect only direct local config and cannot
      invoke shell/network/credential/helper/global Git behavior; Git 2.28 and
-     native suites prove private HOME/XDG isolation.
+     native suites prove private HOME/XDG isolation. Empty/comment-only section
+     text is tested as key-semantic absence without a raw config parser.
 4. **Terminal plan and safe exits**
    - Likely ownership: `internal/terminal/remote_wizard.go`, CLI routing/tests.
    - Start with help, complete role copy, exact `Attach`, cancel, and collision
@@ -45,9 +46,9 @@ prohibited-effect evidence, and independent acceptance of the immutable bytes.
 6. **Docs, reconciliation, artifact acceptance, and release**
    - Likely ownership: durable docs, evidence fixtures, nomination/acceptance/
      release workflows and scripts when the exact-byte chain is absent.
-   - Exit: container/native CI, independent review, same-byte nomination and
-     disposable-macOS acceptance, GitHub Release digest, receipt, and issue
-     lifecycle all bind the same candidate.
+   - Exit: container/native CI, independent review, same-byte nomination,
+     positive-controlled PF/DTrace disposable-macOS acceptance, GitHub Release
+     digest, cleanup receipt, and issue lifecycle all bind the same candidate.
 
 Keep one implementation PR and reviewable logical commits. Do not merge a
 parser or config write without its corresponding denial, privacy, fault, and
@@ -62,7 +63,8 @@ no-adjacent-effect evidence.
 | Consequence disclosure and exact confirmation | 4 | Runtime/memory PTY transcripts and accessibility review |
 | Canonical local `origin` and read-back | 3, 5 | Exact argv/env/read-back tests, adjacent-name checks, and native Git evidence |
 | Idempotency/collision/failure recovery | 3, 5 | Repeat, lock, corruption, fault, race, and rerun matrix |
-| No adjacent effects/privacy leakage | 1-5 | Observer trace, pair/global/home snapshots, sanitized artifacts |
+| Empty textual origin sections | 3, 5 | Git 2.28/current key-semantic fixtures; comment/adjacent-byte preservation |
+| No adjacent effects/privacy leakage | 1-6 | Argv observer, PF/DTrace positive control and zero-event/counter proof, pair/global/home snapshots |
 | Exact candidate acceptance/release | 6 | Candidate digest, independent evidence, tag/asset receipt |
 
 Detailed cases and the exact-candidate evidence contract live in
@@ -77,6 +79,7 @@ Detailed cases and the exact-candidate evidence contract live in
 | User command and privacy boundary | `README.md` | Add concise usage, disclosure, safe examples, and explicit non-effects |
 | Git/address test and evidence workflow | `docs/development.md` | Update with focused tests, fixture-address policy, PTY/transcript generation, and no-real-address rule |
 | Exact artifact nomination/acceptance/release | `docs/deployment.md` | Update from the actual reused or newly delivered same-byte workflow and remove stale blockers |
+| Disposable PF/DTrace acceptance supervisor | `docs/deployment.md` and `docs/runbook.md` | Document privilege separation, positive control, evidence schema, exact cleanup, and mismatch recovery from shipped scripts |
 | Collision, lock, verification-pending, undo | `docs/runbook.md` | Add address-free Git inspection/recovery guidance and repository-local manual removal |
 | Bounded grammar choice | `docs/decisions/0002-bounded-git-remote-addresses.md` or next free ADR | Create short ADR because security/compatibility tradeoff is likely to be questioned |
 
@@ -97,11 +100,15 @@ leaves draft.
   credential rejection, literal argv/environment, config includes/locking,
   symlink/inode/TOCTOU limits, read-back, uncertain recovery, redaction, and
   prohibited side effects, including the stored-address/future-rewrite boundary.
+- Require acceptance-harness review of disposable-UID quiescence, PF anchor and
+  enable-token scope, DTrace child/resolver/socket coverage, positive controls,
+  counter/event reset, tracer-loss refusal, candidate isolation, and exact
+  cleanup without global PF disable/flush.
 - Require product-design review of the final exact-head runtime/memory/cancel/
   error transcripts at 80 columns and in screen-reader order.
 - Keep the PR draft until reconciliation binds its exact head, durable docs are
-  promoted, this plan is removed, and all transcript/config/observer evidence
-  is openable and sanitized.
+  promoted, this plan is removed, and all transcript/config/observer/PF/DTrace
+  evidence is openable and sanitized.
 - Continue after reviewed merge through deterministic nomination, independent
   Alfred-run disposable-macOS acceptance, same-byte GitHub Release publication,
   verification, and issue closure under the `through-production` envelope.

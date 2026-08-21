@@ -38,7 +38,8 @@ The repository basis is
 - `internal/terminal/evidence_test.go` and
   `internal/terminal/production_boundary_test.go` provide transcript and
   subprocess-boundary precedents. Exact-head remote evidence needs additional
-  config/tree manifests and a network/credential/global-Git negative observer.
+  config/tree manifests, a scrubbed argv observer, and separate native
+  child-inclusive network denial/trace evidence.
 - `docs/architecture/repository-bootstrap.md` defines two separate generated
   repositories and says `init` has no network, credential, commit, or remote
   effect. That remains true; remote attachment is a later capability.
@@ -67,6 +68,11 @@ Official Git documentation consulted on 2026-08-21 establishes the mechanism:
 - [Remote helpers](https://git-scm.com/docs/gitremote-helpers) run independent
   processes and may transfer refs and objects. That extensibility is precisely
   why unknown schemes and helper syntax must not enter this bounded attach flow.
+- The macOS-supplied `pfctl(8)` manual documents named anchors, reference-counted
+  enable with `-E`, exact reference release with `-X`, and labeled rule counters.
+  `dtrace(1)` documents administrator-operated kernel/user tracing and command
+  execution. Because probe availability can vary with macOS/SIP policy, a native
+  positive control—not documentation alone—is the release authority.
 
 ## Actors And Critical Journeys
 
@@ -90,8 +96,9 @@ Official Git documentation consulted on 2026-08-21 establishes the mechanism:
 
 Downloads the nominated immutable Darwin/ARM64 artifact, verifies its digest,
 exercises both roles and denial/retry cases under a disposable non-admin macOS
-identity, proves prohibited adjacent effects with a subprocess observer and
-before/after manifests, and records fresh candidate-bound transcripts.
+identity, proves prohibited adjacent effects with before/after manifests and
+separate argv plus kernel/syscall evidence, and records fresh candidate-bound
+transcripts.
 
 ### Maintainer and release operator
 
@@ -134,9 +141,12 @@ background work; Linux, Windows, or Intel support; and changing `init`.
   pinning narrows TOCTOU but does not claim an adversarial sandbox against an
   administrator replacing ancestors between an external Git process's checks.
 - `.git/config` is mixed Git/user state. My Friday may add only the canonical
-  `origin` entries when no `origin` subsection exists. It never edits config
-  directly, removes a lock, repairs syntax, follows includes, or overwrites a
-  partial/different state.
+  `origin` entries when no direct-local `remote.origin.*` key and no semantic
+  Git remote named `origin` exists. Empty, comment-only, or duplicate-empty
+  section text is key-semantic absence and may be reused by Git; key-bearing
+  partial, duplicate, or different state fails closed. My Friday never parses
+  section text, edits config directly, removes a lock, repairs syntax, follows
+  includes, or overwrites semantic state.
 - An accepted address is intentionally visible in terminal output and may be
   retained by shell history or process listings because it is an argument.
   Help and preview warn users never to supply credentials. Rejected and
@@ -147,8 +157,10 @@ background work; Linux, Windows, or Intel support; and changing `init`.
   local address; the preview and receipt must not imply effective-endpoint
   verification.
 - Network non-use must be executable evidence, not an inference from fixture
-  hosts. The production Git observer and acceptance process monitor must prove
-  only local inspection/config argv were attempted.
+  hosts or argv. The observer proves only local inspection/config commands were
+  requested. Exact-candidate acceptance separately needs a child-inclusive
+  outbound deny plus resolver/socket trace, a positive control, zero candidate
+  events/counters, and verified policy teardown.
 - The repository has no staging service; production for this artifact is a
   digest-verified GitHub Release asset. The same bytes must move from nomination
   through acceptance to release.

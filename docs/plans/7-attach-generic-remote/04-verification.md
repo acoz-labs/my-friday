@@ -34,6 +34,11 @@ Likely files: `internal/remoteconfig/config_test.go` and
   duplicate URL/fetch, URL-only/fetch-only, push URL, additional origin keys,
   other remotes, invalid syntax, include/includeIf, unreadable config, unsafe
   remote names, symlink/config-type changes, and global/system canaries.
+- Add native Git 2.28/current fixtures containing one empty, one comment-only,
+  and duplicate-empty `[remote "origin"]` section. Each is key-semantic absence:
+  the preview proceeds, Git creates the canonical pair, exact read-back passes,
+  and pre-existing comments/adjacent fixture bytes remain. Duplicate or partial
+  URL/fetch keys remain collisions. No production raw-config parser is allowed.
 - Prove exact literal argv and environment for every Git call. The observer must
   see only `rev-parse`, `config --local --no-includes`, and one
   `remote add -- origin` operation; no shell, credential, helper, `ls-remote`,
@@ -52,7 +57,8 @@ Likely files: `internal/remoteconfig/config_test.go` and
 - Add local/global `insteadOf` and `pushInsteadOf` canaries. Prove the stored
   value remains exact, no expanded endpoint is queried, and preview/receipt
   explicitly state that future resolved endpoints are unverified.
-- Existing different/partial/duplicated origin refuses and preserves raw config.
+- Existing different/partial/duplicated key-bearing origin refuses and
+  preserves raw config.
 - Hold `.git/config.lock` to prove a stable nonzero failure and that My Friday
   does not delete/wait on it; repeat after external release succeeds.
 - Make config unwritable, corrupt it, inject Git failures, and replace config or
@@ -92,7 +98,8 @@ Likely files: `internal/terminal/remote_wizard_test.go`,
 Run focused packages first, then `go test -race ./...`, static Darwin/ARM64
 build, `bin/container bin/ci`, and native `bin/ci` on supported Apple silicon.
 Container results cannot substitute for native APFS, Git-lock, terminal, and
-process-observer evidence.
+PF/DTrace network-guard evidence. The process observer remains useful for argv/
+environment assertions but cannot prove syscall or packet non-use.
 
 If the exact-byte artifact chain is absent on implementation base, add failing
 workflow/script tests before enabling it. Verify deterministic archive name and
@@ -117,7 +124,9 @@ do not fork a second artifact protocol.
 6. Add failing lock/permission/corruption/fault/TOCTOU/concurrency tests; harden
    revalidation and verification-pending recovery.
 7. Add failing privacy, other-repository isolation, no-network/credential/global
-   Git, Unicode path, 80-column, and transcript-generation tests.
+   Git, Unicode path, 80-column, and transcript-generation tests. Add the
+   PF/DTrace supervisor positive-control, zero-event, teardown, and mismatch
+   refusal tests separately from argv-observer tests.
 8. Reconcile or implement the exact-byte artifact transport, run full native/
    container checks, then execute independent exact-candidate acceptance.
 
@@ -128,6 +137,64 @@ Under `docs/operations/ui-acceptance.md`, retained UTF-8 transcripts and state/
 subprocess manifests replace screenshots, browser console, network panel, and
 visual baselines.
 
+### Child-inclusive no-network acceptance guard
+
+The subprocess observer is not network evidence; it records scrubbed argv and
+environment only. Through-production acceptance adds a separate macOS kernel/
+syscall guard around the exact artifact:
+
+1. The root supervisor proves the disposable non-admin UID is marker-bound and
+   quiescent, records PF enabled/reference state and existing anchors, and
+   verifies the host main ruleset already evaluates the `com.apple/*` anchor.
+   It does not reload or flush the main ruleset.
+2. With physical operator authentication, it obtains a PF enable-reference
+   token using `pfctl -E` and loads one unique
+   `com.apple/my-friday-acceptance/<run-id>` anchor. The labeled IPv4/IPv6 rule
+   is `block return out log quick user <disposable-uid> all`. The token is held
+   by the supervisor; it is never passed to the candidate.
+3. The supervisor starts DTrace as administrator before the candidate. The
+   trace filters the quiescent disposable effective UID and records process/
+   child lifecycle, resolver-entry probes, and IPv4/IPv6 `socket`, `connect`,
+   `sendto`, and `sendmsg` attempts. It records event type, executable identity,
+   PID lineage, and monotonic time only—never buffers, addresses, packet payload,
+   environment, or config values. UID scope includes the candidate's Git child;
+   the non-admin candidate cannot change UID.
+4. A disposable-UID child positive control attempts one high-entropy `.invalid`
+   resolution plus direct reserved-address IPv4 and IPv6 TCP/UDP operations.
+   Acceptance proceeds only when DTrace records every expected resolver/socket
+   class, the labeled PF counters increase, the operations fail, and supervisor/
+   tracer health remains good. The trace/counters are then reset for the
+   candidate window.
+5. The exact candidate runs all scenarios with only high-entropy `.invalid` or
+   numeric fixture hosts. Approval requires zero resolver/network events for the
+   disposable UID/process tree and zero PF counter delta, alongside the separate
+   expected Git argv trace. Any event, counter, tracer loss, PID/UID ambiguity,
+   or incomplete window is rejection—not a warning.
+6. After the candidate exits, the supervisor proves no descendant or other
+   disposable-UID process survives the monitored window. Cleanup then stops and
+   verifies DTrace, flushes only the exact marker-bound anchor, releases only the
+   recorded PF enable token using `pfctl -X`, and proves the initial PF enabled/
+   reference/anchor state is restored. It never uses global `pfctl -d` or
+   flushes another ruleset. A process, marker, UID, anchor, token, counter, or
+   baseline mismatch blocks acceptance and preserves evidence for operator
+   diagnosis rather than broad cleanup.
+
+The admin boundary belongs only to the acceptance supervisor. My Friday and
+its Git child always run as the disposable non-admin UID with no privileged
+descriptor, token, executable, or environment. Unit tests use a fake supervisor;
+one native preflight and exact-candidate run must prove the real PF/DTrace
+capabilities on the recorded supported macOS build. If SIP, permissions, PF
+layout, or probe availability prevents the positive control, through-production
+acceptance cannot claim no-network behavior and the candidate is rejected.
+
+The evidence bundle contains policy/trace-script digests, run ID and sanitized
+UID, initial/final PF state, enable-reference acquired/released status (the
+token value is excluded), anchor/rule label, positive-control event-class and
+counter totals, candidate zero-event/counter totals, tracer start/stop health,
+process-tree quiescence, command window timestamps, and exact cleanup verdict.
+It contains no packet payload, unrelated host event, private hostname, address,
+or credential.
+
 Implementation retains sanitized exact-head evidence for:
 
 | Scenario | Observable proof | Retained evidence |
@@ -136,6 +203,7 @@ Implementation retains sanitized exact-head evidence for:
 | Memory + SSH/SCP fixture | Memory disclosure and exact config | Transcript and manifests |
 | Return, `q`, EOF, wrong case/space | `No changes made`; byte-identical state | Combined PTY transcript and snapshots |
 | Exact repeat | `Already attached`; identity/size/mtime unchanged | Transcript and config metadata |
+| Empty/comment-only/duplicate-empty origin sections | Key-semantic absence; canonical add; comments preserved | Native Git 2.28/current fixture transcript and byte comparison |
 | Different/partial origin | Collision; original preserved and unsafe value redacted | Transcript and selected-state/metadata proof, never raw value or digest |
 | Other remote only | Names disclosed; only `origin` added | Transcript and exact config delta |
 | Unsafe/credential/helper/local inputs | Reject before Git; generated value absent everywhere | Boundary assertion and sanitized category counts |
@@ -143,7 +211,7 @@ Implementation retains sanitized exact-head evidence for:
 | Symlinked/spaced/Unicode path | Entered/canonical mapping; target only | Transcript and target/adjacent manifests |
 | Config lock/permission/corruption | Stable failure; no lock deletion/chmod/repair | Transcript and metadata snapshot |
 | Change after preview/interruption | Revalidation or verification pending; rerun-safe | Deterministic fault transcript |
-| External-effects boundary | No network/helper/credential/global Git/content/ref/other repo effect | Scrubbed argv/process trace and pair snapshots |
+| External-effects boundary | Expected local argv; zero child-inclusive resolver/socket attempt; no credential/global/content/ref/other repo effect | Scrubbed argv trace, PF rule counters, DTrace event-class manifest, pair snapshots |
 | User Git rewrite rules present | Literal local value verified; later endpoint explicitly unverified | Transcript plus untouched rewrite canaries |
 | 80-column/accessibility | Logical order, natural wrap, no ANSI/timing state | Pinned PTY transcript and checklist |
 
@@ -155,6 +223,8 @@ against the nominated immutable Darwin/ARM64 artifact. The manifest records:
   workflow commit;
 - macOS/architecture/APFS/Git versions, locale, terminal width, sanitized
   disposable UID/home identity, and acceptor;
+- PF/DTrace policy and script digests, positive-control proof, candidate
+  zero-event/counter window, supervisor health, and exact cleanup receipt;
 - scenario/action/expected/result/verdict rows and openable transcript/manifest
   artifact links;
 - proof that Alfred's live Codex home, operator home, source checkout, global
@@ -163,8 +233,9 @@ against the nominated immutable Darwin/ARM64 artifact. The manifest records:
 - disposable identity marker/teardown proof and final approval or rejection.
 
 No real remote, network service, credential, private path, or provider account
-is needed. Fixture addresses are configuration strings only; the subprocess
-observer independently proves no connection attempt.
+is needed. Fixture addresses are configuration strings only. The subprocess
+observer proves expected Git command selection; the PF/DTrace guard separately
+proves child-inclusive network denial and zero candidate resolver/socket attempt.
 
 ## Rollout
 
@@ -176,8 +247,10 @@ observer independently proves no connection attempt.
    and records structured run/artifact/digest/commit/issue identity.
 3. Alfred downloads that artifact onto supported macOS, verifies the digest,
    provisions or reuses the marker-bounded disposable non-admin acceptance
-   identity, executes the fresh matrix offline/without credentials, captures
-   sanitized evidence, and verifies teardown plus protected-live-state canaries.
+   identity, starts and positively verifies the marker-bound PF/DTrace
+   supervisor, executes the fresh matrix without credentials, captures
+   sanitized evidence, and verifies policy/identity teardown plus protected-
+   live-state canaries.
 4. Product acceptance records issue #7, the exact candidate/digest, independent
    acceptor, verdict, and openable evidence.
 5. Release downloads the same named artifact, re-verifies acceptance and digest,
@@ -207,7 +280,8 @@ inactive until the user explicitly invokes `remote attach` and confirms.
 - Address, config, terminal, privacy, fault, race, and production-boundary tests
   pass under focused, race, container, and native suites.
 - Native Apple silicon/APFS/Git evidence proves real config locking, literal
-  argv, no network/credential/global-Git effects, and protected live roots.
+  argv, PF/DTrace positive control and zero candidate network events/counters,
+  no credential/global-Git effects, and protected live roots.
 - Durable docs accurately describe shipped grammar, disclosure, recovery, and
   artifact promotion; reconciliation removes this temporary plan.
 - Exact-byte build/transport/upload and marker-bounded macOS acceptance exist
@@ -225,11 +299,13 @@ inactive until the user explicitly invokes `remote attach` and confirms.
 - **Activation:** the digest-verified GitHub Release asset is production. User
   behavior remains explicit and dormant until `remote attach` plus `Attach`.
 - **Verification:** CI proves parser/config/boundary behavior; macOS acceptance
-  proves the fresh terminal matrix, local Git effects, live-state isolation,
-  and teardown; release verifies the public asset digest.
+  proves the fresh terminal matrix, local Git effects, PF/DTrace network guard,
+  zero candidate events/counters, live-state isolation, and exact policy/user
+  teardown; release verifies the public asset digest.
 - **Rollback:** failed acceptance releases nothing. A bad release is superseded
   by the previous asset/source revert; user repositories are never changed by
   release rollback. Mismatched assets are refused, not overwritten.
 - **Receipt:** commit, control workflow SHA, Actions run/artifact ID/name,
   SHA-256, issue #7, independent acceptor and evidence, tag/release/asset URL and
-  digest, protected-state proof, teardown proof, and rollback target.
+  digest, PF/DTrace policy/positive-control/zero-event/cleanup proof, protected-
+  state proof, teardown proof, and rollback target.
