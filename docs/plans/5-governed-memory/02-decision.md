@@ -82,11 +82,15 @@ absent path, fsync the parent, mark verification, revalidate, and remove the
 journal. Recovery uses only stored IDs, paths, modes, sizes, and digests to
 finish or remove an owned stage; it never reconstructs content from metadata.
 
-Each final record persists its transaction ID and each completed or cleanly
-aborted transaction leaves one immutable body-free completion receipt before
-the WAL journal is removed. Recovery therefore decides from the valid journal,
-stage digest, final digest/transaction link, and receipt—not from the recorded
-phase alone—and a retry after cleanup remains provably idempotent.
+Each final record persists its transaction ID. Committed initialization and
+ordinary committed or cleanly aborted transactions persist one immutable
+body-free completion receipt before the WAL is removed. Because governed
+completion storage does not exist before initialization, a no-effect
+initialization abort instead removes only an exact
+stage and retains its single direct WAL at terminal `aborted`; the next exact
+`Initialize` reuses that transaction ID. Recovery decides from valid declared
+state, stage/final digests, transaction links, and receipt/terminal WAL—not from
+phase alone—and retry remains provably idempotent without a partial governed tree.
 
 Recall scans only active durable-memory v1 documents. Query and claim tokens are
 NFC-normalized, Unicode-lowercased sequences of letters and numbers. Score is
@@ -122,7 +126,7 @@ questions rather than correctness unknowns.
 | Separate exact `Initialize` before capture | One coherent migration transaction and one confirmation meaning per command | Review finding; safe terminal defaults |
 | Remove only exact four generated `.gitkeep` files | Preserve evolved/foreign content and make the Git diff visible | O1 generator bytes and fail-closed ownership |
 | Pinned descriptor-relative no-follow access | Close ancestor/symlink races for reads as well as writes | Approved issue #4 filesystem capability contract |
-| Transaction IDs plus completion receipts | Recovery remains derivable after journal cleanup, including aborted intent | WAL idempotency requirement |
+| Transaction IDs, ordinary receipts, terminal pre-init WAL | Recovery remains derivable without creating undeclared partial initialization | WAL idempotency requirement |
 | Recorder plus match reasons/tokens in packet | Attribution and ranking are inspectable within the declared bound | Product experience and review finding |
 | Issue #4 accepted release is a nomination gate | Reuse one proven immutable candidate chain; avoid a parallel substitute | O2 dependency and repository release policy |
 | No edit/delete/retract in v1 | Avoid lifecycle semantics not needed to prove the loop | Issue #5's smallest outcome |

@@ -75,16 +75,19 @@ memories never appear.
 - **Initialization is its own confirmed prerequisite.** An uninitialized memory
   repository refuses capture and directs the user to read-only preview plus
   exact `Initialize`. That one recoverable transaction installs schemas/control
-  state and removes only the four exact generated empty `.gitkeep` placeholders;
-  it never hides initialization inside `Record`.
+  state, records all four initial dispositions, and removes only the exact
+  generated empty `.gitkeep` files actually present; it never hides
+  initialization inside `Record`.
 - **Every filesystem capability is pinned and no-follow.** The memory root is
   opened once as an owner-controlled directory descriptor, all traversal and
   mutation is descriptor-relative, and root identity plus entry type/link/
   owner/mode/digest are re-proved immediately before each effect.
 - **Completed transactions remain provable.** Final records carry their
-  transaction ID and a body-free completion receipt survives journal cleanup,
-  making committed and cleanly aborted recovery retries read-only and
-  deterministic.
+  transaction ID; body-free completion receipts survive committed initialization
+  and ordinary journal cleanup. A pre-initialization abort instead retains its
+  single WAL at terminal `aborted` and reuses that transaction ID on retry, so
+  it creates no partial
+  governed tree. Both forms make recovery retries read-only and deterministic.
 - **Recall explains each match inside the bound.** Every emitted entry includes
   explicit recorder attribution, the fixed lexical reason, and sorted matched
   query tokens; those bytes count toward the 4,000-grapheme cap.

@@ -22,13 +22,16 @@ recovery, or recall without sensitivity enforcement and attribution.
    - Likely ownership: `internal/memory`, embedded schema assets, repository
      role validation tests.
    - Begin with failing schema/semantic/canonical byte tests.
-   - Exit: all five v1 document types and complete cross-reference invariants
-     validate deterministically; no command writes yet.
+   - Exit: all seven v1 governed schemas/documents validate deterministically:
+     memory contract, observation, journal, proposal, durable memory, write
+     transaction, and completion receipt. Cross-reference invariants pass; no
+     command writes yet.
 2. **Governed-contract initialization**
    - Likely ownership: `internal/memory`, CLI adapter, PTY tests.
-   - Exit: separate preview/exact `Initialize` removes only the four exact O1
-     placeholders inside one WAL, installs schema/control/contract state, and
-     refuses changed or foreign paths.
+   - Exit: separate preview/exact `Initialize` records all four per-path
+     absent/removed dispositions, removes only exact O1 placeholders, retains a
+     lone terminal-aborted WAL before effects, retries its ID, installs governed
+     state atomically after the commitment point, and refuses foreign paths.
 3. **Shared transaction writer and recovery**
    - Likely ownership: `internal/memory` transaction subpackage or cohesive
      files, fault-injection tests, CLI recovery adapter.

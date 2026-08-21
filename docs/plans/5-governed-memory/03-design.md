@@ -42,8 +42,8 @@ MEMORY_ROOT/
     manifest.json
     memory-contract.json
     memory.lock
-    memory-init-<transaction-id>.json   # initialization/recovery only
-    memory-init-<transaction-id>.stage/ # initialization/recovery only
+    memory-init-<transaction-id>.json   # active or terminal-aborted pre-init WAL
+    memory-init-<transaction-id>.stage/ # active initialization/recovery only
     schemas/
       repository-manifest.v1.schema.json
       memory-contract.v1.schema.json
@@ -93,6 +93,17 @@ WAL includes each exact relative preimage path and digest. Changed bytes, mode,
 owner, link count, type, any record, or any other entry refuses. Success leaves
 all four placeholders absent and governed validation rejects reappearance.
 
+Pre-initialization control state permits either no initialization WAL, or
+exactly one valid direct-child `memory-init-<transaction-id>.json` at terminal
+phase `aborted` with no stage and no visible initialization effect. Multiple
+WALs, an aborted WAL with a stage/effect, or any other lookalike refuses. A new
+read-only validation reports `memory.contract_uninitialized` plus the terminal
+transaction ID and retry command without treating the state as corruption. A new
+`--initialize` starts a transaction only when no WAL exists; after a terminal
+abort it previews a retry and exact `Initialize` reuses that same transaction
+ID, atomically returns the WAL to `prepared`, and recreates its stage. It never
+allocates accumulating aborted markers.
+
 Initialization may otherwise add only exact embedded schema bytes, empty
 stage/transaction/completion directories, `memory-contract.json`, and the lock;
 any collision fails closed. This evolves repository content/control without a
@@ -104,18 +115,21 @@ transient, schema-defined direct children of the already authenticated
 `.my-friday` directory: `memory-init-<transaction-id>.json` is the body-free
 durable journal and `memory-init-<transaction-id>.stage/` holds the complete
 fixed-file set and placeholder preimage/deletion manifest. The implementation
-validates that initialization journal against
-the embedded authoritative transaction schema because the copied schema does
+validates that initialization journal against the embedded authoritative
+transaction schema because the copied schema does
 not exist yet. It fsyncs the journal and complete staged tree before promoting
 individual absent schema files with no-replace semantics, then creates the exact
 empty transaction/stage/completion directories, lock, and
 `memory-contract.json`. That contract file persists the initialization
 transaction ID and exact fixed-file/placeholder outcome. Recovery finishes the
 entire manifest once any final addition or placeholder deletion is visible;
-before the first visible effect it may abort by removing only its proven stage.
-The two
-transient children are removed after full validation; any pre-existing
-lookalike, unexpected final, or partial state without its journal fails closed.
+before the first visible effect it may remove only its proven stage and rewrite
+the same direct-child WAL to terminal `aborted`. It does not create
+`completions/`, a receipt, schema, lock, or other governed path when aborting.
+After full initialization validation, the committed receipt is written inside
+the now-created completions directory and the direct WAL/stage are removed. Any
+pre-existing lookalike, unexpected final, or partial state without its WAL
+fails closed.
 
 ### Pinned descriptor-relative root contract
 
@@ -164,10 +178,13 @@ All schemas declare draft 2020-12, a stable HTTPS `$id`, object
 and `contract_version: 1`; record schemas also require constant `record_type`.
 
 `memory-contract.json` is schema-bound and records contract version, assistant
-ID, initialization transaction ID/time, the six governed record/control schema
-IDs plus exact SHA-256 digests, and the four removed placeholder relative paths
-plus their known empty digest. Validation authenticates every copied schema byte
-against the executable before trusting it.
+ID, initialization transaction ID/time, the seven governed schema/document IDs
+plus exact SHA-256 digests, and `placeholder_dispositions`: exactly four sorted
+entries, one for each known `.gitkeep` path. Each entry records
+`initial_disposition: absent | exact_placeholder_removed`; the removed case also
+records empty SHA-256, size `0`, and mode `0600`, while absent requires those
+preimage fields null. Validation authenticates every copied schema byte and all
+four dispositions before trusting the contract.
 
 ### Shared value objects
 
@@ -293,16 +310,19 @@ identifies who authorized durable status.
 
 The body-free journal records contract version/type, transaction ID, operation
 (`initialize|observe|journal|propose|promote`), assistant ID, canonical root,
-phase (`prepared|staged|promoted|verified`), record type/ID, canonical relative
+phase (`prepared|staged|promoted|verified`, plus initialization-only terminal
+`aborted`), record type/ID, canonical relative
 stage and final paths, expected SHA-256/size/mode, root device/inode/owner, and
 created-at. Extra fields and absolute derived paths are refused. Phase updates
 use write/fsync/atomic replace/fsync-parent. The record body exists only in the
 stage/final file, never duplicated into the journal.
 
-For initialization, the same schema carries ordered `fixed_files` and
-`placeholder_preimages` manifests of relative paths, sizes, modes, and SHA-256
-digests and uses the reserved direct-child journal/stage derivation above. It
-contains no schema bytes or user content. Ordinary record transactions use
+For initialization, the same schema carries ordered `fixed_files` plus exactly
+four `placeholder_dispositions`. Each disposition records path and
+`absent|exact_placeholder_removed`; only the removed case carries expected
+size/mode/SHA preimage proof. It uses the reserved direct-child journal/stage
+derivation above. It contains no schema bytes or user content. Ordinary record
+transactions use
 `.my-friday/transactions` and `.my-friday/stages` only after initialization.
 
 Before removing a terminal journal, the writer atomically persists and fsyncs
@@ -310,10 +330,13 @@ Before removing a terminal journal, the writer atomically persists and fsyncs
 transaction/operation/assistant IDs, outcome `committed|aborted`, record type
 and ID (nullable only for initialization/abort), stage and final relative paths,
 final digest/size/mode (nullable only for abort), and completion time; an
-initialization receipt includes the `memory-contract.json` digest. It contains
-no body. A committed ordinary receipt must cross-check the final record's
+initialization receipt includes the `memory-contract.json` digest and exactly
+mirrors its four placeholder dispositions. It contains no body. A committed
+ordinary receipt must cross-check the final record's
 transaction ID; an aborted receipt must prove stage and final absent. Receipts
-are descriptor-relative, owner-only, immutable records.
+are descriptor-relative, owner-only, immutable records. The `aborted` receipt
+outcome applies only after governed initialization; a no-effect initialization
+abort uses the retained direct WAL contract below.
 
 ```mermaid
 stateDiagram-v2
@@ -323,7 +346,9 @@ stateDiagram-v2
   Promoted --> Verified: full repository validation
   Verified --> Receipted: persist completion receipt
   Receipted --> [*]: remove journal and fsync
-  Prepared --> Receipted: recover proves no effect; receipt abort
+  Prepared --> Receipted: governed no-effect abort receipt
+  Prepared --> Aborted: pre-init only; remove exact stage, retain WAL
+  Aborted --> Prepared: exact Initialize retries same transaction
   Staged --> Promoted: recover proves digest and final absence
   Promoted --> Verified: recover proves exact final digest
 ```
@@ -353,13 +378,26 @@ must prove stage/final absence. It then reports `Already recovered:
 committed|aborted` read-only. Missing, conflicting, or unprovable receipt returns
 `memory.recovery_required`; equal unowned bytes never imply completion.
 
-Initialization applies the same logic to fixed-file and placeholder manifests.
-Before any visible effect it may abort with a receipt. Once any final addition
-or placeholder deletion is visible, exact stage/final/preimage proofs must
-complete every remaining addition and exact placeholder removal, then persist
-`memory-contract.json`, a committed receipt, and remove the journal. Any changed
-placeholder, unexpected final/stage, moved root, symlink, wrong owner/mode/link/
-type, non-derived path, or digest mismatch refuses and preserves evidence.
+#### Initialization recovery state table
+
+| Declared state | Observed state | Exact result |
+|---|---|---|
+| No WAL | No stage/effect | Clean uninitialized; `--initialize` may create one new transaction after exact `Initialize`. Recovery has no target. |
+| `prepared|staged` WAL | No effect; stage absent or exact | Exact `Recover` removes only an exact stage when present, fsyncs, and rewrites the same WAL to terminal `aborted`. No governed directory/receipt is created. |
+| `aborted` WAL | Stage absent; no effect | Read-only `Already recovered: aborted`. A later exact `Initialize` retries the same transaction ID; safe exit leaves it terminal. |
+| `aborted` WAL | Any stage or visible effect | Refuse and preserve evidence; terminal abort cannot authorize bytes. |
+| Active WAL | One or more exact visible additions/deletions | Abort is forbidden. Exact `Recover` completes all remaining fixed additions and disposition-authorized removals, then contract, committed receipt, and WAL cleanup. |
+| No direct WAL | Exact initialized contract plus matching committed receipt | Read-only complete; recovery of the old journal path resolves the governed receipt. |
+| Any | Missing/foreign/mismatched stage, final, placeholder, root, contract, or receipt | Refuse and preserve evidence. |
+
+The initialization contract and committed receipt both store all four per-path
+initial dispositions even when fixtures are mixed. A path recorded `absent`
+must never be deleted; a path recorded `exact_placeholder_removed` must match
+the journaled empty preimage immediately before deletion. Once any visible
+effect exists, exact stage/final/preimage proofs must complete every remaining
+addition and authorized removal. Any changed placeholder, unexpected final/
+stage, moved root, symlink, wrong owner/mode/link/type, non-derived path, or
+digest mismatch refuses.
 
 ## Interfaces And Contracts
 

@@ -28,8 +28,9 @@ rejected values never echo.
 
 Prove uninitialized `observe|journal|propose|promote|recall` refuse read-only and
 name `memory validate --initialize`; no command combines `Initialize` with
-`Record`. Initialization transcripts show four exact placeholder removals, the
-Git working-tree consequence, exact `Initialize`, and all safe exits.
+`Record`. Initialization transcripts show four exact per-path dispositions,
+present-placeholder removals, the Git working-tree consequence, exact
+`Initialize`, and all safe exits.
 
 ### Transactions, recovery, and concurrency
 
@@ -41,7 +42,8 @@ staged` (rename before phase update), exact duplicate stage/final, advanced
 phase with missing bytes, and conflicting/missing receipts. Assert the truth
 table's sole action, exact `Recover` gate and safe exits, or retained refusal.
 Repeat after cleanup for committed and aborted receipts and prove transaction/
-record linkage.
+record linkage. Separately prove initialization's terminal-aborted WAL because
+pre-init governed receipts do not exist.
 
 Exercise root inode replacement before preview and every mutation, symlinked
 ancestors/entries, hard links, case-fold collisions, device/mount change,
@@ -52,11 +54,16 @@ Instrument filesystem calls to assert every read, enumeration, rename, and
 unlink is pinned-descriptor-relative and no-follow. Foreign bytes are never
 opened through a followed link, overwritten, or deleted.
 
-Initialization fault tests cover the four data directories independently as
-empty or exact empty-mode-`0600` `.gitkeep`, mixed exact/absent placeholders,
-changed bytes/mode/owner/link/type, extra entries, and interruption before/after
-each schema addition, placeholder deletion, `memory-contract.json`, receipt,
-and cleanup. Only exact generator placeholders are removed; after any visible
+Initialization tests enumerate all 16 combinations of four per-path
+`absent|exact_placeholder_removed` dispositions and assert the WAL,
+`memory-contract.json`, and committed receipt contain the same sorted four
+entries with null versus exact empty preimage fields. Fault tests cover changed
+bytes/mode/owner/link/type, extra entries, and interruption before/after stage,
+terminal abort rewrite, retry of the same transaction ID, each schema addition,
+each authorized placeholder deletion, contract, committed receipt, and cleanup.
+Before visible effects, exact `Recover` leaves only one terminal `aborted` WAL
+and no schema/lock/governed directory; repeat recovery is read-only and a safe-
+exit `Initialize` preserves it. Exact retry reuses the ID. After any visible
 effect recovery completes the manifest or refuses on drift.
 
 ### Recall
@@ -95,7 +102,8 @@ release.
 1. Add failing closed-schema/canonicalization tests and embedded v1 schemas;
    implement typed records and semantic validation.
 2. Add failing placeholder/collision tests; implement separately confirmed
-   initialization WAL, exact placeholder migration, and completion receipt.
+   initialization WAL, all four dispositions, terminal-abort retry, and
+   committed completion receipt.
 3. Add failing observation/journal tests; implement the pinned-root writer,
    transaction-linked records, exhaustive recovery table, receipts, and exact
    `Recover` interaction.
@@ -119,8 +127,9 @@ This change has **no rendered UI impact** under
 not screenshots. The implementation PR must retain sanitized, openable,
 exact-head evidence for:
 
-1. Initialize an existing generated memory repository; prove separate exact
-   `Initialize`, four-placeholder migration, safe exits, and no Git invocation.
+1. Initialize existing generated memory repositories with mixed dispositions;
+   prove separate exact `Initialize`, all four disposition records, safe exits,
+   present-placeholder migration, terminal-abort retry, and no Git invocation.
 2. Record one observation and one chronological journal entry.
 3. Propose a claim citing both, then inspect files and attribution.
 4. Attempt noninteractive and wrong-case promotion (denied), then exact
