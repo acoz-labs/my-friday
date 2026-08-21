@@ -4,18 +4,20 @@
 package codexhome
 
 import (
+	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
-	"syscall"
 
 	"github.com/acoz-labs/my-friday/internal/profile"
 	"github.com/acoz-labs/my-friday/internal/repository"
+	"golang.org/x/sys/unix"
 )
 
 const (
@@ -98,23 +100,29 @@ func paths(home string) (string, string, string, string) {
 	return filepath.Join(home, "AGENTS.md"), filepath.Join(home, controlDir, manifestFile), filepath.Join(home, controlDir, previousFile), filepath.Join(home, controlDir, journalFile)
 }
 func safeRegular(path string) ([]byte, error) {
-	i, err := os.Lstat(path)
+	fd, err := unix.Open(path, unix.O_RDONLY|unix.O_CLOEXEC|unix.O_NOFOLLOW, 0)
 	if err != nil {
 		return nil, err
 	}
-	if !i.Mode().IsRegular() || i.Mode()&os.ModeSymlink != 0 {
+	f := os.NewFile(uintptr(fd), path)
+	defer f.Close()
+	var st unix.Stat_t
+	if err = unix.Fstat(fd, &st); err != nil {
+		return nil, err
+	}
+	if st.Mode&unix.S_IFMT != unix.S_IFREG {
 		return nil, fmt.Errorf("unsafe non-regular path: %s", path)
 	}
-	if st, ok := i.Sys().(*syscall.Stat_t); ok && st.Nlink != 1 {
+	if st.Nlink != 1 {
 		return nil, fmt.Errorf("unsafe linked path: %s", path)
 	}
-	if st, ok := i.Sys().(*syscall.Stat_t); ok && st.Uid != uint32(os.Getuid()) {
+	if st.Uid != uint32(os.Getuid()) {
 		return nil, fmt.Errorf("unsafe foreign owner: %s", path)
 	}
-	if i.Mode().Perm() != 0600 {
+	if st.Mode&0777 != 0600 {
 		return nil, fmt.Errorf("unsafe file mode: %s", path)
 	}
-	return os.ReadFile(path)
+	return io.ReadAll(f)
 }
 func canonicalHome(home string) (string, error) {
 	if home == "" {
@@ -132,7 +140,11 @@ func canonicalHome(home string) (string, error) {
 	if !i.IsDir() || i.Mode()&os.ModeSymlink != 0 {
 		return "", errors.New("Codex home must be a non-symlink directory")
 	}
-	if st, ok := i.Sys().(*syscall.Stat_t); ok && st.Uid != uint32(os.Getuid()) {
+	var st unix.Stat_t
+	if err = unix.Stat(abs, &st); err != nil {
+		return "", err
+	}
+	if st.Uid != uint32(os.Getuid()) {
 		return "", errors.New("Codex home must be owned by the current user")
 	}
 	return abs, nil
@@ -354,15 +366,23 @@ func atomicWrite(path string, b []byte) error {
 	if err := os.MkdirAll(dir, 0700); err != nil {
 		return err
 	}
-	tmp, err := os.CreateTemp(dir, ".my-friday-write-")
+	dirfd, err := unix.Open(dir, unix.O_RDONLY|unix.O_DIRECTORY|unix.O_CLOEXEC|unix.O_NOFOLLOW, 0)
 	if err != nil {
 		return err
 	}
-	name := tmp.Name()
-	defer os.Remove(name)
-	if err = tmp.Chmod(0600); err == nil {
-		_, err = tmp.Write(b)
+	defer unix.Close(dirfd)
+	random := make([]byte, 12)
+	if _, err = rand.Read(random); err != nil {
+		return err
 	}
+	name := ".my-friday-write-" + hex.EncodeToString(random)
+	fd, err := unix.Openat(dirfd, name, unix.O_WRONLY|unix.O_CREAT|unix.O_EXCL|unix.O_CLOEXEC|unix.O_NOFOLLOW, 0600)
+	if err != nil {
+		return err
+	}
+	tmp := os.NewFile(uintptr(fd), name)
+	defer unix.Unlinkat(dirfd, name, 0)
+	_, err = tmp.Write(b)
 	if err == nil {
 		err = tmp.Sync()
 	}
@@ -372,7 +392,10 @@ func atomicWrite(path string, b []byte) error {
 	if err != nil {
 		return err
 	}
-	return os.Rename(name, path)
+	if err = unix.Renameat(dirfd, name, dirfd, filepath.Base(path)); err != nil {
+		return err
+	}
+	return unix.Fsync(dirfd)
 }
 func writeManifest(path string, m manifest) error {
 	b, _ := json.MarshalIndent(m, "", "  ")
