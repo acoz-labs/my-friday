@@ -1,0 +1,35 @@
+name: Backfill stable release asset
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Exact current latest release tag
+        required: true
+        type: string
+      source_asset:
+        description: Existing commit-suffixed archive name
+        required: true
+        type: string
+      executable_sha256:
+        description: Accepted executable SHA-256 (64 lowercase hex)
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  backfill:
+    if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    runs-on: ${{ vars.CI_RUNNER }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Verify source and publish stable alias
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          bin/backfill-stable-release-asset
+          '${{ inputs.tag }}'
+          '${{ inputs.source_asset }}'
+          '${{ inputs.executable_sha256 }}'

@@ -39,6 +39,7 @@ rollback="${RELEASE_ROLLBACK:-}"
 smoke_summary="${SMOKE_SUMMARY:-}"
 production_deployment_id="${PRODUCTION_DEPLOYMENT_ID:-}"
 control_sha="${RELEASE_CONTROL_SHA:-}"
+asset_paths="${RELEASE_ASSET_PATHS:-}"
 
 if [[ -z "$repo" || ! "$repo" =~ ^[^/]+/[^/]+$ || ! "$sha" =~ ^[0-9a-f]{40}$ ||
   -z "$artifact" || -z "${requested_issues// }" || -z "${summary// }" ]]; then
@@ -52,6 +53,10 @@ fi
 if [[ "$preflight_only" == "0" && "$mode" == "production" &&
   (-z "${rollback// }" || -z "${smoke_summary// }") ]]; then
   echo "Production finalization requires RELEASE_ROLLBACK and SMOKE_SUMMARY." >&2
+  exit 64
+fi
+if [[ "$preflight_only" == "0" && "$mode" == "artifact" && -z "$asset_paths" ]]; then
+  echo "Artifact finalization requires RELEASE_ASSET_PATHS." >&2
   exit 64
 fi
 if [[ "$preflight_only" == "0" && "$mode" == "production" &&
@@ -335,6 +340,16 @@ else
     exit 1
   fi
   release_url="$(jq -r '.url' <<< "$release_json")"
+fi
+if [[ "$mode" == "artifact" ]]; then
+  IFS=':' read -r -a release_asset_paths <<< "$asset_paths"
+  if [[ "${#release_asset_paths[@]}" != 2 ||
+    "$(basename "${release_asset_paths[0]}")" != "my-friday-darwin-arm64.tar.gz" ||
+    "$(basename "${release_asset_paths[1]}")" != "SHA256SUMS" ]]; then
+    echo "RELEASE_ASSET_PATHS must name the stable archive and SHA256SUMS." >&2
+    exit 64
+  fi
+  bin/release-assets "$release_tag" "${release_asset_paths[@]}"
 fi
 release_comment="Released in [${release_tag}](${release_url}) from \`${sha}\`."
 if [[ "$mode" == "production" ]]; then

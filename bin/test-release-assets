@@ -1,0 +1,70 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+root="$(cd "$(dirname "$0")/.." && pwd)"
+tmp="$(mktemp -d)"
+trap 'rm -rf "$tmp"' EXIT
+fixture="$tmp/my-friday"
+printf '#!/bin/sh\necho fixture\n' > "$fixture"
+chmod 0755 "$fixture"
+digest="$(sha256sum "$fixture" | awk '{print $1}')"
+
+"$root/bin/package-release-artifact" "$fixture" "$digest" "$tmp/one" >/dev/null
+touch -t 203001010101 "$fixture"
+"$root/bin/package-release-artifact" "$fixture" "$digest" "$tmp/two" >/dev/null
+cmp "$tmp/one/my-friday-darwin-arm64.tar.gz" "$tmp/two/my-friday-darwin-arm64.tar.gz"
+cmp "$tmp/one/SHA256SUMS" "$tmp/two/SHA256SUMS"
+[[ "$(tar -tzf "$tmp/one/my-friday-darwin-arm64.tar.gz")" == my-friday ]]
+mkdir "$tmp/extract"
+tar -xzf "$tmp/one/my-friday-darwin-arm64.tar.gz" -C "$tmp/extract"
+cmp "$fixture" "$tmp/extract/my-friday"
+[[ -x "$tmp/extract/my-friday" ]]
+if "$root/bin/package-release-artifact" "$fixture" "$(printf '0%.0s' {1..64})" "$tmp/bad" 2>/dev/null; then
+  echo "Packaging accepted a mismatched executable digest." >&2
+  exit 1
+fi
+
+mkdir "$tmp/mock-bin"
+cat > "$tmp/mock-bin/gh" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+log="${GH_MOCK_LOG:?}"
+state="${GH_MOCK_STATE:?}"
+if [[ "$1 $2" == "release view" ]]; then
+  digest="$(sha256sum "${LOCAL_ASSET:?}" | awk '{print $1}')"
+  case "$(cat "$state")" in
+    missing) printf '{"assets":[]}\n' ;;
+    equal) printf '{"assets":[{"name":"my-friday-darwin-arm64.tar.gz","digest":"sha256:%s"}]}\n' "$digest" ;;
+    mismatch) printf '{"assets":[{"name":"my-friday-darwin-arm64.tar.gz","digest":"sha256:%064d"}]}\n' 0 ;;
+  esac
+elif [[ "$1 $2" == "release upload" ]]; then
+  printf 'upload\n' >> "$log"
+else
+  echo "Unexpected gh invocation: $*" >&2
+  exit 2
+fi
+EOF
+chmod +x "$tmp/mock-bin/gh"
+export PATH="$tmp/mock-bin:$PATH" GITHUB_REPOSITORY=owner/repo GH_MOCK_LOG="$tmp/gh.log"
+export GH_MOCK_STATE="$tmp/state" LOCAL_ASSET="$tmp/one/my-friday-darwin-arm64.tar.gz"
+: > "$GH_MOCK_LOG"
+printf missing > "$GH_MOCK_STATE"
+"$root/bin/release-assets" tag "$LOCAL_ASSET"
+[[ "$(wc -l < "$GH_MOCK_LOG" | tr -d ' ')" == 1 ]]
+printf equal > "$GH_MOCK_STATE"
+"$root/bin/release-assets" tag "$LOCAL_ASSET"
+[[ "$(wc -l < "$GH_MOCK_LOG" | tr -d ' ')" == 1 ]]
+printf mismatch > "$GH_MOCK_STATE"
+if "$root/bin/release-assets" tag "$LOCAL_ASSET" 2>/dev/null; then
+  echo "Release retry accepted a mismatched existing asset." >&2
+  exit 1
+fi
+
+grep -Fq 'name: my-friday-darwin-arm64' "$root/.github/workflows/nominate-artifact.yml"
+grep -Fq "bin/prepare-release-artifact" "$root/.github/workflows/release-artifact.yml"
+if grep -Eq 'go build|make build' "$root/.github/workflows/release-artifact.yml"; then
+  echo "Release workflow rebuilds the accepted executable." >&2
+  exit 1
+fi
+
+echo "release asset tests passed."

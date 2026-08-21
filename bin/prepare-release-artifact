@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+authority="${1:-}"
+output_dir="${2:-}"
+repo="${GITHUB_REPOSITORY:-}"
+pattern='^artifact-v1:run=([0-9]+):id=([0-9]+):name=([A-Za-z0-9._-]+):sha256=([0-9a-f]{64})$'
+if [[ -z "$repo" || -z "$output_dir" || ! "$authority" =~ $pattern ]]; then
+  echo "Usage: GITHUB_REPOSITORY=OWNER/REPO bin/prepare-release-artifact <artifact-v1 authority> <output-dir>" >&2
+  exit 64
+fi
+run_id="${BASH_REMATCH[1]}"
+artifact_id="${BASH_REMATCH[2]}"
+artifact_name="${BASH_REMATCH[3]}"
+digest="${BASH_REMATCH[4]}"
+
+metadata="$(gh api "repos/$repo/actions/artifacts/$artifact_id")"
+if [[ "$(jq -r '.id' <<< "$metadata")" != "$artifact_id" ||
+  "$(jq -r '.name' <<< "$metadata")" != "$artifact_name" ||
+  "$(jq -r '.workflow_run.id' <<< "$metadata")" != "$run_id" ||
+  "$(jq -r '.expired' <<< "$metadata")" != "false" ]]; then
+  echo "Actions artifact metadata does not match accepted authority." >&2
+  exit 1
+fi
+
+download="$(mktemp -d)"
+trap 'rm -rf "$download"' EXIT
+gh run download "$run_id" --repo "$repo" --name "$artifact_name" --dir "$download"
+mapfile -d '' entries < <(find "$download" -mindepth 1 -maxdepth 1 -print0)
+if [[ "${#entries[@]}" != 1 || ! -f "${entries[0]}" || -L "${entries[0]}" ]]; then
+  echo "Accepted Actions artifact must contain exactly one regular file." >&2
+  exit 1
+fi
+bin/package-release-artifact "${entries[0]}" "$digest" "$output_dir"

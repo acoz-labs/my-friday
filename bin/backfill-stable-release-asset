@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+tag="${1:-}"
+source_name="${2:-}"
+expected_executable="${3:-}"
+repo="${GITHUB_REPOSITORY:-}"
+stable_name="my-friday-darwin-arm64.tar.gz"
+if [[ -z "$repo" || -z "$tag" || -z "$source_name" || "$source_name" == "$stable_name" || ! "$expected_executable" =~ ^[0-9a-f]{64}$ ]]; then
+  echo "Usage: GITHUB_REPOSITORY=OWNER/REPO bin/backfill-stable-release-asset <latest-tag> <source-archive> <executable-sha256>" >&2
+  exit 64
+fi
+release="$(gh release view "$tag" --repo "$repo" --json tagName,isDraft,isPrerelease,assets)"
+latest="$(gh release view --repo "$repo" --json tagName --jq .tagName)"
+if [[ "$(jq -r .tagName <<< "$release")" != "$latest" || "$(jq -r .isDraft <<< "$release")" != false || "$(jq -r .isPrerelease <<< "$release")" != false ]]; then
+  echo "Backfill target must be the current published latest release." >&2
+  exit 1
+fi
+for name in "$source_name" SHA256SUMS; do
+  [[ "$(jq --arg name "$name" '[.assets[] | select(.name == $name)] | length' <<< "$release")" == 1 ]] || { echo "Missing or ambiguous source asset: $name" >&2; exit 1; }
+done
+work="$(mktemp -d)"
+trap 'rm -rf "$work"' EXIT
+gh release download "$tag" --repo "$repo" --pattern "$source_name" --pattern SHA256SUMS --dir "$work"
+source_digest="$(sha256sum "$work/$source_name" | awk '{print $1}')"
+checksum_count="$(awk -v name="$source_name" '$2 == name { count++ } END { print count+0 }' "$work/SHA256SUMS")"
+checksum_digest="$(awk -v name="$source_name" '$2 == name { print $1 }' "$work/SHA256SUMS")"
+[[ "$checksum_count" == 1 && "$checksum_digest" == "$source_digest" ]] || { echo "Source archive checksum mismatch or ambiguity." >&2; exit 1; }
+mapfile -t listing < <(tar -tzf "$work/$source_name")
+[[ "${#listing[@]}" == 1 && "${listing[0]#./}" == my-friday ]] || { echo "Source archive must contain exactly my-friday." >&2; exit 1; }
+tar -xzf "$work/$source_name" -C "$work" --no-same-owner
+[[ -f "$work/my-friday" && ! -L "$work/my-friday" ]] || { echo "Unsafe source archive content." >&2; exit 1; }
+[[ "$(sha256sum "$work/my-friday" | awk '{print $1}')" == "$expected_executable" ]] || { echo "Contained executable digest mismatch." >&2; exit 1; }
+cp "$work/$source_name" "$work/$stable_name"
+bin/release-assets "$tag" "$work/$stable_name"
+echo "Verified stable alias $stable_name from $source_name on $tag."
