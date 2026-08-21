@@ -30,3 +30,21 @@ A pair that still contains `.my-friday/creation-state.json` is incomplete even
 when its other files validate. Run the reported recovery command so cleanup can
 re-prove the exact pair and remove markers, reservations, and the journal in
 their recorded order.
+
+## Recover or remove an installed Codex baseline
+
+Run `my-friday codex verify` first. A healthy or source-drifted installation
+can be removed with `my-friday codex uninstall` after reviewing its exact
+paths. Managed drift refuses deletion; use `my-friday codex repair` only when
+the recorded runtime source is still the intended assistant.
+
+For interruption, run only the exact command printed by the failure:
+
+```sh
+my-friday codex recover --transaction "$CODEX_HOME/.my-friday/transaction.json"
+```
+
+Recovery recognizes a complete manifest-consistent operation or restores the
+stored pre-change projection and manifest. If exact proof is unavailable,
+preserve `.my-friday` and `AGENTS.md` for diagnosis. Never manually adopt or
+delete a foreign file, shadowing override, symlink, hard link, or control tree.

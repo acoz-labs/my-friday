@@ -21,6 +21,7 @@ on:
         type: string
 
 permissions:
+  actions: read
   checks: read
   contents: write
   deployments: read
@@ -52,6 +53,33 @@ jobs:
           STAGING_REQUIRED: "false"
         run: bin/release-gate --require-acceptance "$RELEASE_SHA"
 
+      - name: Parse accepted artifact authority
+        id: artifact
+        env:
+          RELEASE_ARTIFACT: ${{ inputs.artifact }}
+        run: |
+          set -euo pipefail
+          IFS=: read -r scheme run_id artifact_id digest_scheme digest extra <<< "$RELEASE_ARTIFACT"
+          [[ "$scheme" == actions && "$run_id" =~ ^[0-9]+$ && "$artifact_id" =~ ^[0-9]+$ && "$digest_scheme" == sha256 && "$digest" =~ ^[0-9a-f]{64}$ && -z "$extra" ]]
+          echo "run-id=$run_id" >> "$GITHUB_OUTPUT"
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
+
+      - name: Download accepted bytes
+        uses: actions/download-artifact@v4
+        with:
+          name: my-friday-darwin-arm64-${{ inputs.sha }}
+          path: dist
+          github-token: ${{ github.token }}
+          run-id: ${{ steps.artifact.outputs.run-id }}
+
+      - name: Verify accepted-byte digest
+        env:
+          EXPECTED_DIGEST: ${{ steps.artifact.outputs.digest }}
+        run: |
+          set -euo pipefail
+          actual="$(sha256sum dist/my-friday-darwin-arm64 | awk '{print $1}')"
+          [[ "$actual" == "$EXPECTED_DIGEST" ]]
+
       - name: Verify issue-specific release authority
         env:
           GH_TOKEN: ${{ github.token }}
@@ -68,4 +96,5 @@ jobs:
           RELEASE_ISSUES: ${{ inputs.issues }}
           RELEASE_SHA: ${{ inputs.sha }}
           RELEASE_SUMMARY: ${{ inputs.summary }}
+          RELEASE_ASSET_PATH: dist/my-friday-darwin-arm64
         run: bin/finalize-release artifact

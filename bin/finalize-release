@@ -39,6 +39,7 @@ rollback="${RELEASE_ROLLBACK:-}"
 smoke_summary="${SMOKE_SUMMARY:-}"
 production_deployment_id="${PRODUCTION_DEPLOYMENT_ID:-}"
 control_sha="${RELEASE_CONTROL_SHA:-}"
+release_asset_path="${RELEASE_ASSET_PATH:-}"
 
 if [[ -z "$repo" || ! "$repo" =~ ^[^/]+/[^/]+$ || ! "$sha" =~ ^[0-9a-f]{40}$ ||
   -z "$artifact" || -z "${requested_issues// }" || -z "${summary// }" ]]; then
@@ -52,6 +53,11 @@ fi
 if [[ "$preflight_only" == "0" && "$mode" == "production" &&
   (-z "${rollback// }" || -z "${smoke_summary// }") ]]; then
   echo "Production finalization requires RELEASE_ROLLBACK and SMOKE_SUMMARY." >&2
+  exit 64
+fi
+if [[ "$preflight_only" == "0" && "$mode" == "artifact" &&
+  (! -f "$release_asset_path" || -L "$release_asset_path") ]]; then
+  echo "Artifact finalization requires a regular RELEASE_ASSET_PATH." >&2
   exit 64
 fi
 if [[ "$preflight_only" == "0" && "$mode" == "production" &&
@@ -323,6 +329,9 @@ else
     --notes "$notes"
     --generate-notes
   )
+	if [[ "$mode" == "artifact" ]]; then
+		create_args+=("$release_asset_path#my-friday-darwin-arm64")
+	fi
   if git rev-parse -q --verify "refs/tags/$release_tag" >/dev/null; then
     create_args+=(--verify-tag)
   else

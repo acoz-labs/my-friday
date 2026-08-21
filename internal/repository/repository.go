@@ -93,6 +93,13 @@ func ValidatePair(runtime, memory string) error {
 	return err
 }
 
+// ValidateRuntime validates one generated runtime repository and returns its
+// stable assistant identity. Installed-state management intentionally does not
+// require access to the separate memory repository.
+func ValidateRuntime(runtime string) (string, error) {
+	return validate(runtime, "runtime", false)
+}
+
 func ValidateFreshPair(runtime, memory string) error {
 	_, _, err := validatePair(runtime, memory, true, true)
 	return err

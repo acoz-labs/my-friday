@@ -7,12 +7,9 @@ on:
         description: Full successful main commit SHA
         required: true
         type: string
-      artifact:
-        description: Immutable artifact identifier or digest produced from that commit
-        required: true
-        type: string
 
 permissions:
+  actions: read
   checks: read
   contents: read
   issues: write
@@ -34,16 +31,40 @@ jobs:
           ref: ${{ inputs.sha }}
           fetch-depth: 0
 
-      - name: Verify and nominate artifact
+      - name: Verify candidate
         env:
           ACCEPTANCE_REQUIRED_CHECKS: ${{ vars.ACCEPTANCE_REQUIRED_CHECKS }}
           GH_TOKEN: ${{ github.token }}
-          RELEASE_ARTIFACT: ${{ inputs.artifact }}
           RELEASE_SHA: ${{ inputs.sha }}
           STAGING_REQUIRED: "false"
         run: |
           set -euo pipefail
           bin/release-gate "$RELEASE_SHA"
+
+      - name: Build exact Darwin ARM64 bytes
+        id: package
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -trimpath -o dist/my-friday-darwin-arm64 ./cmd/my-friday
+          digest="$(sha256sum dist/my-friday-darwin-arm64 | awk '{print $1}')"
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
+
+      - name: Upload exact candidate bytes
+        id: upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: my-friday-darwin-arm64-${{ inputs.sha }}
+          path: dist/my-friday-darwin-arm64
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Nominate exact artifact
+        env:
+          RELEASE_SHA: ${{ inputs.sha }}
+          RELEASE_ARTIFACT: actions:${{ github.run_id }}:${{ steps.upload.outputs.artifact-id }}:sha256:${{ steps.package.outputs.digest }}
+        run: |
+          set -euo pipefail
           bin/nominate-release-candidate \
             "$RELEASE_SHA" \
             "$RELEASE_ARTIFACT" \

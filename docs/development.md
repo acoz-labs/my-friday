@@ -31,3 +31,7 @@ APFS, macOS permissions, terminal, or local Git-template behaviour. Run
 
 Focused commands are `go test ./...`, `go test -race ./...`, and
 `GOOS=darwin GOARCH=arm64 CGO_ENABLED=0 go build ./cmd/my-friday`.
+
+Installed-baseline tests must pass explicit temporary Codex-home and runtime
+roots to `internal/codexhome`; they must never target a developer's effective
+`CODEX_HOME` or `~/.codex`. Only the command layer resolves the production home.
