@@ -126,7 +126,9 @@ do not fork a second artifact protocol.
 7. Add failing privacy, other-repository isolation, no-network/credential/global
    Git, Unicode path, 80-column, and transcript-generation tests. Add the
    PF/DTrace supervisor positive-control, zero-event, teardown, and mismatch
-   refusal tests separately from argv-observer tests.
+   refusal tests separately from argv-observer tests. Fixture-test the PF dry-
+   run classifier for the exact build/hash/advisory tuple plus missing, changed,
+   additional, parser-diagnostic, normalized-output, and nonzero-exit cases.
 8. Reconcile or implement the exact-byte artifact transport, run full native/
    container checks, then execute independent exact-candidate acceptance.
 
@@ -152,8 +154,21 @@ syscall guard around the exact artifact:
    numeric UID and bounded run label, then requires unprivileged
    `pfctl -vnf -` to parse the exact bytes successfully. The grammar is:
    `block return out log quick all user <disposable-uid> label
-   "my-friday-acceptance-<run-id>"`. Parse warnings, normalized output drift,
-   unexpected rules, or unsafe label/UID substitution refuse setup.
+   "my-friday-acceptance-<run-id>"`. A reviewed allowlist keys the exact expected
+   stderr bytes by macOS build and `/sbin/pfctl` SHA-256; an unlisted tuple
+   refuses setup rather than learning a new message at runtime. The audited
+   stock advisory is the concatenation of these exact ASCII byte strings:
+   `"pfctl: Use of -f option, could result in flushing of rules\n"`,
+   `"present in the main ruleset added by the system at startup.\n"`,
+   `"See /etc/pf.conf for further details.\n"`, and `"\n"`. The initial native
+   entry is macOS build `25E253`, `pfctl` SHA-256
+   `59311c12a535f42c550fd98566af953c93bb5efdf4bf50483b565ec8c4b210b2`;
+   another supported build requires a separately reviewed fixture entry. Exit
+   must be zero, stderr must byte-match that tuple's sole allowlisted advisory,
+   and stdout must byte-match only the expected normalized rule, including
+   `user = <disposable-uid>`, label, and final newline. A parser diagnostic,
+   missing/different/additional stderr, normalized-rule drift, unexpected rule,
+   nonzero exit, or unsafe label/UID substitution refuses setup.
 3. With physical operator authentication, the supervisor obtains a PF enable-
    reference token using `pfctl -E` and loads the already parsed bytes into one
    unique direct-child anchor:
@@ -205,10 +220,11 @@ acceptance cannot claim no-network behavior and the candidate is rejected.
 The evidence bundle contains policy/trace-script digests, the exact enabled
 DTrace probe manifest for the recorded macOS build, run ID and sanitized UID,
 initial/final PF state, enable-reference acquired/released status (the token
-value is excluded), dry-run parse transcript/digest, direct-child anchor
-attachment/read-back, rule label, positive-control phase/event-class and
-counter totals, candidate zero-event/counter totals, tracer start/stop health,
-process-tree quiescence, command window timestamps, and exact cleanup verdict.
+value is excluded), `pfctl` build/hash/allowlist-entry identity, dry-run exit and
+exact stdout/stderr classification transcript/digest, direct-child anchor
+attachment/read-back, rule label, positive-control phase/event-class and counter
+totals, candidate zero-event/counter totals, tracer start/stop health, process-
+tree quiescence, command window timestamps, and exact cleanup verdict.
 It contains no packet payload, unrelated host event, private hostname, address,
 or credential.
 
