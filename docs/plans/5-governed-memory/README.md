@@ -1,6 +1,6 @@
 # Solution Design: Complete the governed-memory loop
 
-- **Status:** Draft
+- **Status:** Final
 - **Issue:** #5
 - **Planning PR:** #20
 - **Repository basis:** 359a2dc4c94f050775b93c4dfc366dfe0976d6a4
@@ -31,9 +31,10 @@ memories never appear.
   supported disposable non-admin macOS identity and a generated fixture memory
   repository. It must never read or mutate an operator's live Codex home,
   installed runtime projection, or private memory.
-- Candidate nomination, acceptance, and GitHub Release must reuse the exact-byte
-  artifact chain delivered by issue #4, or deliver the same chain before this
-  change can be nominated. No rebuild may occur between acceptance and release.
+- Issue #5 nomination is blocked until issue #4/O2 is accepted and released and
+  its production receipt proves the working exact-byte nomination, acceptance,
+  and GitHub Release chain. Issue #5 must reuse that released chain; no
+  substitute enabling work or rebuild between acceptance and release is allowed.
 
 ## Decision Spotlight
 
@@ -71,6 +72,22 @@ memories never appear.
   writers. A durable body-free transaction journal and same-filesystem stage
   precede atomic rename; ambiguous ownership or drift retains evidence and
   refuses mutation.
+- **Initialization is its own confirmed prerequisite.** An uninitialized memory
+  repository refuses capture and directs the user to read-only preview plus
+  exact `Initialize`. That one recoverable transaction installs schemas/control
+  state and removes only the four exact generated empty `.gitkeep` placeholders;
+  it never hides initialization inside `Record`.
+- **Every filesystem capability is pinned and no-follow.** The memory root is
+  opened once as an owner-controlled directory descriptor, all traversal and
+  mutation is descriptor-relative, and root identity plus entry type/link/
+  owner/mode/digest are re-proved immediately before each effect.
+- **Completed transactions remain provable.** Final records carry their
+  transaction ID and a body-free completion receipt survives journal cleanup,
+  making committed and cleanly aborted recovery retries read-only and
+  deterministic.
+- **Recall explains each match inside the bound.** Every emitted entry includes
+  explicit recorder attribution, the fixed lexical reason, and sorted matched
+  query tokens; those bytes count toward the 4,000-grapheme cap.
 
 ## Plan Map
 
@@ -82,7 +99,6 @@ memories never appear.
 
 ## Final Gate
 
-The plan may become `Final` after this draft planning PR is linked to issue #5,
-independent maintainer review has no blocking finding, and validation passes on
-its exact head. Product authority must then approve that exact final head with
-the `through-production` envelope before merge.
+This plan is final after resolution of the independent findings and validation
+on the current PR head. Product authority must approve that exact final head
+with the `through-production` envelope before merge.

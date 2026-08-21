@@ -70,8 +70,10 @@ added foreign content.
 6. **Diagnose:** run validation to identify malformed, mismatched, orphaned,
    downgraded, duplicate, or incomplete state without changing it.
 7. **Recover:** pass the exact reported transaction journal to a separate
-   recovery command. Recovery proceeds only when ownership and expected bytes
-   can be proved; otherwise it preserves evidence.
+   recovery command. Review the body-free intended action and type exact
+   `Recover`; every other input exits without mutation. Recovery proceeds only
+   when ownership and expected bytes can be proved; otherwise it preserves
+   evidence.
 
 ### Independent acceptor
 
@@ -84,8 +86,8 @@ against the exact candidate. The implementer cannot be the sole acceptor.
 
 ### In scope
 
-- Version-1 JSON Schemas for observation, journal, proposal, durable memory,
-  and memory-write transaction records.
+- Version-1 JSON Schemas for the governed-memory contract, observation, journal,
+  proposal, durable memory, write transaction, and completion receipt.
 - Local immutable record creation with explicit confirmations and provenance.
 - Monotonic standard/sensitive/restricted handling.
 - Full repository validation and exact, conservative recovery.
@@ -111,6 +113,9 @@ against the exact candidate. The implementer cannot be the sole acceptor.
 - O1 supplies a recognized memory repository. O2/issue #4 supplies a safely
   managed Codex baseline and the exact-artifact release chain; memory commands
   remain repository-local and do not require the baseline to be installed.
+  Nevertheless, issue #5 nomination is authority-gated on issue #4 being
+  independently accepted and released with a verified production receipt. The
+  issue #4 chain is reused, not reimplemented or replaced in issue #5.
 - The on-disk contract becomes durable public API. Schemas use
   `additionalProperties: false`, embedded authoritative bytes, semantic checks,
   explicit versions, and no silently accepted future fields.
@@ -122,6 +127,15 @@ against the exact candidate. The implementer cannot be the sole acceptor.
   enum selections may be arguments or prompts.
 - APFS atomic rename protects a single file, not an unjournaled multi-file
   workflow. A durable write transaction is required before staging each record.
+- Existing O1 repositories contain empty `data/*/.gitkeep` placeholders. Their
+  exact empty regular-file bytes/mode are known generator output, but they may
+  now be tracked by Git. Initialization must preview their removal, remove only
+  exact generated placeholders within its WAL, and refuse changed or foreign
+  entries; My Friday never runs Git or conceals the resulting working-tree diff.
+- Path prechecks alone do not contain ancestor replacement races. Every read,
+  validation, write, rename, unlink, and recovery action must use a pinned
+  memory-root descriptor and descriptor-relative no-follow operations, with
+  identity revalidation at mutation boundaries.
 - Deterministic retrieval can miss synonyms and contextual similarity. That is
   an accepted transparency tradeoff, not a defect to conceal with fuzzy logic.
 - Manual paste can expose selected content to whatever model/service handles

@@ -10,7 +10,8 @@ IDs/timestamps; assistant mismatch; Unicode normalization; control/format/line
 characters; grapheme boundaries; text limits; owner/mode/type violations; and
 copied-schema byte drift. Validate filename/ID equality, unique/sorted sources,
 source existence/type, proposal sensitivity floor, exact durable copy,
-monotonic promotion sensitivity, and one memory per proposal.
+monotonic promotion sensitivity, explicit recorder attribution, unique
+transaction IDs, completion-receipt cross-links, and one memory per proposal.
 
 Use generated standard/sensitive/restricted fixture text only. Credential-shaped
 canaries remain test-generated and assertions prove they do not enter errors,
@@ -25,16 +26,38 @@ leading-trailing whitespace safe exits. Prove promotion refuses pipes and every
 attempted `--yes`/environment bypass. Success output includes IDs but not bodies;
 rejected values never echo.
 
+Prove uninitialized `observe|journal|propose|promote|recall` refuse read-only and
+name `memory validate --initialize`; no command combines `Initialize` with
+`Record`. Initialization transcripts show four exact placeholder removals, the
+Git working-tree consequence, exact `Initialize`, and all safe exits.
+
 ### Transactions, recovery, and concurrency
 
-Inject filesystem checkpoints before/after journal fsync, stage create/write/
-fsync, phase update, no-replace rename, directory fsync, final validation, and
-journal removal for each operation. At every point assert either the exact old
-valid repository, exact new valid repository, or a retained recoverable journal.
-Exercise root inode change, symlinks, devices, wrong owners/modes, stage/final
-collision, digest drift, truncated journal, unknown phase/field, cross-root path,
-disk-full/permission errors, lock contention, concurrent promotion of the same
-proposal, and repeated recovery. Foreign bytes are never overwritten or deleted.
+Inject checkpoints before/after journal fsync, stage create/write/fsync, phase
+update, no-replace rename, directory fsync, final validation, completion-receipt
+fsync, and journal removal. Run the complete 3×3 stage/final `A|E|X` matrix at
+every journal phase, explicitly including `stage absent + exact final + phase
+staged` (rename before phase update), exact duplicate stage/final, advanced
+phase with missing bytes, and conflicting/missing receipts. Assert the truth
+table's sole action, exact `Recover` gate and safe exits, or retained refusal.
+Repeat after cleanup for committed and aborted receipts and prove transaction/
+record linkage.
+
+Exercise root inode replacement before preview and every mutation, symlinked
+ancestors/entries, hard links, case-fold collisions, device/mount change,
+FIFO/device/socket, wrong owner/mode, descriptor/path disagreement, ambient
+absolute-path substitution, collision/digest drift, malformed journal, cross-
+root journal, disk-full, lock contention, concurrency, and repeated recovery.
+Instrument filesystem calls to assert every read, enumeration, rename, and
+unlink is pinned-descriptor-relative and no-follow. Foreign bytes are never
+opened through a followed link, overwritten, or deleted.
+
+Initialization fault tests cover the four data directories independently as
+empty or exact empty-mode-`0600` `.gitkeep`, mixed exact/absent placeholders,
+changed bytes/mode/owner/link/type, extra entries, and interruption before/after
+each schema addition, placeholder deletion, `memory-contract.json`, receipt,
+and cleanup. Only exact generator placeholders are removed; after any visible
+effect recovery completes the manifest or refuses on drift.
 
 ### Recall
 
@@ -43,8 +66,9 @@ distinct-token scoring, zero matches, stable score/time/ID ties, filesystem and
 map-order independence, proposals excluded, restricted excluded, sensitive
 count-only warning, exact per-run inclusion, consent reset, five-entry cap,
 4,000-grapheme cap including envelope, whole-entry skipping, oversized entries,
-and deterministic bytes across repeated runs. Validate no reads outside the
-explicit root and no writes anywhere.
+explicit recorder, fixed match reason, sorted matched tokens, those fields
+inside the packet cap, and deterministic bytes. Validate no reads outside the
+pinned root descriptor and no writes anywhere.
 
 A performance characterization scans at least 10,000 small valid memory files
 on the supported filesystem and records time/memory without creating a pass/fail
@@ -70,10 +94,11 @@ release.
 
 1. Add failing closed-schema/canonicalization tests and embedded v1 schemas;
    implement typed records and semantic validation.
-2. Add failing initialization/collision tests; implement exact previewed
-   governed-contract initialization without changing existing user records.
-3. Add failing observation and journal prompt/confirmation tests; implement the
-   shared journaled single-file writer and recovery checkpoints.
+2. Add failing placeholder/collision tests; implement separately confirmed
+   initialization WAL, exact placeholder migration, and completion receipt.
+3. Add failing observation/journal tests; implement the pinned-root writer,
+   transaction-linked records, exhaustive recovery table, receipts, and exact
+   `Recover` interaction.
 4. Add failing proposal reference/sensitivity tests; implement proposal preview
    and immutable write.
 5. Add failing interactive-only/idempotent/monotonic promotion tests; implement
@@ -81,7 +106,7 @@ release.
 6. Add failing whole-repository validation and stable-diagnostic matrices;
    implement `memory validate` and exhaustive reference checks.
 7. Add failing lexical ranking, consent, bound, and golden-packet tests;
-   implement read-only deterministic recall.
+   implement recall with recorder, reason, and matched tokens inside the cap.
 8. Add PTY acceptance transcripts, child/network/filesystem negative-effect
    probes, race/concurrency/fault suites, docs, and release-chain evidence.
 9. Reconcile the exact implementation head, promote durable documentation,
@@ -94,7 +119,8 @@ This change has **no rendered UI impact** under
 not screenshots. The implementation PR must retain sanitized, openable,
 exact-head evidence for:
 
-1. Initialize an existing generated memory repository.
+1. Initialize an existing generated memory repository; prove separate exact
+   `Initialize`, four-placeholder migration, safe exits, and no Git invocation.
 2. Record one observation and one chronological journal entry.
 3. Propose a claim citing both, then inspect files and attribution.
 4. Attempt noninteractive and wrong-case promotion (denied), then exact
@@ -102,12 +128,14 @@ exact-head evidence for:
 5. Recall in task A: prove proposal and restricted memory exclusion, standard
    inclusion, sensitive default exclusion and count-only warning.
 6. Repeat with exact `Include`; prove no consent survives the next invocation.
-7. Demonstrate five-record and 4,000-grapheme bounds plus deterministic output.
+7. Demonstrate five-record and 4,000-grapheme bounds, recorder attribution,
+   lexical reason, sorted matched tokens, and deterministic output.
 8. Paste the exact packet manually into a fresh Codex task B and verify it is
    legible, attributed, explicitly non-authoritative, and sufficient to locate
    source records. Do not require or claim automatic model behavior.
-9. Interrupt a write after stage/promotion, run explicit recovery, and prove an
-   exact valid final repository with no transaction residue.
+9. Interrupt before/after rename and before phase/receipt/journal updates;
+   preview recovery, prove safe exit, exact `Recover`, and then receipt-linked
+   read-only retry after journal deletion.
 10. Run validation, process/network observer, and before/after manifests proving
     no Git, network, global Codex, sibling repository, or unrelated path effect.
 
@@ -124,14 +152,17 @@ not the sole acceptor.
 1. Merge only after approved-plan reconciliation, independent code/security
    review, all required checks, durable docs promotion, and temporary-plan
    deletion.
-2. Nominate the merge commit and one named Darwin/ARM64 archive through the
+2. Verify issue #4/O2 is independently accepted and released and its production
+   receipt/tag/asset/digest prove the exact-byte chain. Without that completed
+   authority, issue #5 cannot be nominated.
+3. Nominate the merge commit and one named Darwin/ARM64 archive through the
    artifact-nomination workflow. Build once; record run/artifact/digest.
-3. Independent acceptance downloads and verifies that archive, exercises the
+4. Independent acceptance downloads and verifies that archive, exercises the
    disposable-user matrix, and records acceptance against the exact candidate.
-4. The release workflow re-downloads and digest-verifies the accepted archive,
+5. The release workflow re-downloads and digest-verifies the accepted archive,
    tags the accepted commit, publishes that same archive in the GitHub Release,
    records the production receipt, and verifies tag/commit/asset/digest.
-5. Close issue #5 only after release verification and lifecycle/project state
+6. Close issue #5 only after release verification and lifecycle/project state
    are updated. Memory capability has no service activation, migration daemon,
    secret slot, feature flag, or staging environment.
 
@@ -158,8 +189,10 @@ not the sole acceptor.
 
 ## Release Prerequisites
 
-- Issue #4's exact-byte nomination/acceptance/release chain must be merged and
-  operational, or equivalent enabling work must land before nomination.
+- Issue #4/O2 must be independently accepted and released. Its production
+  receipt must bind accepted commit, tag, GitHub Release asset/digest, workflow/
+  run SHA, and acceptance record; issue #5 verifies and reuses that authority
+  before nomination. No substitute artifact path is authorized.
 - Disposable non-admin acceptance tooling must prove unique marker, UID, home,
   ownership, and exact teardown; a mismatch refuses deletion. Physical admin
   authentication may be required only to create/remove that test identity and
@@ -177,9 +210,9 @@ decisions.
 
 - **Secrets:** none required. Candidate fixtures contain no real private data or
   credentials; no secret slot or workflow credential is added.
-- **Build/injection:** reuse the repository's pinned release workflow extended
-  by issue #4 to produce one Darwin/ARM64 archive and pass its name/digest/run to
-  acceptance and release.
+- **Build/injection:** only after verifying issue #4's accepted/released receipt,
+  reuse its pinned workflow to produce one Darwin/ARM64 archive and pass its
+  name/digest/run to acceptance and release.
 - **Deploy/activate:** artifact repository; no service deploy or feature toggle.
   Production is the verified Git tag and GitHub Release carrying the accepted
   archive.

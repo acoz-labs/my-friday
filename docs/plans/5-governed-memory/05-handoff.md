@@ -26,13 +26,15 @@ recovery, or recall without sensitivity enforcement and attribution.
      validate deterministically; no command writes yet.
 2. **Governed-contract initialization**
    - Likely ownership: `internal/memory`, CLI adapter, PTY tests.
-   - Exit: exact schemas/control paths initialize only after preview and exact
-     `Initialize`; collisions and evolved foreign paths refuse.
+   - Exit: separate preview/exact `Initialize` removes only the four exact O1
+     placeholders inside one WAL, installs schema/control/contract state, and
+     refuses changed or foreign paths.
 3. **Shared transaction writer and recovery**
    - Likely ownership: `internal/memory` transaction subpackage or cohesive
      files, fault-injection tests, CLI recovery adapter.
-   - Exit: every checkpoint yields old/new/recoverable state; foreign state is
-     never overwritten/deleted; lock and recovery are idempotent.
+   - Exit: pinned no-follow descriptor operations cover every read/write; the
+     3×3 stage/final matrix and receipts make every checkpoint and completed
+     retry deterministic; exact `Recover` gates effects; foreign state remains.
 4. **Observation and journal capture**
    - Likely ownership: terminal memory flow, typed records, command routing.
    - Exit: exact `Record`, safe exits, prompt-only content, normalized preview,
@@ -44,7 +46,7 @@ recovery, or recall without sensitivity enforcement and attribution.
 6. **Validation and recall**
    - Exit: deterministic ordered diagnostics; lexical golden matrix; proposal/
      restricted exclusion; per-run sensitive consent; whole-entry dual bounds;
-     byte-stable packet.
+     recorder/reason/matched tokens within cap; byte-stable packet.
 7. **Boundary evidence and durable docs**
    - Likely ownership: `cmd/my-friday`, `internal/terminal`, evidence harness,
      architecture/user/runbook/deployment docs and release workflows.
@@ -65,11 +67,11 @@ follow the slices for reviewability.
 |---|---:|---|
 | Observation and journal | 1, 3, 4 | Schema/semantic/fault tests; exact-confirmation transcripts |
 | Proposal and deliberate promotion | 1, 3, 5 | Reference/sensitivity/noninteractive/idempotency tests; transcripts |
-| Validation and recovery | 1–3, 6 | Corruption matrix, injected checkpoint recovery, stable diagnostics |
+| Validation and recovery | 1–3, 6 | No-follow race suite, 3×3 WAL matrix, receipts, exact-Recover transcripts |
 | Bounded attributed recall | 6 | Golden lexical/consent/bound tests; manual fresh-task transcript |
 | Automatic promotion excluded | 5 | No bypass tests; process/filesystem manifest |
 | Vector/network/Git/sync excluded | 6, 7 | Dependency/static review; child/network observer; before/after manifest |
-| Exact-candidate release | 8 | Nomination, independent acceptance, artifact digest, release receipt |
+| Exact-candidate release | 8 | Accepted/released issue #4 receipt gate, nomination, independent acceptance, artifact digest, release receipt |
 
 The detailed scenario matrix and candidate identity are in
 `04-verification.md`.
@@ -104,13 +106,17 @@ remove `docs/plans/5-governed-memory/` before the implementation PR leaves draft
   repository-approved deviation).
 - Independent review must be findings-first and focus on schema compatibility,
   path/symlink/ownership enforcement, recovery deletion authority, concurrency,
-  content leakage, sensitivity monotonicity, promotion bypasses, deterministic
-  bounds, and exact-candidate chain.
+  placeholder migration, receipt idempotency, content leakage, recorder fields,
+  sensitivity monotonicity, promotion bypasses, match explanations, deterministic
+  bounds, and issue #4-gated exact-candidate chain.
 - The PR description records issue/plan provenance, acceptance matrix, stable
   error and schema changes, docs matrix, no-rendered-impact classification,
   prohibited effects, release impact, and reconciliation bound to exact head.
 - Merge does not close issue #5. It remains open through immutable nomination,
   independent acceptance, GitHub Release verification, and lifecycle closure.
+- Nomination is mechanically refused until issue #4's lifecycle and production
+  receipt prove O2 independently accepted and released; implementation may not
+  substitute another workflow or parallel artifact path.
 
 ## Explicit Non-Goals And YAGNI Boundary
 
@@ -140,7 +146,8 @@ Return to product design and Solution Design if implementation requires any of:
   memory storage;
 - mutable/retractable durable records or migration of private predecessor data;
 - inability to guarantee body-free recovery authority, exact-file ownership,
-  deterministic bounds, or the immutable candidate chain;
+  pinned no-follow access, receipt-linked idempotency, deterministic bounds, or
+  the issue #4-authorized immutable candidate chain;
 - work outside the approved `through-production` envelope.
 
 Measured full-scan performance or lexical usefulness that makes the pilot

@@ -74,12 +74,19 @@ cites exactly one proposal and copies the reviewed claim, provenance,
 uncertainty, attribution, and a sensitivity at least as high as every input.
 
 Every write uses the same small state machine: validate repository and all
-current records, acquire the repository memory lock, revalidate, durably write
+current records through a pinned no-follow root capability, acquire the
+repository memory lock, revalidate, durably write
 a body-free transaction intent, create and fsync a same-filesystem staged file,
 validate its exact bytes and relationships, atomically rename to its final
 absent path, fsync the parent, mark verification, revalidate, and remove the
 journal. Recovery uses only stored IDs, paths, modes, sizes, and digests to
 finish or remove an owned stage; it never reconstructs content from metadata.
+
+Each final record persists its transaction ID and each completed or cleanly
+aborted transaction leaves one immutable body-free completion receipt before
+the WAL journal is removed. Recovery therefore decides from the valid journal,
+stage digest, final digest/transaction link, and receipt—not from the recorded
+phase alone—and a retry after cleanup remains provably idempotent.
 
 Recall scans only active durable-memory v1 documents. Query and claim tokens are
 NFC-normalized, Unicode-lowercased sequences of letters and numbers. Score is
@@ -87,7 +94,9 @@ the number of distinct query tokens present in the claim. Zero-score records
 are omitted; ties sort by `promoted_at` descending and then ID ascending. After
 the per-run sensitivity decision, records are selected in order only when the
 complete attributed entry fits, up to five entries and 4,000 extended grapheme
-clusters for the entire packet. Entries are never truncated.
+clusters for the entire packet. Each entry also renders recorder attribution,
+the fixed reason `lexical token overlap`, and its sorted matched query tokens;
+all of those bytes count toward the cap. Entries are never truncated.
 
 Confidence is **Medium-High**: repository and transaction precedents are strong;
 retrieval usefulness and workflow friction remain acceptance and pilot-learning
@@ -110,4 +119,10 @@ questions rather than correctness unknowns.
 | Five entries and 4,000 graphemes, no truncation | Bounded context without distorting attributed claims | Product experience packet |
 | Full scan, no index | Smallest coherent pilot; no invalidation state | YAGNI and local repository size assumption |
 | Body-free recovery journal | Recovery authority without duplicating sensitive content | Existing repository transaction precedent |
+| Separate exact `Initialize` before capture | One coherent migration transaction and one confirmation meaning per command | Review finding; safe terminal defaults |
+| Remove only exact four generated `.gitkeep` files | Preserve evolved/foreign content and make the Git diff visible | O1 generator bytes and fail-closed ownership |
+| Pinned descriptor-relative no-follow access | Close ancestor/symlink races for reads as well as writes | Approved issue #4 filesystem capability contract |
+| Transaction IDs plus completion receipts | Recovery remains derivable after journal cleanup, including aborted intent | WAL idempotency requirement |
+| Recorder plus match reasons/tokens in packet | Attribution and ranking are inspectable within the declared bound | Product experience and review finding |
+| Issue #4 accepted release is a nomination gate | Reuse one proven immutable candidate chain; avoid a parallel substitute | O2 dependency and repository release policy |
 | No edit/delete/retract in v1 | Avoid lifecycle semantics not needed to prove the loop | Issue #5's smallest outcome |
