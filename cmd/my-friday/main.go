@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -37,7 +38,7 @@ func classifyError(args []string, err error) (int, string) {
 		return 5, "transaction.recovery_required"
 	}
 	if command == "codex" {
-		if strings.Contains(message, "collision") || strings.Contains(message, "drift") || strings.Contains(message, "refused") {
+		if strings.Contains(message, "collision") || strings.Contains(message, "drift") || strings.Contains(message, "refused") || strings.Contains(message, "unhealthy") {
 			return 3, "codex.state_denied"
 		}
 		return 2, "codex.input_invalid"
@@ -50,6 +51,22 @@ func classifyError(args []string, err error) (int, string) {
 	}
 	return 2, "input.invalid"
 }
+
+func verifyStatus(status codexhome.Status) error {
+	if status.State != codexhome.StateHealthy {
+		return fmt.Errorf("Codex baseline unhealthy: %s — %s", status.State, status.Detail)
+	}
+	return nil
+}
+
+func readConfirmation(input io.Reader, token string) (bool, error) {
+	line, err := bufio.NewReader(input).ReadString('\n')
+	if err != nil {
+		return false, err
+	}
+	return line == token+"\n", nil
+}
+
 func run() error {
 	command := "init"
 	if len(os.Args) >= 2 {
@@ -138,7 +155,7 @@ func runCodex() error {
 			return err
 		}
 		fmt.Fprintf(os.Stdout, "Codex baseline: %s — %s\n", status.State, status.Detail)
-		return nil
+		return verifyStatus(status)
 	}
 	if sub == "recover" {
 		if len(os.Args) != 5 || os.Args[3] != "--transaction" {
@@ -172,11 +189,11 @@ func runCodex() error {
 	fmt.Fprint(os.Stdout, p.String())
 	token := strings.ToUpper(sub[:1]) + sub[1:]
 	fmt.Fprintf(os.Stdout, "Type %s to continue: ", token)
-	line, err := bufio.NewReader(os.Stdin).ReadString('\n')
-	if err != nil && strings.TrimSpace(line) == "" {
+	confirmed, err := readConfirmation(os.Stdin, token)
+	if err != nil {
 		return err
 	}
-	if strings.TrimSpace(line) != token {
+	if !confirmed {
 		fmt.Fprintln(os.Stdout, "No changes made")
 		return nil
 	}
