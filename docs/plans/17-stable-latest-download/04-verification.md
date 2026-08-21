@@ -87,6 +87,8 @@ The existing `GITHUB_TOKEN` injection and `contents: write` permission are the
 only publication credential path. Implementation must demonstrate exact
 Actions artifact retrieval, executable digest verification, deterministic
 packaging, retry-safe release lookup/upload, and dry fixture rollback before
-the final implementation review. Production receipts are the workflow URL,
+the final implementation review. Activation is an explicit guarded workflow
+dispatch after its named release preflight, never an implicit merge side effect.
+Production verification and receipts are the workflow URL,
 candidate SHA/authority, release tag, asset IDs/digests, checksum evidence, and
 successful permanent-URL probe.

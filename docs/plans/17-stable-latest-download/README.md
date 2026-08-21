@@ -2,9 +2,9 @@
 
 - **Status:** Draft
 - **Issue:** #17
-- **Planning PR:** Pending
+- **Planning PR:** #23
 - **Repository basis:** e0f7c685ec7a0339cb42d945a02b40e4f513b4f2
-- **Execution envelope:** `through-production`
+- **Execution envelope:** through-production
 
 ## Decision
 
