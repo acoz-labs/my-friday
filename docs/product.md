@@ -58,6 +58,26 @@ Users must be able to:
 - Employer policy, credentials, permissions, and third-party integrations
   remain outside the core bootstrap promise.
 
+## Public product surface
+
+My Friday owns one deliberately small public landing page at
+`https://my-friday.acoz.dev`, hosted on Cloudflare Pages. The page is a front
+door for technically capable macOS users to understand the local-first product,
+confirm current platform and distribution caveats, and download the latest
+accepted Apple silicon artifact.
+
+GitHub Releases remains authoritative for binaries, checksums, release notes,
+licensing, and rollback history. The primary download uses GitHub's stable
+latest-release asset contract:
+
+`https://github.com/acoz-labs/my-friday/releases/latest/download/my-friday-darwin-arm64.tar.gz`
+
+Every public release must publish that stable asset name from the accepted
+bytes. The landing page does not duplicate the changelog, version, release
+date, or other moving release metadata, and an ordinary release must not
+require a website edit. The page is not a documentation portal, hosted product,
+account surface, analytics application, or content-management system.
+
 ## Approved outcome sequence
 
 ### Selected
