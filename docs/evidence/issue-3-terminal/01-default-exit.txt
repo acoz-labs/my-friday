@@ -1,0 +1,78 @@
+Step 1 of 7: Scope
+My Friday creates two separate local Git repositories. It does not install Codex, use the network, access secrets, import content, create commits, or configure remotes.
+Press Return to continue [b back; q quit]: Step 2 of 7: Identity
+Assistant display name [b back; q quit]: How should the assistant address you? (optional) [b back; q quit]: Assistant purpose [b back; q quit]: Step 3 of 7: Communication style
+1 Balanced (default)
+2 Concise
+3 Conversational
+4 Custom
+Choose 1-4 [b back; q quit]: Step 4 of 7: Locations
+1 One parent with stable names (default)
+2 Two separate targets
+Choose 1-2 [b back; q quit]: Parent directory (default: invocation directory) [b back; q quit]: Step 5 of 7: Preview
+Plan: bee9fbc1389f1018b14d5969daac90dcda736352932244cca112c99c68ba67bd
+Assistant: asst-da5641d6eea30106634b258759050ce3
+Runtime entered: <TEMP>/exit/my-friday-runtime
+Runtime canonical: <TEMP>/exit/my-friday-runtime
+Memory entered: <TEMP>/exit/my-friday-memory
+Memory canonical: <TEMP>/exit/my-friday-memory
+Normalized identity: Fridáy 🦇
+Normalized address: Boss
+Normalized purpose: Keep local work inspectable
+Normalized style: concise
+Runtime initial state: absent
+Runtime symlink mapping: <TEMP>/exit/my-friday-runtime -> <TEMP>/exit/my-friday-runtime
+Memory initial state: absent
+Memory symlink mapping: <TEMP>/exit/my-friday-memory -> <TEMP>/exit/my-friday-memory
+- create parent <TEMP>/exit mode 0700
+- temporary support <TEMP>/.my-friday-bee9fbc1389f1018.json (removed after success)
+- temporary support <TEMP>/exit/.my-friday-bee9fbc1389f1018-runtime (removed after success)
+- temporary support <TEMP>/exit/.my-friday-bee9fbc1389f1018-memory (removed after success)
+- temporary support <TEMP>/.my-friday-reservation-2467e25ad529a1a1 (removed after success)
+- temporary support <TEMP>/.my-friday-reservation-26d0f432ccec76a8 (removed after success)
+- file runtime:.my-friday/manifest.json mode 0600 sha256 2b5e3bb0b870ab17cd9b025e7b7a19e85e108c2c8b09b85693e2289755aa752c
+- file runtime:.my-friday/schemas/assistant-profile.v1.schema.json mode 0600 sha256 620d89690ed1f5ba4ff81947c6fe82d5021d215aabb8b37eeb52c9fd64391c33
+- file runtime:.my-friday/schemas/repository-manifest.v1.schema.json mode 0600 sha256 144eee2176933a116d0e844f1f8695e3a5bf68bee8561f108abd2caf6aa0a0a4
+- file runtime:AGENTS.md mode 0600 sha256 c231fcdf65c9a74414a904e46fe5982ff8adc615ded56160ec0165bd8d194a1f
+- file runtime:README.md mode 0600 sha256 ae4bc7f314b39f612b0d54089bee9938569a60c1183b34ffe9b8e59441ed7c15
+- file runtime:assistant/profile.json mode 0600 sha256 aeac161bdba32bc21c76ef4e200313613e87c59fcd6af7538a8b0ebfdcb32d23
+- file runtime:skills/.gitkeep mode 0600 sha256 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+- file memory:.my-friday/manifest.json mode 0600 sha256 c52a92e769a27b2483ae79785caeca1458dda9a3270333a04704063b34bbfbc2
+- file memory:.my-friday/schemas/repository-manifest.v1.schema.json mode 0600 sha256 144eee2176933a116d0e844f1f8695e3a5bf68bee8561f108abd2caf6aa0a0a4
+- file memory:AGENTS.md mode 0600 sha256 333351f3ba54ce1fa9bc3d0c61568a55b0e781ea1b800b2339c014897aae4c08
+- file memory:README.md mode 0600 sha256 1595391140014536173f2c61e3e118279af0197fed0d241b76f63937b2fddfde
+- file memory:data/journals/.gitkeep mode 0600 sha256 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+- file memory:data/memories/.gitkeep mode 0600 sha256 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+- file memory:data/observations/.gitkeep mode 0600 sha256 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+- file memory:data/proposals/.gitkeep mode 0600 sha256 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+- file memory:schemas/README.md mode 0600 sha256 f4b8b81e7d83fcefcd5c554a9c72b9e23d29d9975f930ab8a7d4cb4a4023677e
+- create owner-only parent directories when missing
+- reserve both canonical targets
+- stage and validate runtime repository
+- stage and validate memory repository
+- initialize both repositories on unborn branch main with an empty Git template
+- promote runtime repository
+- promote memory repository
+- validate the final pair and remove transaction support state
+- write runtime:.my-friday/manifest.json
+- write runtime:.my-friday/schemas/assistant-profile.v1.schema.json
+- write runtime:.my-friday/schemas/repository-manifest.v1.schema.json
+- write runtime:AGENTS.md
+- write runtime:README.md
+- write runtime:assistant/profile.json
+- write runtime:skills/.gitkeep
+- write memory:.my-friday/manifest.json
+- write memory:.my-friday/schemas/repository-manifest.v1.schema.json
+- write memory:AGENTS.md
+- write memory:README.md
+- write memory:data/journals/.gitkeep
+- write memory:data/memories/.gitkeep
+- write memory:data/observations/.gitkeep
+- write memory:data/proposals/.gitkeep
+- write memory:schemas/README.md
+- No global installation
+- No network or hosted account setup
+- No secrets or imported private content
+- No commits or remotes
+Step 6 of 7: Creation and verification
+Create these two repositories? [type Create; default Exit] [b back; q quit]: No changes made

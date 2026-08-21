@@ -1,45 +1,32 @@
 # Runbook
 
-Use this file for one or a few recurring operational procedures. Split focused
-runbooks into `docs/runbooks/` when this file becomes difficult to navigate.
+## Recover an interrupted repository creation
 
-## Procedure: Name
+Use this only when `my-friday init` reports a retained owner-only transaction
+journal. Do not move, edit, or merge either target before diagnosis.
 
-### Trigger And Expected Outcome
+1. Read the reported phase and paths; confirm they are the intended targets.
+2. Run `my-friday recover --transaction <reported-journal-path>`.
+3. Run `my-friday validate --runtime <runtime-path> --memory <memory-path>`.
+4. If recovery refuses because state drifted, preserve the journal and targets
+   and ask a maintainer to inspect them. Never manually delete a non-empty
+   target.
 
-State when to use this procedure, when not to use it, and the successful end
-state.
+The command receipt says `Recovered and verified repository pair`, `Rolled
+back to the pre-run state`, or `No recovery needed`. Re-running recovery after
+validation is safe.
 
-### Safety And Preconditions
+Before promotion, recovery removes only marker-owned partial stages, restores
+untouched empty shells and owned parent state, and removes the journal last. A
+plan-derived deletion path may briefly remain after interrupted recursive
+cleanup. The journal records its exact path and complete-tree proof before
+rename; rerunning the same command finishes only that authorized deletion. A
+pre-existing foreign collision is preserved and blocks cleanup.
+If both the original target and its journal-authorized deletion path are
+absent, cleanup had already completed; recovery continues and recreates an
+original empty shell with its recorded mode when required.
 
-- Required access, backup, maintenance window, or authorization
-- Data-loss, availability, cost, or security hazards
-
-### Symptoms And Diagnosis
-
-| Signal | Meaning | Check |
-|---|---|---|
-| | | |
-
-### Procedure
-
-1. Use exact, current, and executable commands.
-2. Identify expected output at consequential steps.
-3. Stop rather than improvise when a safety precondition fails.
-
-### Verification
-
-List the checks that prove the system recovered or the procedure completed.
-
-### Rollback Or Recovery
-
-State how to reverse partial work or return to the last known-good state.
-
-### Escalation
-
-Identify the conditions that require a maintainer, operator, security owner, or
-data owner.
-
-### References
-
-- Architecture, deployment, dashboard, source, or decision links
+A pair that still contains `.my-friday/creation-state.json` is incomplete even
+when its other files validate. Run the reported recovery command so cleanup can
+re-prove the exact pair and remove markers, reservations, and the journal in
+their recorded order.
