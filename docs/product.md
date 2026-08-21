@@ -60,11 +60,18 @@ Users must be able to:
 
 ## Public product surface
 
-My Friday owns one deliberately small public landing page at
-`https://my-friday.acoz.dev`, hosted on Cloudflare Pages. The page is a front
-door for technically capable macOS users to understand the local-first product,
-confirm current platform and distribution caveats, and download the latest
-accepted Apple silicon artifact.
+My Friday's canonical public page is
+`https://acoz.dev/projects/my-friday/`. It is part of the existing `acoz.dev`
+service and its open-source project collection at
+`https://acoz.dev/open-source/`; source availability is project metadata rather
+than part of the canonical project URL. `https://my-friday.acoz.dev` is a
+permanent redirect to the canonical route, not a second content surface.
+
+The page is a front door for technically capable macOS users to understand the
+local-first product, confirm current platform and distribution caveats, and
+download the latest accepted Apple silicon artifact. The `acoz` repository
+owns page presentation and deployment; this repository owns the binary,
+checksums, release notes, licence, documentation, and download contract.
 
 GitHub Releases remains authoritative for binaries, checksums, release notes,
 licensing, and rollback history. The primary download uses GitHub's stable
