@@ -697,6 +697,11 @@ func replaceJournalAt(fd int, prior, next []byte, phase string) error {
 	if e := writeStageAt(fd, journalNext, next); e != nil {
 		return e
 	}
+	if faultHook != nil {
+		if e := faultHook("journal-" + phase + "-staged"); e != nil {
+			return e
+		}
+	}
 	if e := renameSwap(fd, journalNext, fd, journalFile); e != nil {
 		_ = removeAt(fd, journalNext)
 		return e
@@ -1025,6 +1030,11 @@ func journalPhaseRank(phase string) int {
 	return -1
 }
 
+func adjacentJournalPhases(a, b string) bool {
+	delta := journalPhaseRank(a) - journalPhaseRank(b)
+	return delta == 1 || delta == -1
+}
+
 func sameJournalTransaction(a, b journal) bool {
 	return a.ContractVersion == b.ContractVersion && a.Action == b.Action && a.Root == b.Root &&
 		proofsEqual(a.Before, b.Before) && proofsEqual(a.After, b.After)
@@ -1034,6 +1044,17 @@ func decodeJournal(b []byte) (journal, error) {
 	var j journal
 	if strictJSON(b, &j) != nil || validJournal(j) != nil {
 		return journal{}, errors.New("incompatible or ambiguous journal")
+	}
+	return j, nil
+}
+
+func decodeJournalForRoot(b []byte, root rootProof) (journal, error) {
+	j, e := decodeJournal(b)
+	if e != nil {
+		return journal{}, e
+	}
+	if j.Root != root {
+		return journal{}, errors.New("Codex home identity changed")
 	}
 	return j, nil
 }
@@ -1171,7 +1192,7 @@ func Recover(home string) error {
 		if x != nil {
 			return x
 		}
-		if _, x = decodeJournal(next); x != nil {
+		if _, x = decodeJournalForRoot(next, r.proof); x != nil {
 			return errors.New("recovery refused: unproven staged journal retained")
 		}
 		if x = renameExclusive(cfd, journalNext, cfd, journalFile); x != nil {
@@ -1185,15 +1206,21 @@ func Recover(home string) error {
 	if e != nil {
 		return e
 	}
-	j, x := decodeJournal(b)
+	j, x := decodeJournalForRoot(b, r.proof)
 	if x != nil {
 		return fmt.Errorf("recovery refused: %w", x)
 	}
 	next, nextErr := readRegularAt(cfd, journalNext)
 	if nextErr == nil {
-		staged, sx := decodeJournal(next)
-		if sx != nil || !sameJournalTransaction(j, staged) || journalPhaseRank(j.Phase) <= journalPhaseRank(staged.Phase) {
-			return errors.New("recovery refused: staged journal does not prove the prior transaction phase")
+		staged, sx := decodeJournalForRoot(next, r.proof)
+		if sx != nil || !sameJournalTransaction(j, staged) || !adjacentJournalPhases(j.Phase, staged.Phase) {
+			return errors.New("recovery refused: staged journal does not prove an adjacent transaction phase")
+		}
+		if journalPhaseRank(staged.Phase) > journalPhaseRank(j.Phase) {
+			if x = renameSwap(cfd, journalNext, cfd, journalFile); x != nil {
+				return x
+			}
+			j = staged
 		}
 		if x = removeAt(cfd, journalNext); x != nil {
 			return x
@@ -1203,9 +1230,6 @@ func Recover(home string) error {
 		}
 	} else if !errors.Is(nextErr, unix.ENOENT) {
 		return nextErr
-	}
-	if j.Root != r.proof {
-		return errors.New("recovery refused: Codex home identity changed")
 	}
 	if e = bindControl(r, cfd); e != nil {
 		return e
@@ -1289,6 +1313,10 @@ func recoverDetached(r *homeRoot) error {
 		if e != nil {
 			return errors.New("recovery refused: detached control directory lacks committed journal")
 		}
+		j, x := decodeJournalForRoot(b, r.proof)
+		if x != nil || !validDetachedJournal(j) {
+			return errors.New("recovery refused: detached deletion authority is incompatible")
+		}
 		if e = renameExclusive(fd, journalFile, r.fd, removalMarker); e != nil {
 			return e
 		}
@@ -1296,9 +1324,8 @@ func recoverDetached(r *homeRoot) error {
 			return e
 		}
 	}
-	var j journal
-	if strictJSON(b, &j) != nil || validJournal(j) != nil || j.Root != r.proof ||
-		!((j.Action == ActionUninstall && j.Phase == "committed") || (j.Action == ActionInstall && j.Phase != "committed" && allAbsent(j.Before))) {
+	j, e := decodeJournalForRoot(b, r.proof)
+	if e != nil || !validDetachedJournal(j) {
 		return errors.New("recovery refused: detached deletion authority is incompatible")
 	}
 	target := j.After
@@ -1327,4 +1354,9 @@ func recoverDetached(r *homeRoot) error {
 		return e
 	}
 	return unix.Fsync(r.fd)
+}
+
+func validDetachedJournal(j journal) bool {
+	return (j.Action == ActionUninstall && j.Phase == "committed") ||
+		(j.Action == ActionInstall && j.Phase != "committed" && allAbsent(j.Before))
 }

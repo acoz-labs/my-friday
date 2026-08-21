@@ -581,6 +581,115 @@ func TestRecoveryUsesNewerJournalWhenPriorPhaseRemainsStaged(t *testing.T) {
 	}
 }
 
+func TestRecoveryUsesNewerStagedJournalWhenCurrentPhasePrecedesIt(t *testing.T) {
+	runtime, codex := installFixture(t)
+	mutatePurpose(t, runtime, "Journal pre-swap interruption")
+	p, err := Plan(ActionUpgrade, runtime, codex)
+	if err != nil {
+		t.Fatal(err)
+	}
+	faultHook = func(phase string) error {
+		if phase == "journal-committed-staged" {
+			return errors.New("injected journal staging interruption")
+		}
+		return nil
+	}
+	t.Cleanup(func() { faultHook = nil })
+	if err = Execute(p); err == nil {
+		t.Fatal("journal staging interruption did not fire")
+	}
+	faultHook = nil
+	if err = Recover(codex); err != nil {
+		t.Fatal(err)
+	}
+	if err = Recover(codex); err != nil {
+		t.Fatalf("second recovery reversed the committed result: %v", err)
+	}
+	got, err := os.ReadFile(filepath.Join(codex, "AGENTS.md"))
+	if err != nil || digest(got) != p.manifest.ProjectionSHA256 {
+		t.Fatalf("committed projection was not retained: %v", err)
+	}
+}
+
+func TestRecoveryPreservesStagedJournalWhenPinnedRootDiffers(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		bothSlots bool
+	}{
+		{"stage only", false},
+		{"both slots", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			runtime, codex := fixture(t)
+			if err := os.MkdirAll(codex, 0700); err != nil {
+				t.Fatal(err)
+			}
+			p, err := Plan(ActionInstall, runtime, codex)
+			if err != nil {
+				t.Fatal(err)
+			}
+			j := journal{ContractVersion: 1, Action: ActionInstall, Phase: "prepared", Root: p.root, Before: p.before, After: afterProofs(p)}
+			j.Root.Inode++
+			if err = os.Mkdir(filepath.Join(codex, controlDir), 0700); err != nil {
+				t.Fatal(err)
+			}
+			next := journalBytes(j)
+			if err = os.WriteFile(filepath.Join(codex, controlDir, journalNext), next, 0600); err != nil {
+				t.Fatal(err)
+			}
+			if tc.bothSlots {
+				j.Root = p.root
+				j.Phase = "mutating"
+				if err = os.WriteFile(filepath.Join(codex, controlDir, journalFile), journalBytes(j), 0600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			before, err := os.ReadFile(filepath.Join(codex, controlDir, journalNext))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err = Recover(codex); err == nil {
+				t.Fatal("mismatched pinned root was accepted")
+			}
+			after, readErr := os.ReadFile(filepath.Join(codex, controlDir, journalNext))
+			if readErr != nil || !bytes.Equal(after, before) {
+				t.Fatalf("staged evidence changed: %v", readErr)
+			}
+		})
+	}
+}
+
+func TestDetachedRecoveryPreservesJournalWhenPinnedRootDiffers(t *testing.T) {
+	runtime, codex := fixture(t)
+	if err := os.MkdirAll(codex, 0700); err != nil {
+		t.Fatal(err)
+	}
+	p, err := Plan(ActionInstall, runtime, codex)
+	if err != nil {
+		t.Fatal(err)
+	}
+	j := journal{ContractVersion: 1, Action: ActionInstall, Phase: "prepared", Root: p.root, Before: p.before, After: afterProofs(p)}
+	j.Root.Inode++
+	if err = os.Mkdir(filepath.Join(codex, removingDir), 0700); err != nil {
+		t.Fatal(err)
+	}
+	want := journalBytes(j)
+	journalPath := filepath.Join(codex, removingDir, journalFile)
+	if err = os.WriteFile(journalPath, want, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err = Recover(codex); err == nil {
+		t.Fatal("mismatched detached authority was accepted")
+	}
+	got, readErr := os.ReadFile(journalPath)
+	if readErr != nil || !bytes.Equal(got, want) {
+		t.Fatalf("detached journal evidence changed: %v", readErr)
+	}
+	if _, statErr := os.Stat(filepath.Join(codex, removalMarker)); !os.IsNotExist(statErr) {
+		t.Fatalf("detached journal was promoted before validation: %v", statErr)
+	}
+}
+
 func TestCommittedUninstallRecoversWithPriorJournalPhaseStaged(t *testing.T) {
 	_, codex := installFixture(t)
 	p, err := Plan(ActionUninstall, "", codex)
