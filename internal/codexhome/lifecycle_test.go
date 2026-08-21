@@ -1,7 +1,9 @@
 package codexhome
 
 import (
+	"bytes"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -185,14 +187,222 @@ func TestUpgradeRollbackAndRecovery(t *testing.T) {
 		t.Fatalf("wrong rollback bytes: %s", got)
 	}
 
-	journal := filepath.Join(codex, controlDir, journalFile)
-	if err := os.WriteFile(journal, []byte(`{"contract_version":1,"action":"repair","phase":"prepared"}`), 0600); err != nil {
+}
+
+func installFixture(t *testing.T) (string, string) {
+	t.Helper()
+	runtime, codex := fixture(t)
+	if err := os.MkdirAll(codex, 0700); err != nil {
 		t.Fatal(err)
 	}
-	if err := Recover(codex); err != nil {
+	p, err := Plan(ActionInstall, runtime, codex)
+	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := os.Stat(journal); !os.IsNotExist(err) {
-		t.Fatalf("journal remains: %v", err)
+	if err = Execute(p); err != nil {
+		t.Fatalf("install: %v", err)
+	}
+	return runtime, codex
+}
+
+func mutatePurpose(t *testing.T, runtime, purpose string) {
+	t.Helper()
+	path := filepath.Join(runtime, "assistant", "profile.json")
+	b, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var p profile.Profile
+	if err = json.Unmarshal(b, &p); err != nil {
+		t.Fatal(err)
+	}
+	p.Identity.Purpose = purpose
+	b, _ = json.MarshalIndent(p, "", "  ")
+	if err = os.WriteFile(path, append(b, '\n'), 0600); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestForeignControlCanaryAlwaysFailsClosed(t *testing.T) {
+	runtime, codex := installFixture(t)
+	canary := filepath.Join(codex, controlDir, "foreign-canary")
+	if err := os.WriteFile(canary, []byte("keep"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Plan(ActionUninstall, "", codex); err == nil {
+		t.Fatal("uninstall accepted foreign control content")
+	}
+	if err := Recover(codex); err == nil {
+		t.Fatal("recovery accepted foreign control content")
+	}
+	if got, _ := os.ReadFile(canary); string(got) != "keep" {
+		t.Fatalf("foreign canary changed: %q", got)
+	}
+	_ = runtime
+}
+
+func TestSymlinkedHomeAncestorCannotRedirectManagedWrites(t *testing.T) {
+	runtime, _ := fixture(t)
+	root := t.TempDir()
+	realHome := filepath.Join(root, "real", ".codex")
+	if err := os.MkdirAll(realHome, 0700); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(root, "link")
+	if err := os.Symlink(filepath.Join(root, "real"), link); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Plan(ActionInstall, runtime, filepath.Join(link, ".codex")); err == nil {
+		t.Fatal("symlinked ancestor accepted")
+	}
+	if _, err := os.Stat(filepath.Join(realHome, "AGENTS.md")); !os.IsNotExist(err) {
+		t.Fatalf("redirected write occurred: %v", err)
+	}
+}
+
+func TestExecuteRefusesAnyPostPreviewChange(t *testing.T) {
+	runtime, codex := fixture(t)
+	if err := os.MkdirAll(codex, 0700); err != nil {
+		t.Fatal(err)
+	}
+	p, err := Plan(ActionInstall, runtime, codex)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mutatePurpose(t, runtime, "Changed after preview")
+	if err = Execute(p); err == nil || !strings.Contains(err.Error(), "confirmed preview") {
+		t.Fatalf("preview race accepted: %v", err)
+	}
+	if _, err = os.Stat(filepath.Join(codex, "AGENTS.md")); !os.IsNotExist(err) {
+		t.Fatalf("preview race mutated target: %v", err)
+	}
+}
+
+func TestExecuteRefusesManagedTargetSwapAtMutationBoundary(t *testing.T) {
+	runtime, codex := installFixture(t)
+	mutatePurpose(t, runtime, "Changed generation")
+	p, err := Plan(ActionUpgrade, runtime, codex)
+	if err != nil {
+		t.Fatal(err)
+	}
+	faultHook = func(phase string) error {
+		if phase == "mutating" {
+			return os.WriteFile(filepath.Join(codex, "AGENTS.md"), []byte("concurrent foreign bytes"), 0600)
+		}
+		return nil
+	}
+	t.Cleanup(func() { faultHook = nil })
+	if err = Execute(p); err == nil || !strings.Contains(err.Error(), "changed before mutation") {
+		t.Fatalf("managed target race accepted: %v", err)
+	}
+	faultHook = nil
+	if err = Recover(codex); err == nil || !strings.Contains(err.Error(), "neither journal generation") {
+		t.Fatalf("recovery adopted concurrent bytes: %v", err)
+	}
+	got, _ := os.ReadFile(filepath.Join(codex, "AGENTS.md"))
+	if string(got) != "concurrent foreign bytes" {
+		t.Fatalf("concurrent bytes changed: %q", got)
+	}
+}
+
+func TestRepairRefusesChangedSourceAndRestoresCanonicalBytes(t *testing.T) {
+	runtime, codex := installFixture(t)
+	projection := filepath.Join(codex, "AGENTS.md")
+	if err := os.WriteFile(projection, []byte("drift"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	mutatePurpose(t, runtime, "Changed source")
+	if _, err := Plan(ActionRepair, runtime, codex); err == nil || !strings.Contains(err.Error(), "recorded source changed") {
+		t.Fatalf("repair upgraded changed source: %v", err)
+	}
+	mutatePurpose(t, runtime, "Help with careful work")
+	p, err := Plan(ActionRepair, runtime, codex)
+	if err != nil || Execute(p) != nil {
+		t.Fatalf("repair failed: %v", err)
+	}
+	got, _ := os.ReadFile(projection)
+	if string(got) == "drift" {
+		t.Fatal("repair did not restore canonical generation")
+	}
+}
+
+func TestManifestAuthorityIsStrict(t *testing.T) {
+	_, codex := installFixture(t)
+	path := filepath.Join(codex, controlDir, manifestFile)
+	b, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b = bytes.Replace(b, []byte("\n}"), []byte(",\n  \"foreign\": true\n}"), 1)
+	if err = os.WriteFile(path, b, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if s, _ := Inspect("", codex); s.State != StateCollision {
+		t.Fatalf("unknown manifest authority accepted: %s", s.State)
+	}
+}
+
+func TestPostInstallOverrideIsUnhealthy(t *testing.T) {
+	_, codex := installFixture(t)
+	if err := os.WriteFile(filepath.Join(codex, "AGENTS.override.md"), []byte("shadow"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if s, _ := Inspect("", codex); s.State != StateCollision || !strings.Contains(s.Detail, "shadows") {
+		t.Fatalf("shadowing state=%s detail=%q", s.State, s.Detail)
+	}
+}
+
+func TestRollbackAndUninstallDoNotRequireSource(t *testing.T) {
+	runtime, codex := installFixture(t)
+	mutatePurpose(t, runtime, "Second generation")
+	p, err := Plan(ActionUpgrade, runtime, codex)
+	if err != nil || Execute(p) != nil {
+		t.Fatalf("upgrade: %v", err)
+	}
+	if err = os.Rename(runtime, runtime+"-gone"); err != nil {
+		t.Fatal(err)
+	}
+	p, err = Plan(ActionRollback, "", codex)
+	if err != nil || Execute(p) != nil {
+		t.Fatalf("source-independent rollback: %v", err)
+	}
+	p, err = Plan(ActionUninstall, "", codex)
+	if err != nil || Execute(p) != nil {
+		t.Fatalf("source-independent uninstall: %v", err)
+	}
+}
+
+func TestRecoveryAtEveryDurablePhase(t *testing.T) {
+	phases := []string{"prepared", "mutating", "projection-written", "canonical-written", "previous-written", "manifest-written", "committed"}
+	for _, phase := range phases {
+		t.Run(phase, func(t *testing.T) {
+			runtime, codex := installFixture(t)
+			mutatePurpose(t, runtime, "New generation")
+			p, err := Plan(ActionUpgrade, runtime, codex)
+			if err != nil {
+				t.Fatal(err)
+			}
+			faultHook = func(got string) error {
+				if got == phase {
+					return errors.New("injected interruption")
+				}
+				return nil
+			}
+			t.Cleanup(func() { faultHook = nil })
+			if err = Execute(p); err == nil {
+				t.Fatal("fault did not interrupt")
+			}
+			faultHook = nil
+			if err = Recover(codex); err != nil {
+				t.Fatal(err)
+			}
+			s, _ := Inspect("", codex)
+			if s.State != StateHealthy && s.State != StateSourceDrift {
+				t.Fatalf("unrecovered state: %s", s.State)
+			}
+			if _, err = os.Stat(filepath.Join(codex, controlDir, journalFile)); !os.IsNotExist(err) {
+				t.Fatalf("journal remains: %v", err)
+			}
+		})
 	}
 }

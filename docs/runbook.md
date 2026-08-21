@@ -45,6 +45,9 @@ my-friday codex recover --transaction "$CODEX_HOME/.my-friday/transaction.json"
 ```
 
 Recovery recognizes a complete manifest-consistent operation or restores the
-stored pre-change projection and manifest. If exact proof is unavailable,
+stored projection, manifest, canonical, and previous generations. If exact
+proof is unavailable,
 preserve `.my-friday` and `AGENTS.md` for diagnosis. Never manually adopt or
 delete a foreign file, shadowing override, symlink, hard link, or control tree.
+Any unrecognized entry inside `.my-friday` blocks both mutation and recovery;
+preserve it for diagnosis rather than deleting the control directory.

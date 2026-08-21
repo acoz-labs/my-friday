@@ -1,9 +1,8 @@
 // Package codexhome manages the deliberately tiny installed Codex baseline.
-// Its authority is limited to AGENTS.md and .my-friday beneath an injected
-// Codex home; it never enumerates or edits unrelated Codex state.
 package codexhome
 
 import (
+	"bytes"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
@@ -13,6 +12,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/acoz-labs/my-friday/internal/profile"
@@ -21,13 +21,14 @@ import (
 )
 
 const (
-	controlDir             = ".my-friday"
-	manifestFile           = "installed-baseline.json"
-	previousFile           = "previous-AGENTS.md"
-	journalFile            = "transaction.json"
-	recoveryProjectionFile = "recovery-AGENTS.md"
-	recoveryManifestFile   = "recovery-manifest.json"
+	controlDir    = ".my-friday"
+	manifestFile  = "installed-baseline.json"
+	previousFile  = "previous-AGENTS.md"
+	canonicalFile = "canonical-AGENTS.md"
+	journalFile   = "transaction.json"
 )
+
+var managedControlNames = map[string]bool{manifestFile: true, previousFile: true, canonicalFile: true, journalFile: true}
 
 type Action string
 
@@ -55,13 +56,24 @@ type Status struct {
 	Detail string
 }
 type Change struct{ Operation, Path, SHA256 string }
+type fileProof struct {
+	Exists bool   `json:"exists"`
+	SHA256 string `json:"sha256,omitempty"`
+	Bytes  []byte `json:"bytes,omitempty"`
+}
+type rootProof struct {
+	Device uint64 `json:"device"`
+	Inode  uint64 `json:"inode"`
+}
 type PlanResult struct {
-	Action             Action
-	Runtime, CodexHome string
-	Changes            []Change
-	NegativeActions    []string
-	projection         []byte
-	manifest           manifest
+	Action               Action
+	Runtime, CodexHome   string
+	Changes              []Change
+	NegativeActions      []string
+	projection, previous []byte
+	manifest             manifest
+	root                 rootProof
+	before               map[string]fileProof
 }
 
 func (p PlanResult) String() string {
@@ -82,6 +94,7 @@ type manifest struct {
 	ProjectionSHA256 string `json:"projection_sha256"`
 	SourcePath       string `json:"source_path"`
 	SourceSHA256     string `json:"source_sha256"`
+	CanonicalSHA256  string `json:"canonical_sha256"`
 	PreviousSHA256   string `json:"previous_sha256,omitempty"`
 }
 type runtimeManifest struct {
@@ -90,92 +103,222 @@ type runtimeManifest struct {
 	AssistantID     string `json:"assistant_id"`
 }
 type journal struct {
-	ContractVersion int    `json:"contract_version"`
-	Action          Action `json:"action"`
-	Phase           string `json:"phase"`
+	ContractVersion int                  `json:"contract_version"`
+	Action          Action               `json:"action"`
+	Phase           string               `json:"phase"`
+	Root            rootProof            `json:"root"`
+	Before          map[string]fileProof `json:"before"`
+	After           map[string]fileProof `json:"after"`
 }
 
+// faultHook is test-only deterministic crash injection after durable phases.
+var faultHook func(string) error
+
 func digest(b []byte) string { h := sha256.Sum256(b); return hex.EncodeToString(h[:]) }
+func validDigest(s string) bool {
+	_, e := hex.DecodeString(s)
+	return len(s) == 64 && e == nil && s == strings.ToLower(s)
+}
 func paths(home string) (string, string, string, string) {
 	return filepath.Join(home, "AGENTS.md"), filepath.Join(home, controlDir, manifestFile), filepath.Join(home, controlDir, previousFile), filepath.Join(home, controlDir, journalFile)
 }
-func safeRegular(path string) ([]byte, error) {
-	fd, err := unix.Open(path, unix.O_RDONLY|unix.O_CLOEXEC|unix.O_NOFOLLOW, 0)
-	if err != nil {
-		return nil, err
+
+type homeRoot struct {
+	fd    int
+	path  string
+	proof rootProof
+}
+
+func (r *homeRoot) close() {
+	if r != nil && r.fd >= 0 {
+		_ = unix.Close(r.fd)
+		r.fd = -1
 	}
-	f := os.NewFile(uintptr(fd), path)
-	defer f.Close()
+}
+func openHome(home string) (*homeRoot, error) {
+	if home == "" {
+		return nil, errors.New("Codex home is required")
+	}
+	abs, e := filepath.Abs(home)
+	if e != nil {
+		return nil, e
+	}
+	abs = filepath.Clean(abs)
+	// macOS exposes /var as a system-owned compatibility symlink to
+	// /private/var. Resolve only that fixed platform alias; user-controlled
+	// ancestor symlinks remain forbidden by the component walk below.
+	if abs == "/var" || strings.HasPrefix(abs, "/var/") {
+		abs = filepath.Join("/private/var", strings.TrimPrefix(abs, "/var/"))
+	}
+	fd, e := unix.Open("/", unix.O_RDONLY|unix.O_DIRECTORY|unix.O_CLOEXEC|unix.O_NOFOLLOW, 0)
+	if e != nil {
+		return nil, e
+	}
+	for _, part := range strings.Split(strings.TrimPrefix(abs, "/"), "/") {
+		if part == "" {
+			continue
+		}
+		next, x := unix.Openat(fd, part, unix.O_RDONLY|unix.O_DIRECTORY|unix.O_CLOEXEC|unix.O_NOFOLLOW, 0)
+		_ = unix.Close(fd)
+		if x != nil {
+			return nil, fmt.Errorf("Codex home path component %q is unsafe: %w", part, x)
+		}
+		fd = next
+	}
 	var st unix.Stat_t
-	if err = unix.Fstat(fd, &st); err != nil {
-		return nil, err
-	}
-	if st.Mode&unix.S_IFMT != unix.S_IFREG {
-		return nil, fmt.Errorf("unsafe non-regular path: %s", path)
-	}
-	if st.Nlink != 1 {
-		return nil, fmt.Errorf("unsafe linked path: %s", path)
+	if e = unix.Fstat(fd, &st); e != nil {
+		_ = unix.Close(fd)
+		return nil, e
 	}
 	if st.Uid != uint32(os.Getuid()) {
-		return nil, fmt.Errorf("unsafe foreign owner: %s", path)
+		_ = unix.Close(fd)
+		return nil, errors.New("Codex home must be owned by current user")
 	}
-	if st.Mode&0777 != 0600 {
-		return nil, fmt.Errorf("unsafe file mode: %s", path)
+	return &homeRoot{fd, abs, rootProof{uint64(st.Dev), uint64(st.Ino)}}, nil
+}
+func canonicalHome(home string) (string, error) {
+	r, e := openHome(home)
+	if e != nil {
+		return "", e
+	}
+	defer r.close()
+	return r.path, nil
+}
+func openControl(r *homeRoot, create bool) (int, error) {
+	fd, e := unix.Openat(r.fd, controlDir, unix.O_RDONLY|unix.O_DIRECTORY|unix.O_CLOEXEC|unix.O_NOFOLLOW, 0)
+	if e == nil {
+		var st unix.Stat_t
+		if x := unix.Fstat(fd, &st); x != nil || st.Uid != uint32(os.Getuid()) || st.Mode&0777 != 0700 {
+			_ = unix.Close(fd)
+			return -1, errors.New("unsafe control directory owner or mode")
+		}
+		return fd, nil
+	}
+	if !create {
+		return fd, e
+	}
+	if !errors.Is(e, unix.ENOENT) {
+		return -1, e
+	}
+	if e = unix.Mkdirat(r.fd, controlDir, 0700); e != nil && !errors.Is(e, unix.EEXIST) {
+		return -1, e
+	}
+	return openControl(r, false)
+}
+func readRegularAt(dirfd int, name string) ([]byte, error) {
+	fd, e := unix.Openat(dirfd, name, unix.O_RDONLY|unix.O_CLOEXEC|unix.O_NOFOLLOW, 0)
+	if e != nil {
+		return nil, e
+	}
+	f := os.NewFile(uintptr(fd), name)
+	defer f.Close()
+	var st unix.Stat_t
+	if e = unix.Fstat(fd, &st); e != nil {
+		return nil, e
+	}
+	if st.Mode&unix.S_IFMT != unix.S_IFREG || st.Nlink != 1 || st.Uid != uint32(os.Getuid()) || st.Mode&0777 != 0600 {
+		return nil, fmt.Errorf("unsafe managed file: %s", name)
 	}
 	return io.ReadAll(f)
 }
-func canonicalHome(home string) (string, error) {
-	if home == "" {
-		return "", errors.New("Codex home is required")
+func safeRegular(path string) ([]byte, error) {
+	d, e := os.Open(filepath.Dir(path))
+	if e != nil {
+		return nil, e
 	}
-	abs, err := filepath.Abs(home)
-	if err != nil {
-		return "", err
+	defer d.Close()
+	return readRegularAt(int(d.Fd()), filepath.Base(path))
+}
+func lstatAt(fd int, name string) (unix.Stat_t, error) {
+	var st unix.Stat_t
+	e := unix.Fstatat(fd, name, &st, unix.AT_SYMLINK_NOFOLLOW)
+	return st, e
+}
+func proofAt(fd int, name string) (fileProof, error) {
+	b, e := readRegularAt(fd, name)
+	if errors.Is(e, unix.ENOENT) {
+		return fileProof{}, nil
+	}
+	if e != nil {
+		return fileProof{}, e
+	}
+	return fileProof{true, digest(b), b}, nil
+}
+func controlNames(fd int) ([]string, error) {
+	dup, e := unix.Dup(fd)
+	if e != nil {
+		return nil, e
+	}
+	f := os.NewFile(uintptr(dup), controlDir)
+	defer f.Close()
+	names, e := f.Readdirnames(-1)
+	if e != nil {
+		return nil, e
+	}
+	sort.Strings(names)
+	for _, n := range names {
+		if !managedControlNames[n] {
+			return nil, fmt.Errorf("foreign control-tree entry %q", n)
+		}
+	}
+	return names, nil
+}
+func validateControl(r *homeRoot) error {
+	fd, e := openControl(r, false)
+	if errors.Is(e, unix.ENOENT) {
+		return nil
+	}
+	if e != nil {
+		return fmt.Errorf("unsafe control tree: %w", e)
+	}
+	defer unix.Close(fd)
+	_, e = controlNames(fd)
+	return e
+}
+func strictJSON(b []byte, v any) error {
+	d := json.NewDecoder(bytes.NewReader(b))
+	d.DisallowUnknownFields()
+	if e := d.Decode(v); e != nil {
+		return e
+	}
+	if d.Decode(&struct{}{}) != io.EOF {
+		return errors.New("trailing JSON data")
+	}
+	return nil
+}
+
+func render(runtime string) ([]byte, runtimeManifest, string, error) {
+	abs, e := filepath.Abs(runtime)
+	if e != nil {
+		return nil, runtimeManifest{}, "", e
+	}
+	abs, e = filepath.EvalSymlinks(filepath.Clean(abs))
+	if e != nil {
+		return nil, runtimeManifest{}, "", e
 	}
 	abs = filepath.Clean(abs)
-	i, err := os.Lstat(abs)
-	if err != nil {
-		return "", fmt.Errorf("Codex home must already exist: %w", err)
+	id, e := repository.ValidateRuntime(abs)
+	if e != nil {
+		return nil, runtimeManifest{}, "", fmt.Errorf("runtime repository: %w", e)
 	}
-	if !i.IsDir() || i.Mode()&os.ModeSymlink != 0 {
-		return "", errors.New("Codex home must be a non-symlink directory")
-	}
-	var st unix.Stat_t
-	if err = unix.Stat(abs, &st); err != nil {
-		return "", err
-	}
-	if st.Uid != uint32(os.Getuid()) {
-		return "", errors.New("Codex home must be owned by the current user")
-	}
-	return abs, nil
-}
-func render(runtime string) ([]byte, runtimeManifest, error) {
-	abs, err := filepath.Abs(runtime)
-	if err != nil {
-		return nil, runtimeManifest{}, err
-	}
-	assistantID, err := repository.ValidateRuntime(abs)
-	if err != nil {
-		return nil, runtimeManifest{}, fmt.Errorf("runtime repository: %w", err)
-	}
-	mb, err := safeRegular(filepath.Join(abs, ".my-friday", "manifest.json"))
-	if err != nil {
-		return nil, runtimeManifest{}, fmt.Errorf("runtime manifest: %w", err)
+	mb, e := safeRegular(filepath.Join(abs, ".my-friday", "manifest.json"))
+	if e != nil {
+		return nil, runtimeManifest{}, "", fmt.Errorf("runtime manifest: %w", e)
 	}
 	var rm runtimeManifest
 	if json.Unmarshal(mb, &rm) != nil || rm.ContractVersion != 1 || rm.RepositoryRole != "runtime" || !strings.HasPrefix(rm.AssistantID, "asst-") {
-		return nil, rm, errors.New("runtime repository manifest is incompatible")
+		return nil, rm, "", errors.New("runtime repository manifest is incompatible")
 	}
-	if rm.AssistantID != assistantID {
-		return nil, rm, errors.New("runtime assistant identity mismatch")
+	if rm.AssistantID != id {
+		return nil, rm, "", errors.New("runtime assistant identity mismatch")
 	}
-	pb, err := safeRegular(filepath.Join(abs, "assistant", "profile.json"))
-	if err != nil {
-		return nil, rm, err
+	pb, e := safeRegular(filepath.Join(abs, "assistant", "profile.json"))
+	if e != nil {
+		return nil, rm, "", e
 	}
 	var p profile.Profile
-	if json.Unmarshal(pb, &p) != nil || profile.Validate(p) != nil || p.AssistantID != assistantID {
-		return nil, rm, errors.New("runtime profile is incompatible")
+	if json.Unmarshal(pb, &p) != nil || profile.Validate(p) != nil || p.AssistantID != id {
+		return nil, rm, "", errors.New("runtime profile is incompatible")
 	}
 	var out strings.Builder
 	out.WriteString("# Managed Assistant Instructions\n\n")
@@ -188,368 +331,553 @@ func render(runtime string) ([]byte, runtimeManifest, error) {
 		fmt.Fprintf(&out, " — %s", *p.Communication.CustomGuidance)
 	}
 	out.WriteString(".\n\nThese presentation preferences never override authorization, safety, trust, privacy, or tool policy.\n")
-	return []byte(out.String()), rm, nil
+	return []byte(out.String()), rm, abs, nil
 }
-func loadManifest(path string) (manifest, error) {
-	b, err := safeRegular(path)
-	if err != nil {
-		return manifest{}, err
+func validateManifest(m manifest) error {
+	if m.ContractVersion != 1 || !strings.HasPrefix(m.AssistantID, "asst-") || len(m.AssistantID) <= 5 {
+		return errors.New("identity invariant")
+	}
+	if !validDigest(m.ProjectionSHA256) || !validDigest(m.SourceSHA256) || !validDigest(m.CanonicalSHA256) {
+		return errors.New("digest invariant")
+	}
+	if m.ProjectionSHA256 != m.SourceSHA256 || m.ProjectionSHA256 != m.CanonicalSHA256 {
+		return errors.New("active invariant")
+	}
+	if m.PreviousSHA256 != "" && (!validDigest(m.PreviousSHA256) || m.PreviousSHA256 == m.ProjectionSHA256) {
+		return errors.New("previous invariant")
+	}
+	if !filepath.IsAbs(m.SourcePath) || filepath.Clean(m.SourcePath) != m.SourcePath {
+		return errors.New("source path invariant")
+	}
+	return nil
+}
+func loadManifestAt(fd int) (manifest, error) {
+	b, e := readRegularAt(fd, manifestFile)
+	if e != nil {
+		return manifest{}, e
 	}
 	var m manifest
-	if json.Unmarshal(b, &m) != nil || m.ContractVersion != 1 || m.AssistantID == "" || len(m.ProjectionSHA256) != 64 {
-		return m, errors.New("installed manifest is incompatible")
+	if strictJSON(b, &m) != nil || validateManifest(m) != nil {
+		return manifest{}, errors.New("installed manifest is incompatible")
 	}
 	return m, nil
 }
+func loadManifest(path string) (manifest, error) {
+	b, e := safeRegular(path)
+	if e != nil {
+		return manifest{}, e
+	}
+	var m manifest
+	if strictJSON(b, &m) != nil || validateManifest(m) != nil {
+		return manifest{}, errors.New("installed manifest is incompatible")
+	}
+	return m, nil
+}
+
+func inspectRoot(r *homeRoot, runtime string, checkSource bool) (Status, manifest, error) {
+	if e := validateControl(r); e != nil {
+		return Status{StateCollision, e.Error()}, manifest{}, nil
+	}
+	if _, e := lstatAt(r.fd, "AGENTS.override.md"); e == nil {
+		return Status{StateCollision, "AGENTS.override.md shadows the managed projection"}, manifest{}, nil
+	} else if !errors.Is(e, unix.ENOENT) {
+		return Status{}, manifest{}, e
+	}
+	cfd, ce := openControl(r, false)
+	_, pe := lstatAt(r.fd, "AGENTS.md")
+	if ce == nil {
+		defer unix.Close(cfd)
+		if _, je := lstatAt(cfd, journalFile); je == nil {
+			return Status{StateInterrupted, "transaction journal exists"}, manifest{}, nil
+		}
+	}
+	if errors.Is(pe, unix.ENOENT) && errors.Is(ce, unix.ENOENT) {
+		return Status{StateNotInstalled, "no managed projection"}, manifest{}, nil
+	}
+	if pe != nil || ce != nil {
+		return Status{StateCollision, "projection and ownership control tree disagree"}, manifest{}, nil
+	}
+	m, e := loadManifestAt(cfd)
+	if e != nil {
+		return Status{StateCollision, e.Error()}, manifest{}, nil
+	}
+	projection, e := readRegularAt(r.fd, "AGENTS.md")
+	if e != nil {
+		return Status{StateCollision, e.Error()}, manifest{}, nil
+	}
+	canonical, e := readRegularAt(cfd, canonicalFile)
+	if e != nil || digest(canonical) != m.CanonicalSHA256 {
+		return Status{StateCollision, "canonical generation disagrees with manifest"}, manifest{}, nil
+	}
+	prev, e := proofAt(cfd, previousFile)
+	if e != nil || prev.Exists != (m.PreviousSHA256 != "") || (prev.Exists && prev.SHA256 != m.PreviousSHA256) {
+		return Status{StateCollision, "previous generation disagrees with manifest"}, manifest{}, nil
+	}
+	if digest(projection) != m.ProjectionSHA256 {
+		return Status{StateDrift, "projection digest differs from manifest"}, m, nil
+	}
+	if checkSource {
+		if runtime == "" {
+			runtime = m.SourcePath
+		}
+		rb, rm, source, re := render(runtime)
+		if re != nil || rm.AssistantID != m.AssistantID || source != m.SourcePath || digest(rb) != m.SourceSHA256 {
+			return Status{StateSourceDrift, "installed state is healthy but source differs"}, m, nil
+		}
+	}
+	return Status{StateHealthy, "manifest, canonical generation, and projection agree"}, m, nil
+}
 func Inspect(runtime, home string) (Status, error) {
-	h, err := canonicalHome(home)
-	if err != nil {
-		return Status{}, err
+	r, e := openHome(home)
+	if e != nil {
+		return Status{}, e
 	}
-	projection, mp, _, jp := paths(h)
-	control := filepath.Join(h, controlDir)
-	if _, err = os.Lstat(jp); err == nil {
-		return Status{StateInterrupted, "transaction journal exists"}, nil
+	defer r.close()
+	s, _, e := inspectRoot(r, runtime, true)
+	return s, e
+}
+func snapshot(r *homeRoot) (map[string]fileProof, error) {
+	out := map[string]fileProof{}
+	p, e := proofAt(r.fd, "AGENTS.md")
+	if e != nil {
+		return nil, e
 	}
-	_, pe := os.Lstat(projection)
-	_, me := os.Lstat(mp)
-	_, ce := os.Lstat(control)
-	if os.IsNotExist(pe) && os.IsNotExist(me) {
-		if ce == nil {
-			return Status{StateCollision, "foreign .my-friday control namespace"}, nil
+	out["projection"] = p
+	cfd, e := openControl(r, false)
+	if errors.Is(e, unix.ENOENT) {
+		for _, k := range []string{"manifest", "canonical", "previous"} {
+			out[k] = fileProof{}
 		}
-		return Status{StateNotInstalled, "no managed projection"}, nil
+		return out, nil
 	}
-	if pe != nil || me != nil {
-		return Status{StateCollision, "projection and ownership manifest disagree"}, nil
+	if e != nil {
+		return nil, e
 	}
-	m, err := loadManifest(mp)
-	if err != nil {
-		return Status{StateCollision, err.Error()}, nil
+	defer unix.Close(cfd)
+	for k, n := range map[string]string{"manifest": manifestFile, "canonical": canonicalFile, "previous": previousFile} {
+		p, e = proofAt(cfd, n)
+		if e != nil {
+			return nil, e
+		}
+		out[k] = p
 	}
-	b, err := safeRegular(projection)
-	if err != nil {
-		return Status{StateCollision, err.Error()}, nil
+	return out, nil
+}
+func proofsEqual(a, b map[string]fileProof) bool {
+	if len(a) != len(b) {
+		return false
 	}
-	if digest(b) != m.ProjectionSHA256 {
-		return Status{StateDrift, "projection digest differs from manifest"}, nil
-	}
-	if runtime == "" {
-		runtime = m.SourcePath
-	}
-	if runtime != "" {
-		rb, rm, re := render(runtime)
-		if re != nil || rm.AssistantID != m.AssistantID || digest(rb) != m.SourceSHA256 {
-			return Status{StateSourceDrift, "installed state is healthy but source differs"}, nil
+	for k, v := range a {
+		w, ok := b[k]
+		if !ok || v.Exists != w.Exists || v.SHA256 != w.SHA256 || !bytes.Equal(v.Bytes, w.Bytes) {
+			return false
 		}
 	}
-	return Status{StateHealthy, "manifest and projection agree"}, nil
+	return true
+}
+func planEqual(a, b PlanResult) bool {
+	return a.Action == b.Action && a.Runtime == b.Runtime && a.CodexHome == b.CodexHome && a.root == b.root && bytes.Equal(a.projection, b.projection) && bytes.Equal(a.previous, b.previous) && a.manifest == b.manifest && proofsEqual(a.before, b.before) && fmt.Sprint(a.Changes) == fmt.Sprint(b.Changes)
 }
 
 func Plan(action Action, runtime, home string) (PlanResult, error) {
-	h, err := canonicalHome(home)
-	if err != nil {
-		return PlanResult{}, err
+	r, e := openHome(home)
+	if e != nil {
+		return PlanResult{}, e
 	}
-	projection, mp, pp, _ := paths(h)
-	s, err := Inspect(runtime, h)
-	if err != nil {
-		return PlanResult{}, err
+	defer r.close()
+	check := action == ActionInstall || action == ActionRepair || action == ActionUpgrade
+	s, m, e := inspectRoot(r, runtime, check)
+	if e != nil {
+		return PlanResult{}, e
 	}
-	p := PlanResult{Action: action, Runtime: runtime, CodexHome: h, NegativeActions: []string{"edit config.toml, auth, sessions, logs, skills, packages, or project configuration", "start a daemon, use the network, or request privilege"}}
+	p := PlanResult{Action: action, Runtime: runtime, CodexHome: r.path, root: r.proof, NegativeActions: []string{"edit config.toml, auth, sessions, logs, skills, packages, or project configuration", "start a daemon, use the network, or request privilege"}}
+	p.before, e = snapshot(r)
+	if e != nil {
+		return p, e
+	}
+	projection, mp, pp, _ := paths(r.path)
 	switch action {
 	case ActionInstall:
 		if s.State != StateNotInstalled {
 			return p, fmt.Errorf("install refused: %s", s.State)
 		}
-		if _, e := os.Lstat(filepath.Join(h, "AGENTS.override.md")); e == nil {
-			return p, errors.New("install refused: AGENTS.override.md would shadow the managed projection")
-		} else if !os.IsNotExist(e) {
+		var rm runtimeManifest
+		p.projection, rm, p.Runtime, e = render(runtime)
+		if e != nil {
 			return p, e
 		}
-		p.projection, _, err = render(runtime)
-		if err != nil {
-			return p, err
-		}
-		var rm runtimeManifest
-		_, rm, _ = render(runtime)
-		p.manifest = manifest{1, rm.AssistantID, digest(p.projection), runtime, digest(p.projection), ""}
-		p.Changes = []Change{{"create", projection, digest(p.projection)}, {"create", mp, "manifest"}}
+		sha := digest(p.projection)
+		p.manifest = manifest{1, rm.AssistantID, sha, p.Runtime, sha, sha, ""}
+		p.Changes = []Change{{"create", projection, sha}, {"create", mp, "manifest"}, {"create", filepath.Join(r.path, controlDir, canonicalFile), sha}}
 	case ActionRepair:
 		if s.State != StateDrift {
 			return p, fmt.Errorf("repair requires managed drift; found %s", s.State)
 		}
-		old, e := loadManifest(mp)
-		if e != nil {
-			return p, e
+		cfd, x := openControl(r, false)
+		if x != nil {
+			return p, x
 		}
-		if runtime == "" {
-			runtime = old.SourcePath
-			p.Runtime = runtime
+		p.projection, x = readRegularAt(cfd, canonicalFile)
+		unix.Close(cfd)
+		if x != nil {
+			return p, x
 		}
-		var rm runtimeManifest
-		p.projection, rm, e = render(runtime)
-		if e != nil {
-			return p, e
+		rb, rm, source, x := render(runtime)
+		if x != nil || rm.AssistantID != m.AssistantID || source != m.SourcePath || digest(rb) != m.SourceSHA256 {
+			return p, errors.New("repair refused: recorded source changed")
 		}
-		if rm.AssistantID != old.AssistantID {
-			return p, errors.New("assistant identity mismatch")
-		}
-		p.manifest = old
-		p.manifest.ProjectionSHA256 = digest(p.projection)
-		p.manifest.SourceSHA256 = digest(p.projection)
-		p.manifest.SourcePath = runtime
-		p.Changes = []Change{{"replace drifted managed file", projection, digest(p.projection)}}
+		p.Runtime = source
+		p.manifest = m
+		p.Changes = []Change{{"restore manifest-proven bytes", projection, m.ProjectionSHA256}}
 	case ActionUpgrade:
 		if s.State != StateSourceDrift {
 			return p, fmt.Errorf("upgrade requires healthy installed state and changed source; found %s", s.State)
 		}
-		old, e := loadManifest(mp)
-		if e != nil {
-			return p, e
-		}
-		current, e := safeRegular(projection)
-		if e != nil {
-			return p, e
+		current, x := readRegularAt(r.fd, "AGENTS.md")
+		if x != nil {
+			return p, x
 		}
 		var rm runtimeManifest
-		p.projection, rm, e = render(runtime)
-		if e != nil {
-			return p, e
+		p.projection, rm, p.Runtime, x = render(runtime)
+		if x != nil {
+			return p, x
 		}
-		if rm.AssistantID != old.AssistantID {
+		if rm.AssistantID != m.AssistantID {
 			return p, errors.New("assistant identity mismatch")
 		}
-		p.manifest = old
+		p.previous = current
+		sha := digest(p.projection)
+		p.manifest = m
 		p.manifest.PreviousSHA256 = digest(current)
-		p.manifest.ProjectionSHA256 = digest(p.projection)
-		p.manifest.SourceSHA256 = digest(p.projection)
-		p.manifest.SourcePath = runtime
-		p.Changes = []Change{{"store previous", pp, digest(current)}, {"replace", projection, digest(p.projection)}}
+		p.manifest.ProjectionSHA256 = sha
+		p.manifest.SourceSHA256 = sha
+		p.manifest.CanonicalSHA256 = sha
+		p.manifest.SourcePath = p.Runtime
+		p.Changes = []Change{{"store previous", pp, digest(current)}, {"replace", projection, sha}, {"replace", filepath.Join(r.path, controlDir, canonicalFile), sha}}
 	case ActionRollback:
-		if s.State != StateHealthy && s.State != StateSourceDrift {
+		if s.State != StateHealthy {
 			return p, fmt.Errorf("rollback refused: %s", s.State)
 		}
-		old, e := loadManifest(mp)
-		if e != nil {
-			return p, e
-		}
-		if old.PreviousSHA256 == "" {
+		if m.PreviousSHA256 == "" {
 			return p, errors.New("no rollback generation")
 		}
-		p.projection, e = safeRegular(pp)
-		if e != nil || digest(p.projection) != old.PreviousSHA256 {
+		cfd, x := openControl(r, false)
+		if x != nil {
+			return p, x
+		}
+		p.projection, x = readRegularAt(cfd, previousFile)
+		unix.Close(cfd)
+		if x != nil || digest(p.projection) != m.PreviousSHA256 {
 			return p, errors.New("rollback generation is not manifest-verified")
 		}
-		p.manifest = old
-		p.manifest.ProjectionSHA256 = old.PreviousSHA256
-		p.manifest.SourceSHA256 = old.PreviousSHA256
+		p.manifest = m
+		p.manifest.ProjectionSHA256 = m.PreviousSHA256
+		p.manifest.SourceSHA256 = m.PreviousSHA256
+		p.manifest.CanonicalSHA256 = m.PreviousSHA256
 		p.manifest.PreviousSHA256 = ""
-		p.Changes = []Change{{"restore", projection, digest(p.projection)}, {"remove", pp, ""}}
+		p.Changes = []Change{{"restore", projection, digest(p.projection)}, {"replace", filepath.Join(r.path, controlDir, canonicalFile), digest(p.projection)}, {"remove", pp, ""}}
 	case ActionUninstall:
-		if s.State != StateHealthy && s.State != StateSourceDrift {
+		if s.State != StateHealthy {
 			return p, fmt.Errorf("uninstall refused: %s", s.State)
 		}
-		p.manifest, err = loadManifest(mp)
-		if err != nil {
-			return p, err
-		}
-		p.Changes = []Change{{"remove", projection, p.manifest.ProjectionSHA256}, {"remove", filepath.Join(h, controlDir), ""}}
+		p.manifest = m
+		p.Changes = []Change{{"remove", projection, m.ProjectionSHA256}, {"remove proven managed entries", filepath.Join(r.path, controlDir), ""}}
 	default:
 		return p, fmt.Errorf("unknown action %q", action)
 	}
 	return p, nil
 }
 
-func atomicWrite(path string, b []byte) error {
-	dir := filepath.Dir(path)
-	if err := os.MkdirAll(dir, 0700); err != nil {
-		return err
-	}
-	dirfd, err := unix.Open(dir, unix.O_RDONLY|unix.O_DIRECTORY|unix.O_CLOEXEC|unix.O_NOFOLLOW, 0)
-	if err != nil {
-		return err
-	}
-	defer unix.Close(dirfd)
+func atomicWriteAt(fd int, name string, b []byte) error {
 	random := make([]byte, 12)
-	if _, err = rand.Read(random); err != nil {
-		return err
+	if _, e := rand.Read(random); e != nil {
+		return e
 	}
-	name := ".my-friday-write-" + hex.EncodeToString(random)
-	fd, err := unix.Openat(dirfd, name, unix.O_WRONLY|unix.O_CREAT|unix.O_EXCL|unix.O_CLOEXEC|unix.O_NOFOLLOW, 0600)
-	if err != nil {
-		return err
+	tmp := ".my-friday-write-" + hex.EncodeToString(random)
+	fno, e := unix.Openat(fd, tmp, unix.O_WRONLY|unix.O_CREAT|unix.O_EXCL|unix.O_CLOEXEC|unix.O_NOFOLLOW, 0600)
+	if e != nil {
+		return e
 	}
-	tmp := os.NewFile(uintptr(fd), name)
-	defer unix.Unlinkat(dirfd, name, 0)
-	_, err = tmp.Write(b)
-	if err == nil {
-		err = tmp.Sync()
+	f := os.NewFile(uintptr(fno), tmp)
+	_, e = f.Write(b)
+	if e == nil {
+		e = f.Sync()
 	}
-	if closeErr := tmp.Close(); err == nil {
-		err = closeErr
+	if x := f.Close(); e == nil {
+		e = x
 	}
-	if err != nil {
-		return err
+	if e != nil {
+		_ = unix.Unlinkat(fd, tmp, 0)
+		return e
 	}
-	if err = unix.Renameat(dirfd, name, dirfd, filepath.Base(path)); err != nil {
-		return err
+	if e = unix.Renameat(fd, tmp, fd, name); e != nil {
+		_ = unix.Unlinkat(fd, tmp, 0)
+		return e
 	}
-	return unix.Fsync(dirfd)
+	return unix.Fsync(fd)
 }
-func writeManifest(path string, m manifest) error {
+func writeExclusiveAt(fd int, name string, b []byte) error {
+	n, e := unix.Openat(fd, name, unix.O_WRONLY|unix.O_CREAT|unix.O_EXCL|unix.O_CLOEXEC|unix.O_NOFOLLOW, 0600)
+	if e != nil {
+		return fmt.Errorf("another transaction or recovery is active: %w", e)
+	}
+	f := os.NewFile(uintptr(n), name)
+	_, e = f.Write(b)
+	if e == nil {
+		e = f.Sync()
+	}
+	if x := f.Close(); e == nil {
+		e = x
+	}
+	if e == nil {
+		e = unix.Fsync(fd)
+	}
+	return e
+}
+func manifestBytes(m manifest) []byte {
 	b, _ := json.MarshalIndent(m, "", "  ")
-	return atomicWrite(path, append(b, '\n'))
+	return append(b, '\n')
 }
-
-func writeExclusive(path string, b []byte) error {
-	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
-		return err
+func journalBytes(j journal) []byte { b, _ := json.MarshalIndent(j, "", "  "); return append(b, '\n') }
+func afterProofs(p PlanResult) map[string]fileProof {
+	mk := func(b []byte) fileProof { return fileProof{true, digest(b), b} }
+	if p.Action == ActionUninstall {
+		return map[string]fileProof{"projection": {}, "manifest": {}, "canonical": {}, "previous": {}}
 	}
-	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
-	if err != nil {
-		return fmt.Errorf("another transaction or recovery is active: %w", err)
+	prev := fileProof{}
+	if p.manifest.PreviousSHA256 != "" {
+		prev = mk(p.previous)
 	}
-	if _, err = f.Write(b); err == nil {
-		err = f.Sync()
-	}
-	if closeErr := f.Close(); err == nil {
-		err = closeErr
-	}
-	return err
+	return map[string]fileProof{"projection": mk(p.projection), "manifest": mk(manifestBytes(p.manifest)), "canonical": mk(p.projection), "previous": prev}
 }
-
-func Execute(p PlanResult) error {
-	// Rebuild the plan immediately before mutation to close the preview/use gap.
-	fresh, err := Plan(p.Action, p.Runtime, p.CodexHome)
-	if err != nil {
-		return err
+func setPhase(fd int, j *journal, phase string) error {
+	j.Phase = phase
+	if e := atomicWriteAt(fd, journalFile, journalBytes(*j)); e != nil {
+		return e
 	}
-	projection, mp, pp, jp := paths(p.CodexHome)
-	j, _ := json.Marshal(journal{1, p.Action, "prepared"})
-	if err = writeExclusive(jp, j); err != nil {
-		return err
+	if faultHook != nil {
+		return faultHook(phase)
 	}
-	recoveryProjection := filepath.Join(p.CodexHome, controlDir, recoveryProjectionFile)
-	recoveryManifest := filepath.Join(p.CodexHome, controlDir, recoveryManifestFile)
-	if p.Action != ActionInstall {
-		current, copyErr := safeRegular(projection)
-		if copyErr == nil {
-			copyErr = atomicWrite(recoveryProjection, current)
-		}
-		manifestBytes, manifestErr := safeRegular(mp)
-		if copyErr == nil && manifestErr == nil {
-			copyErr = atomicWrite(recoveryManifest, manifestBytes)
-		}
-		if copyErr != nil || manifestErr != nil {
-			return fmt.Errorf("transaction preparation failed; recovery required at %s", jp)
-		}
-	}
-	complete := false
-	defer func() {
-		if complete {
-			_ = os.Remove(jp)
-		}
-	}()
-	switch p.Action {
-	case ActionInstall:
-		if err = atomicWrite(projection, fresh.projection); err == nil {
-			err = writeManifest(mp, fresh.manifest)
-		}
-	case ActionRepair:
-		if err = atomicWrite(projection, fresh.projection); err == nil {
-			err = writeManifest(mp, fresh.manifest)
-		}
-	case ActionUpgrade:
-		var current []byte
-		current, err = safeRegular(projection)
-		if err == nil {
-			err = atomicWrite(pp, current)
-		}
-		if err == nil {
-			err = atomicWrite(projection, fresh.projection)
-		}
-		if err == nil {
-			err = writeManifest(mp, fresh.manifest)
-		}
-	case ActionRollback:
-		if err = atomicWrite(projection, fresh.projection); err == nil {
-			err = writeManifest(mp, fresh.manifest)
-		}
-		if err == nil {
-			err = os.Remove(pp)
-		}
-	case ActionUninstall:
-		if err = os.Remove(projection); err == nil {
-			err = os.RemoveAll(filepath.Join(p.CodexHome, controlDir))
-		}
-	}
-	if err != nil {
-		return fmt.Errorf("transaction interrupted; recovery required at %s: %w", jp, err)
-	}
-	if err = os.Remove(jp); err != nil && !os.IsNotExist(err) {
-		return err
-	}
-	_ = os.Remove(recoveryProjection)
-	_ = os.Remove(recoveryManifest)
-	complete = true
 	return nil
 }
-
-// Recover is idempotent. Prepared journals precede mutation and can be removed;
-// a later ambiguous state is retained for explicit diagnosis.
-func Recover(home string) error {
-	h, err := canonicalHome(home)
-	if err != nil {
-		return err
+func applyPhase(cfd int, j *journal, phase string, apply func() error) error {
+	if e := apply(); e != nil {
+		return e
 	}
-	_, _, _, jp := paths(h)
-	b, err := safeRegular(jp)
-	if os.IsNotExist(err) {
+	return setPhase(cfd, j, phase)
+}
+func removeAt(fd int, name string) error {
+	e := unix.Unlinkat(fd, name, 0)
+	if errors.Is(e, unix.ENOENT) {
 		return nil
 	}
-	if err != nil {
-		return err
+	return e
+}
+func applyProof(fd int, name string, p fileProof) error {
+	if !p.Exists {
+		return removeAt(fd, name)
 	}
-	var j journal
-	if json.Unmarshal(b, &j) != nil || j.ContractVersion != 1 || j.Phase != "prepared" {
-		return errors.New("recovery refused: incompatible or ambiguous journal")
+	if digest(p.Bytes) != p.SHA256 {
+		return errors.New("journal byte proof failed")
 	}
-	projection, mp, _, _ := paths(h)
-	if j.Action == ActionInstall {
-		if m, manifestErr := loadManifest(mp); manifestErr == nil {
-			if installed, fileErr := safeRegular(projection); fileErr == nil && digest(installed) == m.ProjectionSHA256 {
-				return os.Remove(jp)
+	return atomicWriteAt(fd, name, p.Bytes)
+}
+func proofMatches(fd int, name string, want fileProof) bool {
+	got, e := proofAt(fd, name)
+	return e == nil && got.Exists == want.Exists && got.SHA256 == want.SHA256 && bytes.Equal(got.Bytes, want.Bytes)
+}
+func applyTransition(fd int, name string, before, after fileProof) error {
+	if !proofMatches(fd, name, before) {
+		return fmt.Errorf("managed state changed before mutation: %s", name)
+	}
+	return applyProof(fd, name, after)
+}
+func applyRecovery(fd int, name string, before, after, target fileProof) error {
+	if !proofMatches(fd, name, before) && !proofMatches(fd, name, after) {
+		return fmt.Errorf("recovery refused: %s matches neither journal generation", name)
+	}
+	return applyProof(fd, name, target)
+}
+func Execute(p PlanResult) error {
+	fresh, e := Plan(p.Action, p.Runtime, p.CodexHome)
+	if e != nil {
+		return e
+	}
+	if !planEqual(p, fresh) {
+		return errors.New("execution refused: current state no longer matches confirmed preview")
+	}
+	r, e := openHome(p.CodexHome)
+	if e != nil {
+		return e
+	}
+	defer r.close()
+	if r.proof != p.root {
+		return errors.New("execution refused: Codex home identity changed")
+	}
+	current, e := snapshot(r)
+	if e != nil || !proofsEqual(current, p.before) {
+		return errors.New("execution refused: managed state changed after preview")
+	}
+	cfd, e := openControl(r, true)
+	if e != nil {
+		return e
+	}
+	defer unix.Close(cfd)
+	if _, e = controlNames(cfd); e != nil {
+		return e
+	}
+	j := journal{1, p.Action, "prepared", p.root, p.before, afterProofs(p)}
+	if e = writeExclusiveAt(cfd, journalFile, journalBytes(j)); e != nil {
+		return e
+	}
+	if faultHook != nil {
+		if e = faultHook("prepared"); e != nil {
+			return fmt.Errorf("transaction interrupted; recovery required: %w", e)
+		}
+	}
+	if e = setPhase(cfd, &j, "mutating"); e != nil {
+		return fmt.Errorf("transaction interrupted; recovery required: %w", e)
+	}
+	if e = applyPhase(cfd, &j, "projection-written", func() error {
+		return applyTransition(r.fd, "AGENTS.md", j.Before["projection"], j.After["projection"])
+	}); e == nil {
+		e = applyPhase(cfd, &j, "canonical-written", func() error {
+			return applyTransition(cfd, canonicalFile, j.Before["canonical"], j.After["canonical"])
+		})
+	}
+	if e == nil {
+		e = applyPhase(cfd, &j, "previous-written", func() error {
+			return applyTransition(cfd, previousFile, j.Before["previous"], j.After["previous"])
+		})
+	}
+	if e == nil {
+		e = applyPhase(cfd, &j, "manifest-written", func() error {
+			return applyTransition(cfd, manifestFile, j.Before["manifest"], j.After["manifest"])
+		})
+	}
+	if e != nil {
+		return fmt.Errorf("transaction interrupted; recovery required: %w", e)
+	}
+	if e = setPhase(cfd, &j, "committed"); e != nil {
+		return fmt.Errorf("transaction interrupted; recovery required: %w", e)
+	}
+	if e = removeAt(cfd, journalFile); e != nil {
+		return e
+	}
+	if e = unix.Fsync(cfd); e != nil {
+		return e
+	}
+	if p.Action == ActionUninstall {
+		names, x := controlNames(cfd)
+		if x != nil {
+			return x
+		}
+		if len(names) != 0 {
+			return errors.New("uninstall refused: control tree is not empty")
+		}
+		if x = unix.Unlinkat(r.fd, controlDir, unix.AT_REMOVEDIR); x != nil {
+			return x
+		}
+		return unix.Fsync(r.fd)
+	}
+	return nil
+}
+func validJournal(j journal) error {
+	validPhase := map[string]bool{
+		"prepared": true, "mutating": true, "projection-written": true,
+		"canonical-written": true, "previous-written": true,
+		"manifest-written": true, "committed": true,
+	}
+	if j.ContractVersion != 1 || !validPhase[j.Phase] {
+		return errors.New("incompatible phase")
+	}
+	switch j.Action {
+	case ActionInstall, ActionRepair, ActionUpgrade, ActionRollback, ActionUninstall:
+	default:
+		return errors.New("incompatible action")
+	}
+	for _, set := range []map[string]fileProof{j.Before, j.After} {
+		if len(set) != 4 {
+			return errors.New("incomplete generation set")
+		}
+		for _, k := range []string{"projection", "manifest", "canonical", "previous"} {
+			p, ok := set[k]
+			if !ok {
+				return errors.New("missing generation proof")
+			}
+			if p.Exists {
+				if !validDigest(p.SHA256) || digest(p.Bytes) != p.SHA256 {
+					return errors.New("invalid generation proof")
+				}
+			} else if p.SHA256 != "" || len(p.Bytes) != 0 {
+				return errors.New("invalid absent proof")
 			}
 		}
-		if err := os.Remove(projection); err != nil && !os.IsNotExist(err) {
-			return err
+	}
+	return nil
+}
+func Recover(home string) error {
+	r, e := openHome(home)
+	if e != nil {
+		return e
+	}
+	defer r.close()
+	if e = validateControl(r); e != nil {
+		return e
+	}
+	cfd, e := openControl(r, false)
+	if errors.Is(e, unix.ENOENT) {
+		return nil
+	}
+	if e != nil {
+		return e
+	}
+	defer unix.Close(cfd)
+	b, e := readRegularAt(cfd, journalFile)
+	if errors.Is(e, unix.ENOENT) {
+		return nil
+	}
+	if e != nil {
+		return e
+	}
+	var j journal
+	if strictJSON(b, &j) != nil || validJournal(j) != nil {
+		return errors.New("recovery refused: incompatible or ambiguous journal")
+	}
+	if j.Root != r.proof {
+		return errors.New("recovery refused: Codex home identity changed")
+	}
+	target := j.Before
+	if j.Phase == "committed" {
+		target = j.After
+	}
+	if e = applyRecovery(r.fd, "AGENTS.md", j.Before["projection"], j.After["projection"], target["projection"]); e == nil {
+		e = applyRecovery(cfd, canonicalFile, j.Before["canonical"], j.After["canonical"], target["canonical"])
+	}
+	if e == nil {
+		e = applyRecovery(cfd, previousFile, j.Before["previous"], j.After["previous"], target["previous"])
+	}
+	if e == nil {
+		e = applyRecovery(cfd, manifestFile, j.Before["manifest"], j.After["manifest"], target["manifest"])
+	}
+	if e != nil {
+		return e
+	}
+	if e = removeAt(cfd, journalFile); e != nil {
+		return e
+	}
+	if e = unix.Fsync(cfd); e != nil {
+		return e
+	}
+	names, e := controlNames(cfd)
+	if e != nil {
+		return e
+	}
+	if len(names) == 0 {
+		if e = unix.Unlinkat(r.fd, controlDir, unix.AT_REMOVEDIR); e != nil {
+			return e
 		}
-		return os.RemoveAll(filepath.Join(h, controlDir))
+		return unix.Fsync(r.fd)
 	}
-	if m, manifestErr := loadManifest(mp); manifestErr == nil {
-		if installed, fileErr := safeRegular(projection); fileErr == nil && digest(installed) == m.ProjectionSHA256 {
-			_ = os.Remove(filepath.Join(h, controlDir, recoveryProjectionFile))
-			_ = os.Remove(filepath.Join(h, controlDir, recoveryManifestFile))
-			return os.Remove(jp)
-		}
-	}
-	priorProjection, projectionErr := safeRegular(filepath.Join(h, controlDir, recoveryProjectionFile))
-	priorManifest, manifestErr := safeRegular(filepath.Join(h, controlDir, recoveryManifestFile))
-	if projectionErr != nil || manifestErr != nil {
-		return errors.New("recovery refused: exact pre-change generation is unavailable")
-	}
-	var prior manifest
-	if json.Unmarshal(priorManifest, &prior) != nil || digest(priorProjection) != prior.ProjectionSHA256 {
-		return errors.New("recovery refused: pre-change generation proof failed")
-	}
-	if err := atomicWrite(projection, priorProjection); err != nil {
-		return err
-	}
-	if err := atomicWrite(mp, priorManifest); err != nil {
-		return err
-	}
-	_ = os.Remove(filepath.Join(h, controlDir, recoveryProjectionFile))
-	_ = os.Remove(filepath.Join(h, controlDir, recoveryManifestFile))
-	return os.Remove(jp)
+	return nil
 }

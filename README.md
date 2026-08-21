@@ -41,7 +41,8 @@ preview:
 ./my-friday codex verify
 ```
 
-The confirmation word is the case-sensitive action name. My Friday owns only
+The confirmation word is the exact case-sensitive action name followed by
+Return; surrounding whitespace and unterminated input are refused. My Friday owns only
 `$CODEX_HOME/AGENTS.md` and `$CODEX_HOME/.my-friday`; it never edits Codex
 configuration, authentication, sessions, logs, skills, packages, or project
 configuration. See [the installed-baseline contract](docs/architecture/installed-codex-baseline.md).
