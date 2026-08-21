@@ -842,6 +842,98 @@ func TestInterruptedRecoveryDiscardStageResumes(t *testing.T) {
 	}
 }
 
+func TestFinalJournalDiscardStageBlocksPlanningUntilRecovery(t *testing.T) {
+	runtime, codex := installFixture(t)
+	mutatePurpose(t, runtime, "Final journal discard classification")
+	p, err := Plan(ActionUpgrade, runtime, codex)
+	if err != nil {
+		t.Fatal(err)
+	}
+	faultHook = func(phase string) error {
+		if phase == "mutating" {
+			return errors.New("leave recoverable transaction")
+		}
+		return nil
+	}
+	if err = Execute(p); err == nil {
+		t.Fatal("transaction interruption did not fire")
+	}
+	faultHook = nil
+	recoveryHook = func(point string) error {
+		if point == "final-journal-before-discard-unlink" {
+			return errors.New("interrupt final journal discard")
+		}
+		return nil
+	}
+	if err = Recover(codex); err == nil {
+		t.Fatal("final journal discard interruption did not fire")
+	}
+	recoveryHook = nil
+	t.Cleanup(func() { faultHook = nil; recoveryHook = nil })
+	if s, inspectErr := Inspect(runtime, codex); inspectErr != nil || s.State != StateInterrupted {
+		t.Fatalf("discard state=%s detail=%q err=%v", s.State, s.Detail, inspectErr)
+	}
+	if _, err = Plan(ActionUpgrade, runtime, codex); err == nil {
+		t.Fatal("planning accepted final journal discard authority")
+	}
+	if err = Recover(codex); err != nil {
+		t.Fatalf("discard recovery failed: %v", err)
+	}
+	if err = Recover(codex); err != nil {
+		t.Fatalf("repeat discard recovery failed: %v", err)
+	}
+	if s, inspectErr := Inspect(runtime, codex); inspectErr != nil || s.State == StateInterrupted {
+		t.Fatalf("recovered state=%s detail=%q err=%v", s.State, s.Detail, inspectErr)
+	}
+	if _, statErr := os.Stat(filepath.Join(codex, controlDir, journalDiscard)); !os.IsNotExist(statErr) {
+		t.Fatalf("journal discard stage remains: %v", statErr)
+	}
+}
+
+func TestDetachedMarkerDiscardStageBlocksPlanningUntilRecovery(t *testing.T) {
+	runtime, codex := installFixture(t)
+	p, err := Plan(ActionUninstall, "", codex)
+	if err != nil {
+		t.Fatal(err)
+	}
+	faultHook = func(phase string) error {
+		if phase == "control-detached" {
+			return errors.New("leave detached uninstall")
+		}
+		return nil
+	}
+	if err = Execute(p); err == nil {
+		t.Fatal("detached uninstall interruption did not fire")
+	}
+	faultHook = nil
+	recoveryHook = func(point string) error {
+		if point == "detached-marker-before-discard-unlink" {
+			return errors.New("interrupt detached marker discard")
+		}
+		return nil
+	}
+	if err = Recover(codex); err == nil {
+		t.Fatal("detached marker discard interruption did not fire")
+	}
+	recoveryHook = nil
+	t.Cleanup(func() { faultHook = nil; recoveryHook = nil })
+	if s, inspectErr := Inspect("", codex); inspectErr != nil || s.State != StateInterrupted {
+		t.Fatalf("discard state=%s detail=%q err=%v", s.State, s.Detail, inspectErr)
+	}
+	if _, err = Plan(ActionInstall, runtime, codex); err == nil {
+		t.Fatal("planning accepted detached marker discard authority")
+	}
+	if err = Recover(codex); err != nil {
+		t.Fatalf("detached discard recovery failed: %v", err)
+	}
+	if err = Recover(codex); err != nil {
+		t.Fatalf("repeat detached discard recovery failed: %v", err)
+	}
+	if s, inspectErr := Inspect("", codex); inspectErr != nil || s.State != StateNotInstalled {
+		t.Fatalf("recovered state=%s detail=%q err=%v", s.State, s.Detail, inspectErr)
+	}
+}
+
 func TestDetachedRecoveryPreservesConcurrentJournalReplacement(t *testing.T) {
 	runtime, codex := fixture(t)
 	if err := os.MkdirAll(codex, 0700); err != nil {

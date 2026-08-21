@@ -94,4 +94,5 @@ move to cleanup. If a same-user process replaces an entry between validation
 and mutation, recovery restores the moved entry when safe or retains both
 locations and refuses. Preserve `transaction.json.discard` or
 `.my-friday-removal.json.discard` if reported; rerunning recovery restores a
-valid interrupted cleanup stage before proceeding.
+valid interrupted cleanup stage before proceeding. Either name makes verify
+report `interrupted` and prevents another lifecycle plan until recovery finishes.

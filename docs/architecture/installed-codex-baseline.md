@@ -47,6 +47,9 @@ allowlisted names, then prove the exact moved and displaced bytes. A concurrent
 replacement is restored when that can be proved; otherwise both locations are
 retained and recovery refuses without using stale journal bytes. Interrupted
 cleanup stages are restored to the normal journal slots before recovery resumes.
+The discard-stage names `transaction.json.discard` and
+`.my-friday-removal.json.discard` always classify the installation as
+interrupted and block planning until recovery removes them.
 File replacement uses an atomic swap or exclusive rename so the displaced
 entry can be proved before deletion. Each mutation boundary is durably phased,
 and the complete result is reproved before commit.

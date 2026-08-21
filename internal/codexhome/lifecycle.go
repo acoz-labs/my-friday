@@ -414,6 +414,11 @@ func loadManifest(path string) (manifest, error) {
 }
 
 func inspectRoot(r *homeRoot, runtime string, checkSource bool) (Status, manifest, error) {
+	if _, e := lstatAt(r.fd, removalDiscard); e == nil {
+		return Status{StateInterrupted, "detached cleanup discard stage exists"}, manifest{}, nil
+	} else if !errors.Is(e, unix.ENOENT) {
+		return Status{}, manifest{}, e
+	}
 	if _, e := lstatAt(r.fd, removingDir); e == nil {
 		return Status{StateInterrupted, "committed uninstall cleanup is incomplete"}, manifest{}, nil
 	} else if !errors.Is(e, unix.ENOENT) {
@@ -441,6 +446,9 @@ func inspectRoot(r *homeRoot, runtime string, checkSource bool) (Status, manifes
 		}
 		if _, je := lstatAt(cfd, journalNext); je == nil {
 			return Status{StateInterrupted, "transaction journal publication is incomplete"}, manifest{}, nil
+		}
+		if _, je := lstatAt(cfd, journalDiscard); je == nil {
+			return Status{StateInterrupted, "transaction journal discard stage exists"}, manifest{}, nil
 		}
 	}
 	if errors.Is(pe, unix.ENOENT) && errors.Is(ce, unix.ENOENT) {
