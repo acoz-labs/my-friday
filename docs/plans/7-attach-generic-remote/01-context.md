@@ -141,6 +141,11 @@ background work; Linux, Windows, or Intel support; and changing `init`.
   retained by shell history or process listings because it is an argument.
   Help and preview warn users never to supply credentials. Rejected and
   pre-validation values are never echoed.
+- The direct local value is not necessarily the endpoint a later ordinary Git
+  command resolves. User-owned local, global, or system `url.*.insteadOf` and
+  `pushInsteadOf` rules may rewrite it. Attachment verifies only the stored
+  local address; the preview and receipt must not imply effective-endpoint
+  verification.
 - Network non-use must be executable evidence, not an inference from fixture
   hosts. The production Git observer and acceptance process monitor must prove
   only local inspection/config argv were attempted.

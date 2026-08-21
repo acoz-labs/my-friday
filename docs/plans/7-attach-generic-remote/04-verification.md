@@ -13,6 +13,9 @@ Likely files: `internal/remoteaddress/address_test.go` and additions to
   class, NUL, percent encoding, query, fragment, userinfo/password, unsafe
   username/host/port/path, plaintext schemes, local/file/UNC/drive paths,
   bundles, unknown schemes, `ext::`, and arbitrary helpers.
+- Include leading-option usernames/hosts/paths, malformed DNS labels, numeric-IP
+  lookalikes, empty/`.`/`..` segments, SCP ambiguity, and SSH option-injection
+  shapes such as a generated `-oProxyCommand` token.
 - Generate credential-shaped values only in test memory, assert they never
   reach Git/config/output/evidence, and discard them without printing, hashing,
   snapshotting, or committing a literal sentinel.
@@ -35,10 +38,17 @@ Likely files: `internal/remoteconfig/config_test.go` and
   see only `rev-parse`, `config --local --no-includes`, and one
   `remote add -- origin` operation; no shell, credential, helper, `ls-remote`,
   fetch, push, commit, global/system, or provider command may appear.
+- Run the adapter contract suite against Git 2.28 with an owner-only empty
+  HOME/XDG isolation root and again against native Git. Put hostile global/XDG/
+  system canaries in the invoking test environment and prove they are unread,
+  unchanged, and unable to influence origin classification.
 - Exact success adds one URL and one canonical fetch refspec while preserving
   every non-origin local key/value and repository content/ref/index/object/hook
   snapshot. System/global canaries remain unread and byte-identical.
 - Existing exact state performs no write and preserves config digest/mtime.
+- Add local/global `insteadOf` and `pushInsteadOf` canaries. Prove the stored
+  value remains exact, no expanded endpoint is queried, and preview/receipt
+  explicitly state that future resolved endpoints are unverified.
 - Existing different/partial/duplicated origin refuses and preserves raw config.
 - Hold `.git/config.lock` to prove a stable nonzero failure and that My Friday
   does not delete/wait on it; repeat after external release succeeds.
@@ -131,6 +141,7 @@ Implementation retains sanitized exact-head evidence for:
 | Config lock/permission/corruption | Stable failure; no lock deletion/chmod/repair | Transcript and metadata snapshot |
 | Change after preview/interruption | Revalidation or verification pending; rerun-safe | Deterministic fault transcript |
 | External-effects boundary | No network/helper/credential/global Git/content/ref/other repo effect | Scrubbed argv/process trace and pair snapshots |
+| User Git rewrite rules present | Literal local value verified; later endpoint explicitly unverified | Transcript plus untouched rewrite canaries |
 | 80-column/accessibility | Logical order, natural wrap, no ANSI/timing state | Pinned PTY transcript and checklist |
 
 Independent product acceptance freshly reruns both roles, cancellation, repeat,

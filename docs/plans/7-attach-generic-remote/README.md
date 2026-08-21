@@ -56,6 +56,11 @@ or discovers or changes the user's other My Friday repository.
   two canonical `remote.origin` entries through Git without `-f`, then verifies
   direct local read-back. It never claims the destination exists, is private,
   belongs to the user, or is reachable.
+- **Stored address is not a resolved-endpoint guarantee.** My Friday verifies
+  the literal repository-local value. Later Git commands may apply user-managed
+  `url.*.insteadOf` or `pushInsteadOf` rules from configuration this command
+  deliberately does not inspect. The preview makes that boundary explicit;
+  My Friday never claims to verify the future transport endpoint.
 - **Ambiguity fails closed.** A different, duplicated, incomplete, included, or
   otherwise non-canonical `origin` is never adopted or overwritten. Lock and
   uncertain-write failures preserve state and direct the user to inspect and

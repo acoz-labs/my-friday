@@ -116,6 +116,8 @@ The capability owns no state after the Git command. The canonical pair in
    `origin` it cannot prove it alone created.
 8. Accepted addresses exist durably only in the selected `.git/config` and any
    terminal/shell history controlled by the user.
+9. Verification of the literal stored address is never represented as
+   verification of a future Git-resolved endpoint.
 
 ## Interfaces And Contracts
 
@@ -146,7 +148,8 @@ The parser applies this order:
 3. select only exact lowercase `https://`, `ssh://`, or unambiguous SCP-style
    syntax with no slash before its first separator colon;
 4. parse and validate host, optional port, SSH username, and nonempty path with
-   component-specific allowlists; and
+   component-specific start/end and segment rules that reject leading-option,
+   dot-segment, and ambiguous local-path shapes; and
 5. preserve the original bytes without decoding, normalization, or rewrite.
 
 HTTPS rejects all userinfo. SSH permits username-only identity; a password or
@@ -160,10 +163,18 @@ Every subprocess uses literal argv and a fixed environment derived from the
 existing `gitexec` boundary plus:
 
 - `GIT_CONFIG_NOSYSTEM=1`;
-- `GIT_CONFIG_GLOBAL=/dev/null`;
+- `HOME` and `XDG_CONFIG_HOME` set to a process-owned, owner-only, initially
+  empty temporary isolation root rather than the invoking user's home;
 - no `GIT_CONFIG_COUNT`, `GIT_CONFIG_KEY_*`, or `GIT_CONFIG_VALUE_*` variables;
 - stable UTF-8 locale; and
 - no askpass/credential or network command.
+
+The adapter creates the empty isolation root before Git, verifies it contains
+no configuration, and removes only that exact empty tool-owned root afterward.
+An interrupted run can leave an empty private temporary directory but no Git
+configuration or credential. This mechanism is available at the Git 2.28 floor
+and does not depend on the newer `GIT_CONFIG_GLOBAL` override. Compatibility
+tests execute the adapter with Git 2.28 as well as the native supported Git.
 
 Inspection uses `git -C <canonical> config --local --no-includes` with NUL
 output and explicit keys/regex. Mutation is exactly:
@@ -179,6 +190,11 @@ Read-back uses direct local config, not `git remote get-url`, because Git can
 expand `insteadOf` values. It verifies one exact URL and the canonical fetch
 refspec. The adapter separately checks the observed whole config delta and
 repository identity before emitting success.
+
+This verifies the value stored in the selected repository, not the endpoint a
+future Git operation will resolve. Later user-directed Git may apply local,
+global, or system `url.*.insteadOf`/`pushInsteadOf` rules. My Friday neither
+reads those external scopes nor claims to verify their eventual destination.
 
 ### Preview and confirmation
 
@@ -200,6 +216,10 @@ to the configured destination. Runtime and memory repositories can contain
 different information; attach only the repository whose sharing policy you
 accept.
 
+Your other Git configuration may rewrite this address for later fetch or push.
+My Friday stores and verifies the local address shown above; it does not inspect
+or verify the endpoint that a future Git command will resolve.
+
 My Friday will not create or log in to a hosted repository, test the connection,
 store credentials, change permissions, commit, fetch, push, or modify the other
 My Friday repository.
@@ -219,7 +239,8 @@ and return success. The complete disclosure appears on every mutating attempt.
 
 Success prints role, canonical repository, `origin`, exact accepted address,
 and the facts: local Git config only, network none, credentials stored none,
-remote access not verified, other repository unchanged. It provides a
+remote access not verified, future resolved endpoint not verified, other
+repository unchanged. It provides a
 shell-quoted inspection command containing only the canonical path and fixed
 remote name, never the address.
 
@@ -302,5 +323,6 @@ enter CI annotations, issue comments, acceptance manifests, or release receipts.
 | Lock/interruption/TOCTOU | Git lock plus before/after identity | adapter | preserve state; inspect and rerun |
 | No adjacent effects | fixed argv/env and single selected root | observer/manifest evidence | no network/credential/global/other repo |
 | Privacy-safe output | accepted vs unsafe display policy | errors/transcripts | no raw unsafe or durable real address |
+| Address rewrite boundary | literal local read-back | preview and receipt | future Git resolution remains user-owned/unverified |
 | Accessible terminal flow | line-oriented copy and PTY | all states | 80-column/screen-reader review |
 | Exact release | artifact candidate identity | nomination/acceptance/release | same digest bytes and fresh evidence |

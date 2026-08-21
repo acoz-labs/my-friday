@@ -19,7 +19,7 @@ prohibited-effect evidence, and independent acceptance of the immutable bytes.
    - Likely ownership: new `internal/remoteaddress/` package and tests.
    - Start with allowlist/denylist/fuzz failures.
    - Exit: all accepted forms preserve exact bytes; all credential/helper/local/
-     unsafe forms fail without raw-value output or Git invocation.
+     unsafe/leading-option forms fail without raw-value output or Git invocation.
 2. **Single-repository identity**
    - Likely ownership: `internal/repository/repository.go` and tests.
    - Start with runtime/memory/evolved/symlink/tamper cases.
@@ -30,7 +30,8 @@ prohibited-effect evidence, and independent acceptance of the immutable bytes.
    - Start with fixed environment/literal argv and absent/canonical/collision
      snapshots, including includes/corruption/global canaries.
    - Exit: deterministic plans inspect only direct local config and cannot
-     invoke shell/network/credential/helper/global Git behavior.
+     invoke shell/network/credential/helper/global Git behavior; Git 2.28 and
+     native suites prove private HOME/XDG isolation.
 4. **Terminal plan and safe exits**
    - Likely ownership: `internal/terminal/remote_wizard.go`, CLI routing/tests.
    - Start with help, complete role copy, exact `Attach`, cancel, and collision
@@ -95,7 +96,7 @@ leaves draft.
 - Require independent security review of address parsing, external-helper and
   credential rejection, literal argv/environment, config includes/locking,
   symlink/inode/TOCTOU limits, read-back, uncertain recovery, redaction, and
-  prohibited side effects.
+  prohibited side effects, including the stored-address/future-rewrite boundary.
 - Require product-design review of the final exact-head runtime/memory/cancel/
   error transcripts at 80 columns and in screen-reader order.
 - Keep the PR draft until reconciliation binds its exact head, durable docs are

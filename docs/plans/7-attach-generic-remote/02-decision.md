@@ -97,13 +97,20 @@ The accepted grammar is deliberately smaller than Git's:
 | SSH URL | `ssh://[user@]host[:port]/path` | password userinfo, query, fragment, percent escapes, empty host/path, unsafe username/port |
 | SCP-style SSH | `[user@]host:path` | slash before separator, empty host/path, ambiguous/local form, unsafe username/path |
 
-Accepted input is ASCII. Host parsing permits DNS names, IPv4, and bracketed
-IPv6 where the syntax unambiguously supports it. Usernames are optional SSH
-identities limited to letters, digits, dot, underscore, and hyphen. Paths use
-only letters, digits, slash, dot, underscore, hyphen, and tilde; they contain no
-whitespace, controls, bidi/format characters, percent encoding, shell
-metacharacters, query, or fragment. The original accepted string is stored and
-read back byte-for-byte; it is never normalized or rewritten.
+Accepted input is ASCII. DNS labels must start and end with an alphanumeric
+character and may contain only interior ASCII alphanumerics or hyphens; IPv4
+and bracketed IPv6 literals must pass numeric parsing. SSH usernames must start
+with an alphanumeric character and then contain only ASCII alphanumerics, dot,
+underscore, or hyphen. No host or username can begin with an option marker.
+
+Paths use slash-separated ASCII segments containing letters, digits, dot,
+underscore, hyphen, and tilde. Every segment is nonempty, is neither `.` nor
+`..`, and starts with an alphanumeric, dot, or tilde rather than hyphen. URL
+paths begin with `/`; SCP-style paths begin with a safe segment, `/`, or a
+bounded `~user/` prefix. They contain no whitespace, controls, bidi/format
+characters, percent encoding, shell metacharacters, query, or fragment. The
+original accepted string is stored and read back byte-for-byte; it is never
+normalized or rewritten.
 
 Everything else fails before Git sees it: `http`, `git`, `ftp`, `ftps`, `file`,
 absolute/relative paths, Windows/UNC paths, bundles, unknown schemes,
@@ -134,6 +141,7 @@ candidate may be accepted.
 | HTTPS and SSH subset only | Covers common hosted destinations without plaintext, local, or helper execution surfaces | Official Git URL/helper docs |
 | Literal `git remote add --` without `-f` | Git owns config locking; end-of-options blocks option injection; no fetch occurs | Official `git remote` docs and local argv verification |
 | Direct local config, includes disabled | No global/user/include access or ambiguous inherited state | Official `git config` scopes |
+| Stored value distinct from future resolved endpoint | User Git rewrites remain outside My Friday authority and may alter later transport | Official `insteadOf`/`pushInsteadOf` behavior |
 | Canonical pair or collision | Exact repeat is read-only; partial/duplicated state is never repaired implicitly | Failure and idempotency criteria |
 | No durable My Friday registry | Git config already owns the fact; duplication adds drift/privacy risk | YAGNI and data minimization |
 | Full accepted address only in foreground output | User must verify destination; unsafe/durable surfaces must not leak it | Product-experience privacy rules |
