@@ -83,7 +83,9 @@ redaction, idempotent same-digest Release asset reuse, mismatched-asset refusal,
 and receipt completeness. The macOS harness has dry preflight tests for UID/home/
 keychain/CODEX_HOME isolation and teardown plus one native end-to-end run; it
 must refuse when admin provisioning, secret injection, or protected-home guards
-are not satisfied.
+are not satisfied. Account deletion tests cover pre-existing username refusal,
+UID reuse, moved/reowned home, missing/mismatched creation marker, and foreign
+content; every mismatch preserves the account and requires operator diagnosis.
 
 ## Red/Green Sequence
 
@@ -147,12 +149,18 @@ temporary directory under Alfred's account is insufficient for acceptance.
 2. A local macOS harness downloads by run/name and verifies digest. With one-time
    physical admin authentication its runbook creates a dedicated non-admin user
    with fresh home/keychain/CODEX_HOME, installs supported Codex, and injects
-   test-only `OPENAI_API_KEY` from an operator-approved secret source into the
-   smoke process only, tracing disabled and without persistence.
-3. It runs the matrix, externally terminates the unmodified candidate at an
+   test-only `OPENAI_API_KEY` from an operator-approved secret source by piping
+   it on stdin to `codex login --with-api-key` with tracing disabled. The
+   resulting disposable `$CODEX_HOME/auth.json` is sensitive, excluded from
+   evidence/content reads, and destroyed after `codex logout` and user teardown.
+3. Provisioning first proves a generated username is absent, creates it, and
+   records a private creation marker with username, UID, canonical home, owner,
+   and run ID. It runs the matrix, externally terminates the unmodified candidate at an
    observed durable phase, captures sanitized evidence, verifies protected live
-   homes, clears the credential, removes user/home/keychain after physical admin
-   authentication, and proves teardown.
+   homes, logs Codex out, then revalidates the marker, UID, home path/owner, and
+   absence of foreign content before removing only that user/home/keychain after
+   physical admin authentication. Any mismatch refuses deletion; teardown proof
+   confirms account, home, keychain, auth file, and marker are absent.
 4. Acceptance records the exact ID/digest/evidence. Release downloads the same
    artifact, re-verifies digest and authority, and uploads those exact bytes to
    GitHub Release. Mismatches fail closed; an existing asset is reused only when
@@ -163,19 +171,19 @@ artifact does not mutate Codex; the user still invokes the explicit lifecycle.
 
 ## Rollback And Recovery
 
-- Before any later release, reject the candidate or revert its implementation.
+- Before release, reject the candidate or revert its implementation.
 - A user can run `my-friday codex rollback` for the prior managed generation or
   `uninstall` for complete reversal. Drift or ambiguous state fails closed and
   retains the transaction journal for diagnosis.
 - Source rollback does not delete installed state. A compatible older runtime
   may be supplied through explicit `upgrade` only when the assistant identity
   and renderer contract permit it.
-- A later release runbook must remove the injected test credential, delete the
+- The release runbook must remove the injected test credential, delete the
   disposable user/home/keychain, and verify no residue after evidence capture.
 
 ## Release Prerequisites
 
-- A later exact candidate passes container CI and native Apple silicon/APFS/Git tests.
+- The exact candidate passes container CI and native Apple silicon/APFS/Git tests.
 - All mutation tests prove explicit injected roots and the live-home guard.
 - Independent acceptance evidence opens successfully and is bound to the
   candidate SHA and artifact digest.
@@ -183,13 +191,15 @@ artifact does not mutate Codex; the user still invokes the explicit lifecycle.
   `docs/development.md`, `docs/deployment.md`, and `docs/runbook.md` describe
   shipped behavior and correct stale release text.
 - Executable packaging/transport/upload and macOS acceptance automation are
-  designed and verified before a broader envelope is requested.
+  implemented and verified before production promotion.
 
 ## Production Readiness Preflight
 
 - **Secrets:** runtime install uses none. Acceptance consumes only the named
-  `OPENAI_API_KEY` slot from an operator-approved source, process-scoped with
-  tracing disabled; no value enters logs, files, evidence, or My Friday.
+  `OPENAI_API_KEY` slot from an operator-approved source, piped with tracing
+  disabled to `codex login --with-api-key` inside the disposable Codex home.
+  `auth.json` is sensitive disposable state excluded from evidence and removed
+  through logout plus marker-verified identity teardown.
 - **Deploy/promote:** nomination uploads one named archive and records run ID,
   artifact ID/name, digest, commit, and issue. Release downloads that exact
   artifact and verifies all fields before uploading the same bytes.
