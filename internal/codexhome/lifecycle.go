@@ -3,7 +3,6 @@ package codexhome
 
 import (
 	"bytes"
-	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -26,9 +25,15 @@ const (
 	previousFile  = "previous-AGENTS.md"
 	canonicalFile = "canonical-AGENTS.md"
 	journalFile   = "transaction.json"
+	journalNext   = "transaction.json.next"
+	removingDir   = ".my-friday-removing"
+	removalMarker = ".my-friday-removal.json"
 )
 
-var managedControlNames = map[string]bool{manifestFile: true, previousFile: true, canonicalFile: true, journalFile: true}
+var managedControlNames = map[string]bool{
+	manifestFile: true, previousFile: true, canonicalFile: true, journalFile: true,
+	journalNext: true, manifestFile + ".next": true, previousFile + ".next": true, canonicalFile + ".next": true,
+}
 
 type Action string
 
@@ -174,7 +179,26 @@ func openHome(home string) (*homeRoot, error) {
 		_ = unix.Close(fd)
 		return nil, errors.New("Codex home must be owned by current user")
 	}
+	var fs unix.Statfs_t
+	if e = unix.Fstatfs(fd, &fs); e != nil {
+		_ = unix.Close(fd)
+		return nil, e
+	}
+	fsType := strings.TrimRight(string(fs.Fstypename[:]), "\x00")
+	if e = validateHomeEnvironment(os.Geteuid(), fsType, fs.Flags); e != nil {
+		_ = unix.Close(fd)
+		return nil, e
+	}
 	return &homeRoot{fd, abs, rootProof{uint64(st.Dev), uint64(st.Ino)}}, nil
+}
+func validateHomeEnvironment(euid int, fsType string, fsFlags uint32) error {
+	if euid == 0 {
+		return errors.New("Codex baseline lifecycle refuses root")
+	}
+	if fsType != "apfs" || fsFlags&unix.MNT_LOCAL == 0 {
+		return fmt.Errorf("Codex home must be on a local APFS volume (found %s)", fsType)
+	}
+	return nil
 }
 func canonicalHome(home string) (string, error) {
 	r, e := openHome(home)
@@ -200,10 +224,23 @@ func openControl(r *homeRoot, create bool) (int, error) {
 	if !errors.Is(e, unix.ENOENT) {
 		return -1, e
 	}
-	if e = unix.Mkdirat(r.fd, controlDir, 0700); e != nil && !errors.Is(e, unix.EEXIST) {
+	if e = unix.Mkdirat(r.fd, controlDir, 0700); e != nil {
 		return -1, e
 	}
 	return openControl(r, false)
+}
+func bindControl(r *homeRoot, fd int) error {
+	var opened, entry unix.Stat_t
+	if e := unix.Fstat(fd, &opened); e != nil {
+		return e
+	}
+	if e := unix.Fstatat(r.fd, controlDir, &entry, unix.AT_SYMLINK_NOFOLLOW); e != nil {
+		return e
+	}
+	if entry.Mode&unix.S_IFMT != unix.S_IFDIR || opened.Dev != entry.Dev || opened.Ino != entry.Ino {
+		return errors.New("control directory identity changed")
+	}
+	return nil
 }
 func readRegularAt(dirfd int, name string) ([]byte, error) {
 	fd, e := unix.Openat(dirfd, name, unix.O_RDONLY|unix.O_CLOEXEC|unix.O_NOFOLLOW, 0)
@@ -245,7 +282,7 @@ func proofAt(fd int, name string) (fileProof, error) {
 	return fileProof{true, digest(b), b}, nil
 }
 func controlNames(fd int) ([]string, error) {
-	dup, e := unix.Dup(fd)
+	dup, e := unix.Openat(fd, ".", unix.O_RDONLY|unix.O_DIRECTORY|unix.O_CLOEXEC|unix.O_NOFOLLOW, 0)
 	if e != nil {
 		return nil, e
 	}
@@ -375,6 +412,16 @@ func loadManifest(path string) (manifest, error) {
 }
 
 func inspectRoot(r *homeRoot, runtime string, checkSource bool) (Status, manifest, error) {
+	if _, e := lstatAt(r.fd, removingDir); e == nil {
+		return Status{StateInterrupted, "committed uninstall cleanup is incomplete"}, manifest{}, nil
+	} else if !errors.Is(e, unix.ENOENT) {
+		return Status{}, manifest{}, e
+	}
+	if _, e := lstatAt(r.fd, removalMarker); e == nil {
+		return Status{StateInterrupted, "committed uninstall cleanup marker exists"}, manifest{}, nil
+	} else if !errors.Is(e, unix.ENOENT) {
+		return Status{}, manifest{}, e
+	}
 	if e := validateControl(r); e != nil {
 		return Status{StateCollision, e.Error()}, manifest{}, nil
 	}
@@ -389,6 +436,9 @@ func inspectRoot(r *homeRoot, runtime string, checkSource bool) (Status, manifes
 		defer unix.Close(cfd)
 		if _, je := lstatAt(cfd, journalFile); je == nil {
 			return Status{StateInterrupted, "transaction journal exists"}, manifest{}, nil
+		}
+		if _, je := lstatAt(cfd, journalNext); je == nil {
+			return Status{StateInterrupted, "transaction journal publication is incomplete"}, manifest{}, nil
 		}
 	}
 	if errors.Is(pe, unix.ENOENT) && errors.Is(ce, unix.ENOENT) {
@@ -588,12 +638,7 @@ func Plan(action Action, runtime, home string) (PlanResult, error) {
 	return p, nil
 }
 
-func atomicWriteAt(fd int, name string, b []byte) error {
-	random := make([]byte, 12)
-	if _, e := rand.Read(random); e != nil {
-		return e
-	}
-	tmp := ".my-friday-write-" + hex.EncodeToString(random)
+func writeStageAt(fd int, tmp string, b []byte) error {
 	fno, e := unix.Openat(fd, tmp, unix.O_WRONLY|unix.O_CREAT|unix.O_EXCL|unix.O_CLOEXEC|unix.O_NOFOLLOW, 0600)
 	if e != nil {
 		return e
@@ -610,29 +655,42 @@ func atomicWriteAt(fd int, name string, b []byte) error {
 		_ = unix.Unlinkat(fd, tmp, 0)
 		return e
 	}
-	if e = unix.Renameat(fd, tmp, fd, name); e != nil {
-		_ = unix.Unlinkat(fd, tmp, 0)
+	return unix.Fsync(fd)
+}
+func atomicWriteAt(fd int, name string, b []byte) error {
+	tmp := name + ".next"
+	if e := writeStageAt(fd, tmp, b); e != nil {
 		return e
+	}
+	if _, e := lstatAt(fd, name); errors.Is(e, unix.ENOENT) {
+		if e = unix.RenameatxNp(fd, tmp, fd, name, unix.RENAME_EXCL); e != nil {
+			_ = removeAt(fd, tmp)
+			return e
+		}
+	} else if e != nil {
+		_ = removeAt(fd, tmp)
+		return e
+	} else {
+		if e = unix.RenameatxNp(fd, tmp, fd, name, unix.RENAME_SWAP); e != nil {
+			_ = removeAt(fd, tmp)
+			return e
+		}
+		if e = removeAt(fd, tmp); e != nil {
+			return e
+		}
 	}
 	return unix.Fsync(fd)
 }
 func writeExclusiveAt(fd int, name string, b []byte) error {
-	n, e := unix.Openat(fd, name, unix.O_WRONLY|unix.O_CREAT|unix.O_EXCL|unix.O_CLOEXEC|unix.O_NOFOLLOW, 0600)
-	if e != nil {
+	tmp := name + ".next"
+	if e := writeStageAt(fd, tmp, b); e != nil {
 		return fmt.Errorf("another transaction or recovery is active: %w", e)
 	}
-	f := os.NewFile(uintptr(n), name)
-	_, e = f.Write(b)
-	if e == nil {
-		e = f.Sync()
+	if e := unix.RenameatxNp(fd, tmp, fd, name, unix.RENAME_EXCL); e != nil {
+		_ = removeAt(fd, tmp)
+		return fmt.Errorf("another transaction or recovery is active: %w", e)
 	}
-	if x := f.Close(); e == nil {
-		e = x
-	}
-	if e == nil {
-		e = unix.Fsync(fd)
-	}
-	return e
+	return unix.Fsync(fd)
 }
 func manifestBytes(m manifest) []byte {
 	b, _ := json.MarshalIndent(m, "", "  ")
@@ -673,30 +731,81 @@ func removeAt(fd int, name string) error {
 	}
 	return e
 }
-func applyProof(fd int, name string, p fileProof) error {
-	if !p.Exists {
-		return removeAt(fd, name)
-	}
-	if digest(p.Bytes) != p.SHA256 {
-		return errors.New("journal byte proof failed")
-	}
-	return atomicWriteAt(fd, name, p.Bytes)
-}
 func proofMatches(fd int, name string, want fileProof) bool {
 	got, e := proofAt(fd, name)
 	return e == nil && got.Exists == want.Exists && got.SHA256 == want.SHA256 && bytes.Equal(got.Bytes, want.Bytes)
 }
 func applyTransition(fd int, name string, before, after fileProof) error {
-	if !proofMatches(fd, name, before) {
-		return fmt.Errorf("managed state changed before mutation: %s", name)
+	tmp := name + ".next"
+	if after.Exists {
+		if digest(after.Bytes) != after.SHA256 {
+			return errors.New("journal byte proof failed")
+		}
+		if e := writeStageAt(fd, tmp, after.Bytes); e != nil {
+			return e
+		}
+		if before.Exists {
+			if e := unix.RenameatxNp(fd, tmp, fd, name, unix.RENAME_SWAP); e != nil {
+				_ = removeAt(fd, tmp)
+				return fmt.Errorf("managed state changed before mutation: %s", name)
+			}
+			if !proofMatches(fd, tmp, before) {
+				_ = unix.RenameatxNp(fd, tmp, fd, name, unix.RENAME_SWAP)
+				_ = removeAt(fd, tmp)
+				return fmt.Errorf("managed state changed before mutation: %s", name)
+			}
+			if e := removeAt(fd, tmp); e != nil {
+				return e
+			}
+		} else if e := unix.RenameatxNp(fd, tmp, fd, name, unix.RENAME_EXCL); e != nil {
+			_ = removeAt(fd, tmp)
+			return fmt.Errorf("managed state changed before mutation: %s", name)
+		}
+	} else {
+		if !before.Exists {
+			return nil
+		}
+		if e := unix.RenameatxNp(fd, name, fd, tmp, unix.RENAME_EXCL); e != nil {
+			return fmt.Errorf("managed state changed before mutation: %s", name)
+		}
+		if !proofMatches(fd, tmp, before) {
+			_ = unix.RenameatxNp(fd, tmp, fd, name, unix.RENAME_EXCL)
+			return fmt.Errorf("managed state changed before mutation: %s", name)
+		}
+		if e := removeAt(fd, tmp); e != nil {
+			return e
+		}
 	}
-	return applyProof(fd, name, after)
+	return unix.Fsync(fd)
 }
 func applyRecovery(fd int, name string, before, after, target fileProof) error {
-	if !proofMatches(fd, name, before) && !proofMatches(fd, name, after) {
-		return fmt.Errorf("recovery refused: %s matches neither journal generation", name)
+	if e := discardProvenStage(fd, name+".next", before, after); e != nil {
+		return e
 	}
-	return applyProof(fd, name, target)
+	if proofMatches(fd, name, before) {
+		return applyTransition(fd, name, before, target)
+	}
+	if proofMatches(fd, name, after) {
+		return applyTransition(fd, name, after, target)
+	}
+	return fmt.Errorf("recovery refused: %s matches neither journal generation", name)
+}
+func discardProvenStage(fd int, name string, before, after fileProof) error {
+	stage, e := proofAt(fd, name)
+	if errors.Is(e, unix.ENOENT) || !stage.Exists {
+		return nil
+	}
+	if e != nil {
+		return e
+	}
+	if !(stage.Exists == before.Exists && stage.SHA256 == before.SHA256 && bytes.Equal(stage.Bytes, before.Bytes)) &&
+		!(stage.Exists == after.Exists && stage.SHA256 == after.SHA256 && bytes.Equal(stage.Bytes, after.Bytes)) {
+		return fmt.Errorf("recovery refused: unproven transaction stage %s", name)
+	}
+	if e = removeAt(fd, name); e != nil {
+		return e
+	}
+	return unix.Fsync(fd)
 }
 func Execute(p PlanResult) error {
 	fresh, e := Plan(p.Action, p.Runtime, p.CodexHome)
@@ -718,11 +827,22 @@ func Execute(p PlanResult) error {
 	if e != nil || !proofsEqual(current, p.before) {
 		return errors.New("execution refused: managed state changed after preview")
 	}
-	cfd, e := openControl(r, true)
+	var cfd int
+	if p.Action == ActionInstall {
+		if e = unix.Mkdirat(r.fd, controlDir, 0700); e != nil {
+			return fmt.Errorf("install refused: control directory appeared after preview: %w", e)
+		}
+		cfd, e = openControl(r, false)
+	} else {
+		cfd, e = openControl(r, false)
+	}
 	if e != nil {
 		return e
 	}
 	defer unix.Close(cfd)
+	if e = bindControl(r, cfd); e != nil {
+		return e
+	}
 	if _, e = controlNames(cfd); e != nil {
 		return e
 	}
@@ -738,47 +858,111 @@ func Execute(p PlanResult) error {
 	if e = setPhase(cfd, &j, "mutating"); e != nil {
 		return fmt.Errorf("transaction interrupted; recovery required: %w", e)
 	}
+	if e = bindControl(r, cfd); e != nil {
+		return fmt.Errorf("transaction interrupted; recovery required: %w", e)
+	}
 	if e = applyPhase(cfd, &j, "projection-written", func() error {
+		if x := bindControl(r, cfd); x != nil {
+			return x
+		}
 		return applyTransition(r.fd, "AGENTS.md", j.Before["projection"], j.After["projection"])
 	}); e == nil {
 		e = applyPhase(cfd, &j, "canonical-written", func() error {
+			if x := bindControl(r, cfd); x != nil {
+				return x
+			}
 			return applyTransition(cfd, canonicalFile, j.Before["canonical"], j.After["canonical"])
 		})
 	}
 	if e == nil {
 		e = applyPhase(cfd, &j, "previous-written", func() error {
+			if x := bindControl(r, cfd); x != nil {
+				return x
+			}
 			return applyTransition(cfd, previousFile, j.Before["previous"], j.After["previous"])
 		})
 	}
 	if e == nil {
 		e = applyPhase(cfd, &j, "manifest-written", func() error {
+			if x := bindControl(r, cfd); x != nil {
+				return x
+			}
 			return applyTransition(cfd, manifestFile, j.Before["manifest"], j.After["manifest"])
 		})
 	}
 	if e != nil {
 		return fmt.Errorf("transaction interrupted; recovery required: %w", e)
 	}
+	if faultHook != nil {
+		if e = faultHook("before-final-verification"); e != nil {
+			return fmt.Errorf("transaction interrupted; recovery required: %w", e)
+		}
+	}
+	if e = bindControl(r, cfd); e != nil {
+		return fmt.Errorf("transaction interrupted; recovery required: %w", e)
+	}
+	final, x := snapshot(r)
+	if x != nil || !proofsEqual(final, j.After) {
+		return errors.New("transaction interrupted; recovery required: final managed state does not match journal")
+	}
+	if e = setPhase(cfd, &j, "final-verified"); e != nil {
+		return fmt.Errorf("transaction interrupted; recovery required: %w", e)
+	}
 	if e = setPhase(cfd, &j, "committed"); e != nil {
 		return fmt.Errorf("transaction interrupted; recovery required: %w", e)
 	}
-	if e = removeAt(cfd, journalFile); e != nil {
-		return e
-	}
-	if e = unix.Fsync(cfd); e != nil {
-		return e
-	}
 	if p.Action == ActionUninstall {
+		if e = bindControl(r, cfd); e != nil {
+			return e
+		}
 		names, x := controlNames(cfd)
 		if x != nil {
 			return x
 		}
-		if len(names) != 0 {
-			return errors.New("uninstall refused: control tree is not empty")
+		if len(names) != 1 || names[0] != journalFile {
+			return fmt.Errorf("uninstall refused: committed control tree is not journal-only: %v", names)
 		}
-		if x = unix.Unlinkat(r.fd, controlDir, unix.AT_REMOVEDIR); x != nil {
+		if x = unix.RenameatxNp(r.fd, controlDir, r.fd, removingDir, unix.RENAME_EXCL); x != nil {
+			return x
+		}
+		if x = unix.Fsync(r.fd); x != nil {
+			return x
+		}
+		if faultHook != nil {
+			if x = faultHook("control-detached"); x != nil {
+				return fmt.Errorf("transaction interrupted; recovery required: %w", x)
+			}
+		}
+		if x = unix.RenameatxNp(cfd, journalFile, r.fd, removalMarker, unix.RENAME_EXCL); x != nil {
+			return x
+		}
+		if x = unix.Fsync(r.fd); x != nil {
+			return x
+		}
+		if faultHook != nil {
+			if x = faultHook("removal-marked"); x != nil {
+				return fmt.Errorf("transaction interrupted; recovery required: %w", x)
+			}
+		}
+		if x = unix.Unlinkat(r.fd, removingDir, unix.AT_REMOVEDIR); x != nil {
+			return x
+		}
+		if x = unix.Fsync(r.fd); x != nil {
+			return x
+		}
+		if x = removeAt(r.fd, removalMarker); x != nil {
 			return x
 		}
 		return unix.Fsync(r.fd)
+	}
+	if e = removeAt(cfd, journalFile); e != nil {
+		return e
+	}
+	if e = removeAt(cfd, journalNext); e != nil {
+		return e
+	}
+	if e = unix.Fsync(cfd); e != nil {
+		return e
 	}
 	return nil
 }
@@ -786,7 +970,7 @@ func validJournal(j journal) error {
 	validPhase := map[string]bool{
 		"prepared": true, "mutating": true, "projection-written": true,
 		"canonical-written": true, "previous-written": true,
-		"manifest-written": true, "committed": true,
+		"manifest-written": true, "final-verified": true, "committed": true,
 	}
 	if j.ContractVersion != 1 || !validPhase[j.Phase] {
 		return errors.New("incompatible phase")
@@ -814,6 +998,100 @@ func validJournal(j journal) error {
 			}
 		}
 	}
+	return validateJournalTransition(j)
+}
+func manifestFromProof(p fileProof) (manifest, error) {
+	if !p.Exists {
+		return manifest{}, errors.New("manifest proof absent")
+	}
+	var m manifest
+	if strictJSON(p.Bytes, &m) != nil || validateManifest(m) != nil {
+		return manifest{}, errors.New("manifest proof invalid")
+	}
+	return m, nil
+}
+func consistentGeneration(set map[string]fileProof, allowProjectionDrift bool) (manifest, error) {
+	m, e := manifestFromProof(set["manifest"])
+	if e != nil {
+		return m, e
+	}
+	if !set["canonical"].Exists || set["canonical"].SHA256 != m.CanonicalSHA256 {
+		return m, errors.New("canonical proof disagrees with manifest")
+	}
+	if set["previous"].Exists != (m.PreviousSHA256 != "") || set["previous"].SHA256 != m.PreviousSHA256 {
+		return m, errors.New("previous proof disagrees with manifest")
+	}
+	if !set["projection"].Exists {
+		return m, errors.New("projection proof absent")
+	}
+	if !allowProjectionDrift && set["projection"].SHA256 != m.ProjectionSHA256 {
+		return m, errors.New("projection proof disagrees with manifest")
+	}
+	return m, nil
+}
+func allAbsent(set map[string]fileProof) bool {
+	for _, p := range set {
+		if p.Exists {
+			return false
+		}
+	}
+	return true
+}
+func validateJournalTransition(j journal) error {
+	switch j.Action {
+	case ActionInstall:
+		if !allAbsent(j.Before) {
+			return errors.New("install before-state is not empty")
+		}
+		_, e := consistentGeneration(j.After, false)
+		return e
+	case ActionUninstall:
+		if _, e := consistentGeneration(j.Before, false); e != nil {
+			return e
+		}
+		if !allAbsent(j.After) {
+			return errors.New("uninstall after-state is not empty")
+		}
+	case ActionRepair:
+		bm, e := consistentGeneration(j.Before, true)
+		if e != nil {
+			return e
+		}
+		am, e := consistentGeneration(j.After, false)
+		if e != nil {
+			return e
+		}
+		if bm != am || j.Before["projection"].SHA256 == bm.ProjectionSHA256 {
+			return errors.New("repair transition invariant")
+		}
+		if j.After["projection"].SHA256 != bm.CanonicalSHA256 {
+			return errors.New("repair target invariant")
+		}
+	case ActionUpgrade:
+		bm, e := consistentGeneration(j.Before, false)
+		if e != nil {
+			return e
+		}
+		am, e := consistentGeneration(j.After, false)
+		if e != nil {
+			return e
+		}
+		if bm.AssistantID != am.AssistantID || j.After["previous"].SHA256 != j.Before["projection"].SHA256 || am.PreviousSHA256 != bm.ProjectionSHA256 {
+			return errors.New("upgrade transition invariant")
+		}
+	case ActionRollback:
+		bm, e := consistentGeneration(j.Before, false)
+		if e != nil {
+			return e
+		}
+		am, e := consistentGeneration(j.After, false)
+		if e != nil {
+			return e
+		}
+		if bm.PreviousSHA256 == "" || j.After["projection"].SHA256 != bm.PreviousSHA256 || am.PreviousSHA256 != "" || j.After["previous"].Exists {
+			return errors.New("rollback transition invariant")
+		}
+	}
 	return nil
 }
 func Recover(home string) error {
@@ -822,6 +1100,17 @@ func Recover(home string) error {
 		return e
 	}
 	defer r.close()
+	_, removingErr := lstatAt(r.fd, removingDir)
+	_, markerErr := lstatAt(r.fd, removalMarker)
+	if removingErr == nil || markerErr == nil {
+		return recoverDetached(r)
+	}
+	if !errors.Is(removingErr, unix.ENOENT) {
+		return removingErr
+	}
+	if !errors.Is(markerErr, unix.ENOENT) {
+		return markerErr
+	}
 	if e = validateControl(r); e != nil {
 		return e
 	}
@@ -833,9 +1122,48 @@ func Recover(home string) error {
 		return e
 	}
 	defer unix.Close(cfd)
+	if e = bindControl(r, cfd); e != nil {
+		return e
+	}
 	b, e := readRegularAt(cfd, journalFile)
 	if errors.Is(e, unix.ENOENT) {
-		return nil
+		next, x := readRegularAt(cfd, journalNext)
+		if errors.Is(x, unix.ENOENT) {
+			return nil
+		}
+		if x != nil {
+			return x
+		}
+		var staged journal
+		if strictJSON(next, &staged) != nil || validJournal(staged) != nil {
+			// The authoritative journal is published only after its staged bytes
+			// are complete and durable. Without journalFile no mutation started,
+			// so an incomplete reserved stage can be removed conservatively.
+			if x = removeAt(cfd, journalNext); x != nil {
+				return x
+			}
+			if x = unix.Fsync(cfd); x != nil {
+				return x
+			}
+			names, nx := controlNames(cfd)
+			if nx != nil {
+				return nx
+			}
+			if len(names) == 0 {
+				if nx = unix.Unlinkat(r.fd, controlDir, unix.AT_REMOVEDIR); nx != nil {
+					return nx
+				}
+				return unix.Fsync(r.fd)
+			}
+			return nil
+		}
+		if x = unix.RenameatxNp(cfd, journalNext, cfd, journalFile, unix.RENAME_EXCL); x != nil {
+			return x
+		}
+		if x = unix.Fsync(cfd); x != nil {
+			return x
+		}
+		b = next
 	}
 	if e != nil {
 		return e
@@ -846,6 +1174,9 @@ func Recover(home string) error {
 	}
 	if j.Root != r.proof {
 		return errors.New("recovery refused: Codex home identity changed")
+	}
+	if e = bindControl(r, cfd); e != nil {
+		return e
 	}
 	target := j.Before
 	if j.Phase == "committed" {
@@ -862,6 +1193,19 @@ func Recover(home string) error {
 	}
 	if e != nil {
 		return e
+	}
+	final, e := snapshot(r)
+	if e != nil || !proofsEqual(final, target) {
+		return errors.New("recovery refused: final managed state does not match journal")
+	}
+	if j.Action == ActionUninstall && j.Phase == "committed" {
+		if e = unix.RenameatxNp(r.fd, controlDir, r.fd, removingDir, unix.RENAME_EXCL); e != nil {
+			return e
+		}
+		if e = unix.Fsync(r.fd); e != nil {
+			return e
+		}
+		return recoverDetached(r)
 	}
 	if e = removeAt(cfd, journalFile); e != nil {
 		return e
@@ -880,4 +1224,65 @@ func Recover(home string) error {
 		return unix.Fsync(r.fd)
 	}
 	return nil
+}
+
+func recoverDetached(r *homeRoot) error {
+	fd, dirErr := unix.Openat(r.fd, removingDir, unix.O_RDONLY|unix.O_DIRECTORY|unix.O_CLOEXEC|unix.O_NOFOLLOW, 0)
+	if dirErr != nil && !errors.Is(dirErr, unix.ENOENT) {
+		return dirErr
+	}
+	if fd >= 0 {
+		defer unix.Close(fd)
+	}
+	b, markerErr := readRegularAt(r.fd, removalMarker)
+	if markerErr != nil && !errors.Is(markerErr, unix.ENOENT) {
+		return markerErr
+	}
+	if markerErr == nil && fd >= 0 {
+		if _, e := lstatAt(fd, journalFile); e == nil {
+			return errors.New("recovery refused: duplicate uninstall authority")
+		}
+	}
+	if errors.Is(markerErr, unix.ENOENT) {
+		if fd < 0 {
+			return errors.New("recovery refused: uninstall authority is absent")
+		}
+		var e error
+		b, e = readRegularAt(fd, journalFile)
+		if e != nil {
+			return errors.New("recovery refused: detached control directory lacks committed journal")
+		}
+		if e = unix.RenameatxNp(fd, journalFile, r.fd, removalMarker, unix.RENAME_EXCL); e != nil {
+			return e
+		}
+		if e = unix.Fsync(r.fd); e != nil {
+			return e
+		}
+	}
+	var j journal
+	if strictJSON(b, &j) != nil || validJournal(j) != nil || j.Action != ActionUninstall || j.Phase != "committed" || j.Root != r.proof {
+		return errors.New("recovery refused: detached uninstall authority is incompatible")
+	}
+	if !proofMatches(r.fd, "AGENTS.md", j.After["projection"]) {
+		return errors.New("recovery refused: detached uninstall state disagrees with journal")
+	}
+	if fd >= 0 {
+		names, e := controlNames(fd)
+		if e != nil {
+			return e
+		}
+		if len(names) != 0 {
+			return fmt.Errorf("recovery refused: detached control directory is not empty: %v", names)
+		}
+		if e = unix.Unlinkat(r.fd, removingDir, unix.AT_REMOVEDIR); e != nil {
+			return e
+		}
+		if e = unix.Fsync(r.fd); e != nil {
+			return e
+		}
+	}
+	if e := removeAt(r.fd, removalMarker); e != nil {
+		return e
+	}
+	return unix.Fsync(r.fd)
 }

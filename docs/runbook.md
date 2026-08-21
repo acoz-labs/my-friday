@@ -51,3 +51,8 @@ preserve `.my-friday` and `AGENTS.md` for diagnosis. Never manually adopt or
 delete a foreign file, shadowing override, symlink, hard link, or control tree.
 Any unrecognized entry inside `.my-friday` blocks both mutation and recovery;
 preserve it for diagnosis rather than deleting the control directory.
+During a committed uninstall, recovery may report the reserved
+`.my-friday-removing` namespace. Do not rename or delete it manually: the
+embedded committed journal authorizes the same recovery command to finish
+deletion. A malformed staging file, journal, or deletion namespace is retained
+and refused for maintainer diagnosis.

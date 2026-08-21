@@ -12,6 +12,7 @@ import (
 	bootstrap "github.com/acoz-labs/my-friday/internal/plan"
 	"github.com/acoz-labs/my-friday/internal/profile"
 	"github.com/acoz-labs/my-friday/internal/repository"
+	"golang.org/x/sys/unix"
 )
 
 func fixture(t *testing.T) (string, string) {
@@ -373,7 +374,7 @@ func TestRollbackAndUninstallDoNotRequireSource(t *testing.T) {
 }
 
 func TestRecoveryAtEveryDurablePhase(t *testing.T) {
-	phases := []string{"prepared", "mutating", "projection-written", "canonical-written", "previous-written", "manifest-written", "committed"}
+	phases := []string{"prepared", "mutating", "projection-written", "canonical-written", "previous-written", "manifest-written", "committed", "final-verified"}
 	for _, phase := range phases {
 		t.Run(phase, func(t *testing.T) {
 			runtime, codex := installFixture(t)
@@ -404,5 +405,148 @@ func TestRecoveryAtEveryDurablePhase(t *testing.T) {
 				t.Fatalf("journal remains: %v", err)
 			}
 		})
+	}
+}
+
+func TestConcurrentControlDirectoryReplacementIsRefused(t *testing.T) {
+	runtime, codex := installFixture(t)
+	mutatePurpose(t, runtime, "Replacement race")
+	p, err := Plan(ActionUpgrade, runtime, codex)
+	if err != nil {
+		t.Fatal(err)
+	}
+	faultHook = func(phase string) error {
+		if phase != "mutating" {
+			return nil
+		}
+		owned := filepath.Join(codex, controlDir)
+		if err := os.Rename(owned, owned+"-detached"); err != nil {
+			return err
+		}
+		return os.Mkdir(owned, 0700)
+	}
+	t.Cleanup(func() { faultHook = nil })
+	if err = Execute(p); err == nil || !strings.Contains(err.Error(), "control directory identity changed") {
+		t.Fatalf("control replacement accepted: %v", err)
+	}
+}
+
+func TestForgedActionJournalIsRefused(t *testing.T) {
+	_, codex := installFixture(t)
+	r, err := openHome(codex)
+	if err != nil {
+		t.Fatal(err)
+	}
+	before, err := snapshot(r)
+	root := r.proof
+	r.close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	forged := journal{ContractVersion: 1, Action: ActionUninstall, Phase: "committed", Root: root, Before: before, After: before}
+	b, _ := json.MarshalIndent(forged, "", "  ")
+	if err = os.WriteFile(filepath.Join(codex, controlDir, journalFile), append(b, '\n'), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err = Recover(codex); err == nil || !strings.Contains(err.Error(), "incompatible or ambiguous journal") {
+		t.Fatalf("forged uninstall journal accepted: %v", err)
+	}
+}
+
+func TestFinalVerificationDetectsPostMutationRace(t *testing.T) {
+	runtime, codex := installFixture(t)
+	mutatePurpose(t, runtime, "Final verification race")
+	p, err := Plan(ActionUpgrade, runtime, codex)
+	if err != nil {
+		t.Fatal(err)
+	}
+	faultHook = func(phase string) error {
+		if phase == "before-final-verification" {
+			return os.WriteFile(filepath.Join(codex, "AGENTS.md"), []byte("foreign final bytes"), 0600)
+		}
+		return nil
+	}
+	t.Cleanup(func() { faultHook = nil })
+	if err = Execute(p); err == nil || !strings.Contains(err.Error(), "final managed state") {
+		t.Fatalf("final race accepted: %v", err)
+	}
+	if got, _ := os.ReadFile(filepath.Join(codex, "AGENTS.md")); string(got) != "foreign final bytes" {
+		t.Fatalf("foreign bytes overwritten: %q", got)
+	}
+}
+
+func TestCommittedUninstallDeletionIsRecoverable(t *testing.T) {
+	for _, interrupted := range []string{"control-detached", "removal-marked"} {
+		t.Run(interrupted, func(t *testing.T) {
+			_, codex := installFixture(t)
+			p, err := Plan(ActionUninstall, "", codex)
+			if err != nil {
+				t.Fatal(err)
+			}
+			faultHook = func(phase string) error {
+				if phase == interrupted {
+					return errors.New("injected interruption")
+				}
+				return nil
+			}
+			t.Cleanup(func() { faultHook = nil })
+			if err = Execute(p); err == nil {
+				t.Fatal("fault did not interrupt uninstall")
+			}
+			faultHook = nil
+			if err = Recover(codex); err != nil {
+				t.Fatal(err)
+			}
+			if _, err = os.Stat(filepath.Join(codex, removingDir)); !os.IsNotExist(err) {
+				t.Fatalf("deletion namespace remains: %v", err)
+			}
+			if _, err = os.Stat(filepath.Join(codex, removalMarker)); !os.IsNotExist(err) {
+				t.Fatalf("deletion marker remains: %v", err)
+			}
+			if s, _ := Inspect("", codex); s.State != StateNotInstalled {
+				t.Fatalf("state=%s", s.State)
+			}
+		})
+	}
+}
+
+func TestSupportedHomeEnvironmentRequiresNonRootLocalAPFS(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		euid  int
+		fs    string
+		flags uint32
+	}{
+		{"root", 0, "apfs", unix.MNT_LOCAL},
+		{"network apfs", 501, "apfs", 0},
+		{"local non-apfs", 501, "nfs", unix.MNT_LOCAL},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if err := validateHomeEnvironment(tc.euid, tc.fs, tc.flags); err == nil {
+				t.Fatal("unsupported environment accepted")
+			}
+		})
+	}
+	if err := validateHomeEnvironment(501, "apfs", unix.MNT_LOCAL); err != nil {
+		t.Fatalf("supported environment refused: %v", err)
+	}
+}
+
+func TestPartialInitialJournalPublicationRecoversWithoutMutation(t *testing.T) {
+	_, codex := fixture(t)
+	if err := os.MkdirAll(filepath.Join(codex, controlDir), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(codex, controlDir, journalNext), []byte("{\"contract_version\":"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := Recover(codex); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(codex, controlDir)); !os.IsNotExist(err) {
+		t.Fatalf("empty control namespace remains: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(codex, "AGENTS.md")); !os.IsNotExist(err) {
+		t.Fatalf("projection was mutated: %v", err)
 	}
 }
