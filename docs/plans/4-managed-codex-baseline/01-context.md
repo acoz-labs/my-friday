@@ -167,7 +167,7 @@ and outcomes O3 through O8.
 - A self-contained renderer can preserve the validated profile's presentation
   semantics without including arbitrary repository prose.
 
-### Known release capability gaps
+### Required enabling work
 
 - The exact Codex CLI patch version present in the disposable acceptance user
   is recorded as evidence; expanding a tested compatibility range is a later
@@ -176,6 +176,6 @@ and outcomes O3 through O8.
   keychain, isolated `CODEX_HOME`, named test-credential injection, evidence,
   and teardown; current acceptance automation only records a decision.
 
-These gaps do not block implementation, but they prohibit acceptance/release.
-A later design must name the host, commands, secret slot/source, immutable
-package store, digest checks, upload/download path, teardown, and receipt.
+Implementation closes these gaps. One-time physical administrator authentication
+to create and remove the dedicated non-admin acceptance user is an explicit
+acceptance precondition, not unattended authority.

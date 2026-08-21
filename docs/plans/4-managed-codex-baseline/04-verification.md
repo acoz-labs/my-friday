@@ -77,6 +77,14 @@ ownership, terminal behavior, or installed-state recovery. Run focused
 `go test -race ./...` and static Darwin/ARM64 build as already defined in
 `docs/development.md`.
 
+Add shell/fixture tests for deterministic archive creation, parseable candidate
+IDs, artifact download/digest mismatch, acceptance evidence binding, secret
+redaction, idempotent same-digest Release asset reuse, mismatched-asset refusal,
+and receipt completeness. The macOS harness has dry preflight tests for UID/home/
+keychain/CODEX_HOME isolation and teardown plus one native end-to-end run; it
+must refuse when admin provisioning, secret injection, or protected-home guards
+are not satisfied.
+
 ## Red/Green Sequence
 
 1. Add failing renderer/manifest tests for the one-projection contract, then
@@ -105,8 +113,7 @@ UI change under `docs/operations/ui-acceptance.md`; screenshot or visual
 baseline evidence is not required. Exact terminal transcripts and filesystem
 manifests are required.
 
-This envelope stops before candidate acceptance. A later delivery plan must
-make the following evidence executable against one packaged Darwin/ARM64 binary
+Implementation makes the following evidence executable against one packaged Darwin/ARM64 binary
 identified by full commit and SHA-256 digest:
 
 - macOS version, Apple silicon architecture, local APFS proof, Git version,
@@ -134,13 +141,22 @@ temporary directory under Alfred's account is insufficient for acceptance.
 
 ## Rollout
 
-1. Complete code, tests, docs, and a reviewed implementation PR.
-2. Stop at the `implementation` envelope. Merge, nomination, acceptance, and
-   release are not authorized by this plan.
-3. A later plan must name executable packaging/upload/download/digest commands,
-   the macOS host, disposable-user create/delete commands, fresh home/keychain
-   checks, `CODEX_TEST_ACCESS_TOKEN` secret slot and approved injection source,
-   sanitized evidence collection, and teardown verification.
+1. Nomination builds once from the exact CI SHA, creates a deterministic
+   Darwin/ARM64 archive, computes SHA-256, uploads a named Actions artifact, and
+   records a parseable `run-id/artifact-name/digest` candidate ID.
+2. A local macOS harness downloads by run/name and verifies digest. With one-time
+   physical admin authentication its runbook creates a dedicated non-admin user
+   with fresh home/keychain/CODEX_HOME, installs supported Codex, and injects
+   test-only `OPENAI_API_KEY` from an operator-approved secret source into the
+   smoke process only, tracing disabled and without persistence.
+3. It runs the matrix, externally terminates the unmodified candidate at an
+   observed durable phase, captures sanitized evidence, verifies protected live
+   homes, clears the credential, removes user/home/keychain after physical admin
+   authentication, and proves teardown.
+4. Acceptance records the exact ID/digest/evidence. Release downloads the same
+   artifact, re-verifies digest and authority, and uploads those exact bytes to
+   GitHub Release. Mismatches fail closed; an existing asset is reused only when
+   its digest matches.
 
 There is no feature flag or background activation. Installing the released
 artifact does not mutate Codex; the user still invokes the explicit lifecycle.
@@ -171,10 +187,19 @@ artifact does not mutate Codex; the user still invokes the explicit lifecycle.
 
 ## Production Readiness Preflight
 
-Not applicable to the `implementation` envelope. Runtime installation uses no
-secret, but production readiness is not proved: current automation lacks a
-digest-verified executable package/transport/upload chain and a macOS harness
-for disposable UID/home/keychain provisioning, named test-credential injection,
-evidence, and teardown. A broader plan must provide executable deploy or
-publication, activation, verification, rollback, and exact-candidate receipt
-contracts rather than treating an opaque artifact string as the bytes.
+- **Secrets:** runtime install uses none. Acceptance consumes only the named
+  `OPENAI_API_KEY` slot from an operator-approved source, process-scoped with
+  tracing disabled; no value enters logs, files, evidence, or My Friday.
+- **Deploy/promote:** nomination uploads one named archive and records run ID,
+  artifact ID/name, digest, commit, and issue. Release downloads that exact
+  artifact and verifies all fields before uploading the same bytes.
+- **Activation:** the GitHub Release asset is activation; user installation
+  remains explicit and automation never writes an operator Codex home.
+- **Verification:** CI verifies packaging; macOS acceptance verifies digest,
+  lifecycle, Codex discovery, isolation, and teardown; release verifies accepted
+  authority and published-asset digest.
+- **Rollback:** failed acceptance publishes nothing. Mismatch fails closed. A
+  correction is a new immutable artifact/release; assets are never overwritten.
+- **Receipt:** commit, run ID, Actions artifact ID/name, digest, accepted issue,
+  evidence and acceptor, release/tag/asset URL and digest, control workflow SHA,
+  teardown proof, and rollback target.

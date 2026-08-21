@@ -4,7 +4,7 @@
 - **Issue:** #4
 - **Planning PR:** Pending
 - **Repository basis:** 5bc309226d2c40e1473a4011c1bd8552c995919d
-- **Execution envelope:** implementation
+- **Execution envelope:** through-production
 
 ## Decision
 
@@ -32,9 +32,9 @@ remain outside My Friday's ownership.
   Destructive install, repair, uninstall, rollback, or recovery tests must
   never target Alfred's live `~/.codex`, a developer's real Codex home, or a
   deployed `batcomputer-ai` release projection.
-- Existing artifact workflows record an opaque artifact identifier and ledger;
-  they do not package, transport, digest-verify, or upload executable bytes.
-  Disposable-user acceptance and publication need a later delivery design.
+- Existing artifact workflows must be extended to carry exact bytes: nomination
+  builds one Darwin/ARM64 archive, uploads it as a named Actions artifact, and
+  records run/artifact/digest; acceptance and release re-download and verify it.
 
 ## Decision Spotlight
 
@@ -60,8 +60,8 @@ remain outside My Friday's ownership.
   the invoking developer's home. Exact-candidate acceptance uses a disposable
   non-admin macOS user/home because a temporary directory alone cannot prove
   separation from keychain, login state, or host-level path discovery.
-- **One rollback generation.** Each successful repair or compatible upgrade
-  retains exactly one verified prior managed generation. Rollback is explicit,
+- **One rollback generation.** A compatible upgrade retains exactly one verified
+  prior generation; repair never rotates it or stores drifted bytes. Rollback is explicit,
   previewed, single-step, and idempotent; My Friday is not a general backup or
   configuration-history service.
 - **No daemon, privilege escalation, or network.** Lifecycle work is a
@@ -82,5 +82,5 @@ remain outside My Friday's ownership.
 
 The plan becomes final only after the draft planning PR is linked to issue #4,
 the complete pack has no blocking maintainer finding, plan validation passes,
-and the exact PR number and `implementation` envelope are recorded. Product
+and the exact PR number and `through-production` envelope are recorded. Product
 authority must then approve the exact final head before merge.

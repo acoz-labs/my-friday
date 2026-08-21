@@ -95,9 +95,9 @@ prose into an unchecked global instruction channel.
 
 Confidence is high in the architecture and medium-high in the Codex
 compatibility claim until exact-candidate acceptance proves discovery under a
-fresh macOS identity. The envelope is `implementation`: current workflows can
-record an artifact string, decision, tag, and ledger release, but do not prove
-executable packaging/transport/upload or provision disposable macOS acceptance.
+fresh macOS identity. The envelope is `through-production`; implementation must
+add the missing exact-byte package/transport/upload chain and executable
+disposable-macOS acceptance harness defined in verification.
 
 ## Decisions Ledger
 

@@ -41,7 +41,9 @@ candidate acceptance under an isolated macOS identity.
    - Exit: the complete namespaced lifecycle is operable and recovery commands
      are copyable without leaking profile or unrelated state.
 6. **Documentation, reconciliation, and release proof**
-   - Likely ownership: durable docs, evidence manifest, implementation PR.
+   - Likely ownership: nomination/product-acceptance/release workflows,
+     `bin/nominate-release-candidate`, `bin/finalize-release`, new macOS
+     acceptance harness/runbook, durable docs, evidence manifest, implementation PR.
    - Exit: native/container CI, independent review, exact-candidate disposable-
      user evidence, docs promotion, plan deletion, reconciliation, nomination,
      acceptance, and release gates all agree on the same artifact.
@@ -98,9 +100,9 @@ draft. The temporary plan is not copied wholesale into permanent docs.
   `~/.codex`, a contributor's actual home, or deployed Batcomputer runtime.
 - Keep the PR draft until reconciliation binds the exact head, durable docs are
   promoted, this plan is removed, and evidence is openable.
-- Stop after the reviewed implementation PR. Merge, nomination, acceptance,
-  and release require later authority backed by executable candidate transport
-  and disposable-macOS harness design.
+- Continue after review through exact-byte nomination, disposable-macOS
+  acceptance, same-byte GitHub Release publication, verification, and lifecycle
+  closure under the `through-production` envelope.
 
 ## Explicit Non-Goals And YAGNI Boundary
 
