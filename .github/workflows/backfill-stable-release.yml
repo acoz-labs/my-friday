@@ -28,8 +28,11 @@ jobs:
       - name: Verify source and publish stable alias
         env:
           GH_TOKEN: ${{ github.token }}
-        run: >-
-          bin/backfill-stable-release-asset
-          '${{ inputs.tag }}'
-          '${{ inputs.source_asset }}'
-          '${{ inputs.executable_sha256 }}'
+          RELEASE_TAG: ${{ inputs.tag }}
+          RELEASE_SOURCE_ASSET: ${{ inputs.source_asset }}
+          RELEASE_EXECUTABLE_SHA256: ${{ inputs.executable_sha256 }}
+        run: |
+          bin/backfill-stable-release-asset \
+            "$RELEASE_TAG" \
+            "$RELEASE_SOURCE_ASSET" \
+            "$RELEASE_EXECUTABLE_SHA256"

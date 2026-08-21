@@ -64,7 +64,8 @@ jobs:
       - name: Retrieve and package accepted executable
         env:
           GH_TOKEN: ${{ github.token }}
-        run: bin/prepare-release-artifact '${{ inputs.artifact }}' release-assets
+          RELEASE_INPUT_ARTIFACT: ${{ inputs.artifact }}
+        run: bin/prepare-release-artifact "$RELEASE_INPUT_ARTIFACT" release-assets
 
       - name: Publish artifact ledger
         env:

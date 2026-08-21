@@ -10,10 +10,17 @@ if [[ -z "$repo" || -z "$tag" || -z "$source_name" || "$source_name" == "$stable
   echo "Usage: GITHUB_REPOSITORY=OWNER/REPO bin/backfill-stable-release-asset <latest-tag> <source-archive> <executable-sha256>" >&2
   exit 64
 fi
-release="$(gh release view "$tag" --repo "$repo" --json tagName,isDraft,isPrerelease,assets)"
+release="$(gh release view "$tag" --repo "$repo" --json tagName,isDraft,isPrerelease,body,assets)"
 latest="$(gh release view --repo "$repo" --json tagName --jq .tagName)"
 if [[ "$(jq -r .tagName <<< "$release")" != "$latest" || "$(jq -r .isDraft <<< "$release")" != false || "$(jq -r .isPrerelease <<< "$release")" != false ]]; then
   echo "Backfill target must be the current published latest release." >&2
+  exit 1
+fi
+ledger_body="$(jq -r '.body // ""' <<< "$release")"
+ledger_count="$(printf '%s\n' "$ledger_body" | grep -c '^- Artifact:' || true)"
+ledger_digest="$(printf '%s\n' "$ledger_body" | sed -n 's/^- Artifact: `sha256:\([0-9a-f]\{64\}\)`$/\1/p')"
+if [[ "$ledger_count" != 1 || "$ledger_digest" != "$expected_executable" ]]; then
+  echo "Release ledger must contain one accepted executable digest matching the requested backfill." >&2
   exit 1
 fi
 for name in "$source_name" SHA256SUMS; do

@@ -41,10 +41,12 @@ The first result verifies the archive entry; the second must match the
 Run the `Backfill stable release asset` workflow only against the exact current
 latest tag, its retained commit-suffixed archive, and the accepted executable
 digest recorded in the release ledger. The command verifies that the release
-is published and latest, requires one source archive and checksum asset,
-verifies the source archive checksum and its sole safe executable, then uploads
-the unchanged archive bytes under the stable name. An equal existing alias is
-an idempotent success; a mismatch fails without replacement.
+is published and latest, requires exactly one `- Artifact:` ledger entry in the
+closed `sha256:<digest>` form, and binds that authority to the requested digest
+and contained executable. It also requires one source archive and checksum
+asset, verifies the source archive checksum and its sole safe executable, then
+uploads the unchanged archive bytes under the stable name. An equal existing
+alias is an idempotent success; a mismatch fails without replacement.
 
 If an incorrect stable alias is proven, resolve its exact asset ID and delete
 only `my-friday-darwin-arm64.tar.gz` from that release. Retain the tag, release

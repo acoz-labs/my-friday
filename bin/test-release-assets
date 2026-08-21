@@ -69,9 +69,9 @@ cat > "$tmp/mock-bin/gh" <<'EOF'
 set -euo pipefail
 if [[ "$1 $2" == "release view" && " $* " == *" --jq .tagName "* ]]; then
   printf '%s\n' "${BACKFILL_TAG:?}"
-elif [[ "$1 $2" == "release view" && " $* " == *" tagName,isDraft,isPrerelease,assets "* ]]; then
-  printf '{"tagName":"%s","isDraft":false,"isPrerelease":false,"assets":[{"name":"%s"},{"name":"SHA256SUMS"}]}\n' \
-    "${BACKFILL_TAG:?}" "${BACKFILL_SOURCE_NAME:?}"
+elif [[ "$1 $2" == "release view" && " $* " == *" tagName,isDraft,isPrerelease,body,assets "* ]]; then
+  printf '{"tagName":"%s","isDraft":false,"isPrerelease":false,"body":"%s","assets":[{"name":"%s"},{"name":"SHA256SUMS"}]}\n' \
+    "${BACKFILL_TAG:?}" "${BACKFILL_BODY:?}" "${BACKFILL_SOURCE_NAME:?}"
 elif [[ "$1 $2" == "release view" ]]; then
   printf '{"assets":[]}\n'
 elif [[ "$1 $2" == "release download" ]]; then
@@ -87,16 +87,56 @@ fi
 EOF
 chmod +x "$tmp/mock-bin/gh"
 export BACKFILL_TAG=artifact-2026.01.01-deadbee BACKFILL_SOURCE_NAME="$source_name" BACKFILL_FIXTURES="$tmp"
+export BACKFILL_BODY="- Artifact: \`sha256:$digest\`"
 : > "$GH_MOCK_LOG"
 "$root/bin/backfill-stable-release-asset" "$BACKFILL_TAG" "$source_name" "$digest"
 [[ "$(grep -c backfill-upload "$GH_MOCK_LOG")" == 1 ]]
+BACKFILL_BODY="- Artifact: \`sha256:$(printf '0%.0s' {1..64})\`"
+export BACKFILL_BODY
+if "$root/bin/backfill-stable-release-asset" "$BACKFILL_TAG" "$source_name" "$digest" 2>/dev/null; then
+  echo "Backfill accepted a Release-ledger digest mismatch." >&2
+  exit 1
+fi
+BACKFILL_BODY="- Artifact: \`sha256:$digest\`\\n- Artifact: \`sha256:$digest\`"
+export BACKFILL_BODY
+if "$root/bin/backfill-stable-release-asset" "$BACKFILL_TAG" "$source_name" "$digest" 2>/dev/null; then
+  echo "Backfill accepted ambiguous Release-ledger authority." >&2
+  exit 1
+fi
 if "$root/bin/backfill-stable-release-asset" "$BACKFILL_TAG" "$source_name" "$(printf '0%.0s' {1..64})" 2>/dev/null; then
   echo "Backfill accepted a mismatched contained executable." >&2
   exit 1
 fi
 
+cat > "$tmp/mock-bin/gh" <<'EOF'
+#!/usr/bin/env bash
+printf '%s\n' "$*" >> "${GH_MOCK_LOG:?}"
+exit 99
+EOF
+chmod +x "$tmp/mock-bin/gh"
+: > "$GH_MOCK_LOG"
+if GITHUB_REPOSITORY=owner/repo RELEASE_SHA="$(git -C "$root" rev-parse HEAD)" \
+  RELEASE_ARTIFACT=test RELEASE_ISSUES=17 RELEASE_SUMMARY=test \
+  RELEASE_ASSET_PATHS="$tmp/missing:wrong" \
+  "$root/bin/finalize-release" artifact 2>/dev/null; then
+  echo "Finalizer accepted malformed release asset paths." >&2
+  exit 1
+fi
+[[ ! -s "$GH_MOCK_LOG" ]] || { echo "Malformed asset paths reached GitHub mutation boundary." >&2; exit 1; }
+
 grep -Fq 'name: my-friday-darwin-arm64' "$root/.github/workflows/nominate-artifact.yml"
 grep -Fq "bin/prepare-release-artifact" "$root/.github/workflows/release-artifact.yml"
+for workflow in release-artifact.yml backfill-stable-release.yml; do
+  if awk '
+    /^[[:space:]]+run:/ { in_run=1 }
+    in_run && /\$\{\{[[:space:]]*inputs\./ { found=1 }
+    in_run && /^[[:space:]]+- name:/ { in_run=0 }
+    END { exit found ? 0 : 1 }
+  ' "$root/.github/workflows/$workflow"; then
+    echo "$workflow interpolates dispatch input into shell source." >&2
+    exit 1
+  fi
+done
 if grep -Eq 'go build|make build' "$root/.github/workflows/release-artifact.yml"; then
   echo "Release workflow rebuilds the accepted executable." >&2
   exit 1
