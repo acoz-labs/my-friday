@@ -66,11 +66,18 @@ func main() {
 	}
 	cmd := exec.Command("/usr/bin/sandbox-exec", args...)
 	cmd.Dir = filepath.Dir(*home)
+	for _, path := range []string{filepath.Join(filepath.Dir(*home), "tmp"), filepath.Join(filepath.Dir(*home), "xdg-cache"), filepath.Join(filepath.Dir(*home), "xdg-config")} {
+		if err := os.MkdirAll(path, 0o700); err != nil {
+			fatal(err)
+		}
+	}
 	cmd.Env = []string{
 		"HOME=" + filepath.Dir(*home), "CODEX_HOME=" + *home,
 		"TMPDIR=" + filepath.Join(filepath.Dir(*home), "tmp"),
 		"XDG_CACHE_HOME=" + filepath.Join(filepath.Dir(*home), "xdg-cache"),
 		"XDG_CONFIG_HOME=" + filepath.Join(filepath.Dir(*home), "xdg-config"),
+		"CFFIXED_USER_HOME=" + filepath.Dir(*home),
+		"CLANG_MODULE_CACHE_PATH=" + filepath.Join(filepath.Dir(*home), "xdg-cache", "clang"),
 		"LANG=en_US.UTF-8", "PATH=/usr/bin:/bin:/usr/sbin:/sbin",
 	}
 	tokens := map[string]string{"install": "Install", "upgrade": "Upgrade", "uninstall": "Uninstall"}

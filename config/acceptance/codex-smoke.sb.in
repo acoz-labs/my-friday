@@ -4,5 +4,6 @@
 (allow sysctl-read)
 (allow file-read*)
 (allow file-write* (subpath @@VOLUME@@))
+(allow file-write-data (literal "/dev/null"))
 (allow network-outbound)
 (deny signal)

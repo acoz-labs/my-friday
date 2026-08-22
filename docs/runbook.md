@@ -110,6 +110,10 @@ APFS volume, and current owner against `attach.plist` and `diskutil info`. Stop
 only the recorded acceptance process group, then use ordinary `hdiutil detach
 <device>`—never `-force`. On any mismatch or detach failure, preserve the run
 and evidence roots for maintainer diagnosis.
+Attachment start is itself a preservation barrier. If attach output is partial
+or ambiguous, do not remove the image, mountpoint, or anything beneath either
+run root. Retain the attach receipt until an operator proves the complete graph,
+performs ordinary detach, and proves graph absence.
 
 After proven detach, remove only marker-listed files and the empty mountpoint.
 Remove the exact run directory only when empty. Private before/after manifests
@@ -127,6 +131,10 @@ root receipts and marker digests, unlinks owned entries descriptor-relative,
 and removes only the two exact run-ID children. The failure trap attempts
 ordinary detach only while all authority still matches; substituted or
 ambiguous state is preserved.
+Descriptor-relative cleanup requires the exact expected transitive entry set.
+Any extra owner-controlled file, directory, link, or identity mismatch refuses
+cleanup and preserves the run for diagnosis; do not regenerate the expected set
+from the live tree.
 
 Interruption observation never reuses a missed attempt. Install, upgrade, and
 uninstall each receive at most three fresh synthetic homes and valid padded

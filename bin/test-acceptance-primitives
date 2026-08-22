@@ -19,7 +19,7 @@ cleanup() {
   if [[ "$mounted" == 1 && "$device" == /dev/disk* ]]; then
     hdiutil detach "$device" >/dev/null 2>&1 || true
   fi
-  rm -f "$image" "$tmp/attach.plist" "$tmp/lifecycle.sb" "$tmp/smoke.sb" "$tmp/support" "$tmp/runner" "$tmp/candidate" "$tmp/candidate.out"
+  rm -f "$image" "$tmp/attach.plist" "$tmp/lifecycle.sb" "$tmp/smoke.sb" "$tmp/support" "$tmp/runner" "$tmp/candidate" "$tmp/candidate.out" "$tmp/install.out"
   rmdir "$mountpoint" "$tmp" 2>/dev/null || true
 }
 trap cleanup EXIT
@@ -39,11 +39,14 @@ mounted=1
 go build -o "$tmp/support" "$root/tools/acceptance-support"
 go build -o "$tmp/runner" "$root/tools/acceptance-runner"
 go build -o "$tmp/candidate" "$root/cmd/my-friday"
-mkdir -m 0700 "$mountpoint/home" "$mountpoint/home/.codex" "$mountpoint/tmp" "$mountpoint/cache" "$mountpoint/config"
+mkdir -m 0700 "$mountpoint/home" "$mountpoint/home/.codex" "$mountpoint/tmp" "$mountpoint/cache" "$mountpoint/config" "$mountpoint/runtime" "$mountpoint/memory"
 "$tmp/support" render-profile --template "$root/config/acceptance/lifecycle.sb.in" --value "$mountpoint" >"$tmp/lifecycle.sb"
 "$tmp/support" render-profile --template "$root/config/acceptance/codex-smoke.sb.in" --value "$mountpoint" >"$tmp/smoke.sb"
 sandbox-exec -f "$tmp/lifecycle.sb" /usr/bin/env -i HOME="$mountpoint/home" CODEX_HOME="$mountpoint/home/.codex" TMPDIR="$mountpoint/tmp" XDG_CACHE_HOME="$mountpoint/cache" XDG_CONFIG_HOME="$mountpoint/config" PATH=/usr/bin:/bin LANG=en_US.UTF-8 "$tmp/candidate" codex verify >"$tmp/candidate.out" 2>&1 && { echo "Not-installed candidate probe unexpectedly succeeded." >&2; exit 1; }
 grep -Fq 'Codex baseline: not-installed' "$tmp/candidate.out" || { echo "Go candidate did not launch under lifecycle profile." >&2; exit 1; }
+"$tmp/support" fixture --runtime "$mountpoint/runtime" --memory "$mountpoint/memory" --token FINAL_PROFILE_INSTALL
+printf 'Install\n' | sandbox-exec -f "$tmp/lifecycle.sb" /usr/bin/env -i HOME="$mountpoint/home" CODEX_HOME="$mountpoint/home/.codex" TMPDIR="$mountpoint/tmp" XDG_CACHE_HOME="$mountpoint/cache" XDG_CONFIG_HOME="$mountpoint/config" CFFIXED_USER_HOME="$mountpoint/home" CLANG_MODULE_CACHE_PATH="$mountpoint/cache/clang" PATH=/usr/bin:/bin:/usr/sbin:/sbin LANG=en_US.UTF-8 "$tmp/candidate" codex install --runtime "$mountpoint/runtime" >"$tmp/install.out" 2>&1 || { cat "$tmp/install.out" >&2; echo "Fresh valid install failed under final lifecycle profile." >&2; exit 1; }
+grep -Fq FINAL_PROFILE_INSTALL "$mountpoint/home/.codex/AGENTS.md" || { echo "Final-profile install did not render the runtime." >&2; exit 1; }
 codex_binary="$("$tmp/support" resolve-executable "$(command -v codex)")"
 codex_probe="$(sandbox-exec -f "$tmp/smoke.sb" "$codex_binary" --version 2>&1)"
 grep -Eq '^codex-cli [0-9]+\.[0-9]+\.[0-9]+' <<<"$codex_probe" || { echo "Real Codex did not launch under smoke profile." >&2; exit 1; }
@@ -72,7 +75,7 @@ mounted=0
 for graph_device in "$image_whole" "$physical_store" "$container_device" "$device"; do diskutil info "$graph_device" >/dev/null 2>&1 && { echo "Primitive APFS device survived detach: $graph_device" >&2; exit 1; }; done
 [[ "$(hdiutil info -plist | plutil -convert json -o - -- - | jq --arg image "$image" '[.images[]|select(.["image-path"]==$image)]|length')" == 0 ]] || { echo "Primitive image remained attached." >&2; exit 1; }
 [[ ! -e "$tmp/denied" ]] || { echo "Denied primitive write changed protected state." >&2; exit 1; }
-rm "$image" "$tmp/attach.plist" "$tmp/lifecycle.sb" "$tmp/smoke.sb" "$tmp/support" "$tmp/runner" "$tmp/candidate" "$tmp/candidate.out"
+rm "$image" "$tmp/attach.plist" "$tmp/lifecycle.sb" "$tmp/smoke.sb" "$tmp/support" "$tmp/runner" "$tmp/candidate" "$tmp/candidate.out" "$tmp/install.out"
 rmdir "$mountpoint" "$tmp"
 trap - EXIT
 echo "acceptance primitive integration passed."

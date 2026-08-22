@@ -1,12 +1,15 @@
 package main
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"flag"
 	"fmt"
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -32,14 +35,20 @@ func main() {
 	}
 	cmd := exec.Command(args[0], args[1:]...)
 	cmd.Dir = *cwd
-	cmd.Env = env
+	var tokenBytes [16]byte
+	if _, err := rand.Read(tokenBytes[:]); err != nil {
+		fatal(err)
+	}
+	processToken := hex.EncodeToString(tokenBytes[:])
+	cmd.Env = append(env, "MY_FRIDAY_ACCEPTANCE_PROCESS_TOKEN="+processToken)
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
+	baseline := processTable()
 	if err := cmd.Start(); err != nil {
 		fatal(err)
 	}
 	pgid := cmd.Process.Pid
-	tracker := newProcessTracker(pgid)
+	tracker := newProcessTracker(pgid, processToken, baseline, args[0])
 	tracker.start()
 	done := make(chan error, 1)
 	go func() { done <- cmd.Wait() }()
@@ -67,19 +76,26 @@ func main() {
 }
 
 type processRecord struct {
-	pid, ppid, pgid int
-	identity, state string
+	pid, ppid, pgid          int
+	identity, state, command string
 }
 type processTracker struct {
-	root int
-	mu   sync.Mutex
-	seen map[int]string
-	stop chan struct{}
-	done chan struct{}
+	root       int
+	token      string
+	executable string
+	baseline   map[int]string
+	mu         sync.Mutex
+	seen       map[int]string
+	stop       chan struct{}
+	done       chan struct{}
 }
 
-func newProcessTracker(root int) *processTracker {
-	return &processTracker{root: root, seen: map[int]string{}, stop: make(chan struct{}), done: make(chan struct{})}
+func newProcessTracker(root int, token string, baseline map[int]processRecord, executable string) *processTracker {
+	identities := map[int]string{}
+	for pid, record := range baseline {
+		identities[pid] = record.identity
+	}
+	return &processTracker{root: root, token: token, executable: filepath.Base(executable), baseline: identities, seen: map[int]string{}, stop: make(chan struct{}), done: make(chan struct{})}
 }
 func (t *processTracker) start() {
 	t.capture()
@@ -117,6 +133,14 @@ func (t *processTracker) capture() {
 					changed = true
 				}
 			}
+		}
+	}
+	for pid, record := range records {
+		fields := strings.Fields(record.command)
+		sameExecutable := len(fields) > 0 && filepath.Base(fields[0]) == t.executable
+		_, existedBefore := t.baseline[pid]
+		if strings.Contains(record.command, "MY_FRIDAY_ACCEPTANCE_PROCESS_TOKEN="+t.token) || (!existedBefore && sameExecutable) {
+			t.seen[pid] = record.identity
 		}
 	}
 }
@@ -166,7 +190,7 @@ func (t *processTracker) stopAndKill() bool {
 }
 
 func processTable() map[int]processRecord {
-	out, err := exec.Command("/bin/ps", "-ax", "-o", "pid=,ppid=,pgid=,stat=,lstart=").Output()
+	out, err := exec.Command("/bin/ps", "-axeww", "-o", "pid=,ppid=,pgid=,stat=,lstart=,command=").Output()
 	if err != nil {
 		return map[int]processRecord{}
 	}
@@ -182,7 +206,7 @@ func processTable() map[int]processRecord {
 		if e1 != nil || e2 != nil || e3 != nil {
 			continue
 		}
-		result[pid] = processRecord{pid: pid, ppid: ppid, pgid: pgid, state: fields[3], identity: fields[0] + " " + strings.Join(fields[4:9], " ")}
+		result[pid] = processRecord{pid: pid, ppid: ppid, pgid: pgid, state: fields[3], identity: fields[0] + " " + strings.Join(fields[4:9], " "), command: strings.Join(fields[9:], " ")}
 	}
 	return result
 }

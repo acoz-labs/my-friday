@@ -26,6 +26,11 @@ import (
 	"golang.org/x/sys/unix"
 )
 
+type stringList []string
+
+func (v *stringList) String() string     { return strings.Join(*v, ",") }
+func (v *stringList) Set(s string) error { *v = append(*v, s); return nil }
+
 func main() {
 	if len(os.Args) < 2 {
 		fatal("usage: acceptance-support <fixture|update|resolve-executable|render-profile|protected-content|secure-roots>")
@@ -221,6 +226,8 @@ func main() {
 		runID := fs.String("run-id", "", "run identifier")
 		receiptJSON := fs.String("receipt", "", "secure-roots receipt")
 		markerSHA := fs.String("marker-sha256", "", "expected marker digest")
+		var expectedEntries stringList
+		fs.Var(&expectedEntries, "expected-entry", "PARENT:relative/path expected cleanup entry")
 		_ = fs.Parse(os.Args[2:])
 		var receipt map[string]map[string]uint64
 		decodedSHA, shaErr := hex.DecodeString(*markerSHA)
@@ -260,7 +267,30 @@ func main() {
 				unix.Close(pfd)
 				fatal("cleanup marker authority changed")
 			}
-			if err = removeContentsAt(cfd); err != nil {
+			expectedPaths := map[string]bool{}
+			for _, entry := range expectedEntries {
+				prefix := parent + ":"
+				if strings.HasPrefix(entry, prefix) {
+					rel := strings.TrimPrefix(entry, prefix)
+					if rel == "" || filepath.Clean(rel) != rel || filepath.IsAbs(rel) || strings.HasPrefix(rel, "../") {
+						fatal("invalid expected cleanup entry")
+					}
+					expectedPaths[rel] = true
+				}
+			}
+			if !expectedPaths["marker.json"] {
+				fatal("cleanup marker is not expected")
+			}
+			seenPaths := map[string]bool{}
+			if err = validateExpectedContentsAt(cfd, "", expectedPaths, seenPaths); err != nil || len(seenPaths) != len(expectedPaths) {
+				unix.Close(cfd)
+				unix.Close(pfd)
+				if err != nil {
+					fatal(err.Error())
+				}
+				fatal("expected cleanup entry is missing")
+			}
+			if err = removeExpectedContentsAt(cfd, "", expectedPaths); err != nil {
 				unix.Close(cfd)
 				unix.Close(pfd)
 				fatal(err.Error())
@@ -421,7 +451,54 @@ func readRegularAt(dirfd int, name string, mode uint32) ([]byte, error) {
 	return io.ReadAll(io.LimitReader(f, 32<<20))
 }
 
-func removeContentsAt(dirfd int) error {
+func validateExpectedContentsAt(dirfd int, prefix string, expected, seen map[string]bool) error {
+	if _, err := unix.Seek(dirfd, 0, 0); err != nil {
+		return err
+	}
+	dup, err := unix.Dup(dirfd)
+	if err != nil {
+		return err
+	}
+	dir := os.NewFile(uintptr(dup), "cleanup-validation")
+	names, err := dir.Readdirnames(-1)
+	_ = dir.Close()
+	if err != nil {
+		return err
+	}
+	for _, name := range names {
+		relative := name
+		if prefix != "" {
+			relative = prefix + "/" + name
+		}
+		if !expected[relative] {
+			return fmt.Errorf("unexpected cleanup entry preserved: %s", relative)
+		}
+		seen[relative] = true
+		var st unix.Stat_t
+		if unix.Fstatat(dirfd, name, &st, unix.AT_SYMLINK_NOFOLLOW) != nil || st.Uid != uint32(os.Getuid()) || st.Mode&unix.S_IFMT == unix.S_IFLNK {
+			return fmt.Errorf("unsafe cleanup entry: %s", relative)
+		}
+		if st.Mode&unix.S_IFMT == unix.S_IFDIR {
+			child, openErr := unix.Openat(dirfd, name, unix.O_RDONLY|unix.O_DIRECTORY|unix.O_CLOEXEC|unix.O_NOFOLLOW, 0)
+			if openErr != nil {
+				return openErr
+			}
+			err = validateExpectedContentsAt(child, relative, expected, seen)
+			unix.Close(child)
+			if err != nil {
+				return err
+			}
+		} else if st.Mode&unix.S_IFMT != unix.S_IFREG || st.Nlink != 1 {
+			return fmt.Errorf("unsupported cleanup entry: %s", relative)
+		}
+	}
+	return nil
+}
+
+func removeExpectedContentsAt(dirfd int, prefix string, expected map[string]bool) error {
+	if _, err := unix.Seek(dirfd, 0, 0); err != nil {
+		return err
+	}
 	dup, err := unix.Dup(dirfd)
 	if err != nil {
 		return err
@@ -437,6 +514,13 @@ func removeContentsAt(dirfd int) error {
 		if name == "." || name == ".." {
 			return fmt.Errorf("unsafe cleanup entry")
 		}
+		relative := name
+		if prefix != "" {
+			relative = prefix + "/" + name
+		}
+		if expected != nil && !expected[relative] {
+			return fmt.Errorf("unexpected cleanup entry preserved: %s", relative)
+		}
 		var st unix.Stat_t
 		if err = unix.Fstatat(dirfd, name, &st, unix.AT_SYMLINK_NOFOLLOW); err != nil {
 			return err
@@ -449,15 +533,30 @@ func removeContentsAt(dirfd int) error {
 			if openErr != nil {
 				return openErr
 			}
-			if err = removeContentsAt(child); err != nil {
+			if err = removeExpectedContentsAt(child, relative, expected); err != nil {
 				unix.Close(child)
 				return err
+			}
+			var rebound unix.Stat_t
+			if unix.Fstatat(dirfd, name, &rebound, unix.AT_SYMLINK_NOFOLLOW) != nil || rebound.Dev != st.Dev || rebound.Ino != st.Ino {
+				unix.Close(child)
+				return fmt.Errorf("cleanup directory identity changed: %s", relative)
 			}
 			unix.Close(child)
 			if err = unix.Unlinkat(dirfd, name, unix.AT_REMOVEDIR); err != nil {
 				return err
 			}
 		} else if st.Mode&unix.S_IFMT == unix.S_IFREG && st.Nlink == 1 {
+			fd, openErr := unix.Openat(dirfd, name, unix.O_RDONLY|unix.O_CLOEXEC|unix.O_NOFOLLOW, 0)
+			if openErr != nil {
+				return openErr
+			}
+			var opened, rebound unix.Stat_t
+			if unix.Fstat(fd, &opened) != nil || unix.Fstatat(dirfd, name, &rebound, unix.AT_SYMLINK_NOFOLLOW) != nil || opened.Dev != st.Dev || opened.Ino != st.Ino || rebound.Dev != st.Dev || rebound.Ino != st.Ino {
+				unix.Close(fd)
+				return fmt.Errorf("cleanup file identity changed: %s", relative)
+			}
+			unix.Close(fd)
 			if err = unix.Unlinkat(dirfd, name, 0); err != nil {
 				return err
 			}
@@ -553,32 +652,9 @@ func openAbsoluteDirNoFollow(path string) (int, error) {
 }
 
 func noFollowDigest(path string) (string, bool, error) {
-	info, err := os.Lstat(path)
-	if os.IsNotExist(err) {
-		return "", false, nil
-	}
-	if err != nil {
-		return "", false, err
-	}
-	if !info.Mode().IsRegular() || info.Mode()&os.ModeSymlink != 0 || info.Sys().(*syscall.Stat_t).Nlink != 1 || info.Sys().(*syscall.Stat_t).Uid != uint32(os.Getuid()) {
-		return "", false, fmt.Errorf("unsafe protected file: %s", path)
-	}
-	fd, err := unix.Open(path, unix.O_RDONLY|unix.O_CLOEXEC|unix.O_NOFOLLOW, 0)
-	if err != nil {
-		return "", false, err
-	}
-	file := os.NewFile(uintptr(fd), path)
-	body, err := io.ReadAll(io.LimitReader(file, 16<<20))
-	closeErr := file.Close()
-	if err != nil {
-		return "", false, err
-	}
-	if closeErr != nil {
-		return "", false, closeErr
-	}
-	after, err := os.Lstat(path)
-	if err != nil || !os.SameFile(info, after) {
-		return "", false, fmt.Errorf("protected file changed during read: %s", path)
+	body, ok, err := noFollowRead(path)
+	if err != nil || !ok {
+		return "", ok, err
 	}
 	sum := sha256.Sum256(body)
 	return fmt.Sprintf("%x", sum), true, nil
@@ -622,19 +698,22 @@ func validateRuntimeNoFollow(root string) error {
 }
 
 func noFollowRead(path string) ([]byte, bool, error) {
-	info, err := os.Lstat(path)
-	if os.IsNotExist(err) {
+	dirfd, err := openAbsoluteDirNoFollow(filepath.Dir(path))
+	if err != nil {
+		return nil, false, err
+	}
+	defer unix.Close(dirfd)
+	fd, err := unix.Openat(dirfd, filepath.Base(path), unix.O_RDONLY|unix.O_CLOEXEC|unix.O_NOFOLLOW, 0)
+	if errors.Is(err, unix.ENOENT) {
 		return nil, false, nil
 	}
 	if err != nil {
 		return nil, false, err
 	}
-	if !info.Mode().IsRegular() || info.Mode()&os.ModeSymlink != 0 || info.Sys().(*syscall.Stat_t).Nlink != 1 || info.Sys().(*syscall.Stat_t).Uid != uint32(os.Getuid()) {
+	var st unix.Stat_t
+	if unix.Fstat(fd, &st) != nil || st.Mode&unix.S_IFMT != unix.S_IFREG || st.Nlink != 1 || st.Uid != uint32(os.Getuid()) {
+		unix.Close(fd)
 		return nil, false, fmt.Errorf("unsafe protected file: %s", path)
-	}
-	fd, err := unix.Open(path, unix.O_RDONLY|unix.O_CLOEXEC|unix.O_NOFOLLOW, 0)
-	if err != nil {
-		return nil, false, err
 	}
 	file := os.NewFile(uintptr(fd), path)
 	body, err := io.ReadAll(io.LimitReader(file, 16<<20))
@@ -645,8 +724,8 @@ func noFollowRead(path string) ([]byte, bool, error) {
 	if closeErr != nil {
 		return nil, false, closeErr
 	}
-	after, err := os.Lstat(path)
-	if err != nil || !os.SameFile(info, after) {
+	var after unix.Stat_t
+	if unix.Fstatat(dirfd, filepath.Base(path), &after, unix.AT_SYMLINK_NOFOLLOW) != nil || after.Dev != st.Dev || after.Ino != st.Ino {
 		return nil, false, fmt.Errorf("protected file changed during read: %s", path)
 	}
 	return body, true, nil

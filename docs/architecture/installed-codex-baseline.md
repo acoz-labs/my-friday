@@ -85,6 +85,11 @@ shell substitution, normalized byte-for-byte, and positive-controlled by both
 the real Go candidate and resolved Codex executable. The reviewed Go-runtime
 `sysctl-read` operation is allowed; broad Mach lookup remains denied and new
 diagnostics fail.
+The profile additionally permits write-data only to `/dev/null`; all synthetic
+temporary, XDG, fixed-user-home, and compiler-cache paths exist inside the
+disposable volume. Its executable control performs a fresh valid contract-v1
+install through the real Git/xcrun path. Diagnostics must be empty or one exact
+reviewed deprecation line; multiline and duplicate diagnostics fail closed.
 
 The supervisor externally stops and kills exact candidate process groups only
 after `tools/acceptance-stop-barrier` observes a schema-valid recoverable journal
@@ -115,6 +120,9 @@ closure, pinned build inputs/flags, tree/blob IDs, and an aggregate digest of
 the actually executed helper binaries. Every candidate and Codex process runs
 from a synthetic cwd under a hard process timeout; process-start-bound lineage
 tracking kills descendants even after `setsid` and proves no live descendants.
+Immediate double-fork descendants are correlated by an inherited per-run token
+and new same-executable identity even if their original parent exits before the
+first process-table sample.
 
 Image authority binds the sparse-image inode to the image whole disk, APFS
 physical store, container, volume device/UUID, mount root, and live `hdiutil`,
@@ -122,3 +130,12 @@ physical store, container, volume device/UUID, mount root, and live `hdiutil`,
 identities and the image association disappear. Exact run children are then
 removed descriptor-relative under no-follow ancestor walks using matching
 root receipts and markers; fixed parents are never recursively deleted.
+Once attach begins, ambiguous or partially validated output forces complete
+preservation until ordinary detach and graph absence are proved. Final cleanup
+accepts an exact descriptor-relative entry set, rebinds each opened entry before
+unlink, and refuses the whole operation on an unexpected entry. Protected reads
+component-walk intermediate directories without following symlinks.
+
+The executed-byte closure also includes artifact download/packaging and evidence
+verification scripts. Dependency-producer and closure-parser failures propagate
+as refusals rather than being interpreted as an empty source closure.

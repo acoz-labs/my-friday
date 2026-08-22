@@ -17,6 +17,11 @@ grep -Fq 'render-profile --template' "$supervisor"
 if grep -Eq 'sed .*@@VOLUME@@' "$supervisor"; then exit 1; fi
 grep -Fq 'source_closure_sha256' "$supervisor"
 grep -Fq 'go list -deps -json' "$supervisor"
+grep -Fq 'if ! dependency_json=' "$supervisor"
+for executed_script in bin/prepare-release-artifact bin/package-release-artifact bin/verify-acceptance-evidence; do grep -Fq "$executed_script" "$supervisor"; done
+grep -Fq 'attach_started=1' "$supervisor"
+grep -Fq -- '--expected-entry' "$supervisor"
+grep -Fq 'file-write-data (literal "/dev/null")' "$root/config/acceptance/lifecycle.sb.in"
 grep -Fq 'verify_detached_absence' "$supervisor"
 grep -Fq 'cleanup-roots --home' "$supervisor"
 grep -Fq 'candidate-like lifecycle sandbox launch control failed' "$supervisor"

@@ -29,11 +29,17 @@ cd "$root"
 head_sha="$(git rev-parse HEAD)"
 [[ -z "$(git status --porcelain=v1 --untracked-files=all)" ]] || refuse "checkout must be clean"
 [[ "$(git remote get-url origin)" == "https://github.com/$repo.git" ]] || refuse "origin does not match $repo"
-closure_list=$'go.mod\ngo.sum\nbin/accept-installed-codex-baseline\nconfig/acceptance/lifecycle.sb.in\nconfig/acceptance/codex-smoke.sb.in\n'
+closure_list=$'go.mod\ngo.sum\nbin/accept-installed-codex-baseline\nbin/prepare-release-artifact\nbin/package-release-artifact\nbin/verify-acceptance-evidence\nconfig/acceptance/lifecycle.sb.in\nconfig/acceptance/codex-smoke.sb.in\n'
+if ! dependency_json="$(CGO_ENABLED=0 go list -deps -json ./tools/acceptance-runner ./tools/acceptance-stop-barrier ./tools/acceptance-support)"; then
+  refuse "helper dependency discovery failed"
+fi
+if ! dependency_files="$(jq -er 'select(.Module.Path == "github.com/acoz-labs/my-friday") | .Dir as $dir | ((.GoFiles // []) + (.CgoFiles // []) + (.SFiles // []) + (.SysoFiles // []) + (.EmbedFiles // []))[] | $dir + "/" + .' <<<"$dependency_json")"; then
+  refuse "helper dependency closure parsing failed"
+fi
 while IFS= read -r absolute; do
   [[ "$absolute" == "$root/"* ]] || refuse "helper dependency escaped the repository: $absolute"
   closure_list+="${absolute#"$root/"}"$'\n'
-done < <(CGO_ENABLED=0 go list -deps -json ./tools/acceptance-runner ./tools/acceptance-stop-barrier ./tools/acceptance-support | jq -r 'select(.Module.Path == "github.com/acoz-labs/my-friday") | .Dir as $dir | ((.GoFiles // []) + (.CgoFiles // []) + (.SFiles // []) + (.SysoFiles // []) + (.EmbedFiles // []))[] | $dir + "/" + .')
+done <<<"$dependency_files"
 closure_list="$(printf %s "$closure_list" | LC_ALL=C sort -u)"
 closure_receipt=""
 while IFS= read -r tracked; do
@@ -92,6 +98,7 @@ run_root="$run_parent/$run_id"
 evidence_root="$evidence_parent/$run_id"
 preserve=1
 mounted=0
+attach_started=0
 device=""
 volume_uuid=""
 image_device=""
@@ -110,8 +117,9 @@ cleanup_failure() {
     wait "$sentinel_pid" 2>/dev/null || true
   fi
   if [[ "${preserve:-1}" == 1 ]]; then
-    if [[ -z "${device:-}" && -n "${marker_sha:-}" && -n "${root_identities:-}" && -d "${run_root:-/nonexistent}" ]]; then
-      go run ./tools/acceptance-support cleanup-roots --home "$real_home" --run-id "$run_id" --receipt "$root_identities" --marker-sha256 "$marker_sha" >/dev/null 2>&1 || true
+    if [[ "${attach_started:-0}" == 0 && -z "${device:-}" && -n "${marker_sha:-}" && -n "${root_identities:-}" && -d "${run_root:-/nonexistent}" ]]; then
+      go run ./tools/acceptance-support cleanup-roots --home "$real_home" --run-id "$run_id" --receipt "$root_identities" --marker-sha256 "$marker_sha" \
+        --expected-entry .my-friday-acceptance:marker.json --expected-entry .my-friday-acceptance-evidence:marker.json >/dev/null 2>&1 || true
     fi
     if [[ "${mounted:-0}" == 1 ]] && verify_mount_authority; then
       if hdiutil detach "$device" >/dev/null 2>&1 && verify_detached_absence; then failure_detached=true; fi
@@ -201,6 +209,7 @@ image_device="$(stat -f %d "$image")"
 image_inode="$(stat -f %i "$image")"
 [[ "$(stat -f %u:%p:%l "$image")" == "$(id -u):100600:1" ]] || fail "backing image identity is unsafe"
 attach_plist="$run_root/attach.plist"
+attach_started=1
 hdiutil attach -plist -nobrowse -owners on -mountpoint "$mountpoint" "$image" >"$attach_plist"
 attach_json="$(plutil -convert json -o - "$attach_plist")"
 [[ "$(jq '[.["system-entities"][] | select(has("mount-point"))] | length' <<<"$attach_json")" == 1 && "$(jq -r '[.["system-entities"][] | select(has("mount-point"))][0]["mount-point"]' <<<"$attach_json")" == "$mountpoint" ]] || fail "attach returned unexpected mounted entities"
@@ -236,9 +245,14 @@ done
 printf 'protected-canary\n' >"$run_root/protected-canary"
 chmod 0600 "$run_root/protected-canary"
 curl -fsS --max-time 5 https://example.com >/dev/null || fail "unsandboxed reachability control failed"
+validate_sandbox_diagnostic() {
+  local diagnostic="$1"
+  [[ "$diagnostic" != *$'\n'* ]] || return 1
+  [[ -z "$diagnostic" || "$diagnostic" =~ ^sandbox-exec:\ warning:\ sandbox-exec\ is\ deprecated.*$ ]]
+}
 for profile in lifecycle codex-smoke; do
   diagnostics="$({ sandbox-exec -f "$run_root/$profile.sb" /usr/bin/true; } 2>&1)" || fail "$profile profile preflight failed"
-  [[ -z "$diagnostics" || "$diagnostics" =~ ^sandbox-exec:.*deprecated.*$ ]] || fail "$profile profile emitted an unreviewed diagnostic"
+  validate_sandbox_diagnostic "$diagnostics" || fail "$profile profile emitted an unreviewed diagnostic"
 done
 # shellcheck disable=SC2016
 sandbox-exec -f "$run_root/lifecycle.sb" /bin/sh -c 'printf ok >"$1/control"' sh "$volume"
@@ -278,7 +292,7 @@ chmod 0700 "$run_root/acceptance-stop-barrier"
 failure_class="candidate"
 failure_scope="candidate"
 
-candidate_env=(--env HOME="$volume/home" --env CODEX_HOME="$volume/home/.codex" --env TMPDIR="$volume/tmp" --env XDG_CACHE_HOME="$volume/xdg-cache" --env XDG_CONFIG_HOME="$volume/xdg-config" --env LANG=en_US.UTF-8 --env PATH="$(dirname "$codex_binary"):/usr/bin:/bin:/usr/sbin:/sbin")
+candidate_env=(--env HOME="$volume/home" --env CODEX_HOME="$volume/home/.codex" --env TMPDIR="$volume/tmp" --env XDG_CACHE_HOME="$volume/xdg-cache" --env XDG_CONFIG_HOME="$volume/xdg-config" --env CFFIXED_USER_HOME="$volume/home" --env CLANG_MODULE_CACHE_PATH="$volume/xdg-cache/clang" --env LANG=en_US.UTF-8 --env PATH="$(dirname "$codex_binary"):/usr/bin:/bin:/usr/sbin:/sbin")
 run_bounded() { "$run_root/acceptance-runner" --cwd "$volume/home" --timeout 45s "${candidate_env[@]}" -- "$@"; }
 run_candidate() { run_bounded sandbox-exec -f "$run_root/lifecycle.sb" "$candidate" "$@"; }
 confirm_candidate() { printf '%s\n' "$1" | run_candidate "${@:2}"; }
@@ -295,6 +309,7 @@ set -e
 [[ "$codex_probe_status" == 0 && "$codex_probe" =~ (^|$'\n')codex-cli[[:space:]][0-9]+\.[0-9]+\.[0-9]+($|$'\n') ]] || fail "real Codex smoke sandbox launch control failed"
 unexpected_codex_diagnostic="$(printf '%s\n' "$codex_probe" | grep -Ev '^(codex-cli [0-9]+\.[0-9]+\.[0-9]+|WARNING: proceeding, even though we could not create PATH aliases: Operation not permitted \(os error 1\))$' || true)"
 [[ -z "$unexpected_codex_diagnostic" ]] || fail "real Codex emitted an unreviewed sandbox diagnostic"
+[[ "$(printf '%s\n' "$codex_probe" | sed '/^$/d' | wc -l | tr -d ' ')" -le 2 ]] || fail "real Codex emitted duplicate or multiline diagnostics"
 if "$run_root/acceptance-runner" --cwd "$volume/home" --timeout 200ms "${candidate_env[@]}" -- "$run_root/acceptance-support" setsid-probe >/dev/null 2>&1; then
   fail "setsid descendant control unexpectedly succeeded"
 fi
@@ -311,7 +326,7 @@ for interrupted_action in install upgrade uninstall; do
     attempt_home="$attempt_root/home"; attempt_codex="$attempt_home/.codex"; attempt_runtime="$attempt_root/runtime"; attempt_memory="$attempt_root/memory"
     for attempt_path in "$attempt_codex" "$attempt_root/tmp" "$attempt_root/xdg-cache" "$attempt_root/xdg-config"; do install -d -m 0700 "$attempt_path"; done
     "$run_root/acceptance-support" fixture --padding --runtime "$attempt_runtime" --memory "$attempt_memory" --token "INTERRUPT_${interrupted_action}_${capture_attempt}_$run_id"
-    attempt_env=(--env HOME="$attempt_home" --env CODEX_HOME="$attempt_codex" --env TMPDIR="$attempt_root/tmp" --env XDG_CACHE_HOME="$attempt_root/xdg-cache" --env XDG_CONFIG_HOME="$attempt_root/xdg-config" --env LANG=en_US.UTF-8 --env PATH="$(dirname "$codex_binary"):/usr/bin:/bin:/usr/sbin:/sbin")
+    attempt_env=(--env HOME="$attempt_home" --env CODEX_HOME="$attempt_codex" --env TMPDIR="$attempt_root/tmp" --env XDG_CACHE_HOME="$attempt_root/xdg-cache" --env XDG_CONFIG_HOME="$attempt_root/xdg-config" --env CFFIXED_USER_HOME="$attempt_home" --env CLANG_MODULE_CACHE_PATH="$attempt_root/xdg-cache/clang" --env LANG=en_US.UTF-8 --env PATH="$(dirname "$codex_binary"):/usr/bin:/bin:/usr/sbin:/sbin")
     run_attempt() { "$run_root/acceptance-runner" --cwd "$attempt_home" --timeout 45s "${attempt_env[@]}" -- sandbox-exec -f "$run_root/lifecycle.sb" "$candidate" "$@"; }
     confirm_attempt() { printf '%s\n' "$1" | run_attempt "${@:2}"; }
     if [[ "$interrupted_action" == upgrade || "$interrupted_action" == uninstall ]]; then confirm_attempt Install codex install --runtime "$attempt_runtime"; fi
@@ -418,7 +433,20 @@ published_provisional="$(gh api "repos/$repo/issues/comments/$provisional_id")"
 [[ "$(stat -f %d:%i:%u:%p "$evidence_root")" == "$(jq -r '.[".my-friday-acceptance-evidence"] | "\(.device):\(.inode)"' <<<"$root_identities"):$(id -u):40700" ]] || fail "evidence root identity changed before cleanup"
 [[ "$(stat -f %d:%i:%u:%p:%l "$image")" == "$image_device:$image_inode:$(id -u):100600:1" ]] || fail "backing image changed before deletion"
 failure_scope="harness"; failure_class="cleanup"
-"$run_root/acceptance-support" cleanup-roots --home "$real_home" --run-id "$run_id" --receipt "$root_identities" --marker-sha256 "$marker_sha"
+cleanup_expected=(
+  .my-friday-acceptance:marker.json .my-friday-acceptance:acceptance.sparseimage .my-friday-acceptance:attach.plist
+  .my-friday-acceptance:mount .my-friday-acceptance:acceptance-support .my-friday-acceptance:acceptance-runner
+  .my-friday-acceptance:acceptance-stop-barrier .my-friday-acceptance:lifecycle.sb .my-friday-acceptance:codex-smoke.sb
+  .my-friday-acceptance:protected-canary .my-friday-acceptance:artifact
+  .my-friday-acceptance:artifact/my-friday-darwin-arm64.tar.gz .my-friday-acceptance:artifact/SHA256SUMS
+  .my-friday-acceptance-evidence:marker.json .my-friday-acceptance-evidence:before-metadata.private
+  .my-friday-acceptance-evidence:before-content.private .my-friday-acceptance-evidence:before-digests
+  .my-friday-acceptance-evidence:after-metadata.private .my-friday-acceptance-evidence:after-content.private
+  .my-friday-acceptance-evidence:after-digests
+)
+cleanup_args=()
+for expected_entry in "${cleanup_expected[@]}"; do cleanup_args+=(--expected-entry "$expected_entry"); done
+"$run_root/acceptance-support" cleanup-roots --home "$real_home" --run-id "$run_id" --receipt "$root_identities" --marker-sha256 "$marker_sha" "${cleanup_args[@]}"
 [[ ! -e "$run_root" && ! -e "$evidence_root" ]] || fail "local cleanup incomplete"
 
 final_json="$(jq -nc --arg sha "$head_sha" --arg artifact "$authority" --argjson id "$provisional_id" --arg digest "$provisional_digest" --arg protected "$protected_metadata_digest:$protected_content_digest" '{schema:"installed-baseline-evidence-v1",authority:"final",issue:4,candidate:$sha,artifact:$artifact,provisional:{id:$id,digest:$digest},protected_state_digest:$protected,cleanup:{non_forced_detach:true,mount_absent:true,image_deleted:true,run_root_deleted:true,evidence_root_deleted:true}}')"

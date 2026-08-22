@@ -83,6 +83,23 @@ func TestNoFollowReadRejectsSymlink(t *testing.T) {
 	}
 }
 
+func TestNoFollowReadRejectsIntermediateSymlink(t *testing.T) {
+	root := t.TempDir()
+	realDir := filepath.Join(root, "real")
+	if err := os.Mkdir(realDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(realDir, "protected"), []byte("secret"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(realDir, filepath.Join(root, "link")); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok, err := noFollowRead(filepath.Join(root, "link", "protected")); err == nil || ok {
+		t.Fatal("intermediate symlink in protected path was accepted")
+	}
+}
+
 func TestResolveExecutableAcceptsOwnedSymlinkChain(t *testing.T) {
 	root := t.TempDir()
 	target := filepath.Join(root, "codex-real")
@@ -157,7 +174,9 @@ func TestCleanupRootsIsReceiptAndMarkerBound(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	cleanup := exec.Command("go", "run", ".", "cleanup-roots", "--home", home, "--run-id", "run", "--receipt", strings.TrimSpace(string(receipt)), "--marker-sha256", markerSHA)
+	cleanup := exec.Command("go", "run", ".", "cleanup-roots", "--home", home, "--run-id", "run", "--receipt", strings.TrimSpace(string(receipt)), "--marker-sha256", markerSHA,
+		"--expected-entry", ".my-friday-acceptance:marker.json", "--expected-entry", ".my-friday-acceptance:owned",
+		"--expected-entry", ".my-friday-acceptance-evidence:marker.json", "--expected-entry", ".my-friday-acceptance-evidence:owned")
 	if out, runErr := cleanup.CombinedOutput(); runErr != nil {
 		t.Fatalf("cleanup: %v %s", runErr, out)
 	}
@@ -168,5 +187,36 @@ func TestCleanupRootsIsReceiptAndMarkerBound(t *testing.T) {
 		if _, err = os.Stat(filepath.Join(home, parent)); err != nil {
 			t.Fatal("fixed parent was removed")
 		}
+	}
+}
+
+func TestCleanupRootsPreservesUnexpectedEntry(t *testing.T) {
+	home := t.TempDir()
+	receipt, err := exec.Command("go", "run", ".", "secure-roots", "--home", home, "--run-id", "run").CombinedOutput()
+	if err != nil {
+		t.Fatal(err)
+	}
+	marker := []byte("marker\n")
+	markerSHA := fmt.Sprintf("%x", sha256.Sum256(marker))
+	for _, parent := range []string{".my-friday-acceptance", ".my-friday-acceptance-evidence"} {
+		child := filepath.Join(home, parent, "run")
+		if err = os.WriteFile(filepath.Join(child, "marker.json"), marker, 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	unexpected := filepath.Join(home, ".my-friday-acceptance", "run", "unexpected")
+	if err = os.WriteFile(unexpected, []byte("preserve"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cmd := exec.Command("go", "run", ".", "cleanup-roots", "--home", home, "--run-id", "run", "--receipt", strings.TrimSpace(string(receipt)), "--marker-sha256", markerSHA,
+		"--expected-entry", ".my-friday-acceptance:marker.json", "--expected-entry", ".my-friday-acceptance-evidence:marker.json")
+	if err = cmd.Run(); err == nil {
+		t.Fatal("cleanup accepted an unexpected entry")
+	}
+	if body, readErr := os.ReadFile(unexpected); readErr != nil || string(body) != "preserve" {
+		t.Fatal("unexpected entry was not preserved")
+	}
+	if body, readErr := os.ReadFile(filepath.Join(home, ".my-friday-acceptance", "run", "marker.json")); readErr != nil || string(body) != "marker\n" {
+		t.Fatal("cleanup mutated expected state before refusing the unexpected entry")
 	}
 }

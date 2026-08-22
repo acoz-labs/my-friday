@@ -46,12 +46,19 @@ func TestEscapedDescendantHelper(t *testing.T) {
 	}
 	if mode == "parent" {
 		cmd := exec.Command(os.Args[0], "-test.run=TestEscapedDescendantHelper")
-		cmd.Env = []string{"ESCAPE_HELPER=child", "PIDFILE=" + os.Getenv("PIDFILE")}
+		cmd.Env = []string{"ESCAPE_HELPER=child", "PIDFILE=" + os.Getenv("PIDFILE"), "MY_FRIDAY_ACCEPTANCE_PROCESS_TOKEN=" + os.Getenv("MY_FRIDAY_ACCEPTANCE_PROCESS_TOKEN")}
+		if err := cmd.Start(); err != nil {
+			os.Exit(2)
+		}
+		return
+	}
+	if mode == "child" {
+		cmd := exec.Command(os.Args[0], "-test.run=TestEscapedDescendantHelper")
+		cmd.Env = []string{"ESCAPE_HELPER=grandchild", "PIDFILE=" + os.Getenv("PIDFILE"), "MY_FRIDAY_ACCEPTANCE_PROCESS_TOKEN=" + os.Getenv("MY_FRIDAY_ACCEPTANCE_PROCESS_TOKEN")}
 		cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
 		if err := cmd.Start(); err != nil {
 			os.Exit(2)
 		}
-		time.Sleep(250 * time.Millisecond)
 		return
 	}
 	if err := os.WriteFile(os.Getenv("PIDFILE"), []byte(strconv.Itoa(os.Getpid())), 0o600); err != nil {
