@@ -166,7 +166,7 @@ func main() {
 		}
 		defer unix.Close(fd)
 		var st unix.Stat_t
-		if unix.Fstat(fd, &st) != nil || st.Uid != uint32(os.Getuid()) || (*ownerMode != 0 && st.Mode&0o777 != uint16(*ownerMode)) {
+		if unix.Fstat(fd, &st) != nil || st.Uid != uint32(os.Getuid()) || (*ownerMode != 0 && uint32(st.Mode)&0o777 != uint32(*ownerMode)) {
 			fatal("unsafe directory identity")
 		}
 		fmt.Printf("%d:%d\n", st.Dev, st.Ino)
@@ -415,7 +415,7 @@ func readRegularAt(dirfd int, name string, mode uint32) ([]byte, error) {
 	f := os.NewFile(uintptr(fd), name)
 	defer f.Close()
 	var st unix.Stat_t
-	if unix.Fstat(fd, &st) != nil || st.Mode&unix.S_IFMT != unix.S_IFREG || st.Mode&0o777 != uint16(mode) || st.Uid != uint32(os.Getuid()) || st.Nlink != 1 {
+	if unix.Fstat(fd, &st) != nil || st.Mode&unix.S_IFMT != unix.S_IFREG || uint32(st.Mode)&0o777 != mode || st.Uid != uint32(os.Getuid()) || st.Nlink != 1 {
 		return nil, fmt.Errorf("unsafe regular file: %s", name)
 	}
 	return io.ReadAll(io.LimitReader(f, 32<<20))
