@@ -24,7 +24,8 @@ Deterministic tests cover:
   owner/mode/link/device/inode/marker refusals, and fd-relative cleanup;
 - program-readable attach/mount parsing, APFS/local/owner/options enforcement,
   extra-device refusal, detach state, and restart discovery;
-- profile generation/escaping/digest, reviewed warning allowlist, unexpected
+- profile generation/escaping/digest, volume-only candidate writes,
+  evidence-staging denial, reviewed warning allowlist, unexpected
   diagnostic/nonzero refusal, and lifecycle-versus-smoke network rules;
 - protected metadata traversal, exclusions, race/error refusal, aggregate
   comparison, canary proof, and evidence redaction;
@@ -53,7 +54,8 @@ parser/state tests; a suitable macOS job runs primitive integration tests.
 3. Add failing APFS output and cleanup tests; implement create/attach/verify/
    ordinary-detach/marker-bound-delete behavior.
 4. Add failing profile and diagnostic tests; implement fixed lifecycle/smoke
-   profiles plus controls and no-fallback refusal.
+   profiles, candidate denial of evidence staging, controls, and no-fallback
+   refusal.
 5. Add failing exact-artifact and environment tests; implement download/copy/
    digest recheck and minimal synthetic environment.
 6. Add failing lifecycle and journal-interruption scenario tests; implement the

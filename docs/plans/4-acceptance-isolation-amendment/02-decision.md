@@ -89,7 +89,7 @@ changes the sandbox mechanism, acceptance blocks and design reopens.
 | Amend PR #15; do not rewrite it | Preserve exact approved and shipped provenance | PR #15 and PR #19 are merged history |
 | Re-nominate after harness implementation | Acceptance must include every lifecycle-linked implementation merge | Repository exact-candidate policy |
 | Mount below real home | Satisfies product's home-descendant and local APFS checks without admin | Shipped `codexHome`/home-root contract and host probe |
-| Separate volume and evidence roots | Evidence must survive detach long enough to publish while candidate writes remain bounded | Acceptance/evidence lifecycle |
+| Separate volume and evidence roots | Supervisor-owned evidence must survive detach while remaining outside candidate write authority | Acceptance/evidence lifecycle |
 | Deny lifecycle network; allow smoke network | My Friday lifecycle needs none; real Codex provider smoke does | Least privilege and standard Codex auth |
 | Permit no unsandboxed candidate fallback | Otherwise acceptance could silently lose its primary write boundary | Trust-boundary requirement |
 | Aggregate protected manifests without content hashes | Prove mutation absence without exposing same-UID secrets | Evidence privacy requirement |

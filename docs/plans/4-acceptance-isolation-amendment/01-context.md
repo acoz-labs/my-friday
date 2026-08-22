@@ -80,8 +80,9 @@ Acceptance must prove:
    stack without touching the live installation or deployed runtime projection;
 2. lifecycle commands, denials, repair, rollback, uninstall, and externally
    interrupted recovery behave as shipped;
-3. lifecycle processes and descendants cannot write outside the two allowlisted
-   run roots and cannot use network;
+3. lifecycle processes and descendants can write only inside the disposable
+   volume and cannot use network; supervisor-owned evidence staging remains
+   outside candidate authority;
 4. the isolated real-Codex smoke loads the installed baseline, with network and
    auth enabled only for that scenario;
 5. protected pre/post state is equal, durable evidence is sanitized and bound

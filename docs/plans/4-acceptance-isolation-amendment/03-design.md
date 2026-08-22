@@ -37,8 +37,9 @@ absent children of the accepting user's canonical real home:
 - `.my-friday-acceptance/<run-id>/`: mode `0700`, containing the image backing
   file, an empty mountpoint, supervisor marker, private profiles, and private
   manifests;
-- `.my-friday-acceptance-evidence/<run-id>/`: mode `0700`, containing only the
-  sanitized evidence draft and publication receipt.
+- `.my-friday-acceptance-evidence/<run-id>/`: mode `0700`, supervisor-owned and
+  outside every candidate sandbox write allowlist, containing only the sanitized
+  evidence draft and publication receipt.
 
 Before mutation it opens each parent without following symlinks and proves
 local APFS, current owner, non-root location, expected parent identity, and no
@@ -72,10 +73,12 @@ candidate/                 exact nominated executable and archive receipt
 ### Sandbox authority
 
 Profiles use `(deny default)` and permit only the process, signal, system-read,
-device, and terminal operations proven necessary. File writes are allowlisted
-to the exact resolved volume root and evidence staging root; no broader home,
-temporary, or device write rule is allowed. Candidate processes inherit the
-profile across descendants.
+device, and terminal operations proven necessary. Candidate file writes are
+allowlisted only to the exact resolved volume root; evidence staging and every
+broader home, temporary, or device write location remain denied. Candidate
+processes inherit the profile across descendants. Only the trusted supervisor,
+running outside that sandbox after validating structured results, may write
+sanitized evidence staging.
 
 Two reviewed profiles exist:
 
@@ -86,10 +89,12 @@ Two reviewed profiles exist:
 
 The generated profile is derived from fixed templates plus escaped canonical
 paths, UID, and run identifiers. Its SHA-256 and platform build enter evidence.
-Before candidate execution the supervisor proves: allowed volume write succeeds,
-allowed evidence write succeeds, a write to a non-sensitive protected canary is
-denied and unchanged, unsandboxed reachability control succeeds, sandboxed
-lifecycle reachability fails, and smoke-profile reachability succeeds. Nonzero
+Before candidate execution a fixed candidate-like probe proves: allowed volume
+write succeeds, evidence-staging write is denied, a write to a non-sensitive
+protected canary is denied and unchanged, unsandboxed reachability control
+succeeds, sandboxed lifecycle reachability fails, and smoke-profile reachability
+succeeds. The supervisor separately proves it can create its sanitized evidence
+file without granting that path to candidate descendants. Nonzero
 exit, parser diagnostics, unexpected stderr, missing binary, or normalized
 profile/rule mismatch refuses acceptance. Deprecation warnings explicitly
 reviewed and allowlisted for the supported build may be recorded; new warnings
@@ -195,7 +200,7 @@ prohibited effects.
 | --- | --- | --- |
 | Acceptor | Run supervisor and publish evidence | Ordinary user plus GitHub issue-comment authority; root/sudo refuses |
 | Supervisor | Create/mount/detach/delete marked run | Exact canonical paths, marker, device/inode/owner/mode proof; mismatch preserves |
-| Candidate | Mutate synthetic Codex home | Sandbox write allowlist only; lifecycle network denied |
+| Candidate | Mutate synthetic Codex home | Sandbox allows writes only on disposable volume; evidence/live roots and lifecycle network denied |
 | Real Codex | Login and execute smoke | Temporary stdin secret, image-local auth state, smoke-only network |
 | Acceptance workflow | Record issue approval | Exact candidate/artifact/implementation set plus fetched evidence ID/digest/author |
 | Release workflow | Publish bytes | Same accepted artifact and still-valid evidence authority |

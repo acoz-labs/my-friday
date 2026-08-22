@@ -6,7 +6,7 @@
 - **Repository basis:** 0ad07cf578ed4e7f7f7d8ae7d30aa5013bb9d83b
 - **Execution envelope:** through-production
 - **Amends:** original issue #4 Solution Design in PR #15, accepted at
-  `ef28270b19b4ef131571822273ce2e6ea95cdff5`
+  `ef28270dba982f4e31bf1b2171b3dc28e093b7e4`
 - **Implemented basis:** PR #19, merged as
   `0ad07cf578ed4e7f7f7d8ae7d30aa5013bb9d83b`
 
@@ -18,8 +18,8 @@ verify its authority and digest, and exercise it inside a marker-bounded APFS
 disk image mounted beneath the acceptor's real home. The supervisor supplies a
 synthetic `HOME`, `CODEX_HOME`, temporary directories, fixtures, and Codex auth
 state on that volume. Every candidate lifecycle process runs under a reviewed,
-fail-closed macOS sandbox that permits writes only to the disposable volume and
-a marker-bounded evidence staging directory; lifecycle scenarios deny network,
+fail-closed macOS sandbox that permits candidate writes only to the disposable
+volume; lifecycle scenarios deny network,
 while the separately identified real-Codex smoke permits only its required
 network path. Pre/post protected-state manifests, positive controls, canaries,
 and verified detach/delete cleanup prove the intended boundary.
@@ -48,7 +48,7 @@ here.
 - **No administrator authority.** Acceptance creates no user, changes no
   account, and uses no `sudo`. My Friday remains entirely unprivileged.
 - **Two independent containment proofs.** An APFS mount supplies a disposable
-  filesystem boundary; the sandbox denies writes outside allowlisted roots.
+  filesystem boundary; the sandbox denies candidate writes outside that volume.
   Protected-state manifests and canaries demonstrate that the live installation
   and deployed runtime projection did not change.
 - **Same UID is disclosed, not disguised.** The accepted boundary shares the
@@ -62,8 +62,9 @@ here.
 - **Interruption is externally induced.** The supervisor observes an ordinary
   durable transaction-journal phase on the disposable volume, sends `SIGKILL`
   to the production candidate, then proves ordinary `recover` behavior.
-- **Evidence is sanitized and tamper-evident.** An issue comment records only
-  exact identities, aggregate manifest equality/digests, controls, outcomes,
+- **Evidence is supervisor-owned, sanitized, and tamper-evident.** The candidate
+  and its descendants cannot write evidence staging. An issue comment records
+  only exact identities, aggregate manifest equality/digests, controls, outcomes,
   and cleanup proof. Acceptance binds to that comment's immutable ID and body
   digest; secrets, auth files, sensitive paths, and manifest entries stay local
   and are destroyed with the marked run.
