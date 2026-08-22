@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [[ "$(uname -s)" != Darwin || "$(uname -m)" != arm64 ]]; then
+  echo "acceptance primitive integration skipped: requires Apple silicon macOS"
+  exit 0
+fi
+for tool in diskutil hdiutil sandbox-exec plutil jq; do
+  command -v "$tool" >/dev/null 2>&1 || { echo "Missing macOS acceptance primitive: $tool" >&2; exit 1; }
+done
+
+root="$(cd "$(dirname "$0")/.." && pwd)"
+tmp="$(mktemp -d "$HOME/.my-friday-primitive.XXXXXX")"
+image="$tmp/test.sparseimage"
+mountpoint="$tmp/mount"
+device=""
+mounted=0
+cleanup() {
+  if [[ "$mounted" == 1 && "$device" == /dev/disk* ]]; then
+    hdiutil detach "$device" >/dev/null 2>&1 || true
+  fi
+  rm -f "$image" "$tmp/attach.plist" "$tmp/lifecycle.sb"
+  rmdir "$mountpoint" "$tmp" 2>/dev/null || true
+}
+trap cleanup EXIT
+
+mkdir -m 0700 "$mountpoint"
+hdiutil create -quiet -type SPARSE -size 32m -fs APFS -volname my-friday-primitive "$image"
+hdiutil attach -plist -nobrowse -owners on -mountpoint "$mountpoint" "$image" >"$tmp/attach.plist"
+device="$(plutil -convert json -o - "$tmp/attach.plist" | jq -r '[.["system-entities"][] | .["dev-entry"]? // empty] | last')"
+[[ "$device" == /dev/disk* ]] || { echo "Primitive attach omitted a device." >&2; exit 1; }
+mounted=1
+[[ "$(diskutil info -plist "$mountpoint" | plutil -convert json -o - -- - | jq -r .FilesystemType)" == apfs ]] || { echo "Primitive volume is not APFS." >&2; exit 1; }
+sed "s|@@VOLUME@@|$mountpoint|g" "$root/config/acceptance/lifecycle.sb.in" >"$tmp/lifecycle.sb"
+# shellcheck disable=SC2016
+sandbox-exec -f "$tmp/lifecycle.sb" /bin/sh -c 'printf ok >"$1/allowed"' sh "$mountpoint"
+# shellcheck disable=SC2016
+if sandbox-exec -f "$tmp/lifecycle.sb" /bin/sh -c 'printf bad >"$1/denied"' sh "$tmp" 2>/dev/null; then
+  echo "Primitive sandbox escaped the disposable volume." >&2
+  exit 1
+fi
+hdiutil detach "$device" >/dev/null
+mounted=0
+[[ ! -e "$tmp/denied" ]] || { echo "Denied primitive write changed protected state." >&2; exit 1; }
+rm "$image" "$tmp/attach.plist" "$tmp/lifecycle.sb"
+rmdir "$mountpoint" "$tmp"
+trap - EXIT
+echo "acceptance primitive integration passed."

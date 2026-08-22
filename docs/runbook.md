@@ -96,3 +96,24 @@ locations and refuses. Preserve `transaction.json.discard` or
 `.my-friday-removal.json.discard` if reported; rerunning recovery restores a
 valid interrupted cleanup stage before proceeding. Either name makes verify
 report `interrupted` and prevents another lifecycle plan until recovery finishes.
+
+## Recover an interrupted acceptance run
+
+Acceptance state lives only under the canonical-home parents
+`.my-friday-acceptance` and `.my-friday-acceptance-evidence`. Diagnose one exact
+run-ID child at a time. Read its owner-only `marker.json` and require the schema,
+run ID, nonce, candidate SHA, canonical home, UID/GID, and directory identity to
+match before cleanup.
+
+If the image remains attached, verify the device, mountpoint, backing image,
+APFS volume, and current owner against `attach.plist` and `diskutil info`. Stop
+only the recorded acceptance process group, then use ordinary `hdiutil detach
+<device>`—never `-force`. On any mismatch or detach failure, preserve the run
+and evidence roots for maintainer diagnosis.
+
+After proven detach, remove only marker-listed files and the empty mountpoint.
+Remove the exact run directory only when empty. Private before/after manifests
+may be removed only after their marker and protected-state equality are proven;
+then remove the exact evidence directory only when empty. Never recursively
+delete either fixed parent or an unmarked child. A lone provisional GitHub
+comment has no acceptance authority; failed finalization requires a fresh run.

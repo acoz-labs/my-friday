@@ -3,8 +3,10 @@ set -euo pipefail
 
 bin/validate-solution-plans
 bin/test-release-assets
+bin/test-acceptance-evidence
+bin/test-acceptance-primitives
 
-unformatted="$(gofmt -l cmd internal)"
+unformatted="$(gofmt -l cmd internal tools)"
 if [[ -n "$unformatted" ]]; then
   echo "Go files require gofmt:" >&2
   echo "$unformatted" >&2

@@ -229,6 +229,13 @@ plain artifact identifier and a machine-readable SHA/artifact marker. Release
 gates require both successful status contexts, and release finalization requires
 the matching issue marker, so changing an artifact input on the same commit
 cannot reuse unrelated acceptance.
+Security-boundary acceptance may additionally require a typed evidence
+authority. For the installed Codex baseline this is one provisional comment
+plus one separately published post-cleanup finalization comment. The workflow
+and release finalizer fetch both by immutable ID and verify body digests,
+author, issue, candidate, artifact, cross-binding, and cleanup assertions. A
+mutable URL, opaque prose, edited record, or provisional record alone carries
+no authority.
 Every implementation pull request linked from the issue lifecycle must be
 merged into the accepted candidate's ancestry; a merely merged PR that is not
 present in that SHA cannot borrow acceptance authority.

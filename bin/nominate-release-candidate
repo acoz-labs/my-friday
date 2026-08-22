@@ -79,7 +79,7 @@ while IFS= read -r issue_number; do
     --arg artifact "$artifact_digest" \
     --arg implementation "$implementation_digest" '
     ([.[][] | select((.user.login // "") == "github-actions[bot]") | (.body // "") |
-      capture("<!-- product-acceptance issue=(?<issue>[0-9]+) sha=(?<sha>[0-9a-f]{40}) artifact=(?<artifact>[0-9a-f]{40}) implementation=(?<implementation>[0-9a-f]{40}) acceptor=(?<acceptor>[A-Za-z0-9-]+) decision=(?<decision>approved|changes-required) -->")? |
+      capture("<!-- product-acceptance issue=(?<issue>[0-9]+) sha=(?<sha>[0-9a-f]{40}) artifact=(?<artifact>[0-9a-f]{40}) implementation=(?<implementation>[0-9a-f]{40}) acceptor=(?<acceptor>[A-Za-z0-9-]+) decision=(?<decision>approved|changes-required)(?: evidence=(?<evidence>evidence-v1:[^ ]+))? -->")? |
       select(.issue == $issue and .sha == $sha and .artifact == $artifact and
         .implementation == $implementation)] | last | .decision) // ""' \
     <<< "$comments_json")"

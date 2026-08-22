@@ -24,6 +24,9 @@ jobs:
       - name: Validate shell scripts
         run: >-
           bash -n
+          bin/accept-installed-codex-baseline
+          bin/test-acceptance-evidence
+          bin/test-acceptance-primitives
           bin/ci
           bin/container
           bin/dependency-merge-steward
@@ -33,6 +36,7 @@ jobs:
           bin/record-production-deployment
           bin/record-product-acceptance
           bin/release-gate
+          bin/verify-acceptance-evidence
 
       - name: Run project checks
         run: bin/ci

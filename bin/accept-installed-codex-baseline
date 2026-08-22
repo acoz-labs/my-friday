@@ -1,0 +1,274 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+authority="${1:-}"
+issue="${2:-}"
+repo="${GITHUB_REPOSITORY:-acoz-labs/my-friday}"
+authority_pattern='^artifact-v1:run=([0-9]+):id=([0-9]+):name=([A-Za-z0-9._-]+):sha256=([0-9a-f]{64})$'
+
+refuse() { echo "acceptance refused: $*" >&2; exit 64; }
+fail() { echo "acceptance failed: $*" >&2; exit 1; }
+[[ "$issue" == 4 ]] || refuse "this supervisor is scoped to issue 4"
+[[ "$authority" =~ $authority_pattern ]] || refuse "invalid artifact-v1 authority"
+artifact_digest="${BASH_REMATCH[4]}"
+[[ "$(uname -s)" == Darwin && "$(uname -m)" == arm64 ]] || refuse "Apple silicon macOS is required"
+[[ "$(id -u)" != 0 ]] || refuse "root execution is prohibited"
+[[ -t 0 && -t 1 ]] || refuse "an interactive terminal is required"
+for tool in codex diskutil git gh go hdiutil jq plutil sandbox-exec shasum stat; do
+  command -v "$tool" >/dev/null 2>&1 || refuse "missing prerequisite: $tool"
+done
+
+root="$(cd "$(dirname "$0")/.." && pwd -P)"
+cd "$root"
+head_sha="$(git rev-parse HEAD)"
+[[ -z "$(git status --porcelain=v1 --untracked-files=all)" ]] || refuse "checkout must be clean"
+[[ "$(git remote get-url origin)" == "https://github.com/$repo.git" ]] || refuse "origin does not match $repo"
+[[ "$(git rev-parse 'HEAD^{tree}')" == "$(git rev-parse "$head_sha^{tree}")" ]] || refuse "checkout tree mismatch"
+
+comments="$(gh api --paginate --slurp "repos/$repo/issues/$issue/comments?per_page=100")"
+nomination="$(jq -r '[.[][] | select((.user.login // "") == "github-actions[bot]") | (.body // "") |
+  capture("<!-- release-candidate sha=(?<sha>[0-9a-f]{40}) artifact=(?<artifact>[0-9a-f]{40}) source=[^ ]+ source-id=[^ ]+ intent=application -->")?] | last | [.sha,.artifact] | @tsv' <<<"$comments")"
+IFS=$'\t' read -r nominated_sha nominated_artifact_digest <<<"$nomination"
+[[ "$nominated_sha" == "$head_sha" ]] || refuse "HEAD is not the latest nominated issue candidate"
+[[ "$nominated_artifact_digest" == "$(printf %s "$authority" | git hash-object --stdin)" ]] || refuse "artifact is not the latest nomination"
+
+real_home="$(cd "${HOME:?}" && pwd -P)"
+[[ "$real_home" == /Users/* && ! -L "$real_home" ]] || refuse "canonical home is unsupported"
+[[ "$(diskutil info -plist "$real_home" | plutil -convert json -o - -- - | jq -r .FilesystemType)" == apfs ]] || refuse "canonical home must be APFS"
+run_id="$(uuidgen | tr '[:upper:]' '[:lower:]' | tr -d '-')"
+run_parent="$real_home/.my-friday-acceptance"
+evidence_parent="$real_home/.my-friday-acceptance-evidence"
+run_root="$run_parent/$run_id"
+evidence_root="$evidence_parent/$run_id"
+for parent in "$run_parent" "$evidence_parent"; do
+  if [[ -e "$parent" ]]; then
+    [[ -d "$parent" && ! -L "$parent" && "$(stat -f %u "$parent")" == "$(id -u)" ]] || refuse "unsafe acceptance parent: $parent"
+  else
+    install -d -m 0700 "$parent"
+  fi
+done
+[[ ! -e "$run_root" && ! -e "$evidence_root" ]] || refuse "run collision"
+install -d -m 0700 "$run_root" "$evidence_root"
+nonce="$(jot -r -w %08x 4 0 4294967295 | tr -d '\n')"
+marker="$run_root/marker.json"
+jq -n --arg run "$run_id" --arg nonce "$nonce" --arg home "$real_home" --arg sha "$head_sha" \
+  --argjson uid "$(id -u)" --argjson gid "$(id -g)" \
+  '{schema:"my-friday-acceptance-run-v1",run:$run,nonce:$nonce,home:$home,sha:$sha,uid:$uid,gid:$gid}' >"$marker"
+chmod 0600 "$marker"
+
+live_codex_home="${CODEX_HOME:-$real_home/.codex}"
+runtime_projection="${MY_FRIDAY_RUNTIME_PROJECTION:-}"
+[[ "$live_codex_home" == "$real_home"/* ]] || refuse "effective CODEX_HOME must be below the canonical home"
+[[ -n "$runtime_projection" && "$runtime_projection" == /* ]] || refuse "MY_FRIDAY_RUNTIME_PROJECTION must be an absolute protected runtime path"
+[[ "$runtime_projection" != "$run_parent"* && "$runtime_projection" != "$evidence_parent"* ]] || refuse "runtime projection overlaps acceptance state"
+
+snapshot_protected() {
+  local label="$1" metadata="$evidence_root/$1-metadata.private" content="$evidence_root/$1-content.private"
+  : >"$metadata"
+  : >"$content"
+  local protected_root
+  for protected_root in "$live_codex_home" "$runtime_projection"; do
+    [[ -e "$protected_root" ]] || continue
+    [[ ! -L "$protected_root" ]] || fail "protected root is a symlink"
+    find -x "$protected_root" -exec stat -f '%N|%HT|%d|%i|%l|%u|%g|%p|%f|%z|%m|%c' {} \; | LC_ALL=C sort >>"$metadata"
+  done
+  local managed
+  for managed in \
+    "$live_codex_home/AGENTS.md" \
+    "$live_codex_home/.my-friday/manifest.json" \
+    "$live_codex_home/.my-friday/canonical-AGENTS.md" \
+    "$live_codex_home/.my-friday/previous-AGENTS.md" \
+    "$runtime_projection/AGENTS.md"; do
+    [[ -e "$managed" ]] || continue
+    [[ -f "$managed" && ! -L "$managed" && "$(stat -f %l "$managed")" == 1 ]] || fail "allowlisted managed content has unsafe identity"
+    printf '%s|%s\n' "$managed" "$(shasum -a 256 "$managed" | awk '{print $1}')" >>"$content"
+  done
+  chmod 0600 "$metadata" "$content"
+  printf '%s:%s\n' "$(shasum -a 256 "$metadata" | awk '{print $1}')" "$(shasum -a 256 "$content" | awk '{print $1}')" >"$evidence_root/$label-digests"
+}
+
+snapshot_protected before
+
+preserve=1
+mounted=0
+device=""
+sentinel_pid=""
+cleanup_failure() {
+  if [[ -n "$sentinel_pid" ]]; then
+    kill "$sentinel_pid" >/dev/null 2>&1 || true
+    wait "$sentinel_pid" 2>/dev/null || true
+  fi
+  if [[ "$preserve" == 1 ]]; then
+    if [[ "$mounted" == 1 && "$device" == /dev/disk* ]]; then
+      hdiutil detach "$device" >/dev/null 2>&1 || true
+    fi
+    echo "Private diagnostic state preserved at $run_root and $evidence_root" >&2
+  fi
+}
+trap cleanup_failure EXIT
+
+image="$run_root/acceptance.sparseimage"
+mountpoint="$run_root/mount"
+mkdir -m 0700 "$mountpoint"
+hdiutil create -quiet -type SPARSE -size 256m -fs APFS -volname "my-friday-$run_id" "$image"
+attach_plist="$run_root/attach.plist"
+hdiutil attach -plist -nobrowse -owners on -mountpoint "$mountpoint" "$image" >"$attach_plist"
+device="$(plutil -convert json -o - "$attach_plist" | jq -r '[.["system-entities"][] | .["dev-entry"]? // empty] | last')"
+[[ "$device" == /dev/disk* ]] || fail "could not prove attached device"
+mounted=1
+volume_info="$(diskutil info -plist "$mountpoint" | plutil -convert json -o - -- -)"
+[[ "$(jq -r .FilesystemType <<<"$volume_info")" == apfs && "$(jq -r .MountPoint <<<"$volume_info")" == "$mountpoint" && "$(stat -f %u "$mountpoint")" == "$(id -u)" ]] || fail "attached volume proof failed"
+
+volume="$(cd "$mountpoint" && pwd -P)"
+for path in home/.codex tmp xdg-cache xdg-config fixtures/runtime candidate; do install -d -m 0700 "$volume/$path"; done
+printf '# Acceptance fixture\n\nReply only MY_FRIDAY_ACCEPTANCE_%s.\n' "$run_id" >"$volume/fixtures/runtime/AGENTS.md"
+
+escape_profile() { printf '%s' "$1" | sed 's/[\\&|]/\\&/g'; }
+for profile in lifecycle codex-smoke; do
+  sed "s|@@VOLUME@@|$(escape_profile "$volume")|g" "config/acceptance/$profile.sb.in" >"$run_root/$profile.sb"
+  chmod 0600 "$run_root/$profile.sb"
+done
+
+# Positive and negative controls prove the exact profile before candidate use.
+# shellcheck disable=SC2016
+sandbox-exec -f "$run_root/lifecycle.sb" /bin/sh -c 'printf ok >"$1/control"' sh "$volume"
+# shellcheck disable=SC2016
+if sandbox-exec -f "$run_root/lifecycle.sb" /bin/sh -c 'printf bad >"$1/escape"' sh "$evidence_root" 2>/dev/null; then
+  fail "lifecycle profile allowed an evidence write"
+fi
+if sandbox-exec -f "$run_root/lifecycle.sb" /usr/bin/curl -fsS --max-time 3 https://example.com >/dev/null 2>&1; then
+  fail "lifecycle profile allowed network"
+fi
+/bin/sleep 300 &
+sentinel_pid=$!
+if sandbox-exec -f "$run_root/lifecycle.sb" /bin/kill -TERM "$sentinel_pid" 2>/dev/null; then
+  fail "lifecycle profile allowed signaling an unrelated same-UID process"
+fi
+kill -0 "$sentinel_pid" || fail "same-UID sentinel did not survive signal control"
+
+artifact_dir="$run_root/artifact"
+mkdir -m 0700 "$artifact_dir"
+GITHUB_REPOSITORY="$repo" bin/prepare-release-artifact "$authority" "$artifact_dir"
+tar -xzf "$artifact_dir/my-friday-darwin-arm64.tar.gz" -C "$volume/candidate"
+candidate="$volume/candidate/my-friday"
+[[ "$(shasum -a 256 "$candidate" | awk '{print $1}')" == "$artifact_digest" ]] || fail "candidate digest mismatch"
+go build -o "$run_root/acceptance-stop-barrier" ./tools/acceptance-stop-barrier
+chmod 0700 "$run_root/acceptance-stop-barrier"
+
+candidate_env=(env -i HOME="$volume/home" CODEX_HOME="$volume/home/.codex" TMPDIR="$volume/tmp" XDG_CACHE_HOME="$volume/xdg-cache" XDG_CONFIG_HOME="$volume/xdg-config" LANG=en_US.UTF-8 PATH=/usr/bin:/bin:/usr/sbin:/sbin)
+run_candidate() { sandbox-exec -f "$run_root/lifecycle.sb" "${candidate_env[@]}" "$candidate" "$@"; }
+confirm_candidate() { printf '%s\n' "$1" | sandbox-exec -f "$run_root/lifecycle.sb" "${candidate_env[@]}" "$candidate" "${@:2}"; }
+recover_candidate() { run_candidate codex recover --transaction "$volume/home/.codex/.my-friday/transaction.json"; }
+verify_candidate_digest() { [[ "$(shasum -a 256 "$candidate" | awk '{print $1}')" == "$artifact_digest" ]] || fail "candidate changed between scenario groups"; }
+
+# Externally interrupt ordinary production install, upgrade, and uninstall
+# transactions. The helper stops the exact candidate session, validates a
+# durable journal while every member remains stopped, kills that group, and
+# leaves recovery to the public command.
+printf '# Acceptance interruption fixture\n' >"$volume/fixtures/runtime/AGENTS.md"
+awk 'BEGIN { for (i=0; i<250000; i++) print "# bounded interruption filler" }' >>"$volume/fixtures/runtime/AGENTS.md"
+verify_candidate_digest
+for interrupted_action in install upgrade uninstall; do
+  if [[ "$interrupted_action" == upgrade || "$interrupted_action" == uninstall ]]; then
+    [[ -e "$volume/home/.codex/AGENTS.md" ]] || confirm_candidate Install codex install --runtime "$volume/fixtures/runtime"
+  fi
+  if [[ "$interrupted_action" == upgrade ]]; then
+    printf '\n# changed generation\n' >>"$volume/fixtures/runtime/AGENTS.md"
+  fi
+  "$run_root/acceptance-stop-barrier" \
+    --profile "$run_root/lifecycle.sb" \
+    --candidate "$candidate" \
+    --runtime "$volume/fixtures/runtime" \
+    --home "$volume/home/.codex" \
+    --action "$interrupted_action"
+  run_candidate codex verify >/dev/null 2>&1 && fail "interrupted $interrupted_action verified as healthy"
+  recover_candidate
+  if [[ -e "$volume/home/.codex/AGENTS.md" ]]; then
+    confirm_candidate Uninstall codex uninstall
+  fi
+done
+
+# Restore the compact fixture for the deterministic foreground matrix.
+printf '# Acceptance fixture\n\nReply only MY_FRIDAY_ACCEPTANCE_%s.\n' "$run_id" >"$volume/fixtures/runtime/AGENTS.md"
+verify_candidate_digest
+
+# Full foreground lifecycle, including cancellation, collision, drift, repair,
+# generation movement, source-independent rollback/uninstall, and reversal.
+run_candidate codex install --runtime "$volume/fixtures/runtime" </dev/null
+[[ ! -e "$volume/home/.codex/AGENTS.md" ]] || fail "cancelled install mutated state"
+printf 'foreign\n' >"$volume/home/.codex/AGENTS.md"
+run_candidate codex install --runtime "$volume/fixtures/runtime" >/dev/null 2>&1 && fail "foreign projection collision was accepted"
+[[ "$(cat "$volume/home/.codex/AGENTS.md")" == foreign ]] || fail "foreign projection collision was changed"
+rm "$volume/home/.codex/AGENTS.md"
+printf 'unrelated\n' >"$volume/home/.codex/unrelated-canary"
+confirm_candidate Install codex install --runtime "$volume/fixtures/runtime"
+run_candidate codex verify
+cp "$volume/home/.codex/AGENTS.md" "$volume/home/.codex/AGENTS.before"
+printf '\n# drift\n' >>"$volume/home/.codex/AGENTS.md"
+run_candidate codex verify >/dev/null 2>&1 && fail "verify accepted drift"
+confirm_candidate Repair codex repair --runtime "$volume/fixtures/runtime"
+printf '\n# upgraded\n' >>"$volume/fixtures/runtime/AGENTS.md"
+confirm_candidate Upgrade codex upgrade --runtime "$volume/fixtures/runtime"
+confirm_candidate Rollback codex rollback
+rm "$volume/fixtures/runtime/AGENTS.md"
+rmdir "$volume/fixtures/runtime"
+run_candidate codex verify
+confirm_candidate Uninstall codex uninstall
+run_candidate codex verify >/dev/null 2>&1 && fail "not-installed verify unexpectedly succeeded"
+[[ ! -e "$volume/home/.codex/AGENTS.md" && ! -e "$volume/home/.codex/.my-friday" ]] || fail "uninstall did not completely reverse ownership"
+[[ "$(cat "$volume/home/.codex/unrelated-canary")" == unrelated ]] || fail "unrelated synthetic canary changed"
+
+# Real Codex discovery is fixed and secret input is never placed in argv/logs.
+[[ -n "${OPENAI_API_KEY:-}" ]] || refuse "OPENAI_API_KEY must be injected for the isolated smoke"
+verify_candidate_digest
+install -d -m 0700 "$volume/fixtures/runtime"
+printf '# Acceptance fixture\n\nReply only MY_FRIDAY_ACCEPTANCE_%s.\n' "$run_id" >"$volume/fixtures/runtime/AGENTS.md"
+printf '%s' "$OPENAI_API_KEY" | sandbox-exec -f "$run_root/codex-smoke.sb" "${candidate_env[@]}" codex login --with-api-key >/dev/null
+confirm_candidate Install codex install --runtime "$volume/fixtures/runtime"
+smoke="$(sandbox-exec -f "$run_root/codex-smoke.sb" "${candidate_env[@]}" codex exec --skip-git-repo-check "Follow installed instructions." 2>/dev/null)"
+grep -Fq "MY_FRIDAY_ACCEPTANCE_$run_id" <<<"$smoke" || fail "Codex did not discover installed instructions"
+sandbox-exec -f "$run_root/codex-smoke.sb" "${candidate_env[@]}" codex logout >/dev/null || true
+kill "$sentinel_pid"
+wait "$sentinel_pid" 2>/dev/null || true
+sentinel_pid=""
+
+sync
+hdiutil detach "$device" >/dev/null
+mounted=0
+[[ ! -d "$volume/home" ]] || fail "volume remains mounted"
+snapshot_protected after
+cmp "$evidence_root/before-metadata.private" "$evidence_root/after-metadata.private" >/dev/null || fail "protected metadata changed"
+cmp "$evidence_root/before-content.private" "$evidence_root/after-content.private" >/dev/null || fail "allowlisted protected content changed"
+protected_metadata_digest="$(cut -d: -f1 "$evidence_root/after-digests")"
+protected_content_digest="$(cut -d: -f2 "$evidence_root/after-digests")"
+
+profile_lifecycle="$(shasum -a 256 "$run_root/lifecycle.sb" | awk '{print $1}')"
+profile_smoke="$(shasum -a 256 "$run_root/codex-smoke.sb" | awk '{print $1}')"
+supervisor_blob="$(git rev-parse HEAD:bin/accept-installed-codex-baseline)"
+barrier_blob="$(git rev-parse HEAD:tools/acceptance-stop-barrier/main.go)"
+provisional="$(jq -n -r --arg sha "$head_sha" --arg artifact "$authority" --arg run "$run_id" --arg lifecycle "$profile_lifecycle" --arg smoke "$profile_smoke" --arg supervisor "$supervisor_blob" --arg barrier "$barrier_blob" --arg metadata "$protected_metadata_digest" --arg content "$protected_content_digest" '
+  "<!-- installed-baseline-evidence-v1 authority=provisional -->\n## Installed baseline acceptance evidence (provisional; no authority)\n\n- Issue: 4\n- Candidate: `"+$sha+"`\n- Artifact: `"+$artifact+"`\n- Run: `"+$run+"`\n- Supervisor blob: `"+$supervisor+"`\n- Stop-barrier blob: `"+$barrier+"`\n- Lifecycle profile SHA-256: `"+$lifecycle+"`\n- Smoke profile SHA-256: `"+$smoke+"`\n- Protected metadata aggregate: `"+$metadata+"` (equal)\n- Allowlisted non-sensitive content aggregate: `"+$content+"` (equal)\n- APFS, containment controls, lifecycle, external interruption/recovery, reversal, Codex discovery, detach, and redaction: passed\n- Limitation: same UID; no read-confidentiality, fresh-keychain, or endpoint-restriction claim."
+')"
+provisional_url="$(gh api -X POST "repos/$repo/issues/$issue/comments" -f body="$provisional" --jq .url)"
+provisional_id="${provisional_url##*/}"
+provisional_digest="$(printf %s "$provisional" | shasum -a 256 | awk '{print $1}')"
+
+[[ "$(jq -r '.schema,.run,.nonce,.sha' "$marker" | paste -sd: -)" == "my-friday-acceptance-run-v1:$run_id:$nonce:$head_sha" ]] || fail "run marker changed"
+rm "$image" "$attach_plist" "$marker" "$run_root/lifecycle.sb" "$run_root/codex-smoke.sb" "$run_root/acceptance-stop-barrier"
+rm "$artifact_dir/my-friday-darwin-arm64.tar.gz" "$artifact_dir/SHA256SUMS"
+rmdir "$artifact_dir"
+rmdir "$mountpoint" "$run_root"
+rm "$evidence_root/before-metadata.private" "$evidence_root/before-content.private" "$evidence_root/before-digests" \
+  "$evidence_root/after-metadata.private" "$evidence_root/after-content.private" "$evidence_root/after-digests"
+rmdir "$evidence_root"
+[[ ! -e "$run_root" && ! -e "$evidence_root" ]] || fail "local cleanup incomplete"
+
+final="$(jq -n -r --arg sha "$head_sha" --arg artifact "$authority" --arg id "$provisional_id" --arg digest "$provisional_digest" '
+  "<!-- installed-baseline-evidence-v1 authority=final -->\n## Installed baseline acceptance finalization\n\n- Issue: 4\n- Candidate: `"+$sha+"`\n- Artifact: `"+$artifact+"`\n- Provisional comment: `"+$id+"`\n- Provisional SHA-256: `"+$digest+"`\n- Non-forced detach, image deletion, run-root deletion, and evidence-staging deletion: passed"
+')"
+final_url="$(gh api -X POST "repos/$repo/issues/$issue/comments" -f body="$final" --jq .url)"
+final_id="${final_url##*/}"
+final_digest="$(printf %s "$final" | shasum -a 256 | awk '{print $1}')"
+preserve=0
+trap - EXIT
+printf 'evidence-v1:provisional=%s:%s:final=%s:%s\n' "$provisional_id" "$provisional_digest" "$final_id" "$final_digest"

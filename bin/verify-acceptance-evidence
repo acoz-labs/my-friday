@@ -1,0 +1,68 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+evidence="${1:-}"
+issue="${2:-}"
+sha="${3:-}"
+artifact="${4:-}"
+expected_actor="${5:-}"
+repo="${GITHUB_REPOSITORY:-}"
+pattern='^evidence-v1:provisional=([0-9]+):([0-9a-f]{64}):final=([0-9]+):([0-9a-f]{64})$'
+if [[ -z "$repo" || ! "$evidence" =~ $pattern ]]; then
+  echo "Usage: bin/verify-acceptance-evidence <evidence-v1 authority> <issue> <sha> <artifact> [actor]" >&2
+  exit 64
+fi
+provisional_id="${BASH_REMATCH[1]}"
+provisional_digest="${BASH_REMATCH[2]}"
+final_id="${BASH_REMATCH[3]}"
+final_digest="${BASH_REMATCH[4]}"
+if [[ ! "$issue" =~ ^[0-9]+$ || ! "$sha" =~ ^[0-9a-f]{40}$ ]]; then
+  echo "Usage: bin/verify-acceptance-evidence <evidence-v1 authority> <issue> <sha> <artifact> [actor]" >&2
+  exit 64
+fi
+[[ "$provisional_id" != "$final_id" ]] || { echo "Evidence comments must be distinct." >&2; exit 1; }
+
+provisional_json="$(gh api "repos/$repo/issues/comments/$provisional_id")"
+final_json="$(gh api "repos/$repo/issues/comments/$final_id")"
+for json in "$provisional_json" "$final_json"; do
+  [[ "$(jq -r '.issue_url' <<<"$json")" == "https://api.github.com/repos/$repo/issues/$issue" ]] || {
+    echo "Evidence comment belongs to a different issue." >&2; exit 1;
+  }
+done
+provisional_body="$(jq -r .body <<<"$provisional_json")"
+final_body="$(jq -r .body <<<"$final_json")"
+[[ "$(printf %s "$provisional_body" | shasum -a 256 | awk '{print $1}')" == "$provisional_digest" ]] || {
+  echo "Provisional evidence was edited or mismatched." >&2; exit 1;
+}
+[[ "$(printf %s "$final_body" | shasum -a 256 | awk '{print $1}')" == "$final_digest" ]] || {
+  echo "Final evidence was edited or mismatched." >&2; exit 1;
+}
+provisional_actor="$(jq -r '.user.login | ascii_downcase' <<<"$provisional_json")"
+final_actor="$(jq -r '.user.login | ascii_downcase' <<<"$final_json")"
+[[ "$provisional_actor" == "$final_actor" ]] || { echo "Evidence authors differ." >&2; exit 1; }
+if [[ -n "$expected_actor" ]]; then
+  [[ "$provisional_actor" == "$(printf %s "$expected_actor" | tr '[:upper:]' '[:lower:]')" ]] || {
+    echo "Evidence author does not match the acceptor." >&2; exit 1;
+  }
+fi
+grep -Fqx '<!-- installed-baseline-evidence-v1 authority=provisional -->' <<<"$provisional_body" || {
+  echo "Provisional authority marker missing." >&2; exit 1;
+}
+grep -Fqx '<!-- installed-baseline-evidence-v1 authority=final -->' <<<"$final_body" || {
+  echo "Final authority marker missing." >&2; exit 1;
+}
+for body in "$provisional_body" "$final_body"; do
+  grep -Fq -- "- Issue: $issue" <<<"$body" || { echo "Evidence issue binding mismatch." >&2; exit 1; }
+  grep -Fq -- "- Candidate: \`$sha\`" <<<"$body" || { echo "Evidence candidate binding mismatch." >&2; exit 1; }
+  grep -Fq -- "- Artifact: \`$artifact\`" <<<"$body" || { echo "Evidence artifact binding mismatch." >&2; exit 1; }
+done
+grep -Fq -- "- Provisional comment: \`$provisional_id\`" <<<"$final_body" || {
+  echo "Final evidence does not cross-bind the provisional comment." >&2; exit 1;
+}
+grep -Fq -- "- Provisional SHA-256: \`$provisional_digest\`" <<<"$final_body" || {
+  echo "Final evidence does not cross-bind the provisional digest." >&2; exit 1;
+}
+grep -Fq -- '- Non-forced detach, image deletion, run-root deletion, and evidence-staging deletion: passed' <<<"$final_body" || {
+  echo "Final evidence does not prove cleanup." >&2; exit 1;
+}
+printf '%s\n' "$provisional_actor"

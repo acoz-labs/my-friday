@@ -1,0 +1,55 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+root="$(cd "$(dirname "$0")/.." && pwd)"
+tmp="$(mktemp -d)"
+trap 'rm -rf "$tmp"' EXIT
+mkdir "$tmp/bin"
+
+sha="$(printf 'a%.0s' {1..40})"
+artifact="artifact-v1:run=12:id=34:name=my-friday-darwin-arm64:sha256=$(printf 'b%.0s' {1..64})"
+provisional_id=101
+final_id=102
+provisional="<!-- installed-baseline-evidence-v1 authority=provisional -->
+## Installed baseline acceptance evidence (provisional; no authority)
+
+- Issue: 4
+- Candidate: \`$sha\`
+- Artifact: \`$artifact\`"
+provisional_digest="$(printf %s "$provisional" | shasum -a 256 | awk '{print $1}')"
+final="<!-- installed-baseline-evidence-v1 authority=final -->
+## Installed baseline acceptance finalization
+
+- Issue: 4
+- Candidate: \`$sha\`
+- Artifact: \`$artifact\`
+- Provisional comment: \`$provisional_id\`
+- Provisional SHA-256: \`$provisional_digest\`
+- Non-forced detach, image deletion, run-root deletion, and evidence-staging deletion: passed"
+final_digest="$(printf %s "$final" | shasum -a 256 | awk '{print $1}')"
+authority="evidence-v1:provisional=$provisional_id:$provisional_digest:final=$final_id:$final_digest"
+
+jq -n --arg body "$provisional" '{issue_url:"https://api.github.com/repos/owner/repo/issues/4",user:{login:"acceptor"},body:$body}' >"$tmp/provisional.json"
+jq -n --arg body "$final" '{issue_url:"https://api.github.com/repos/owner/repo/issues/4",user:{login:"acceptor"},body:$body}' >"$tmp/final.json"
+cat >"$tmp/bin/gh" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+case "${*: -1}" in
+  */101) cat "${EVIDENCE_FIXTURES:?}/provisional.json" ;;
+  */102) cat "${EVIDENCE_FIXTURES:?}/final.json" ;;
+  *) exit 2 ;;
+esac
+EOF
+chmod +x "$tmp/bin/gh"
+PATH="$tmp/bin:$PATH" EVIDENCE_FIXTURES="$tmp" GITHUB_REPOSITORY=owner/repo \
+  "$root/bin/verify-acceptance-evidence" "$authority" 4 "$sha" "$artifact" acceptor >/dev/null
+
+jq '.body += " edited"' "$tmp/provisional.json" >"$tmp/edited.json"
+mv "$tmp/edited.json" "$tmp/provisional.json"
+if PATH="$tmp/bin:$PATH" EVIDENCE_FIXTURES="$tmp" GITHUB_REPOSITORY=owner/repo \
+  "$root/bin/verify-acceptance-evidence" "$authority" 4 "$sha" "$artifact" acceptor 2>/dev/null; then
+  echo "Edited provisional evidence was accepted." >&2
+  exit 1
+fi
+
+echo "acceptance evidence tests passed."

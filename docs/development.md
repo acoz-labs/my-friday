@@ -23,7 +23,10 @@ mise install
 ```
 
 The complete check runs solution-plan validation, formatting, vet, race-enabled
-tests, and a static Darwin/ARM64 build with `bin/ci`.
+tests, acceptance-evidence contract tests, a real no-admin APFS/sandbox
+primitive test on Apple silicon macOS, and a static Darwin/ARM64 build with
+`bin/ci`. The primitive test skips on non-macOS hosts; it must pass natively
+before an installed-baseline candidate is nominated.
 
 `bin/container bin/ci` proves portable source compilation but cannot prove
 APFS, macOS permissions, terminal, or local Git-template behaviour. Run

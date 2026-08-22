@@ -67,3 +67,29 @@ returns the control tree to absence.
 
 Implementation: `internal/codexhome/lifecycle.go`; command grammar:
 `cmd/my-friday/main.go`; tests: `internal/codexhome/lifecycle_test.go`.
+
+## Acceptance boundary
+
+Release acceptance runs the exact nominated Darwin/ARM64 executable under
+`bin/accept-installed-codex-baseline`. The foreground supervisor creates a
+marker-owned APFS disk image below the acceptor's canonical home, supplies
+synthetic user, Codex, temporary, XDG, runtime, and candidate paths, and runs
+candidate processes under fixed deny-default sandbox profiles. Lifecycle
+commands and descendants have volume-only write authority and no network. The
+fixed Codex login/exec/logout smoke keeps the write boundary but permits broad
+outbound network; it makes no endpoint-restriction claim.
+
+The supervisor externally stops and kills exact candidate process groups only
+after `tools/acceptance-stop-barrier` observes a schema-valid recoverable journal
+behind an all-members-stopped barrier. Ordinary `codex recover` must then
+restore install, upgrade, and uninstall cases. No fault-enabled candidate or
+background service exists.
+
+Before setup and after ordinary detach, private inventories compare metadata
+for live Codex/runtime roots and exact bytes only for schema-allowlisted,
+non-sensitive managed files. Secret-bearing and foreign contents are never
+opened for evidence. A provisional GitHub comment has no authority. A separate
+post-cleanup finalization comment cross-binds its immutable ID and body digest;
+acceptance and release re-fetch and verify both comments. This is same-UID
+write containment, not distinct-principal isolation, read confidentiality, or
+a fresh login keychain.
