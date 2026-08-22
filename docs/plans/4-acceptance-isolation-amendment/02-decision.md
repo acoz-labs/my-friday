@@ -68,7 +68,8 @@ real home, creates and attaches a sparse APFS image, builds an exact reviewed
 sandbox profile, and runs all candidate commands against synthetic state on the
 volume. It downloads and verifies `artifact-v1` exact bytes before use. Lifecycle
 scenarios deny network; a separately labeled real-Codex smoke profile permits
-only required network while retaining write containment.
+fixed, time-bounded broad outbound network while retaining write containment
+and makes no endpoint-restriction claim.
 
 The supervisor snapshots protected metadata and hashes explicitly allowlisted
 non-sensitive managed content before setup and after cleanup,

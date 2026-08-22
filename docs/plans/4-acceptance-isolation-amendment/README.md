@@ -19,9 +19,9 @@ disk image mounted beneath the acceptor's real home. The supervisor supplies a
 synthetic `HOME`, `CODEX_HOME`, temporary directories, fixtures, and Codex auth
 state on that volume. Every candidate lifecycle process runs under a reviewed,
 fail-closed macOS sandbox that permits candidate writes only to the disposable
-volume; lifecycle scenarios deny network,
-while the separately identified real-Codex smoke permits only its required
-network path. Pre/post protected-state manifests, positive controls, canaries,
+volume; lifecycle scenarios deny network, while the separately identified real-
+Codex smoke permits fixed, time-bounded broad outbound network and makes no
+endpoint-restriction claim. Pre/post protected-state manifests, controls, canaries,
 and verified detach/delete cleanup prove the intended boundary.
 
 This amendment removes the physical administrator gate without weakening the
