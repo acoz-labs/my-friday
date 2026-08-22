@@ -21,3 +21,12 @@ background reconciliation, and general backup history.
 The lifecycle is inspectable and source-independent for reversal, but it never
 silently merges user instructions. Collisions require user resolution and
 managed drift requires explicit repair.
+
+Exact-candidate acceptance uses a no-admin APFS image plus fail-closed macOS
+sandbox write containment instead of creating and deleting a disposable user.
+This proportionate boundary is same-UID and therefore deliberately claims no
+read confidentiality, fresh keychain, or malicious same-UID resistance.
+Acceptance authority requires a no-authority provisional evidence comment and
+a separately published post-cleanup finalization comment. Their IDs, SHA-256
+body digests, author, candidate, artifact, and issue bindings are revalidated
+before release.

@@ -1,0 +1,81 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [[ "$(uname -s)" != Darwin || "$(uname -m)" != arm64 ]]; then
+  echo "acceptance primitive integration skipped: requires Apple silicon macOS"
+  exit 0
+fi
+for tool in codex diskutil hdiutil sandbox-exec plutil jq; do
+  command -v "$tool" >/dev/null 2>&1 || { echo "Missing macOS acceptance primitive: $tool" >&2; exit 1; }
+done
+
+root="$(cd "$(dirname "$0")/.." && pwd)"
+tmp="$(mktemp -d "$HOME/.my-friday-primitive.XXXXXX")"
+image="$tmp/test.sparseimage"
+mountpoint="$tmp/mount"
+device=""
+mounted=0
+cleanup() {
+  if [[ "$mounted" == 1 && "$device" == /dev/disk* ]]; then
+    hdiutil detach "$device" >/dev/null 2>&1 || true
+  fi
+  rm -f "$image" "$tmp/attach.plist" "$tmp/lifecycle.sb" "$tmp/smoke.sb" "$tmp/support" "$tmp/runner" "$tmp/candidate" "$tmp/candidate.out" "$tmp/install.out"
+  rmdir "$mountpoint" "$tmp" 2>/dev/null || true
+}
+trap cleanup EXIT
+
+mkdir -m 0700 "$mountpoint"
+hdiutil create -quiet -type SPARSE -size 32m -fs APFS -volname my-friday-primitive "$image"
+hdiutil attach -plist -nobrowse -owners on -mountpoint "$mountpoint" "$image" >"$tmp/attach.plist"
+attach_json="$(plutil -convert json -o - "$tmp/attach.plist")"
+[[ "$(jq '.["system-entities"]|length' <<<"$attach_json")" == 4 && "$(jq '[.["system-entities"][]|select(has("mount-point"))]|length' <<<"$attach_json")" == 1 ]] || { echo "Primitive attach graph was incomplete." >&2; exit 1; }
+device="$(jq -r '[.["system-entities"][]|select(has("mount-point"))][0]["dev-entry"]' <<<"$attach_json")"
+image_whole="$(jq -r '[.["system-entities"][]|select(.["content-hint"]=="GUID_partition_scheme")][0]["dev-entry"]' <<<"$attach_json")"
+physical_store="$(jq -r '[.["system-entities"][]|select(.["content-hint"]=="Apple_APFS")][0]["dev-entry"]' <<<"$attach_json")"
+container_device="$(jq -r '[.["system-entities"][]|select(.["unmapped-content-hint"]=="EF57347C-0000-11AA-AA11-00306543ECAC")][0]["dev-entry"]' <<<"$attach_json")"
+[[ "$device" == /dev/disk* ]] || { echo "Primitive attach omitted a device." >&2; exit 1; }
+mounted=1
+[[ "$(diskutil info -plist "$mountpoint" | plutil -convert json -o - -- - | jq -r .FilesystemType)" == apfs ]] || { echo "Primitive volume is not APFS." >&2; exit 1; }
+go build -o "$tmp/support" "$root/tools/acceptance-support"
+go build -o "$tmp/runner" "$root/tools/acceptance-runner"
+go build -o "$tmp/candidate" "$root/cmd/my-friday"
+mkdir -m 0700 "$mountpoint/home" "$mountpoint/home/.codex" "$mountpoint/tmp" "$mountpoint/cache" "$mountpoint/config" "$mountpoint/runtime" "$mountpoint/memory"
+"$tmp/support" render-profile --template "$root/config/acceptance/lifecycle.sb.in" --value "$mountpoint" >"$tmp/lifecycle.sb"
+"$tmp/support" render-profile --template "$root/config/acceptance/codex-smoke.sb.in" --value "$mountpoint" >"$tmp/smoke.sb"
+sandbox-exec -f "$tmp/lifecycle.sb" /usr/bin/env -i HOME="$mountpoint/home" CODEX_HOME="$mountpoint/home/.codex" TMPDIR="$mountpoint/tmp" XDG_CACHE_HOME="$mountpoint/cache" XDG_CONFIG_HOME="$mountpoint/config" PATH=/usr/bin:/bin LANG=en_US.UTF-8 "$tmp/candidate" codex verify >"$tmp/candidate.out" 2>&1 && { echo "Not-installed candidate probe unexpectedly succeeded." >&2; exit 1; }
+grep -Fq 'Codex baseline: not-installed' "$tmp/candidate.out" || { echo "Go candidate did not launch under lifecycle profile." >&2; exit 1; }
+"$tmp/support" fixture --runtime "$mountpoint/runtime" --memory "$mountpoint/memory" --token FINAL_PROFILE_INSTALL
+printf 'Install\n' | sandbox-exec -f "$tmp/lifecycle.sb" /usr/bin/env -i HOME="$mountpoint/home" CODEX_HOME="$mountpoint/home/.codex" TMPDIR="$mountpoint/tmp" XDG_CACHE_HOME="$mountpoint/cache" XDG_CONFIG_HOME="$mountpoint/config" CFFIXED_USER_HOME="$mountpoint/home" CLANG_MODULE_CACHE_PATH="$mountpoint/cache/clang" PATH=/usr/bin:/bin:/usr/sbin:/sbin LANG=en_US.UTF-8 "$tmp/candidate" codex install --runtime "$mountpoint/runtime" >"$tmp/install.out" 2>&1 || { cat "$tmp/install.out" >&2; echo "Fresh valid install failed under final lifecycle profile." >&2; exit 1; }
+grep -Fq FINAL_PROFILE_INSTALL "$mountpoint/home/.codex/AGENTS.md" || { echo "Final-profile install did not render the runtime." >&2; exit 1; }
+codex_binary="$("$tmp/support" resolve-executable "$(command -v codex)")"
+codex_probe="$(sandbox-exec -f "$tmp/smoke.sb" "$codex_binary" --version 2>&1)"
+grep -Eq '^codex-cli [0-9]+\.[0-9]+\.[0-9]+' <<<"$codex_probe" || { echo "Real Codex did not launch under smoke profile." >&2; exit 1; }
+if "$tmp/runner" --cwd "$mountpoint" --timeout 200ms --env PATH=/usr/bin:/bin -- "$tmp/support" setsid-probe >/dev/null 2>&1; then
+  echo "Setsid descendant primitive escaped detection." >&2; exit 1
+fi
+# shellcheck disable=SC2016
+sandbox-exec -f "$tmp/lifecycle.sb" /bin/sh -c 'printf ok >"$1/allowed"' sh "$mountpoint"
+# shellcheck disable=SC2016
+if sandbox-exec -f "$tmp/lifecycle.sb" /bin/sh -c 'printf bad >"$1/denied"' sh "$tmp" 2>/dev/null; then
+  echo "Primitive sandbox escaped the disposable volume." >&2
+  exit 1
+fi
+# shellcheck disable=SC2016
+if sandbox-exec -f "$tmp/lifecycle.sb" /bin/sh -c '/bin/sh -c '\''printf bad >"$1/descendant"'\'' sh "$1"' sh "$tmp" 2>/dev/null; then
+  echo "Primitive descendant escaped the sandbox." >&2
+  exit 1
+fi
+if sandbox-exec -f "$tmp/lifecycle.sb" /usr/bin/curl -fsS --max-time 3 https://example.com >/dev/null 2>&1; then
+  echo "Primitive lifecycle profile allowed network." >&2
+  exit 1
+fi
+hdiutil detach "$device" >/dev/null
+mounted=0
+[[ -z "$(mount | grep -F " on $mountpoint " || true)" ]] || { echo "Primitive mount survived detach." >&2; exit 1; }
+for graph_device in "$image_whole" "$physical_store" "$container_device" "$device"; do diskutil info "$graph_device" >/dev/null 2>&1 && { echo "Primitive APFS device survived detach: $graph_device" >&2; exit 1; }; done
+[[ "$(hdiutil info -plist | plutil -convert json -o - -- - | jq --arg image "$image" '[.images[]|select(.["image-path"]==$image)]|length')" == 0 ]] || { echo "Primitive image remained attached." >&2; exit 1; }
+[[ ! -e "$tmp/denied" ]] || { echo "Denied primitive write changed protected state." >&2; exit 1; }
+rm "$image" "$tmp/attach.plist" "$tmp/lifecycle.sb" "$tmp/smoke.sb" "$tmp/support" "$tmp/runner" "$tmp/candidate" "$tmp/candidate.out" "$tmp/install.out"
+rmdir "$mountpoint" "$tmp"
+trap - EXIT
+echo "acceptance primitive integration passed."

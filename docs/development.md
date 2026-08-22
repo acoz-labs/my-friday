@@ -23,7 +23,24 @@ mise install
 ```
 
 The complete check runs solution-plan validation, formatting, vet, race-enabled
-tests, and a static Darwin/ARM64 build with `bin/ci`.
+tests, acceptance-evidence contract tests, a real no-admin APFS/sandbox
+primitive test on Apple silicon macOS, and a static Darwin/ARM64 build with
+`bin/ci`. The primitive test skips on non-macOS hosts; it must pass natively
+before an installed-baseline candidate is nominated.
+`bin/test-acceptance-contract` locks the supervisor's fixture grammar, early
+secret removal, bounded runner, working-byte checks, mount authority, profile
+placeholder, and durable failure-evidence requirements. Go tests under `tools/`
+exercise valid contract-v1 rendering, Scheme escaping, stop-journal validation,
+candidate/Codex profile launch, process-start-bound setsid descendant cleanup,
+filesystem-linked stop receipts, no-follow root/marker cleanup, strict evidence
+semantics/re-fetches, and process-group timeout behavior.
+The native primitive performs a fresh valid install under the final lifecycle
+profile (including Git/xcrun), while regressions cover immediate double-fork
+setsid escape, ambiguous-attach preservation, exact-entry cleanup refusal,
+intermediate-symlink protected-read refusal, closure-producer failure, and exact
+versioned diagnostic semantics. Evidence adversarial cases also require each
+protected metadata/content/canary equality field to be the JSON boolean `true`,
+not a truthy string or number.
 
 `bin/container bin/ci` proves portable source compilation but cannot prove
 APFS, macOS permissions, terminal, or local Git-template behaviour. Run

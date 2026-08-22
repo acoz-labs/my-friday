@@ -32,6 +32,16 @@ if [[ -z "${evidence// }" ]]; then
   echo "Acceptance evidence is required." >&2
   exit 64
 fi
+evidence_marker=""
+if [[ "$issue_number" == 4 ]]; then
+  if [[ "$decision" == approved ]]; then expected_evidence='^evidence-v1:'; else expected_evidence='^failure-v1:'; fi
+  [[ "$evidence" =~ $expected_evidence ]] || {
+    echo "Issue #4 evidence authority does not match the decision." >&2
+    exit 64
+  }
+  bin/verify-acceptance-evidence "$evidence" "$issue_number" "$sha" "$release_artifact" "$actor" >/dev/null
+  evidence_marker=" evidence=$evidence"
+fi
 if [[ -z "$allowed_actors" ]]; then
   echo "ACCEPTANCE_ACTORS must name the repository's authorized product acceptors." >&2
   exit 1
@@ -104,7 +114,7 @@ implementation_digest="$(printf '%s\n' "$implementation_prs" | git hash-object -
 artifact_digest="$(printf '%s' "$release_artifact" | git hash-object --stdin)"
 comments_json="$(gh api --paginate --slurp \
   "repos/$repo/issues/$issue_number/comments?per_page=100")"
-acceptance_marker="<!-- product-acceptance issue=$issue_number sha=$sha artifact=$artifact_digest implementation=$implementation_digest acceptor=$actor_normalized decision=$decision -->"
+acceptance_marker="<!-- product-acceptance issue=$issue_number sha=$sha artifact=$artifact_digest implementation=$implementation_digest acceptor=$actor_normalized decision=$decision$evidence_marker -->"
 has_retry_marker=0
 latest_acceptance="$(jq -c \
   --arg issue "$issue_number" \
@@ -112,11 +122,12 @@ latest_acceptance="$(jq -c \
   --arg artifact "$artifact_digest" \
   --arg implementation "$implementation_digest" '
   ([.[][] | select((.user.login // "") == "github-actions[bot]") | (.body // "") |
-    capture("<!-- product-acceptance issue=(?<issue>[0-9]+) sha=(?<sha>[0-9a-f]{40}) artifact=(?<artifact>[0-9a-f]{40}) implementation=(?<implementation>[0-9a-f]{40}) acceptor=(?<acceptor>[A-Za-z0-9-]+) decision=(?<decision>approved|changes-required) -->")? |
+    capture("<!-- product-acceptance issue=(?<issue>[0-9]+) sha=(?<sha>[0-9a-f]{40}) artifact=(?<artifact>[0-9a-f]{40}) implementation=(?<implementation>[0-9a-f]{40}) acceptor=(?<acceptor>[A-Za-z0-9-]+) decision=(?<decision>approved|changes-required)(?: evidence=(?<evidence>(?:evidence-v1|failure-v1):[^ ]+))? -->")? |
     select(.issue == $issue and .sha == $sha and .artifact == $artifact and
       .implementation == $implementation)] | last) // {}' <<< "$comments_json")"
 if [[ "$(jq -r '.decision // ""' <<< "$latest_acceptance")" == "$decision" &&
-  "$(jq -r '.acceptor // "" | ascii_downcase' <<< "$latest_acceptance")" == "$actor_normalized" ]]; then
+  "$(jq -r '.acceptor // "" | ascii_downcase' <<< "$latest_acceptance")" == "$actor_normalized" &&
+  ( "$issue_number" != 4 || "$(jq -r '.evidence // ""' <<< "$latest_acceptance")" == "$evidence" ) ]]; then
   has_retry_marker=1
 fi
 nomination="$(jq -r '

@@ -67,13 +67,44 @@ Every new candidate still requires successful CI, exact-candidate nomination,
 independent Apple silicon acceptance, and the artifact release gate. No
 configuration or secrets are used at runtime.
 
-Installed-baseline acceptance additionally runs the nominated executable under
-a disposable non-admin macOS 14+ Apple-silicon user with a fresh home, keychain,
-and `CODEX_HOME`. The operator supplies admin authentication only to create and
-remove that marker-bounded user. Acceptance exercises install, collision,
-verify, repair, upgrade, rollback, interruption recovery, uninstall reversal,
-real Codex instruction discovery, unrelated canaries, logout, and complete
-identity/home teardown. Evidence excludes `auth.json` and secret values.
+Installed-baseline acceptance runs from a clean checkout at the freshly
+nominated candidate SHA:
+
+```sh
+MY_FRIDAY_RUNTIME_PROJECTION=/absolute/path/to/deployed/runtime \
+  bin/accept-installed-codex-baseline \
+  'artifact-v1:run=…:id=…:name=my-friday-darwin-arm64:sha256=…' 4
+```
+
+The acceptor injects a test-only `OPENAI_API_KEY` through the process
+environment; it is piped to `codex login --with-api-key`, never placed in argv
+or evidence, is required, captured, and removed from the exported environment
+before the first child process or local mutation, and persists only in the
+disposable image. The command requires
+ordinary-user Apple silicon macOS, APFS, GitHub comment authority, Codex, Go,
+and the reviewed `sandbox-exec` behavior. It exercises lifecycle denials,
+repair/upgrade/rollback, externally interrupted recovery, uninstall reversal,
+and real-Codex instruction discovery in a marker-owned APFS image. It prints an
+`evidence-v1` authority only after non-forced detach and exact local cleanup.
+
+Product acceptance accepts that authority, not an opaque evidence URL. Release
+finalization re-fetches both evidence comments and rejects edits, deletion,
+author/candidate/artifact mismatch, missing cross-binding, or a provisional
+record without final cleanup proof. A candidate nominated before this
+acceptance contract remains historical and cannot use the amended path.
+An acceptance failure publishes a redacted, strict `failure-v1` issue comment
+authority when GitHub is reachable. That authority permits an independent
+acceptor to durably record `changes-required`; it can never authorize approval
+or release. It distinguishes candidate behavior from harness/environment
+failure and records only a redacted failure class, run binding, preservation,
+and safe-detach result.
+
+The successful authority uses exact typed provisional/final schemas. It binds
+archive/executable hashes, transitive helper build closure, platform and APFS
+graph, normalized-profile controls, expected state/exit class for every
+scenario, process quiescence, protected metadata/content counts and digests,
+and the cleanup set. Both comments are fetched twice for stability; final
+protected-state and provisional body digests must agree exactly.
 
 Rollback of source is a Git revert. It must never delete repositories already
 created by a user. Contract-v1 validation must remain available after a future

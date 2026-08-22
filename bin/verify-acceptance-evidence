@@ -1,0 +1,53 @@
+#!/usr/bin/env bash
+set -euo pipefail
+evidence="${1:-}" issue="${2:-}" sha="${3:-}" artifact="${4:-}" expected_actor="${5:-}" repo="${GITHUB_REPOSITORY:-}"
+die() { echo "$*" >&2; exit 1; }
+digest_body() { printf %s "$1" | shasum -a 256 | awk '{print $1}'; }
+fetch_stable() {
+  local id="$1" first second
+  first="$(gh api "repos/$repo/issues/comments/$id")" || die "Evidence comment is unavailable."
+  second="$(gh api "repos/$repo/issues/comments/$id")" || die "Evidence comment disappeared during verification."
+  [[ "$(jq -c '{id,body,issue_url,user:.user.login,created_at}' <<<"$first")" == "$(jq -c '{id,body,issue_url,user:.user.login,created_at}' <<<"$second")" ]] || die "Evidence comment changed during verification."
+  [[ "$(jq -r .id <<<"$second")" == "$id" && "$(jq -r .created_at <<<"$second")" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$ ]] || die "Evidence comment identity is malformed."
+  printf '%s\n' "$second"
+}
+validate_common() {
+  local comment="$1" digest="$2" marker="$3" json body actor
+  body="$(jq -r .body <<<"$comment")"
+  [[ "$(digest_body "$body")" == "$digest" ]] || die "Evidence comment was edited or mismatched."
+  [[ "$body" == "$marker"$'\n'* && "${body#"$marker"$'\n'}" != *$'\n'* ]] || die "Evidence authority body format mismatch."
+  json="${body#"$marker"$'\n'}"; jq -e 'type == "object"' >/dev/null <<<"$json" || die "Evidence JSON is invalid."
+  jq -e --argjson issue "$issue" --arg sha "$sha" --arg artifact "$artifact" '.issue == $issue and .candidate == $sha and .artifact == $artifact and (.issue|type)=="number" and (.candidate|type)=="string" and (.artifact|type)=="string"' <<<"$json" >/dev/null || die "Evidence binding mismatch."
+  [[ "$(jq -r .issue_url <<<"$comment")" == "https://api.github.com/repos/$repo/issues/$issue" ]] || die "Evidence comment belongs to another issue."
+  actor="$(jq -r '.user.login | ascii_downcase' <<<"$comment")"
+  [[ -z "$expected_actor" || "$actor" == "$(printf %s "$expected_actor" | tr '[:upper:]' '[:lower:]')" ]] || die "Evidence author mismatch."
+  printf '%s\n%s\n' "$actor" "$json"
+}
+[[ -n "$repo" && "$issue" =~ ^[0-9]+$ && "$sha" =~ ^[0-9a-f]{40}$ && "$artifact" =~ ^artifact-v1:run=[0-9]+:id=[0-9]+:name=[A-Za-z0-9._-]+:sha256=[0-9a-f]{64}$ ]] || exit 64
+if [[ "$evidence" =~ ^failure-v1:comment=([0-9]+):([0-9a-f]{64})$ ]]; then
+  result="$(validate_common "$(fetch_stable "${BASH_REMATCH[1]}")" "${BASH_REMATCH[2]}" '<!-- installed-baseline-evidence-v1 authority=failure -->')"; json="$(tail -n +2 <<<"$result")"
+  jq -e 'keys == ["artifact","authority","candidate","cleanup","failure_class","failure_scope","issue","redacted","run_id","schema"] and .schema == "installed-baseline-evidence-v1" and .authority == "failure" and (.failure_scope | IN("candidate","harness")) and (.failure_class | IN("refused","preflight","containment","artifact","candidate","evidence","cleanup")) and (.run_id|type)=="string" and (.run_id|length)>0 and .cleanup == {detached:(.cleanup.detached),state_preserved:true} and (.cleanup.detached|type)=="boolean" and .redacted == true' <<<"$json" >/dev/null || die "Failure evidence schema is incomplete."
+  head -n 1 <<<"$result"; exit 0
+fi
+pattern='^evidence-v1:provisional=([0-9]+):([0-9a-f]{64}):final=([0-9]+):([0-9a-f]{64})$'; [[ "$evidence" =~ $pattern ]] || exit 64
+provisional_id="${BASH_REMATCH[1]}" provisional_digest="${BASH_REMATCH[2]}" final_id="${BASH_REMATCH[3]}" final_digest="${BASH_REMATCH[4]}"
+[[ "$provisional_id" != "$final_id" ]] || die "Evidence comments must be distinct."
+presult="$(validate_common "$(fetch_stable "$provisional_id")" "$provisional_digest" '<!-- installed-baseline-evidence-v1 authority=provisional -->')"
+fresult="$(validate_common "$(fetch_stable "$final_id")" "$final_digest" '<!-- installed-baseline-evidence-v1 authority=final -->')"
+pactor="$(head -n1 <<<"$presult")"; pjson="$(tail -n +2 <<<"$presult")"; factor="$(head -n1 <<<"$fresult")"; fjson="$(tail -n +2 <<<"$fresult")"
+[[ "$pactor" == "$factor" ]] || die "Evidence authors differ."
+jq -e '
+ def h40: type=="string" and test("^[0-9a-f]{40}$"); def h64: type=="string" and test("^[0-9a-f]{64}$"); def nonempty: type=="string" and length>0;
+ keys == ["artifact","authority","candidate","checkout","cleanup_expected","controls","issue","limitations","mount","platform","processes","profiles","protected_state","redacted","run_id","scenarios","schema"] and
+ .schema == "installed-baseline-evidence-v1" and .authority == "provisional" and .redacted == true and (.run_id|test("^[0-9a-f]{32}$")) and
+ (.checkout|keys)==["archive_sha256","barrier_blob","build_flags","cgo_enabled","executable_sha256","go_version","goarch","goos","helper_binary_sha256","runner_blob","source_closure_sha256","supervisor_blob","support_blob","tree"] and (.checkout.tree|h40) and (.checkout.supervisor_blob|h40) and (.checkout.barrier_blob|h40) and (.checkout.runner_blob|h40) and (.checkout.support_blob|h40) and all([.checkout.archive_sha256,.checkout.executable_sha256,.checkout.helper_binary_sha256,.checkout.source_closure_sha256][];h64) and .checkout.build_flags=="-trimpath -buildvcs=true" and .checkout.cgo_enabled=="0" and (.checkout.go_version|test("^go[0-9]+\\.[0-9]+")) and .checkout.goos=="darwin" and .checkout.goarch=="arm64" and
+ (.platform|keys)==["architecture","codex","filesystem","git","hardware_model","os_build"] and .platform.architecture=="arm64" and .platform.filesystem=="apfs" and all([.platform.codex,.platform.git,.platform.hardware_model,.platform.os_build][];nonempty) and
+ (.mount|keys)==["container_device","detach_absent","detached","device","image_device","image_inode","image_whole","non_forced","physical_store","uuid"] and all([.mount.device,.mount.image_whole,.mount.physical_store,.mount.container_device][];test("^/dev/disk[0-9]+(s[0-9]+)?$")) and ([.mount.device,.mount.image_whole,.mount.physical_store,.mount.container_device]|unique|length)==4 and (.mount.uuid|test("^[0-9A-F]{8}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{12}$")) and (.mount.image_device|test("^[0-9]+$")) and (.mount.image_inode|test("^[0-9]+$")) and all([.mount.detached,.mount.detach_absent,.mount.non_forced][];type=="boolean" and .==true) and
+ (.profiles|keys)==["diagnostics_allowlisted","lifecycle_sha256","normalized","smoke_sha256"] and (.profiles.lifecycle_sha256|h64) and (.profiles.smoke_sha256|h64) and (.profiles.normalized|type)=="boolean" and .profiles.normalized==true and (.profiles.diagnostics_allowlisted|type)=="boolean" and .profiles.diagnostics_allowlisted==true and
+ (.controls|keys)==["candidate_launch","codex_launch","descendant","evidence_write_denied","lifecycle_network_denied","protected_canary_denied","setsid_descendant","signal_denied","smoke_preflight","unsandboxed_network"] and all(.controls[];.==true) and
+ (.processes|keys)==["escaped_descendants_absent","post_kill_equal","quiescent","stop_barrier"] and all(.processes[];.==true) and
+ (.protected_state|keys)==["canaries_equal","content_count","content_digest","content_equal","metadata_count","metadata_digest","metadata_equal"] and (.protected_state.metadata_digest|h64) and (.protected_state.content_digest|h64) and (.protected_state.metadata_count|type)=="number" and .protected_state.metadata_count>0 and (.protected_state.content_count|type)=="number" and .protected_state.content_count>0 and (.protected_state.metadata_equal|type)=="boolean" and .protected_state.metadata_equal==true and (.protected_state.content_equal|type)=="boolean" and .protected_state.content_equal==true and (.protected_state.canaries_equal|type)=="boolean" and .protected_state.canaries_equal==true and
+ (.scenarios|keys)==["cancel","collision","install","interrupted_install","interrupted_uninstall","interrupted_upgrade","repair","rollback","smoke","uninstall","upgrade","verify"] and all(.scenarios[]; (keys==["exit_class","expected_state","passed"] and (.passed|type)=="boolean" and .passed==true)) and .scenarios.cancel.expected_state=="not-installed" and .scenarios.cancel.exit_class=="cancelled" and .scenarios.collision.expected_state=="foreign-preserved" and .scenarios.collision.exit_class=="collision" and all([.scenarios.install,.scenarios.verify,.scenarios.repair][];.expected_state=="healthy" and .exit_class=="success") and .scenarios.upgrade.expected_state=="healthy-new-generation" and .scenarios.upgrade.exit_class=="success" and .scenarios.rollback.expected_state=="healthy-prior-generation" and .scenarios.rollback.exit_class=="success" and all([.scenarios.interrupted_install,.scenarios.interrupted_upgrade,.scenarios.interrupted_uninstall][];.expected_state=="recovered" and .exit_class=="interrupted") and .scenarios.uninstall.expected_state=="not-installed-unrelated-preserved" and .scenarios.uninstall.exit_class=="success" and .scenarios.smoke.expected_state=="instruction-discovered-auth-disposable" and .scenarios.smoke.exit_class=="success" and
+ .cleanup_expected==["ordinary-detach","graph-absence","image","mountpoint","run-root","evidence-root"] and .limitations==["broad-smoke-egress","no-fresh-keychain","no-read-confidentiality","same-uid"]' <<<"$pjson" >/dev/null || die "Provisional evidence schema or semantics are incomplete."
+jq -e --argjson pid "$provisional_id" --arg pd "$provisional_digest" --arg protected "$(jq -r '.protected_state.metadata_digest+":"+.protected_state.content_digest' <<<"$pjson")" 'keys == ["artifact","authority","candidate","cleanup","issue","protected_state_digest","provisional","schema"] and .schema=="installed-baseline-evidence-v1" and .authority=="final" and .provisional=={id:$pid,digest:$pd} and .protected_state_digest==$protected and (.cleanup|keys)==["evidence_root_deleted","image_deleted","mount_absent","non_forced_detach","run_root_deleted"] and all(.cleanup[];.==true)' <<<"$fjson" >/dev/null || die "Final evidence schema or cross-binding is incomplete."
+printf '%s\n' "$pactor"

@@ -67,3 +67,78 @@ returns the control tree to absence.
 
 Implementation: `internal/codexhome/lifecycle.go`; command grammar:
 `cmd/my-friday/main.go`; tests: `internal/codexhome/lifecycle_test.go`.
+
+## Acceptance boundary
+
+Release acceptance runs the exact nominated Darwin/ARM64 executable under
+`bin/accept-installed-codex-baseline`. The foreground supervisor creates a
+marker-owned APFS disk image below the acceptor's canonical home, supplies
+synthetic user, Codex, temporary, XDG, runtime, and candidate paths, and runs
+candidate processes under fixed deny-default sandbox profiles. Lifecycle
+commands and descendants have volume-only write authority and no network. The
+fixed Codex login/exec/logout smoke keeps the write boundary but permits broad
+outbound network; it makes no endpoint-restriction claim.
+The installed Codex command may be a current-user-owned symlink chain; the
+supervisor resolves and pins its owned regular executable before mutation.
+Profile templates are rendered by literal placeholder replacement rather than
+shell substitution, normalized byte-for-byte, and positive-controlled by both
+the real Go candidate and resolved Codex executable. The reviewed Go-runtime
+`sysctl-read` operation is allowed; broad Mach lookup remains denied and new
+diagnostics fail.
+The profile additionally permits write-data only to `/dev/null`; all synthetic
+temporary, XDG, fixed-user-home, and compiler-cache paths exist inside the
+disposable volume. Its executable control performs a fresh valid contract-v1
+install through the real Git/xcrun path. Diagnostic allowlist `v1` accepts only
+empty output or its one exact literal deprecation line. Version authority is
+validated before content, including empty content; suffixes, multiline output,
+duplicates, and unknown allowlist versions fail closed.
+
+The supervisor externally stops and kills exact candidate process groups only
+after `tools/acceptance-stop-barrier` observes a schema-valid recoverable journal
+behind an all-members-stopped barrier. The barrier binds PID, PGID, process
+start identity, pinned Codex-home device/inode, complete proof digests,
+action-specific before/after invariants, allowed durable phase, and adjacent
+staging authority against descriptor-opened projection, manifest, canonical,
+previous, and staged bytes before signaling. Three stable stopped reads and an
+identical post-kill filesystem receipt are required. Each operation gets up to
+three fresh synthetic homes/fixtures; a missed window carries no evidence into
+the next attempt. Ordinary `codex recover` must then
+restore install, upgrade, and uninstall cases. No fault-enabled candidate or
+background service exists.
+
+Before setup and after ordinary detach, private inventories compare metadata
+for live Codex/runtime roots and exact bytes only for schema-allowlisted,
+non-sensitive managed files. Secret-bearing and foreign contents are never
+opened for evidence. A provisional GitHub comment has no authority. A separate
+post-cleanup finalization comment cross-binds its immutable ID and body digest;
+acceptance and release re-fetch and verify both comments. This is same-UID
+write containment, not distinct-principal isolation, read confidentiality, or
+a fresh login keychain.
+
+The supervisor itself is byte-bound to the candidate checkout: clean status is
+combined with Git blob checks for the complete repository-owned transitive Go
+source closure, module sums, profiles, and supervisor. Evidence records that
+closure, pinned build inputs/flags, tree/blob IDs, and an aggregate digest of
+the actually executed helper binaries. Every candidate and Codex process runs
+from a synthetic cwd under a hard process timeout; process-start-bound lineage
+tracking kills descendants even after `setsid` and proves no live descendants.
+Immediate double-fork descendants are correlated by an inherited per-run token
+and new same-executable identity even if their original parent exits before the
+first process-table sample.
+
+Image authority binds the sparse-image inode to the image whole disk, APFS
+physical store, container, volume device/UUID, mount root, and live `hdiutil`,
+`diskutil`, and mount-table views. Cleanup begins only after all four device
+identities and the image association disappear. Exact run children are then
+removed descriptor-relative under no-follow ancestor walks using matching
+root receipts and markers; fixed parents are never recursively deleted.
+Once attach begins, ambiguous or partially validated output forces complete
+preservation until ordinary detach and graph absence are proved. Final cleanup
+accepts exact descriptor-relative entry sets and fully binds both run trees
+before mutating either, rebinds each opened entry before unlink, and refuses the
+whole operation on an unexpected entry in either root. Protected reads
+component-walk intermediate directories without following symlinks.
+
+The executed-byte closure also includes artifact download/packaging and evidence
+verification scripts. Dependency-producer and closure-parser failures propagate
+as refusals rather than being interpreted as an empty source closure.

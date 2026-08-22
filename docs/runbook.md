@@ -96,3 +96,50 @@ locations and refuses. Preserve `transaction.json.discard` or
 `.my-friday-removal.json.discard` if reported; rerunning recovery restores a
 valid interrupted cleanup stage before proceeding. Either name makes verify
 report `interrupted` and prevents another lifecycle plan until recovery finishes.
+
+## Recover an interrupted acceptance run
+
+Acceptance state lives only under the canonical-home parents
+`.my-friday-acceptance` and `.my-friday-acceptance-evidence`. Diagnose one exact
+run-ID child at a time. Read its owner-only `marker.json` and require the schema,
+run ID, nonce, candidate SHA, canonical home, UID/GID, and directory identity to
+match before cleanup.
+
+If the image remains attached, verify the device, mountpoint, backing image,
+APFS volume, and current owner against `attach.plist` and `diskutil info`. Stop
+only the recorded acceptance process group, then use ordinary `hdiutil detach
+<device>`—never `-force`. On any mismatch or detach failure, preserve the run
+and evidence roots for maintainer diagnosis.
+Attachment start is itself a preservation barrier. If attach output is partial
+or ambiguous, do not remove the image, mountpoint, or anything beneath either
+run root. Retain the attach receipt until an operator proves the complete graph,
+performs ordinary detach, and proves graph absence.
+
+After proven detach, remove only marker-listed files and the empty mountpoint.
+Remove the exact run directory only when empty. Private before/after manifests
+may be removed only after their marker and protected-state equality are proven;
+then remove the exact evidence directory only when empty. Never recursively
+delete either fixed parent or an unmarked child. A lone provisional GitHub
+comment has no acceptance authority; failed finalization requires a fresh run.
+Before detach or deletion, revalidate the backing image device/inode/owner/mode,
+the complete image-whole/physical-store/container/volume graph, mounted device
+and UUID, mount-table entry, writable local APFS identity, live `hdiutil`
+association, and exact run/evidence markers. After ordinary detach, require all
+device lookups, mount entries, and image associations absent. Cleanup reopens
+the canonical home and each ancestor without following symlinks, matches both
+root receipts and marker digests, unlinks owned entries descriptor-relative,
+and removes only the two exact run-ID children. The failure trap attempts
+ordinary detach only while all authority still matches; substituted or
+ambiguous state is preserved.
+Descriptor-relative cleanup requires the exact expected transitive entry set.
+Any extra owner-controlled file, directory, link, or identity mismatch refuses
+cleanup and preserves both roots for diagnosis. The helper must prevalidate and
+hold bindings for both roots before unlinking from either; do not regenerate the
+expected set from the live tree.
+
+Interruption observation never reuses a missed attempt. Install, upgrade, and
+uninstall each receive at most three fresh synthetic homes and valid padded
+contract-v1 fixtures. The barrier requires three identical stopped receipts,
+then kills and reaps the exact group and compares the post-kill projection,
+manifest, canonical, previous, journal, and staging state to the captured
+receipt before ordinary recovery.
