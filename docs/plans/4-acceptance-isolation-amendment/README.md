@@ -1,6 +1,6 @@
 # Solution Design Amendment: No-admin installed-baseline acceptance isolation
 
-- **Status:** Draft
+- **Status:** Final
 - **Issue:** #4
 - **Planning PR:** #27
 - **Repository basis:** 0ad07cf578ed4e7f7f7d8ae7d30aa5013bb9d83b
