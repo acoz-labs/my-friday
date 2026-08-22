@@ -88,8 +88,9 @@ diagnostics fail.
 The profile additionally permits write-data only to `/dev/null`; all synthetic
 temporary, XDG, fixed-user-home, and compiler-cache paths exist inside the
 disposable volume. Its executable control performs a fresh valid contract-v1
-install through the real Git/xcrun path. Diagnostics must be empty or one exact
-reviewed deprecation line; multiline and duplicate diagnostics fail closed.
+install through the real Git/xcrun path. Diagnostic allowlist `v1` accepts only
+empty output or its one exact literal deprecation line; suffixes, multiline
+output, duplicates, and unknown allowlist versions fail closed.
 
 The supervisor externally stops and kills exact candidate process groups only
 after `tools/acceptance-stop-barrier` observes a schema-valid recoverable journal
@@ -132,8 +133,9 @@ removed descriptor-relative under no-follow ancestor walks using matching
 root receipts and markers; fixed parents are never recursively deleted.
 Once attach begins, ambiguous or partially validated output forces complete
 preservation until ordinary detach and graph absence are proved. Final cleanup
-accepts an exact descriptor-relative entry set, rebinds each opened entry before
-unlink, and refuses the whole operation on an unexpected entry. Protected reads
+accepts exact descriptor-relative entry sets and fully binds both run trees
+before mutating either, rebinds each opened entry before unlink, and refuses the
+whole operation on an unexpected entry in either root. Protected reads
 component-walk intermediate directories without following symlinks.
 
 The executed-byte closure also includes artifact download/packaging and evidence

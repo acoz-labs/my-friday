@@ -245,14 +245,9 @@ done
 printf 'protected-canary\n' >"$run_root/protected-canary"
 chmod 0600 "$run_root/protected-canary"
 curl -fsS --max-time 5 https://example.com >/dev/null || fail "unsandboxed reachability control failed"
-validate_sandbox_diagnostic() {
-  local diagnostic="$1"
-  [[ "$diagnostic" != *$'\n'* ]] || return 1
-  [[ -z "$diagnostic" || "$diagnostic" =~ ^sandbox-exec:\ warning:\ sandbox-exec\ is\ deprecated.*$ ]]
-}
 for profile in lifecycle codex-smoke; do
   diagnostics="$({ sandbox-exec -f "$run_root/$profile.sb" /usr/bin/true; } 2>&1)" || fail "$profile profile preflight failed"
-  validate_sandbox_diagnostic "$diagnostics" || fail "$profile profile emitted an unreviewed diagnostic"
+  printf %s "$diagnostics" | "$run_root/acceptance-support" validate-sandbox-diagnostic --allowlist v1 || fail "$profile profile emitted an unreviewed diagnostic"
 done
 # shellcheck disable=SC2016
 sandbox-exec -f "$run_root/lifecycle.sb" /bin/sh -c 'printf ok >"$1/control"' sh "$volume"

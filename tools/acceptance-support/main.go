@@ -120,6 +120,14 @@ func main() {
 		if _, err = os.Stdout.Write(body); err != nil {
 			fatal(err.Error())
 		}
+	case "validate-sandbox-diagnostic":
+		fs := flag.NewFlagSet("validate-sandbox-diagnostic", flag.ExitOnError)
+		version := fs.String("allowlist", "", "diagnostic allowlist version")
+		_ = fs.Parse(os.Args[2:])
+		body, err := io.ReadAll(io.LimitReader(os.Stdin, 16<<10))
+		if err != nil || !validSandboxDiagnostic(*version, string(body)) {
+			fatal("unreviewed sandbox diagnostic")
+		}
 	case "protected-content":
 		fs := flag.NewFlagSet("protected-content", flag.ExitOnError)
 		codex := fs.String("codex-home", "", "live Codex home")
@@ -238,76 +246,11 @@ func main() {
 		if err != nil {
 			fatal(err.Error())
 		}
-		defer unix.Close(hfd)
-		for _, parent := range []string{".my-friday-acceptance", ".my-friday-acceptance-evidence"} {
-			pfd, openErr := unix.Openat(hfd, parent, unix.O_RDONLY|unix.O_DIRECTORY|unix.O_CLOEXEC|unix.O_NOFOLLOW, 0)
-			if openErr != nil {
-				fatal(openErr.Error())
-			}
-			var parentOpened, parentEntry unix.Stat_t
-			if unix.Fstat(pfd, &parentOpened) != nil || unix.Fstatat(hfd, parent, &parentEntry, unix.AT_SYMLINK_NOFOLLOW) != nil || parentOpened.Dev != parentEntry.Dev || parentOpened.Ino != parentEntry.Ino {
-				unix.Close(pfd)
-				fatal("cleanup parent identity changed")
-			}
-			cfd, openErr := unix.Openat(pfd, *runID, unix.O_RDONLY|unix.O_DIRECTORY|unix.O_CLOEXEC|unix.O_NOFOLLOW, 0)
-			if openErr != nil {
-				unix.Close(pfd)
-				fatal(openErr.Error())
-			}
-			var st unix.Stat_t
-			expected := receipt[parent]
-			if unix.Fstat(cfd, &st) != nil || uint64(st.Dev) != expected["device"] || st.Ino != expected["inode"] || st.Uid != uint32(os.Getuid()) || st.Mode&0o777 != 0o700 {
-				unix.Close(cfd)
-				unix.Close(pfd)
-				fatal("cleanup root identity changed")
-			}
-			marker, markerErr := readRegularAt(cfd, "marker.json", 0o600)
-			if markerErr != nil || fmt.Sprintf("%x", sha256.Sum256(marker)) != *markerSHA {
-				unix.Close(cfd)
-				unix.Close(pfd)
-				fatal("cleanup marker authority changed")
-			}
-			expectedPaths := map[string]bool{}
-			for _, entry := range expectedEntries {
-				prefix := parent + ":"
-				if strings.HasPrefix(entry, prefix) {
-					rel := strings.TrimPrefix(entry, prefix)
-					if rel == "" || filepath.Clean(rel) != rel || filepath.IsAbs(rel) || strings.HasPrefix(rel, "../") {
-						fatal("invalid expected cleanup entry")
-					}
-					expectedPaths[rel] = true
-				}
-			}
-			if !expectedPaths["marker.json"] {
-				fatal("cleanup marker is not expected")
-			}
-			seenPaths := map[string]bool{}
-			if err = validateExpectedContentsAt(cfd, "", expectedPaths, seenPaths); err != nil || len(seenPaths) != len(expectedPaths) {
-				unix.Close(cfd)
-				unix.Close(pfd)
-				if err != nil {
-					fatal(err.Error())
-				}
-				fatal("expected cleanup entry is missing")
-			}
-			if err = removeExpectedContentsAt(cfd, "", expectedPaths); err != nil {
-				unix.Close(cfd)
-				unix.Close(pfd)
-				fatal(err.Error())
-			}
-			var childEntry unix.Stat_t
-			if unix.Fstatat(pfd, *runID, &childEntry, unix.AT_SYMLINK_NOFOLLOW) != nil || childEntry.Dev != st.Dev || childEntry.Ino != st.Ino {
-				unix.Close(cfd)
-				unix.Close(pfd)
-				fatal("cleanup child binding changed")
-			}
-			unix.Close(cfd)
-			if err = unix.Unlinkat(pfd, *runID, unix.AT_REMOVEDIR); err != nil {
-				unix.Close(pfd)
-				fatal(err.Error())
-			}
-			unix.Close(pfd)
+		if err = cleanupRoots(hfd, *runID, *markerSHA, receipt, expectedEntries); err != nil {
+			unix.Close(hfd)
+			fatal(err.Error())
 		}
+		unix.Close(hfd)
 	case "setsid-probe":
 		executable, err := os.Executable()
 		if err != nil {
@@ -325,6 +268,116 @@ func main() {
 	default:
 		fatal("unknown acceptance-support command")
 	}
+}
+
+func validSandboxDiagnostic(version, diagnostic string) bool {
+	if diagnostic == "" {
+		return true
+	}
+	if version != "v1" {
+		return false
+	}
+	return diagnostic == "sandbox-exec: warning: sandbox-exec is deprecated and will be removed in a future release."
+}
+
+type cleanupBinding struct {
+	parent            string
+	parentFD, childFD int
+	parentStat        unix.Stat_t
+	childStat         unix.Stat_t
+	expected          map[string]bool
+}
+
+func cleanupRoots(homeFD int, runID, markerSHA string, receipt map[string]map[string]uint64, expectedEntries []string) error {
+	bindings := make([]cleanupBinding, 0, 2)
+	defer func() {
+		for _, binding := range bindings {
+			unix.Close(binding.childFD)
+			unix.Close(binding.parentFD)
+		}
+	}()
+	// Phase one opens, identity-binds, and completely validates both roots.
+	// No unlink is permitted until this loop succeeds for both.
+	for _, parent := range []string{".my-friday-acceptance", ".my-friday-acceptance-evidence"} {
+		pfd, openErr := unix.Openat(homeFD, parent, unix.O_RDONLY|unix.O_DIRECTORY|unix.O_CLOEXEC|unix.O_NOFOLLOW, 0)
+		if openErr != nil {
+			return openErr
+		}
+		var parentOpened, parentEntry unix.Stat_t
+		if unix.Fstat(pfd, &parentOpened) != nil || unix.Fstatat(homeFD, parent, &parentEntry, unix.AT_SYMLINK_NOFOLLOW) != nil || parentOpened.Dev != parentEntry.Dev || parentOpened.Ino != parentEntry.Ino {
+			unix.Close(pfd)
+			return errors.New("cleanup parent identity changed")
+		}
+		cfd, openErr := unix.Openat(pfd, runID, unix.O_RDONLY|unix.O_DIRECTORY|unix.O_CLOEXEC|unix.O_NOFOLLOW, 0)
+		if openErr != nil {
+			unix.Close(pfd)
+			return openErr
+		}
+		var st unix.Stat_t
+		expected := receipt[parent]
+		if unix.Fstat(cfd, &st) != nil || uint64(st.Dev) != expected["device"] || st.Ino != expected["inode"] || st.Uid != uint32(os.Getuid()) || st.Mode&0o777 != 0o700 {
+			unix.Close(cfd)
+			unix.Close(pfd)
+			return errors.New("cleanup root identity changed")
+		}
+		marker, markerErr := readRegularAt(cfd, "marker.json", 0o600)
+		if markerErr != nil || fmt.Sprintf("%x", sha256.Sum256(marker)) != markerSHA {
+			unix.Close(cfd)
+			unix.Close(pfd)
+			return errors.New("cleanup marker authority changed")
+		}
+		expectedPaths := map[string]bool{}
+		for _, entry := range expectedEntries {
+			prefix := parent + ":"
+			if strings.HasPrefix(entry, prefix) {
+				rel := strings.TrimPrefix(entry, prefix)
+				if rel == "" || filepath.Clean(rel) != rel || filepath.IsAbs(rel) || strings.HasPrefix(rel, "../") {
+					unix.Close(cfd)
+					unix.Close(pfd)
+					return errors.New("invalid expected cleanup entry")
+				}
+				expectedPaths[rel] = true
+			}
+		}
+		if !expectedPaths["marker.json"] {
+			unix.Close(cfd)
+			unix.Close(pfd)
+			return errors.New("cleanup marker is not expected")
+		}
+		seenPaths := map[string]bool{}
+		if validationErr := validateExpectedContentsAt(cfd, "", expectedPaths, seenPaths); validationErr != nil || len(seenPaths) != len(expectedPaths) {
+			unix.Close(cfd)
+			unix.Close(pfd)
+			if validationErr != nil {
+				return validationErr
+			}
+			return errors.New("expected cleanup entry is missing")
+		}
+		bindings = append(bindings, cleanupBinding{parent: parent, parentFD: pfd, childFD: cfd, parentStat: parentOpened, childStat: st, expected: expectedPaths})
+	}
+	// Rebind both parent/child directory entries after all validation and before
+	// any mutation, so a rename cannot redirect one side of the transaction.
+	for _, binding := range bindings {
+		var parentEntry, childEntry unix.Stat_t
+		if unix.Fstatat(homeFD, binding.parent, &parentEntry, unix.AT_SYMLINK_NOFOLLOW) != nil || parentEntry.Dev != binding.parentStat.Dev || parentEntry.Ino != binding.parentStat.Ino ||
+			unix.Fstatat(binding.parentFD, runID, &childEntry, unix.AT_SYMLINK_NOFOLLOW) != nil || childEntry.Dev != binding.childStat.Dev || childEntry.Ino != binding.childStat.Ino {
+			return errors.New("cleanup root binding changed before mutation")
+		}
+	}
+	// Phase two mutates only the jointly validated and rebound roots.
+	for _, binding := range bindings {
+		if err := removeExpectedContentsAt(binding.childFD, "", binding.expected); err != nil {
+			return err
+		}
+		var childEntry unix.Stat_t
+		if unix.Fstatat(binding.parentFD, runID, &childEntry, unix.AT_SYMLINK_NOFOLLOW) != nil || childEntry.Dev != binding.childStat.Dev || childEntry.Ino != binding.childStat.Ino {
+			return errors.New("cleanup child binding changed")
+		}
+		if err := unix.Unlinkat(binding.parentFD, runID, unix.AT_REMOVEDIR); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func secureRoots(home, runID string) (map[string]map[string]uint64, error) {

@@ -133,8 +133,9 @@ ordinary detach only while all authority still matches; substituted or
 ambiguous state is preserved.
 Descriptor-relative cleanup requires the exact expected transitive entry set.
 Any extra owner-controlled file, directory, link, or identity mismatch refuses
-cleanup and preserves the run for diagnosis; do not regenerate the expected set
-from the live tree.
+cleanup and preserves both roots for diagnosis. The helper must prevalidate and
+hold bindings for both roots before unlinking from either; do not regenerate the
+expected set from the live tree.
 
 Interruption observation never reuses a missed attempt. Install, upgrade, and
 uninstall each receive at most three fresh synthetic homes and valid padded

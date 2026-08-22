@@ -38,7 +38,9 @@ The native primitive performs a fresh valid install under the final lifecycle
 profile (including Git/xcrun), while regressions cover immediate double-fork
 setsid escape, ambiguous-attach preservation, exact-entry cleanup refusal,
 intermediate-symlink protected-read refusal, closure-producer failure, and exact
-diagnostic/evidence semantics.
+versioned diagnostic semantics. Evidence adversarial cases also require each
+protected metadata/content/canary equality field to be the JSON boolean `true`,
+not a truthy string or number.
 
 `bin/container bin/ci` proves portable source compilation but cannot prove
 APFS, macOS permissions, terminal, or local Git-template behaviour. Run

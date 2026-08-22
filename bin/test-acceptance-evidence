@@ -22,7 +22,7 @@ chmod +x "$tmp/bin/gh"
 verify() { rm -f "$tmp/counts/101" "$tmp/counts/102" "$tmp/counts/103"; PATH="$tmp/bin:$PATH" EVIDENCE_FIXTURES="$tmp" GITHUB_REPOSITORY=owner/repo "$root/bin/verify-acceptance-evidence" "$@"; }
 publish_pair; verify "$authority" 4 "$sha" "$artifact" acceptor >/dev/null
 original="$pjson"
-for mutation in missing_field false_control extra_field bad_hash wrong_type empty_semantic invalid_uuid numeric_boolean wrong_scenario wrong_final_binding; do
+for mutation in missing_field false_control extra_field bad_hash wrong_type empty_semantic invalid_uuid numeric_boolean string_metadata_equal string_content_equal string_canaries_equal wrong_scenario wrong_final_binding; do
   pjson="$original"
   case "$mutation" in
     missing_field) pjson="$(jq -c 'del(.mount.uuid)' <<<"$pjson")" ;;
@@ -33,6 +33,9 @@ for mutation in missing_field false_control extra_field bad_hash wrong_type empt
     empty_semantic) pjson="$(jq -c '.scenarios.install.expected_state=""' <<<"$pjson")" ;;
     invalid_uuid) pjson="$(jq -c '.mount.uuid="------------------------------------"' <<<"$pjson")" ;;
     numeric_boolean) pjson="$(jq -c '.profiles.normalized=1' <<<"$pjson")" ;;
+    string_metadata_equal) pjson="$(jq -c '.protected_state.metadata_equal="true"' <<<"$pjson")" ;;
+    string_content_equal) pjson="$(jq -c '.protected_state.content_equal="true"' <<<"$pjson")" ;;
+    string_canaries_equal) pjson="$(jq -c '.protected_state.canaries_equal="true"' <<<"$pjson")" ;;
     wrong_scenario) pjson="$(jq -c '.scenarios.install.expected_state="healthy-new-generation"' <<<"$pjson")" ;;
   esac
   publish_pair

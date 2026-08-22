@@ -220,3 +220,49 @@ func TestCleanupRootsPreservesUnexpectedEntry(t *testing.T) {
 		t.Fatal("cleanup mutated expected state before refusing the unexpected entry")
 	}
 }
+
+func TestCleanupRootsPrevalidatesBothRootsBeforeMutation(t *testing.T) {
+	home := t.TempDir()
+	receipt, err := exec.Command("go", "run", ".", "secure-roots", "--home", home, "--run-id", "run").CombinedOutput()
+	if err != nil {
+		t.Fatal(err)
+	}
+	marker := []byte("marker\n")
+	markerSHA := fmt.Sprintf("%x", sha256.Sum256(marker))
+	for _, parent := range []string{".my-friday-acceptance", ".my-friday-acceptance-evidence"} {
+		if err = os.WriteFile(filepath.Join(home, parent, "run", "marker.json"), marker, 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	unexpected := filepath.Join(home, ".my-friday-acceptance-evidence", "run", "unexpected")
+	if err = os.WriteFile(unexpected, []byte("preserve"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cmd := exec.Command("go", "run", ".", "cleanup-roots", "--home", home, "--run-id", "run", "--receipt", strings.TrimSpace(string(receipt)), "--marker-sha256", markerSHA,
+		"--expected-entry", ".my-friday-acceptance:marker.json", "--expected-entry", ".my-friday-acceptance-evidence:marker.json")
+	if err = cmd.Run(); err == nil {
+		t.Fatal("cleanup accepted an evidence-root surprise")
+	}
+	for _, parent := range []string{".my-friday-acceptance", ".my-friday-acceptance-evidence"} {
+		if body, readErr := os.ReadFile(filepath.Join(home, parent, "run", "marker.json")); readErr != nil || string(body) != "marker\n" {
+			t.Fatalf("cleanup mutated %s before both roots validated", parent)
+		}
+	}
+}
+
+func TestSandboxDiagnosticAllowlistV1(t *testing.T) {
+	exact := "sandbox-exec: warning: sandbox-exec is deprecated and will be removed in a future release."
+	for name, test := range map[string]struct {
+		input string
+		want  bool
+	}{
+		"empty": {"", true}, "exact": {exact, true}, "suffix": {exact + " attacker", false},
+		"multiline": {exact + "\nunexpected", false}, "duplicate": {exact + "\n" + exact, false},
+	} {
+		t.Run(name, func(t *testing.T) {
+			if got := validSandboxDiagnostic("v1", test.input); got != test.want {
+				t.Fatalf("got %v want %v", got, test.want)
+			}
+		})
+	}
+}
