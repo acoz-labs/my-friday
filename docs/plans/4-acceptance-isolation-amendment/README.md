@@ -2,7 +2,7 @@
 
 - **Status:** Draft
 - **Issue:** #4
-- **Planning PR:** Pending
+- **Planning PR:** #27
 - **Repository basis:** 0ad07cf578ed4e7f7f7d8ae7d30aa5013bb9d83b
 - **Execution envelope:** through-production
 - **Amends:** original issue #4 Solution Design in PR #15, accepted at
