@@ -81,7 +81,10 @@ outbound network; it makes no endpoint-restriction claim.
 
 The supervisor externally stops and kills exact candidate process groups only
 after `tools/acceptance-stop-barrier` observes a schema-valid recoverable journal
-behind an all-members-stopped barrier. Ordinary `codex recover` must then
+behind an all-members-stopped barrier. The barrier binds PID, PGID, process
+start identity, pinned Codex-home device/inode, complete proof digests,
+action-specific before/after invariants, allowed durable phase, and adjacent
+staging authority before signaling. Ordinary `codex recover` must then
 restore install, upgrade, and uninstall cases. No fault-enabled candidate or
 background service exists.
 
@@ -93,3 +96,9 @@ post-cleanup finalization comment cross-binds its immutable ID and body digest;
 acceptance and release re-fetch and verify both comments. This is same-UID
 write containment, not distinct-principal isolation, read confidentiality, or
 a fresh login keychain.
+
+The supervisor itself is byte-bound to the candidate checkout: clean status is
+combined with Git blob checks for the supervisor, profiles, and helpers, and
+evidence records the tree/blob IDs plus an aggregate digest of the actually
+executed helper binaries. Every candidate and Codex process runs from a
+synthetic cwd under a hard process-group timeout and must leave no descendants.

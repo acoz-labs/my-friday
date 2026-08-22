@@ -26,6 +26,7 @@ jobs:
           bash -n
           bin/accept-installed-codex-baseline
           bin/test-acceptance-evidence
+          bin/test-acceptance-contract
           bin/test-acceptance-primitives
           bin/ci
           bin/container

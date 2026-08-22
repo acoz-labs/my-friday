@@ -2,6 +2,6 @@
 (deny default)
 (allow process-exec process-fork)
 (allow file-read*)
-(allow file-write* (subpath "@@VOLUME@@"))
+(allow file-write* (subpath @@VOLUME@@))
 (allow network-outbound)
 (deny signal)

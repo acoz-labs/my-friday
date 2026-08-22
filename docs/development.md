@@ -27,6 +27,11 @@ tests, acceptance-evidence contract tests, a real no-admin APFS/sandbox
 primitive test on Apple silicon macOS, and a static Darwin/ARM64 build with
 `bin/ci`. The primitive test skips on non-macOS hosts; it must pass natively
 before an installed-baseline candidate is nominated.
+`bin/test-acceptance-contract` locks the supervisor's fixture grammar, early
+secret removal, bounded runner, working-byte checks, mount authority, profile
+placeholder, and durable failure-evidence requirements. Go tests under `tools/`
+exercise valid contract-v1 rendering, Scheme escaping, stop-journal validation,
+and process-group timeout behavior.
 
 `bin/container bin/ci` proves portable source compilation but cannot prove
 APFS, macOS permissions, terminal, or local Git-template behaviour. Run

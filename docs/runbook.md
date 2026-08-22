@@ -117,3 +117,8 @@ may be removed only after their marker and protected-state equality are proven;
 then remove the exact evidence directory only when empty. Never recursively
 delete either fixed parent or an unmarked child. A lone provisional GitHub
 comment has no acceptance authority; failed finalization requires a fresh run.
+Before detach or deletion, revalidate the backing image device/inode/owner/mode,
+the complete attach entity graph, mounted device and UUID, mount-table entry,
+writable APFS identity, and exact run marker. The failure trap attempts ordinary
+detach only while those proofs still match; substituted or ambiguous state is
+preserved.

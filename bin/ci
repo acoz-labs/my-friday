@@ -4,6 +4,7 @@ set -euo pipefail
 bin/validate-solution-plans
 bin/test-release-assets
 bin/test-acceptance-evidence
+bin/test-acceptance-contract
 bin/test-acceptance-primitives
 
 unformatted="$(gofmt -l cmd internal tools)"

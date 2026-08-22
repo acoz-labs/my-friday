@@ -34,8 +34,9 @@ if [[ -z "${evidence// }" ]]; then
 fi
 evidence_marker=""
 if [[ "$issue_number" == 4 ]]; then
-  [[ "$evidence" =~ ^evidence-v1: ]] || {
-    echo "Issue #4 evidence must be an evidence-v1 provisional/final authority." >&2
+  if [[ "$decision" == approved ]]; then expected_evidence='^evidence-v1:'; else expected_evidence='^failure-v1:'; fi
+  [[ "$evidence" =~ $expected_evidence ]] || {
+    echo "Issue #4 evidence authority does not match the decision." >&2
     exit 64
   }
   bin/verify-acceptance-evidence "$evidence" "$issue_number" "$sha" "$release_artifact" "$actor" >/dev/null

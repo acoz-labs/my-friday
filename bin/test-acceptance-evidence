@@ -1,55 +1,36 @@
 #!/usr/bin/env bash
 set -euo pipefail
-
-root="$(cd "$(dirname "$0")/.." && pwd)"
-tmp="$(mktemp -d)"
-trap 'rm -rf "$tmp"' EXIT
-mkdir "$tmp/bin"
-
-sha="$(printf 'a%.0s' {1..40})"
-artifact="artifact-v1:run=12:id=34:name=my-friday-darwin-arm64:sha256=$(printf 'b%.0s' {1..64})"
-provisional_id=101
-final_id=102
+root="$(cd "$(dirname "$0")/.." && pwd)"; tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' EXIT; mkdir "$tmp/bin"
+sha="$(printf 'a%.0s' {1..40})"; artifact="artifact-v1:run=12:id=34:name=my-friday-darwin-arm64:sha256=$(printf 'b%.0s' {1..64})"; pid=101; fid=102
+pjson="$(jq -nc --arg s "$sha" --arg a "$artifact" '{schema:"installed-baseline-evidence-v1",authority:"provisional",issue:4,candidate:$s,artifact:$a,run_id:"run",checkout:{tree:"t",supervisor_blob:"s",barrier_blob:"b",runner_blob:"r",support_blob:"u",helper_binary_sha256:"h"},platform:{architecture:"arm64",os_build:"build",filesystem:"apfs",git:"git",codex:"codex"},mount:{device:"/dev/disk1",uuid:"uuid",image_device:"1",image_inode:"2",detached:true},profiles:{lifecycle_sha256:"l",smoke_sha256:"m"},controls:{unsandboxed_network:true,lifecycle_network_denied:true,evidence_write_denied:true,signal_denied:true,descendant:true,smoke_preflight:true},scenarios:{cancel:true,collision:true,install:true,verify:true,repair:true,upgrade:true,rollback:true,interrupted_install:true,interrupted_upgrade:true,interrupted_uninstall:true,uninstall:true,smoke:true},processes:{stop_barrier:true,quiescent:true},protected_state:{metadata_digest:"m",metadata_equal:true,content_digest:"c",content_equal:true},redacted:true,limitations:["broad-smoke-egress","no-fresh-keychain","no-read-confidentiality","same-uid"]}')"
 provisional="<!-- installed-baseline-evidence-v1 authority=provisional -->
-## Installed baseline acceptance evidence (provisional; no authority)
-
-- Issue: 4
-- Candidate: \`$sha\`
-- Artifact: \`$artifact\`"
-provisional_digest="$(printf %s "$provisional" | shasum -a 256 | awk '{print $1}')"
+$pjson"; pd="$(printf %s "$provisional" | shasum -a 256 | awk '{print $1}')"
+fjson="$(jq -nc --arg s "$sha" --arg a "$artifact" --argjson id "$pid" --arg d "$pd" '{schema:"installed-baseline-evidence-v1",authority:"final",issue:4,candidate:$s,artifact:$a,provisional:{id:$id,digest:$d},protected_state_digest:"m:c",cleanup:{non_forced_detach:true,mount_absent:true,image_deleted:true,run_root_deleted:true,evidence_root_deleted:true}}')"
 final="<!-- installed-baseline-evidence-v1 authority=final -->
-## Installed baseline acceptance finalization
-
-- Issue: 4
-- Candidate: \`$sha\`
-- Artifact: \`$artifact\`
-- Provisional comment: \`$provisional_id\`
-- Provisional SHA-256: \`$provisional_digest\`
-- Non-forced detach, image deletion, run-root deletion, and evidence-staging deletion: passed"
-final_digest="$(printf %s "$final" | shasum -a 256 | awk '{print $1}')"
-authority="evidence-v1:provisional=$provisional_id:$provisional_digest:final=$final_id:$final_digest"
-
-jq -n --arg body "$provisional" '{issue_url:"https://api.github.com/repos/owner/repo/issues/4",user:{login:"acceptor"},body:$body}' >"$tmp/provisional.json"
-jq -n --arg body "$final" '{issue_url:"https://api.github.com/repos/owner/repo/issues/4",user:{login:"acceptor"},body:$body}' >"$tmp/final.json"
+$fjson"; fd="$(printf %s "$final" | shasum -a 256 | awk '{print $1}')"; authority="evidence-v1:provisional=$pid:$pd:final=$fid:$fd"
+write_fixture() { jq -n --arg body "$1" --arg actor "${2:-acceptor}" '{issue_url:"https://api.github.com/repos/owner/repo/issues/4",user:{login:$actor},body:$body}'; }
+write_fixture "$provisional" >"$tmp/101.json"; write_fixture "$final" >"$tmp/102.json"
 cat >"$tmp/bin/gh" <<'EOF'
 #!/usr/bin/env bash
-set -euo pipefail
-case "${*: -1}" in
-  */101) cat "${EVIDENCE_FIXTURES:?}/provisional.json" ;;
-  */102) cat "${EVIDENCE_FIXTURES:?}/final.json" ;;
-  *) exit 2 ;;
-esac
+last="${*: -1}"; cat "${EVIDENCE_FIXTURES:?}/${last##*/}.json"
 EOF
 chmod +x "$tmp/bin/gh"
-PATH="$tmp/bin:$PATH" EVIDENCE_FIXTURES="$tmp" GITHUB_REPOSITORY=owner/repo \
-  "$root/bin/verify-acceptance-evidence" "$authority" 4 "$sha" "$artifact" acceptor >/dev/null
-
-jq '.body += " edited"' "$tmp/provisional.json" >"$tmp/edited.json"
-mv "$tmp/edited.json" "$tmp/provisional.json"
-if PATH="$tmp/bin:$PATH" EVIDENCE_FIXTURES="$tmp" GITHUB_REPOSITORY=owner/repo \
-  "$root/bin/verify-acceptance-evidence" "$authority" 4 "$sha" "$artifact" acceptor 2>/dev/null; then
-  echo "Edited provisional evidence was accepted." >&2
-  exit 1
-fi
-
+verify() { PATH="$tmp/bin:$PATH" EVIDENCE_FIXTURES="$tmp" GITHUB_REPOSITORY=owner/repo "$root/bin/verify-acceptance-evidence" "$@"; }
+verify "$authority" 4 "$sha" "$artifact" acceptor >/dev/null
+for mutation in missing_field false_control extra_field wrong_actor wrong_issue; do
+  cp "$tmp/101.json" "$tmp/original.json"
+  case "$mutation" in
+    missing_field) jq '.body |= (split("\n") | .[1] = (.[1] | fromjson | del(.mount.uuid) | tojson) | join("\n"))' "$tmp/original.json" >"$tmp/101.json" ;;
+    false_control) jq '.body |= (split("\n") | .[1] = (.[1] | fromjson | .controls.descendant=false | tojson) | join("\n"))' "$tmp/original.json" >"$tmp/101.json" ;;
+    extra_field) jq '.body |= (split("\n") | .[1] = (.[1] | fromjson | .extra=true | tojson) | join("\n"))' "$tmp/original.json" >"$tmp/101.json" ;;
+    wrong_actor) jq '.user.login="other"' "$tmp/original.json" >"$tmp/101.json" ;;
+    wrong_issue) jq '.issue_url="https://api.github.com/repos/owner/repo/issues/5"' "$tmp/original.json" >"$tmp/101.json" ;;
+  esac
+  if verify "$authority" 4 "$sha" "$artifact" acceptor >/dev/null 2>&1; then echo "accepted adversarial evidence: $mutation" >&2; exit 1; fi
+  mv "$tmp/original.json" "$tmp/101.json"
+done
+failure_json="$(jq -nc --arg s "$sha" --arg a "$artifact" '{schema:"installed-baseline-evidence-v1",authority:"failure",issue:4,candidate:$s,artifact:$a,failure_class:"candidate",redacted:true}')"
+failure="<!-- installed-baseline-evidence-v1 authority=failure -->
+$failure_json"; failure_digest="$(printf %s "$failure" | shasum -a 256 | awk '{print $1}')"; write_fixture "$failure" >"$tmp/103.json"
+verify "failure-v1:comment=103:$failure_digest" 4 "$sha" "$artifact" acceptor >/dev/null
 echo "acceptance evidence tests passed."

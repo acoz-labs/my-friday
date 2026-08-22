@@ -1,68 +1,34 @@
 #!/usr/bin/env bash
 set -euo pipefail
-
-evidence="${1:-}"
-issue="${2:-}"
-sha="${3:-}"
-artifact="${4:-}"
-expected_actor="${5:-}"
-repo="${GITHUB_REPOSITORY:-}"
-pattern='^evidence-v1:provisional=([0-9]+):([0-9a-f]{64}):final=([0-9]+):([0-9a-f]{64})$'
-if [[ -z "$repo" || ! "$evidence" =~ $pattern ]]; then
-  echo "Usage: bin/verify-acceptance-evidence <evidence-v1 authority> <issue> <sha> <artifact> [actor]" >&2
-  exit 64
+evidence="${1:-}" issue="${2:-}" sha="${3:-}" artifact="${4:-}" expected_actor="${5:-}" repo="${GITHUB_REPOSITORY:-}"
+die() { echo "$*" >&2; exit 1; }
+digest_body() { printf %s "$1" | shasum -a 256 | awk '{print $1}'; }
+fetch() { gh api "repos/$repo/issues/comments/$1"; }
+validate_common() {
+  local comment="$1" digest="$2" marker="$3" json body actor
+  body="$(jq -r .body <<<"$comment")"
+  [[ "$(digest_body "$body")" == "$digest" ]] || die "Evidence comment was edited or mismatched."
+  [[ "$(head -n 1 <<<"$body")" == "$marker" ]] || die "Evidence authority marker mismatch."
+  json="$(tail -n +2 <<<"$body")"; jq -e . >/dev/null <<<"$json" || die "Evidence JSON is invalid."
+  [[ "$(jq -r .issue <<<"$json")" == "$issue" && "$(jq -r .candidate <<<"$json")" == "$sha" && "$(jq -r .artifact <<<"$json")" == "$artifact" ]] || die "Evidence binding mismatch."
+  [[ "$(jq -r .issue_url <<<"$comment")" == "https://api.github.com/repos/$repo/issues/$issue" ]] || die "Evidence comment belongs to another issue."
+  actor="$(jq -r '.user.login | ascii_downcase' <<<"$comment")"
+  [[ -z "$expected_actor" || "$actor" == "$(printf %s "$expected_actor" | tr '[:upper:]' '[:lower:]')" ]] || die "Evidence author mismatch."
+  printf '%s\n%s\n' "$actor" "$json"
+}
+[[ -n "$repo" && "$issue" =~ ^[0-9]+$ && "$sha" =~ ^[0-9a-f]{40}$ ]] || exit 64
+if [[ "$evidence" =~ ^failure-v1:comment=([0-9]+):([0-9a-f]{64})$ ]]; then
+  result="$(validate_common "$(fetch "${BASH_REMATCH[1]}")" "${BASH_REMATCH[2]}" '<!-- installed-baseline-evidence-v1 authority=failure -->')"; json="$(tail -n +2 <<<"$result")"
+  jq -e 'keys == ["artifact","authority","candidate","failure_class","issue","redacted","schema"] and .schema == "installed-baseline-evidence-v1" and .authority == "failure" and (.failure_class | IN("refused","candidate","containment","evidence","cleanup-preserved")) and .redacted == true' <<<"$json" >/dev/null || die "Failure evidence schema is incomplete."
+  head -n 1 <<<"$result"; exit 0
 fi
-provisional_id="${BASH_REMATCH[1]}"
-provisional_digest="${BASH_REMATCH[2]}"
-final_id="${BASH_REMATCH[3]}"
-final_digest="${BASH_REMATCH[4]}"
-if [[ ! "$issue" =~ ^[0-9]+$ || ! "$sha" =~ ^[0-9a-f]{40}$ ]]; then
-  echo "Usage: bin/verify-acceptance-evidence <evidence-v1 authority> <issue> <sha> <artifact> [actor]" >&2
-  exit 64
-fi
-[[ "$provisional_id" != "$final_id" ]] || { echo "Evidence comments must be distinct." >&2; exit 1; }
-
-provisional_json="$(gh api "repos/$repo/issues/comments/$provisional_id")"
-final_json="$(gh api "repos/$repo/issues/comments/$final_id")"
-for json in "$provisional_json" "$final_json"; do
-  [[ "$(jq -r '.issue_url' <<<"$json")" == "https://api.github.com/repos/$repo/issues/$issue" ]] || {
-    echo "Evidence comment belongs to a different issue." >&2; exit 1;
-  }
-done
-provisional_body="$(jq -r .body <<<"$provisional_json")"
-final_body="$(jq -r .body <<<"$final_json")"
-[[ "$(printf %s "$provisional_body" | shasum -a 256 | awk '{print $1}')" == "$provisional_digest" ]] || {
-  echo "Provisional evidence was edited or mismatched." >&2; exit 1;
-}
-[[ "$(printf %s "$final_body" | shasum -a 256 | awk '{print $1}')" == "$final_digest" ]] || {
-  echo "Final evidence was edited or mismatched." >&2; exit 1;
-}
-provisional_actor="$(jq -r '.user.login | ascii_downcase' <<<"$provisional_json")"
-final_actor="$(jq -r '.user.login | ascii_downcase' <<<"$final_json")"
-[[ "$provisional_actor" == "$final_actor" ]] || { echo "Evidence authors differ." >&2; exit 1; }
-if [[ -n "$expected_actor" ]]; then
-  [[ "$provisional_actor" == "$(printf %s "$expected_actor" | tr '[:upper:]' '[:lower:]')" ]] || {
-    echo "Evidence author does not match the acceptor." >&2; exit 1;
-  }
-fi
-grep -Fqx '<!-- installed-baseline-evidence-v1 authority=provisional -->' <<<"$provisional_body" || {
-  echo "Provisional authority marker missing." >&2; exit 1;
-}
-grep -Fqx '<!-- installed-baseline-evidence-v1 authority=final -->' <<<"$final_body" || {
-  echo "Final authority marker missing." >&2; exit 1;
-}
-for body in "$provisional_body" "$final_body"; do
-  grep -Fq -- "- Issue: $issue" <<<"$body" || { echo "Evidence issue binding mismatch." >&2; exit 1; }
-  grep -Fq -- "- Candidate: \`$sha\`" <<<"$body" || { echo "Evidence candidate binding mismatch." >&2; exit 1; }
-  grep -Fq -- "- Artifact: \`$artifact\`" <<<"$body" || { echo "Evidence artifact binding mismatch." >&2; exit 1; }
-done
-grep -Fq -- "- Provisional comment: \`$provisional_id\`" <<<"$final_body" || {
-  echo "Final evidence does not cross-bind the provisional comment." >&2; exit 1;
-}
-grep -Fq -- "- Provisional SHA-256: \`$provisional_digest\`" <<<"$final_body" || {
-  echo "Final evidence does not cross-bind the provisional digest." >&2; exit 1;
-}
-grep -Fq -- '- Non-forced detach, image deletion, run-root deletion, and evidence-staging deletion: passed' <<<"$final_body" || {
-  echo "Final evidence does not prove cleanup." >&2; exit 1;
-}
-printf '%s\n' "$provisional_actor"
+pattern='^evidence-v1:provisional=([0-9]+):([0-9a-f]{64}):final=([0-9]+):([0-9a-f]{64})$'; [[ "$evidence" =~ $pattern ]] || exit 64
+provisional_id="${BASH_REMATCH[1]}" provisional_digest="${BASH_REMATCH[2]}" final_id="${BASH_REMATCH[3]}" final_digest="${BASH_REMATCH[4]}"
+[[ "$provisional_id" != "$final_id" ]] || die "Evidence comments must be distinct."
+presult="$(validate_common "$(fetch "$provisional_id")" "$provisional_digest" '<!-- installed-baseline-evidence-v1 authority=provisional -->')"
+fresult="$(validate_common "$(fetch "$final_id")" "$final_digest" '<!-- installed-baseline-evidence-v1 authority=final -->')"
+pactor="$(head -n1 <<<"$presult")"; pjson="$(tail -n +2 <<<"$presult")"; factor="$(head -n1 <<<"$fresult")"; fjson="$(tail -n +2 <<<"$fresult")"
+[[ "$pactor" == "$factor" ]] || die "Evidence authors differ."
+jq -e 'keys == ["artifact","authority","candidate","checkout","controls","issue","limitations","mount","platform","processes","profiles","protected_state","redacted","run_id","scenarios","schema"] and .schema == "installed-baseline-evidence-v1" and .authority == "provisional" and .redacted == true and (.checkout | keys == ["barrier_blob","helper_binary_sha256","runner_blob","supervisor_blob","support_blob","tree"]) and (.controls | keys == ["descendant","evidence_write_denied","lifecycle_network_denied","signal_denied","smoke_preflight","unsandboxed_network"]) and all(.controls[]; . == true) and (.mount | keys == ["detached","device","image_device","image_inode","uuid"]) and .mount.detached == true and (.platform | keys == ["architecture","codex","filesystem","git","os_build"]) and (.processes | keys == ["quiescent","stop_barrier"]) and all(.processes[]; . == true) and (.profiles | keys == ["lifecycle_sha256","smoke_sha256"]) and (.protected_state | keys == ["content_digest","content_equal","metadata_digest","metadata_equal"]) and .protected_state.content_equal == true and .protected_state.metadata_equal == true and (.scenarios | keys == ["cancel","collision","install","interrupted_install","interrupted_uninstall","interrupted_upgrade","repair","rollback","smoke","uninstall","upgrade","verify"]) and all(.scenarios[]; . == true) and (.limitations == ["broad-smoke-egress","no-fresh-keychain","no-read-confidentiality","same-uid"])' <<<"$pjson" >/dev/null || die "Provisional evidence schema is incomplete."
+jq -e --argjson pid "$provisional_id" --arg pd "$provisional_digest" 'keys == ["artifact","authority","candidate","cleanup","issue","protected_state_digest","provisional","schema"] and .schema == "installed-baseline-evidence-v1" and .authority == "final" and .provisional == {id:$pid,digest:$pd} and (.cleanup | keys == ["evidence_root_deleted","image_deleted","mount_absent","non_forced_detach","run_root_deleted"]) and all(.cleanup[]; . == true)' <<<"$fjson" >/dev/null || die "Final evidence schema is incomplete."
+printf '%s\n' "$pactor"
