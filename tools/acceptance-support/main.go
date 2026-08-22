@@ -271,11 +271,11 @@ func main() {
 }
 
 func validSandboxDiagnostic(version, diagnostic string) bool {
-	if diagnostic == "" {
-		return true
-	}
 	if version != "v1" {
 		return false
+	}
+	if diagnostic == "" {
+		return true
 	}
 	return diagnostic == "sandbox-exec: warning: sandbox-exec is deprecated and will be removed in a future release."
 }

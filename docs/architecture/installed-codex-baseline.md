@@ -89,8 +89,9 @@ The profile additionally permits write-data only to `/dev/null`; all synthetic
 temporary, XDG, fixed-user-home, and compiler-cache paths exist inside the
 disposable volume. Its executable control performs a fresh valid contract-v1
 install through the real Git/xcrun path. Diagnostic allowlist `v1` accepts only
-empty output or its one exact literal deprecation line; suffixes, multiline
-output, duplicates, and unknown allowlist versions fail closed.
+empty output or its one exact literal deprecation line. Version authority is
+validated before content, including empty content; suffixes, multiline output,
+duplicates, and unknown allowlist versions fail closed.
 
 The supervisor externally stops and kills exact candidate process groups only
 after `tools/acceptance-stop-barrier` observes a schema-valid recoverable journal

@@ -266,3 +266,13 @@ func TestSandboxDiagnosticAllowlistV1(t *testing.T) {
 		})
 	}
 }
+
+func TestSandboxDiagnosticRejectsUnknownVersionBeforeContent(t *testing.T) {
+	for name, input := range map[string]string{"empty": "", "nonempty": "sandbox diagnostic"} {
+		t.Run(name, func(t *testing.T) {
+			if validSandboxDiagnostic("v2", input) {
+				t.Fatal("unknown allowlist version was accepted")
+			}
+		})
+	}
+}
