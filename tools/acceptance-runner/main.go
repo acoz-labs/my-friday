@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 )
@@ -38,19 +39,21 @@ func main() {
 		fatal(err)
 	}
 	pgid := cmd.Process.Pid
+	tracker := newProcessTracker(pgid)
+	tracker.start()
 	done := make(chan error, 1)
 	go func() { done <- cmd.Wait() }()
 	var err error
 	select {
 	case err = <-done:
 	case <-time.After(*timeout):
-		_ = syscall.Kill(-pgid, syscall.SIGKILL)
+		tracker.stopAndKill()
 		<-done
 		fatal(errors.New("command timed out and its process group was killed"))
 	}
-	if groupExists(pgid) {
-		_ = syscall.Kill(-pgid, syscall.SIGKILL)
-		fatal(errors.New("command exited with surviving process-group members"))
+	escaped := tracker.stopAndKill()
+	if escaped || groupExists(pgid) {
+		fatal(errors.New("command created descendants or exited with surviving process-group members"))
 	}
 	if err != nil {
 		var exit *exec.ExitError
@@ -61,6 +64,133 @@ func main() {
 		}
 		fatal(err)
 	}
+}
+
+type processRecord struct {
+	pid, ppid, pgid int
+	identity, state string
+}
+type processTracker struct {
+	root int
+	mu   sync.Mutex
+	seen map[int]string
+	stop chan struct{}
+	done chan struct{}
+}
+
+func newProcessTracker(root int) *processTracker {
+	return &processTracker{root: root, seen: map[int]string{}, stop: make(chan struct{}), done: make(chan struct{})}
+}
+func (t *processTracker) start() {
+	t.capture()
+	go func() {
+		defer close(t.done)
+		ticker := time.NewTicker(time.Millisecond)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ticker.C:
+				t.capture()
+			case <-t.stop:
+				return
+			}
+		}
+	}()
+}
+func (t *processTracker) capture() {
+	records := processTable()
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if root, ok := records[t.root]; ok {
+		t.seen[t.root] = root.identity
+	}
+	changed := true
+	for changed {
+		changed = false
+		for pid, record := range records {
+			if pid == t.root {
+				continue
+			}
+			if _, parentKnown := t.seen[record.ppid]; parentKnown {
+				if _, known := t.seen[pid]; !known {
+					t.seen[pid] = record.identity
+					changed = true
+				}
+			}
+		}
+	}
+}
+func (t *processTracker) stopAndKill() bool {
+	select {
+	case <-t.stop:
+	default:
+		close(t.stop)
+	}
+	<-t.done
+	for i := 0; i < 5; i++ {
+		t.capture()
+		time.Sleep(2 * time.Millisecond)
+	}
+	t.mu.Lock()
+	seen := make(map[int]string, len(t.seen))
+	for pid, identity := range t.seen {
+		seen[pid] = identity
+	}
+	t.mu.Unlock()
+	surviving := false
+	for pid, identity := range seen {
+		if pid != t.root && currentProcessIdentity(pid) == identity {
+			surviving = true
+		}
+	}
+	_ = syscall.Kill(-t.root, syscall.SIGKILL)
+	for pid, identity := range seen {
+		if pid != t.root && currentProcessIdentity(pid) == identity {
+			_ = syscall.Kill(pid, syscall.SIGKILL)
+		}
+	}
+	for retry := 0; retry < 50; retry++ {
+		alive := false
+		for pid, identity := range seen {
+			if currentProcessIdentity(pid) == identity {
+				alive = true
+				break
+			}
+		}
+		if !alive && !groupExists(t.root) {
+			return surviving
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	return true
+}
+
+func processTable() map[int]processRecord {
+	out, err := exec.Command("/bin/ps", "-ax", "-o", "pid=,ppid=,pgid=,stat=,lstart=").Output()
+	if err != nil {
+		return map[int]processRecord{}
+	}
+	result := map[int]processRecord{}
+	for _, line := range strings.Split(string(out), "\n") {
+		fields := strings.Fields(line)
+		if len(fields) < 9 {
+			continue
+		}
+		pid, e1 := strconv.Atoi(fields[0])
+		ppid, e2 := strconv.Atoi(fields[1])
+		pgid, e3 := strconv.Atoi(fields[2])
+		if e1 != nil || e2 != nil || e3 != nil {
+			continue
+		}
+		result[pid] = processRecord{pid: pid, ppid: ppid, pgid: pgid, state: fields[3], identity: fields[0] + " " + strings.Join(fields[4:9], " ")}
+	}
+	return result
+}
+func currentProcessIdentity(pid int) string {
+	if record, ok := processTable()[pid]; ok && !strings.Contains(record.state, "Z") {
+		return record.identity
+	}
+	return ""
 }
 
 func groupExists(pgid int) bool {

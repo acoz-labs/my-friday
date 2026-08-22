@@ -11,6 +11,20 @@ grep -Fq 'verify_mount_authority' "$supervisor"
 # shellcheck disable=SC2016
 grep -Fq 'git hash-object "$tracked"' "$supervisor"
 grep -Fq 'failure-v1:comment=' "$supervisor"
+# shellcheck disable=SC2016
+grep -Fq 'resolve-executable "$codex_command"' "$supervisor"
+grep -Fq 'render-profile --template' "$supervisor"
+if grep -Eq 'sed .*@@VOLUME@@' "$supervisor"; then exit 1; fi
+grep -Fq 'source_closure_sha256' "$supervisor"
+grep -Fq 'go list -deps -json' "$supervisor"
+grep -Fq 'verify_detached_absence' "$supervisor"
+grep -Fq 'cleanup-roots --home' "$supervisor"
+grep -Fq 'candidate-like lifecycle sandbox launch control failed' "$supervisor"
+grep -Fq 'setsid descendant control' "$supervisor"
+grep -Fq 'protected-metadata' "$supervisor"
+grep -Fq 'published evidence did not survive exact re-fetch verification' "$supervisor"
+grep -Fq 'fetch_stable' "$root/bin/verify-acceptance-evidence"
+grep -Fq '(?:evidence-v1|failure-v1)' "$root/bin/record-product-acceptance"
 grep -Fq '(subpath @@VOLUME@@)' "$root/config/acceptance/lifecycle.sb.in"
 if grep -Eq 'rm -rf.*(run_root|evidence_root|run_parent|evidence_parent)' "$supervisor"; then exit 1; fi
 echo "acceptance contract tests passed."

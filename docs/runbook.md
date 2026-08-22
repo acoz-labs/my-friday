@@ -118,7 +118,19 @@ then remove the exact evidence directory only when empty. Never recursively
 delete either fixed parent or an unmarked child. A lone provisional GitHub
 comment has no acceptance authority; failed finalization requires a fresh run.
 Before detach or deletion, revalidate the backing image device/inode/owner/mode,
-the complete attach entity graph, mounted device and UUID, mount-table entry,
-writable APFS identity, and exact run marker. The failure trap attempts ordinary
-detach only while those proofs still match; substituted or ambiguous state is
-preserved.
+the complete image-whole/physical-store/container/volume graph, mounted device
+and UUID, mount-table entry, writable local APFS identity, live `hdiutil`
+association, and exact run/evidence markers. After ordinary detach, require all
+device lookups, mount entries, and image associations absent. Cleanup reopens
+the canonical home and each ancestor without following symlinks, matches both
+root receipts and marker digests, unlinks owned entries descriptor-relative,
+and removes only the two exact run-ID children. The failure trap attempts
+ordinary detach only while all authority still matches; substituted or
+ambiguous state is preserved.
+
+Interruption observation never reuses a missed attempt. Install, upgrade, and
+uninstall each receive at most three fresh synthetic homes and valid padded
+contract-v1 fixtures. The barrier requires three identical stopped receipts,
+then kills and reaps the exact group and compares the post-kill projection,
+manifest, canonical, previous, journal, and staging state to the captured
+receipt before ordinary recovery.

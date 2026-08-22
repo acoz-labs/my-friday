@@ -31,7 +31,9 @@ before an installed-baseline candidate is nominated.
 secret removal, bounded runner, working-byte checks, mount authority, profile
 placeholder, and durable failure-evidence requirements. Go tests under `tools/`
 exercise valid contract-v1 rendering, Scheme escaping, stop-journal validation,
-and process-group timeout behavior.
+candidate/Codex profile launch, process-start-bound setsid descendant cleanup,
+filesystem-linked stop receipts, no-follow root/marker cleanup, strict evidence
+semantics/re-fetches, and process-group timeout behavior.
 
 `bin/container bin/ci` proves portable source compilation but cannot prove
 APFS, macOS permissions, terminal, or local Git-template behaviour. Run

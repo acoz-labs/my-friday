@@ -78,8 +78,9 @@ MY_FRIDAY_RUNTIME_PROJECTION=/absolute/path/to/deployed/runtime \
 
 The acceptor injects a test-only `OPENAI_API_KEY` through the process
 environment; it is piped to `codex login --with-api-key`, never placed in argv
-or evidence, is captured and removed from the exported environment before the
-first child process, and persists only in the disposable image. The command requires
+or evidence, is required, captured, and removed from the exported environment
+before the first child process or local mutation, and persists only in the
+disposable image. The command requires
 ordinary-user Apple silicon macOS, APFS, GitHub comment authority, Codex, Go,
 and the reviewed `sandbox-exec` behavior. It exercises lifecycle denials,
 repair/upgrade/rollback, externally interrupted recovery, uninstall reversal,
@@ -94,7 +95,16 @@ acceptance contract remains historical and cannot use the amended path.
 An acceptance failure publishes a redacted, strict `failure-v1` issue comment
 authority when GitHub is reachable. That authority permits an independent
 acceptor to durably record `changes-required`; it can never authorize approval
-or release.
+or release. It distinguishes candidate behavior from harness/environment
+failure and records only a redacted failure class, run binding, preservation,
+and safe-detach result.
+
+The successful authority uses exact typed provisional/final schemas. It binds
+archive/executable hashes, transitive helper build closure, platform and APFS
+graph, normalized-profile controls, expected state/exit class for every
+scenario, process quiescence, protected metadata/content counts and digests,
+and the cleanup set. Both comments are fetched twice for stability; final
+protected-state and provisional body digests must agree exactly.
 
 Rollback of source is a Git revert. It must never delete repositories already
 created by a user. Contract-v1 validation must remain available after a future

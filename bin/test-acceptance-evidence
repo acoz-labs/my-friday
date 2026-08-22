@@ -1,36 +1,53 @@
 #!/usr/bin/env bash
 set -euo pipefail
-root="$(cd "$(dirname "$0")/.." && pwd)"; tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' EXIT; mkdir "$tmp/bin"
-sha="$(printf 'a%.0s' {1..40})"; artifact="artifact-v1:run=12:id=34:name=my-friday-darwin-arm64:sha256=$(printf 'b%.0s' {1..64})"; pid=101; fid=102
-pjson="$(jq -nc --arg s "$sha" --arg a "$artifact" '{schema:"installed-baseline-evidence-v1",authority:"provisional",issue:4,candidate:$s,artifact:$a,run_id:"run",checkout:{tree:"t",supervisor_blob:"s",barrier_blob:"b",runner_blob:"r",support_blob:"u",helper_binary_sha256:"h"},platform:{architecture:"arm64",os_build:"build",filesystem:"apfs",git:"git",codex:"codex"},mount:{device:"/dev/disk1",uuid:"uuid",image_device:"1",image_inode:"2",detached:true},profiles:{lifecycle_sha256:"l",smoke_sha256:"m"},controls:{unsandboxed_network:true,lifecycle_network_denied:true,evidence_write_denied:true,signal_denied:true,descendant:true,smoke_preflight:true},scenarios:{cancel:true,collision:true,install:true,verify:true,repair:true,upgrade:true,rollback:true,interrupted_install:true,interrupted_upgrade:true,interrupted_uninstall:true,uninstall:true,smoke:true},processes:{stop_barrier:true,quiescent:true},protected_state:{metadata_digest:"m",metadata_equal:true,content_digest:"c",content_equal:true},redacted:true,limitations:["broad-smoke-egress","no-fresh-keychain","no-read-confidentiality","same-uid"]}')"
-provisional="<!-- installed-baseline-evidence-v1 authority=provisional -->
+root="$(cd "$(dirname "$0")/.." && pwd)"; tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' EXIT; mkdir "$tmp/bin" "$tmp/counts"
+sha="$(printf 'a%.0s' {1..40})"; h40="$(printf 'c%.0s' {1..40})"; h64="$(printf 'd%.0s' {1..64})"; artifact="artifact-v1:run=12:id=34:name=my-friday-darwin-arm64:sha256=$(printf 'b%.0s' {1..64})"; pid=101; fid=102
+scenario='{"passed":true,"expected_state":"healthy","exit_class":"success"}'
+pjson="$(jq -nc --arg s "$sha" --arg a "$artifact" --arg h40 "$h40" --arg h64 "$h64" --argjson scenario "$scenario" '{schema:"installed-baseline-evidence-v1",authority:"provisional",issue:4,candidate:$s,artifact:$a,run_id:"0123456789abcdef0123456789abcdef",checkout:{tree:$h40,supervisor_blob:$h40,barrier_blob:$h40,runner_blob:$h40,support_blob:$h40,source_closure_sha256:$h64,helper_binary_sha256:$h64,executable_sha256:$h64,archive_sha256:$h64,go_version:"go1.26.0",goos:"darwin",goarch:"arm64",cgo_enabled:"0",build_flags:"-trimpath -buildvcs=true"},platform:{architecture:"arm64",hardware_model:"Mac",os_build:"build",filesystem:"apfs",git:"git 1",codex:"codex 1"},mount:{device:"/dev/disk7s1",uuid:"770C4365-D01F-4B2D-A209-53C3B949ED53",image_device:"1",image_inode:"2",image_whole:"/dev/disk6",physical_store:"/dev/disk6s1",container_device:"/dev/disk7",detached:true,detach_absent:true,non_forced:true},profiles:{lifecycle_sha256:$h64,smoke_sha256:$h64,normalized:true,diagnostics_allowlisted:true},controls:{unsandboxed_network:true,lifecycle_network_denied:true,evidence_write_denied:true,protected_canary_denied:true,signal_denied:true,descendant:true,setsid_descendant:true,candidate_launch:true,codex_launch:true,smoke_preflight:true},scenarios:{cancel:$scenario,collision:$scenario,install:$scenario,verify:$scenario,repair:$scenario,upgrade:$scenario,rollback:$scenario,interrupted_install:$scenario,interrupted_upgrade:$scenario,interrupted_uninstall:$scenario,uninstall:$scenario,smoke:$scenario},processes:{stop_barrier:true,quiescent:true,post_kill_equal:true,escaped_descendants_absent:true},protected_state:{metadata_digest:$h64,metadata_count:4,metadata_equal:true,content_digest:$h64,content_count:3,content_equal:true,canaries_equal:true},cleanup_expected:["ordinary-detach","graph-absence","image","mountpoint","run-root","evidence-root"],redacted:true,limitations:["broad-smoke-egress","no-fresh-keychain","no-read-confidentiality","same-uid"]}')"
+write_fixture() { jq -n --argjson id "$1" --arg body "$2" --arg actor "${3:-acceptor}" '{id:$id,created_at:"2026-08-22T20:00:00Z",issue_url:"https://api.github.com/repos/owner/repo/issues/4",user:{login:$actor},body:$body}'; }
+publish_pair() {
+  provisional="<!-- installed-baseline-evidence-v1 authority=provisional -->
 $pjson"; pd="$(printf %s "$provisional" | shasum -a 256 | awk '{print $1}')"
-fjson="$(jq -nc --arg s "$sha" --arg a "$artifact" --argjson id "$pid" --arg d "$pd" '{schema:"installed-baseline-evidence-v1",authority:"final",issue:4,candidate:$s,artifact:$a,provisional:{id:$id,digest:$d},protected_state_digest:"m:c",cleanup:{non_forced_detach:true,mount_absent:true,image_deleted:true,run_root_deleted:true,evidence_root_deleted:true}}')"
-final="<!-- installed-baseline-evidence-v1 authority=final -->
+  protected="$(jq -r '.protected_state.metadata_digest+":"+.protected_state.content_digest' <<<"$pjson")"
+  fjson="$(jq -nc --arg s "$sha" --arg a "$artifact" --argjson id "$pid" --arg d "$pd" --arg protected "$protected" '{schema:"installed-baseline-evidence-v1",authority:"final",issue:4,candidate:$s,artifact:$a,provisional:{id:$id,digest:$d},protected_state_digest:$protected,cleanup:{non_forced_detach:true,mount_absent:true,image_deleted:true,run_root_deleted:true,evidence_root_deleted:true}}')"
+  final="<!-- installed-baseline-evidence-v1 authority=final -->
 $fjson"; fd="$(printf %s "$final" | shasum -a 256 | awk '{print $1}')"; authority="evidence-v1:provisional=$pid:$pd:final=$fid:$fd"
-write_fixture() { jq -n --arg body "$1" --arg actor "${2:-acceptor}" '{issue_url:"https://api.github.com/repos/owner/repo/issues/4",user:{login:$actor},body:$body}'; }
-write_fixture "$provisional" >"$tmp/101.json"; write_fixture "$final" >"$tmp/102.json"
+  write_fixture "$pid" "$provisional" >"$tmp/101.json"; write_fixture "$fid" "$final" >"$tmp/102.json"
+}
 cat >"$tmp/bin/gh" <<'EOF'
 #!/usr/bin/env bash
-last="${*: -1}"; cat "${EVIDENCE_FIXTURES:?}/${last##*/}.json"
+last="${*: -1}"; id="${last##*/}"; count_file="${EVIDENCE_FIXTURES:?}/counts/$id"; count=0; [[ ! -f "$count_file" ]] || count="$(cat "$count_file")"; count=$((count+1)); printf '%s' "$count" >"$count_file"
+if [[ "${MUTATE_ID:-}" == "$id" && "$count" -ge 2 ]]; then cat "$EVIDENCE_FIXTURES/$id-mutated.json"; else cat "$EVIDENCE_FIXTURES/$id.json"; fi
 EOF
 chmod +x "$tmp/bin/gh"
-verify() { PATH="$tmp/bin:$PATH" EVIDENCE_FIXTURES="$tmp" GITHUB_REPOSITORY=owner/repo "$root/bin/verify-acceptance-evidence" "$@"; }
-verify "$authority" 4 "$sha" "$artifact" acceptor >/dev/null
-for mutation in missing_field false_control extra_field wrong_actor wrong_issue; do
-  cp "$tmp/101.json" "$tmp/original.json"
+verify() { rm -f "$tmp/counts/101" "$tmp/counts/102" "$tmp/counts/103"; PATH="$tmp/bin:$PATH" EVIDENCE_FIXTURES="$tmp" GITHUB_REPOSITORY=owner/repo "$root/bin/verify-acceptance-evidence" "$@"; }
+publish_pair; verify "$authority" 4 "$sha" "$artifact" acceptor >/dev/null
+original="$pjson"
+for mutation in missing_field false_control extra_field bad_hash wrong_type empty_semantic wrong_final_binding; do
+  pjson="$original"
   case "$mutation" in
-    missing_field) jq '.body |= (split("\n") | .[1] = (.[1] | fromjson | del(.mount.uuid) | tojson) | join("\n"))' "$tmp/original.json" >"$tmp/101.json" ;;
-    false_control) jq '.body |= (split("\n") | .[1] = (.[1] | fromjson | .controls.descendant=false | tojson) | join("\n"))' "$tmp/original.json" >"$tmp/101.json" ;;
-    extra_field) jq '.body |= (split("\n") | .[1] = (.[1] | fromjson | .extra=true | tojson) | join("\n"))' "$tmp/original.json" >"$tmp/101.json" ;;
-    wrong_actor) jq '.user.login="other"' "$tmp/original.json" >"$tmp/101.json" ;;
-    wrong_issue) jq '.issue_url="https://api.github.com/repos/owner/repo/issues/5"' "$tmp/original.json" >"$tmp/101.json" ;;
+    missing_field) pjson="$(jq -c 'del(.mount.uuid)' <<<"$pjson")" ;;
+    false_control) pjson="$(jq -c '.controls.setsid_descendant=false' <<<"$pjson")" ;;
+    extra_field) pjson="$(jq -c '.extra=true' <<<"$pjson")" ;;
+    bad_hash) pjson="$(jq -c '.checkout.source_closure_sha256="short"' <<<"$pjson")" ;;
+    wrong_type) pjson="$(jq -c '.protected_state.metadata_count="4"' <<<"$pjson")" ;;
+    empty_semantic) pjson="$(jq -c '.scenarios.install.expected_state=""' <<<"$pjson")" ;;
   esac
+  publish_pair
+  if [[ "$mutation" == wrong_final_binding ]]; then
+    bad_json="$(jq -c '.provisional.digest="eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"' <<<"$fjson")"
+    bad_body="<!-- installed-baseline-evidence-v1 authority=final -->
+$bad_json"
+    write_fixture "$fid" "$bad_body" >"$tmp/102.json"
+    fd="$(printf %s "$bad_body" | shasum -a 256 | awk '{print $1}')"; authority="evidence-v1:provisional=$pid:$pd:final=$fid:$fd"
+  fi
   if verify "$authority" 4 "$sha" "$artifact" acceptor >/dev/null 2>&1; then echo "accepted adversarial evidence: $mutation" >&2; exit 1; fi
-  mv "$tmp/original.json" "$tmp/101.json"
 done
-failure_json="$(jq -nc --arg s "$sha" --arg a "$artifact" '{schema:"installed-baseline-evidence-v1",authority:"failure",issue:4,candidate:$s,artifact:$a,failure_class:"candidate",redacted:true}')"
+pjson="$original"; publish_pair
+jq '.body += " "' "$tmp/101.json" >"$tmp/101-mutated.json"
+if MUTATE_ID=101 verify "$authority" 4 "$sha" "$artifact" acceptor >/dev/null 2>&1; then echo "accepted evidence changed between re-fetches" >&2; exit 1; fi
+failure_json="$(jq -nc --arg s "$sha" --arg a "$artifact" '{schema:"installed-baseline-evidence-v1",authority:"failure",issue:4,candidate:$s,artifact:$a,run_id:"run",failure_scope:"candidate",failure_class:"candidate",cleanup:{detached:true,state_preserved:true},redacted:true}')"
 failure="<!-- installed-baseline-evidence-v1 authority=failure -->
-$failure_json"; failure_digest="$(printf %s "$failure" | shasum -a 256 | awk '{print $1}')"; write_fixture "$failure" >"$tmp/103.json"
+$failure_json"; failure_digest="$(printf %s "$failure" | shasum -a 256 | awk '{print $1}')"; write_fixture 103 "$failure" >"$tmp/103.json"
 verify "failure-v1:comment=103:$failure_digest" 4 "$sha" "$artifact" acceptor >/dev/null
 echo "acceptance evidence tests passed."

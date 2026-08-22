@@ -78,13 +78,24 @@ candidate processes under fixed deny-default sandbox profiles. Lifecycle
 commands and descendants have volume-only write authority and no network. The
 fixed Codex login/exec/logout smoke keeps the write boundary but permits broad
 outbound network; it makes no endpoint-restriction claim.
+The installed Codex command may be a current-user-owned symlink chain; the
+supervisor resolves and pins its owned regular executable before mutation.
+Profile templates are rendered by literal placeholder replacement rather than
+shell substitution, normalized byte-for-byte, and positive-controlled by both
+the real Go candidate and resolved Codex executable. The reviewed Go-runtime
+`sysctl-read` operation is allowed; broad Mach lookup remains denied and new
+diagnostics fail.
 
 The supervisor externally stops and kills exact candidate process groups only
 after `tools/acceptance-stop-barrier` observes a schema-valid recoverable journal
 behind an all-members-stopped barrier. The barrier binds PID, PGID, process
 start identity, pinned Codex-home device/inode, complete proof digests,
 action-specific before/after invariants, allowed durable phase, and adjacent
-staging authority before signaling. Ordinary `codex recover` must then
+staging authority against descriptor-opened projection, manifest, canonical,
+previous, and staged bytes before signaling. Three stable stopped reads and an
+identical post-kill filesystem receipt are required. Each operation gets up to
+three fresh synthetic homes/fixtures; a missed window carries no evidence into
+the next attempt. Ordinary `codex recover` must then
 restore install, upgrade, and uninstall cases. No fault-enabled candidate or
 background service exists.
 
@@ -98,7 +109,16 @@ write containment, not distinct-principal isolation, read confidentiality, or
 a fresh login keychain.
 
 The supervisor itself is byte-bound to the candidate checkout: clean status is
-combined with Git blob checks for the supervisor, profiles, and helpers, and
-evidence records the tree/blob IDs plus an aggregate digest of the actually
-executed helper binaries. Every candidate and Codex process runs from a
-synthetic cwd under a hard process-group timeout and must leave no descendants.
+combined with Git blob checks for the complete repository-owned transitive Go
+source closure, module sums, profiles, and supervisor. Evidence records that
+closure, pinned build inputs/flags, tree/blob IDs, and an aggregate digest of
+the actually executed helper binaries. Every candidate and Codex process runs
+from a synthetic cwd under a hard process timeout; process-start-bound lineage
+tracking kills descendants even after `setsid` and proves no live descendants.
+
+Image authority binds the sparse-image inode to the image whole disk, APFS
+physical store, container, volume device/UUID, mount root, and live `hdiutil`,
+`diskutil`, and mount-table views. Cleanup begins only after all four device
+identities and the image association disappear. Exact run children are then
+removed descriptor-relative under no-follow ancestor walks using matching
+root receipts and markers; fixed parents are never recursively deleted.

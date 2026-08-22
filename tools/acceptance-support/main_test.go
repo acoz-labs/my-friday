@@ -1,6 +1,8 @@
 package main
 
 import (
+	"crypto/sha256"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -78,5 +80,93 @@ func TestNoFollowReadRejectsSymlink(t *testing.T) {
 	}
 	if _, ok, err := noFollowRead(link); err == nil || ok {
 		t.Fatal("symlinked protected content was accepted")
+	}
+}
+
+func TestResolveExecutableAcceptsOwnedSymlinkChain(t *testing.T) {
+	root := t.TempDir()
+	target := filepath.Join(root, "codex-real")
+	current := filepath.Join(root, "current")
+	link := filepath.Join(root, "codex")
+	if err := os.WriteFile(target, []byte("binary"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(target, current); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(current, link); err != nil {
+		t.Fatal(err)
+	}
+	cmd := exec.Command("go", "run", ".", "resolve-executable", link)
+	out, err := cmd.CombinedOutput()
+	expected, _ := filepath.EvalSymlinks(target)
+	if err != nil || strings.TrimSpace(string(out)) != expected {
+		t.Fatalf("safe installed symlink was not resolved: %v %s", err, out)
+	}
+}
+
+func TestRenderProfileDoesNotInterpretReplacementMetacharacters(t *testing.T) {
+	root := t.TempDir()
+	template := filepath.Join(root, "profile.in")
+	if err := os.WriteFile(template, []byte("(subpath @@VOLUME@@)\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	value := "/tmp/a&b|c\\d\nq\"r"
+	cmd := exec.Command("go", "run", ".", "render-profile", "--template", template, "--value", value)
+	out, err := cmd.CombinedOutput()
+	if err != nil || string(out) != "(subpath "+strconv.Quote(value)+")\n" || strings.Contains(string(out), "@@VOLUME@@") {
+		t.Fatalf("profile was not rendered literally: %v %q", err, out)
+	}
+}
+
+func TestSecureRootsRejectsSymlinkedAncestor(t *testing.T) {
+	root := t.TempDir()
+	realParent := filepath.Join(root, "real")
+	if err := os.Mkdir(realParent, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	linkParent := filepath.Join(root, "link")
+	if err := os.Symlink(realParent, linkParent); err != nil {
+		t.Fatal(err)
+	}
+	home := filepath.Join(linkParent, "home")
+	if err := os.Mkdir(filepath.Join(realParent, "home"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	cmd := exec.Command("go", "run", ".", "secure-roots", "--home", home, "--run-id", "run")
+	if err := cmd.Run(); err == nil {
+		t.Fatal("secure roots accepted symlinked ancestry")
+	}
+}
+
+func TestCleanupRootsIsReceiptAndMarkerBound(t *testing.T) {
+	home := t.TempDir()
+	secure := exec.Command("go", "run", ".", "secure-roots", "--home", home, "--run-id", "run")
+	receipt, err := secure.CombinedOutput()
+	if err != nil {
+		t.Fatalf("secure roots: %v %s", err, receipt)
+	}
+	marker := []byte("marker\n")
+	markerSHA := fmt.Sprintf("%x", sha256.Sum256(marker))
+	for _, parent := range []string{".my-friday-acceptance", ".my-friday-acceptance-evidence"} {
+		child := filepath.Join(home, parent, "run")
+		if err = os.WriteFile(filepath.Join(child, "marker.json"), marker, 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if err = os.WriteFile(filepath.Join(child, "owned"), []byte("x"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	cleanup := exec.Command("go", "run", ".", "cleanup-roots", "--home", home, "--run-id", "run", "--receipt", strings.TrimSpace(string(receipt)), "--marker-sha256", markerSHA)
+	if out, runErr := cleanup.CombinedOutput(); runErr != nil {
+		t.Fatalf("cleanup: %v %s", runErr, out)
+	}
+	for _, parent := range []string{".my-friday-acceptance", ".my-friday-acceptance-evidence"} {
+		if _, err = os.Stat(filepath.Join(home, parent, "run")); !os.IsNotExist(err) {
+			t.Fatal("run child survived cleanup")
+		}
+		if _, err = os.Stat(filepath.Join(home, parent)); err != nil {
+			t.Fatal("fixed parent was removed")
+		}
 	}
 }
