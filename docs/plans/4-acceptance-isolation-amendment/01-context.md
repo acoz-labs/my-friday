@@ -83,8 +83,9 @@ Acceptance must prove:
 3. lifecycle processes and descendants can write only inside the disposable
    volume and cannot use network; supervisor-owned evidence staging remains
    outside candidate authority;
-4. the isolated real-Codex smoke loads the installed baseline, with network and
-   auth enabled only for that scenario;
+4. the isolated real-Codex smoke loads the installed baseline, with broad
+   outbound network and auth enabled only for its fixed login/exec/logout
+   scenario and no endpoint-restriction claim;
 5. protected pre/post state is equal, durable evidence is sanitized and bound
    to acceptance, and the disk image and local evidence staging are removed.
 
@@ -109,6 +110,10 @@ VM, or reopen unrelated PR #15 decisions. UI acceptance is not applicable.
   operator. The supervisor pipes it to `codex login --with-api-key`; Codex may
   persist `$CODEX_HOME/auth.json` only inside the disposable volume. Logout and
   image destruction remove it.
+- The standard provider has no stable repository-owned endpoint/address set
+  suitable for a fail-closed sandbox allowlist. The smoke therefore permits
+  broad outbound network for its fixed, time-bounded Codex process while keeping
+  file-write containment. It does not prove unrelated smoke egress is denied.
 - A host crash may leave an attached image or private evidence. The runbook must
   identify and clean only marker-proven leftovers; automatic force detach or
   broad recursive deletion is prohibited.
@@ -134,8 +139,9 @@ feasibility on that build, not a permanent platform guarantee.
 
 Assumptions requiring implementation tests are that the reviewed production
 profiles can allow only the device/process reads required by My Friday and the
-Codex smoke while preserving write and network restrictions, and that aggregate
-metadata manifests can be generated without reading secret contents. Failure of
+Codex smoke while preserving write restrictions and lifecycle network denial,
+and that aggregate metadata manifests plus allowlisted non-sensitive content
+digests can be generated without reading secret contents. Failure of
 either assumption reopens design; it does not authorize a weaker boundary.
 
 No product-authority unknown remains before planning review. Exact-head approval

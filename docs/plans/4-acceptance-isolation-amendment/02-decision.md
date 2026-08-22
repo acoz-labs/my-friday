@@ -70,12 +70,15 @@ volume. It downloads and verifies `artifact-v1` exact bytes before use. Lifecycl
 scenarios deny network; a separately labeled real-Codex smoke profile permits
 only required network while retaining write containment.
 
-The supervisor snapshots protected metadata before setup and after cleanup,
+The supervisor snapshots protected metadata and hashes explicitly allowlisted
+non-sensitive managed content before setup and after cleanup,
 uses non-sensitive canaries for active denial proof, externally interrupts an
-ordinary production transaction after observing a durable journal phase, and
-publishes sanitized issue evidence whose comment ID/body digest becomes part of
-acceptance authority. Cleanup revalidates every recorded identity and refuses
-force detach or deletion on mismatch.
+ordinary production transaction only behind a confirmed stop barrier and
+recoverable-state proof, and
+publishes a no-authority provisional issue record, cleans all marked local state,
+then publishes a finalization record. Both comment IDs/body digests become part
+of acceptance authority. Cleanup revalidates every recorded identity and
+refuses force detach or deletion on mismatch.
 
 Confidence is high for the APFS/no-admin primitive and medium for the deprecated
 sandbox contract across future builds. Therefore platform preflight is part of
@@ -90,9 +93,11 @@ changes the sandbox mechanism, acceptance blocks and design reopens.
 | Re-nominate after harness implementation | Acceptance must include every lifecycle-linked implementation merge | Repository exact-candidate policy |
 | Mount below real home | Satisfies product's home-descendant and local APFS checks without admin | Shipped `codexHome`/home-root contract and host probe |
 | Separate volume and evidence roots | Supervisor-owned evidence must survive detach while remaining outside candidate write authority | Acceptance/evidence lifecycle |
-| Deny lifecycle network; allow smoke network | My Friday lifecycle needs none; real Codex provider smoke does | Least privilege and standard Codex auth |
+| Deny lifecycle network; permit broad smoke egress | My Friday lifecycle needs none; provider addresses are not a stable repository-owned allowlist | Truthful fixed-sequence Codex auth boundary |
 | Permit no unsandboxed candidate fallback | Otherwise acceptance could silently lose its primary write boundary | Trust-boundary requirement |
-| Aggregate protected manifests without content hashes | Prove mutation absence without exposing same-UID secrets | Evidence privacy requirement |
-| Bind acceptance to evidence comment ID and body digest | A mutable/deleted comment must not retain release authority | Current workflow accepts opaque evidence text |
+| Split protected proof by data class | Hash only schema-allowlisted non-sensitive managed artifacts/canaries; compare metadata only for unrelated or secret-bearing entries | Integrity plus evidence privacy |
+| Broad network only for fixed Codex smoke | No stable repository-owned provider address grammar exists; endpoint restriction would be a false claim | Lifecycle remains fully network-denied |
+| Bind clean harness checkout to candidate | Locally modified supervisor/profile bytes cannot confer acceptance | Candidate SHA, tree/blob IDs, and digests in evidence |
+| Bind provisional and final evidence IDs/digests | Provisional evidence has no authority; cleanup must precede finalization; mutation/deletion must block release | Current workflow accepts opaque evidence text |
 | Non-forced, marker-bound cleanup | Ambiguity should preserve evidence, not risk unrelated data | Destructive-action safety |
 | Disclose same-UID/keychain limitations | The chosen boundary does not and need not prove account behavior | Product is nonprivileged and account/keychain agnostic |

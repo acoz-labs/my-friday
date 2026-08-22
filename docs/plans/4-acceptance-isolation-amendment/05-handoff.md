@@ -26,14 +26,17 @@ receipt verification, and issue lifecycle completion are one coherent outcome.
 3. **Fail-closed sandbox and protected-state proof**
    - Ownership: reviewed profile templates, diagnostic parser, controls,
      manifest/canary implementation and macOS integration tests.
-   - Exit: allowed writes work, protected writes/lifecycle network fail,
-     smoke network works, unexpected semantics refuse, and pre/post equality is
-     proven without secret-content reads.
+   - Exit: volume-only persistent writes work; protected/evidence writes,
+     lifecycle network, and unrelated-process signaling fail in the candidate
+     and a descendant; smoke network works with its broad-egress limitation;
+     metadata and allowlisted non-sensitive content equality are proven without
+     opening secret contents.
 4. **Exact candidate and lifecycle matrix**
    - Ownership: artifact downloader/environment builder, fixtures, PTY runner,
      journal observer, process supervision.
-   - Exit: unmodified digest-verified bytes pass the complete lifecycle and
-     externally induced interruption/recovery matrix on the disposable volume.
+   - Exit: a fresh clean candidate-SHA checkout binds supervisor/profile blobs;
+     unmodified digest-verified artifact bytes pass the complete lifecycle and
+     stop-barrier interruption/recovery matrix on the disposable volume.
 5. **Isolated real-Codex smoke and sanitization**
    - Ownership: local secret injection, Codex login/discovery/logout adapter,
      redaction tests.
@@ -42,8 +45,9 @@ receipt verification, and issue lifecycle completion are one coherent outcome.
 6. **Durable evidence and release authority**
    - Ownership: issue-comment publisher, `bin/record-product-acceptance`,
      `bin/release-gate`, acceptance/release workflows and contract tests.
-   - Exit: comment ID/body digest/author/candidate/artifact bind acceptance and
-     release; edit/deletion/mismatch fails closed.
+   - Exit: a no-authority provisional record and post-cleanup finalization record
+     cross-bind IDs/digests/author/candidate/artifact; a lone, edited, deleted,
+     or mismatched record fails acceptance and release.
 7. **Documentation, reconciliation, nomination, acceptance, release**
    - Ownership: architecture/deployment/runbook/SDLC docs, PR reconciliation,
      exact artifact workflows and release receipt.
@@ -55,10 +59,10 @@ receipt verification, and issue lifecycle completion are one coherent outcome.
 | Acceptance group | Slice | Required evidence |
 | --- | --- | --- |
 | No-admin APFS boundary and cleanup | 2 | Unit plus real macOS primitive integration |
-| Sandbox/network/protected-state containment | 3 | Parser tests, positive controls, manifest equality |
+| Sandbox/network/signal/protected-state containment | 3 | Descendant/sentinel controls, metadata and allowlisted-content equality |
 | Exact bytes and full lifecycle/recovery | 4 | Automated fixtures and fresh nominated-artifact matrix |
 | Real Codex instruction discovery | 5 | Redacted independent smoke result and auth teardown |
-| Tamper-evident acceptance/release | 6 | Workflow contract tests and comment mutation denials |
+| Tamper-evident acceptance/release | 6 | Provisional/final workflow tests and comment mutation denials |
 | Through-production completion | 7 | Evidence authority, accepted status, release asset/receipt digest |
 
 Detailed cases and acceptance limitations are in `04-verification.md`.
@@ -71,7 +75,7 @@ Detailed cases and acceptance limitations are in `04-verification.md`.
 | `docs/decisions/0002-manifest-owned-codex-baseline.md` or a scoped successor ADR | Why same-UID APFS/sandbox write containment is proportionate and its limits |
 | `docs/deployment.md` | Fresh nomination, local exact-artifact acceptance, evidence binding, same-byte release |
 | `docs/runbook.md` | Preconditions, command, controls, secrets, failure preservation, crash recovery, exact cleanup |
-| `docs/operations/sdlc.md` if generic behavior changes | Evidence comment ID/body digest acceptance and release authority |
+| `docs/operations/sdlc.md` if generic behavior changes | Provisional/final IDs/digests and post-cleanup acceptance authority |
 | CLI/help where appropriate | Supported platform/refusal and exit classifications |
 
 Reconciliation decides the smallest durable destinations from shipped behavior.
@@ -111,7 +115,7 @@ containment. Do not alter unrelated installed-baseline lifecycle decisions.
 Return to Solution Design if the supported macOS build cannot enforce and
 positive-control the reviewed sandbox without admin; APFS attachment requires
 elevation; exact production-byte interruption cannot be safely observed;
-protected manifests require reading secret contents; standard-provider Codex
+protected proofs require reading secret contents; standard-provider Codex
 cannot authenticate entirely inside the disposable volume; evidence cannot be
 bound immutably enough for release; or acceptance needs a distinct UID,
 keychain, VM, privileged helper, broader secrets, or a different execution

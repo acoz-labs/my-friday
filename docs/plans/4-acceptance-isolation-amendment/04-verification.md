@@ -25,18 +25,23 @@ Deterministic tests cover:
 - program-readable attach/mount parsing, APFS/local/owner/options enforcement,
   extra-device refusal, detach state, and restart discovery;
 - profile generation/escaping/digest, volume-only candidate writes,
-  evidence-staging denial, reviewed warning allowlist, unexpected
-  diagnostic/nonzero refusal, and lifecycle-versus-smoke network rules;
-- protected metadata traversal, exclusions, race/error refusal, aggregate
-  comparison, canary proof, and evidence redaction;
+  evidence-staging denial, self-only-or-no signal grammar, descendant
+  inheritance, unrelated same-UID sentinel preservation, reviewed warning
+  allowlist, unexpected diagnostic/nonzero refusal, lifecycle network denial,
+  and the explicitly broad smoke-network profile;
+- protected metadata traversal, exclusions, race/error refusal, metadata
+  comparison, schema-allowlisted non-sensitive content digests, canary proof,
+  secret-content non-open tests, and evidence redaction;
 - every lifecycle fixture transition and source-freshness-independent
   rollback/uninstall contract;
-- observed-journal interruption, PID/process-group targeting, recovery-required
-  state, and ordinary recovery;
+- stop-barrier journal interruption, PID/start/PGID reuse protection, all-member
+  stopped proof, too-early/completed/missed-window bounded retries, no-evidence
+  exhaustion, recovery-required state, and ordinary recovery;
 - auth stdin handling, image-local `auth.json` classification, logout/cleanup,
   and proof that logs/evidence contain no secret or raw provider response;
-- issue evidence creation/fetch, author/candidate/artifact/schema/body-digest
-  binding, idempotent retry, edit/delete/mismatch rejection, and release gate;
+- provisional/final evidence creation/fetch, provisional non-authority,
+  post-cleanup cross-binding, author/candidate/artifact/schema/body-digest
+  binding, edit/delete/lone-provisional rejection, and release gate;
 - failures before/after attach, detach failure, publication failure, protected
   mismatch, unexpected entries, and identity drift preserving evidence.
 
@@ -56,14 +61,17 @@ parser/state tests; a suitable macOS job runs primitive integration tests.
 4. Add failing profile and diagnostic tests; implement fixed lifecycle/smoke
    profiles, candidate denial of evidence staging, controls, and no-fallback
    refusal.
-5. Add failing exact-artifact and environment tests; implement download/copy/
-   digest recheck and minimal synthetic environment.
-6. Add failing lifecycle and journal-interruption scenario tests; implement the
-   complete matrix using only the production candidate interface.
+5. Add failing exact-artifact, clean-checkout/self-digest, and environment tests;
+   implement checkout/tree/blob proof, download/copy/digest recheck, and the
+   minimal synthetic environment.
+6. Add failing lifecycle and stop-barrier interruption tests; implement the
+   complete matrix using only the production candidate interface, bounded fresh
+   fixture retries, and post-kill interrupted-state proof.
 7. Add failing Codex auth/redaction tests; implement login/smoke/logout without
    exposing sensitive disposable state.
-8. Add failing evidence mutation/release tests; implement issue-comment ID/body
-   digest binding in acceptance and release authority.
+8. Add failing evidence mutation/release tests; implement provisional non-
+   authority plus post-cleanup finalization IDs/body digests in acceptance and
+   release authority.
 9. Run repository CI, macOS primitive integration, a contributor rehearsal with
    a nominated test artifact, then independent acceptance on the fresh final
    nominated candidate.
@@ -75,18 +83,20 @@ acceptance is performed by someone other than the sole implementer on the exact
 newly nominated Darwin/ARM64 artifact. The acceptor records:
 
 - candidate SHA, full `artifact-v1` authority, archive and executable digest;
-- implementation and acceptance-harness commits;
+- implementation commit, clean checkout tree, and supervisor/profile blob IDs
+  and file digests;
 - hardware architecture, macOS build, APFS and Git versions, and Codex version;
 - run schema/ID, profile digests, attach/device/volume facts, and all control
   results;
 - scenario-by-scenario pass/fail with expected state and exit classification;
-- protected manifest aggregate before/after digests/counts/equality and canary
-  results;
+- protected metadata aggregate before/after digests/counts/equality, allowlisted
+  non-sensitive managed-content digest equality, and canary results;
 - real-Codex installed-instruction discovery result without prompt/response or
   auth material;
 - child termination, non-forced detach, mount absence, exact cleanup, and
   protected-state postcondition;
-- redaction/sanitization assertion and evidence comment ID/body digest.
+- redaction/sanitization assertion and cross-bound provisional/final comment
+  IDs/body digests.
 
 The acceptor must inspect the sanitized record before approval. The product-
 acceptance workflow independently fetches and verifies it; a pasted URL or
@@ -108,9 +118,10 @@ same-UID resistance. The evidence record repeats those limitations.
    review, and reconciliation. The prior nomination is stale for acceptance.
 4. Run artifact nomination on the new main commit, producing one new exact
    Darwin/ARM64 archive and `artifact-v1` authority.
-5. Independent acceptance downloads those bytes, runs the complete amended
-   boundary/matrix, publishes sanitized evidence, verifies cleanup, and records
-   the decision bound to the evidence comment.
+5. Independent acceptance uses a fresh clean checkout at that SHA, downloads
+   those bytes, runs the complete amended boundary/matrix, publishes no-authority
+   provisional evidence, verifies/deletes all local run state, publishes the
+   finalization record, and records the decision bound to both comments.
 6. On approval, release downloads the same run/name artifact, re-verifies the
    executable digest and still-valid evidence authority, and uploads those exact
    bytes to the GitHub Release. Existing mismatched assets fail closed.
@@ -142,12 +153,12 @@ those contracts are accepted.
 ## Release Prerequisites
 
 - The exact sandbox templates and diagnostic allowlist pass review and actual
-  positive controls on the supported macOS build.
+  file/network/descendant/same-UID-sentinel controls on the supported macOS build.
 - A repository-supported macOS job can execute APFS/sandbox primitive tests
   without administrator authority.
 - The local acceptor has GitHub read/comment authority and an approved secret
   source for a test-only provider key; no secret value is stored in the repo.
-- Evidence comment fetch/digest/author binding and release revalidation ship
+- Provisional/final evidence fetch/digest/author/cross-binding and release revalidation ship
   before product acceptance.
 - Durable docs explicitly replace the old disposable-account path and retain
   the same-UID/keychain/read-boundary disclosure.
@@ -161,12 +172,14 @@ those contracts are accepted.
 - **Artifact transport:** nomination builds once and records run/artifact/name/
   digest; acceptance and release download that exact artifact and independently
   verify the executable SHA-256.
-- **Host path:** the no-admin command, required binaries, synthetic environment,
+- **Host path:** a fresh clean exact-candidate checkout, self/blob digests, the
+  no-admin command, required binaries, synthetic environment,
   profile preflight, controls, full matrix, evidence publication, and cleanup
   are executable on supported Apple Silicon macOS.
 - **Acceptance authority:** issue #4, current lifecycle-linked implementation
-  set, candidate, artifact, acceptor, evidence comment ID, and body digest are
-  mutually bound and revalidated at release.
+  set, candidate, artifact, acceptor, and both provisional/final evidence IDs
+  and body digests are mutually bound and revalidated at release. A provisional
+  record alone has no authority.
 - **Activation:** no service deployment exists. GitHub Release publication is
   the production action after exact-candidate approval.
 - **Rollback:** failed or ambiguous acceptance publishes no release; published

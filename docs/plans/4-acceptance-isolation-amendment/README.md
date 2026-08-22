@@ -35,6 +35,9 @@ here.
   preflight the exact reviewed profile on the actual OS build, run positive and
   negative controls, and fail closed on unsupported or changed semantics. A
   later OS removal is a fresh design decision, not permission to run unsandboxed.
+- The real-Codex smoke temporarily enables broad outbound network for the fixed
+  login/exec/logout sequence. Endpoint-level restriction is not claimed; My
+  Friday lifecycle scenarios and descendants remain network-denied.
 - This is write-containment for a nonprivileged tool, not a distinct-principal
   security boundary. It does **not** prove a distinct UID, a fresh login session
   or keychain, account teardown, confidentiality from same-UID reads, or
@@ -49,8 +52,9 @@ here.
   account, and uses no `sudo`. My Friday remains entirely unprivileged.
 - **Two independent containment proofs.** An APFS mount supplies a disposable
   filesystem boundary; the sandbox denies candidate writes outside that volume.
-  Protected-state manifests and canaries demonstrate that the live installation
-  and deployed runtime projection did not change.
+  Protected-state proofs demonstrate metadata equality across the inventory and
+  exact byte equality for schema-allowlisted non-sensitive managed artifacts and
+  canaries; secret-bearing contents are deliberately not read or claimed.
 - **Same UID is disclosed, not disguised.** The accepted boundary shares the
   operator's UID and login keychain. That is proportionate because My Friday
   refuses root and manages files beneath `CODEX_HOME`; it does not manage users,
@@ -59,15 +63,20 @@ here.
   once, verifies the `artifact-v1` digest, copies it onto the volume, and invokes
   those unmodified bytes for every scenario. There is no test build or fault
   switch.
+- **Reviewed supervisor bytes only.** Acceptance starts from a fresh clean
+  checkout at the nominated candidate SHA and binds the checkout tree plus
+  supervisor/profile blobs and digests into evidence; dirty or mismatched bytes
+  refuse before setup.
 - **Interruption is externally induced.** The supervisor observes an ordinary
-  durable transaction-journal phase on the disposable volume, sends `SIGKILL`
-  to the production candidate, then proves ordinary `recover` behavior.
+  candidate behind a confirmed `SIGSTOP` process-group barrier, kills only a
+  journal-proven recoverable state while it remains stopped, then proves ordinary
+  `recover` behavior. Missed windows retry from fresh fixtures and confer no proof.
 - **Evidence is supervisor-owned, sanitized, and tamper-evident.** The candidate
-  and its descendants cannot write evidence staging. An issue comment records
-  only exact identities, aggregate manifest equality/digests, controls, outcomes,
-  and cleanup proof. Acceptance binds to that comment's immutable ID and body
-  digest; secrets, auth files, sensitive paths, and manifest entries stay local
-  and are destroyed with the marked run.
+  and its descendants cannot write evidence staging. A provisional comment
+  records the sanitized run but has no acceptance authority. Only a separate
+  finalization comment, published after verified image, run-root, and staging
+  deletion, can bind acceptance; both immutable IDs and body digests are checked
+  again at release.
 - **Cleanup refuses ambiguity.** Detach is non-forced. Deletion occurs only
   after recorded device, volume, image, mount, owner, mode, and run-marker
   proofs still agree; otherwise evidence is preserved for diagnosis.
