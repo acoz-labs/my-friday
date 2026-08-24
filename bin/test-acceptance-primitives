@@ -5,7 +5,7 @@ if [[ "$(uname -s)" != Darwin || "$(uname -m)" != arm64 ]]; then
   echo "acceptance primitive integration skipped: requires Apple silicon macOS"
   exit 0
 fi
-for tool in codex diskutil hdiutil sandbox-exec plutil jq; do
+for tool in codex diskutil hdiutil sandbox-exec plutil jq xcrun; do
   command -v "$tool" >/dev/null 2>&1 || { echo "Missing macOS acceptance primitive: $tool" >&2; exit 1; }
 done
 
@@ -19,7 +19,7 @@ cleanup() {
   if [[ "$mounted" == 1 && "$device" == /dev/disk* ]]; then
     hdiutil detach "$device" >/dev/null 2>&1 || true
   fi
-  rm -f "$image" "$tmp/attach.plist" "$tmp/lifecycle.sb" "$tmp/smoke.sb" "$tmp/support" "$tmp/runner" "$tmp/candidate" "$tmp/candidate.out" "$tmp/install.out" "$tmp/term-launcher"
+  rm -f "$image" "$tmp/attach.plist" "$tmp/lifecycle.sb" "$tmp/smoke.sb" "$tmp/support" "$tmp/runner" "$tmp/candidate" "$tmp/candidate.out" "$tmp/install.out" "$tmp/term-launcher" "$tmp/term-launcher.c"
   rmdir "$mountpoint" "$tmp" 2>/dev/null || true
 }
 trap cleanup EXIT
@@ -41,15 +41,35 @@ initial_root_nlink="$(stat -f %l "$mountpoint")"
 go build -o "$tmp/support" "$root/tools/acceptance-support"
 go build -o "$tmp/runner" "$root/tools/acceptance-runner"
 go build -o "$tmp/candidate" "$root/cmd/my-friday"
-cat >"$tmp/term-launcher" <<'EOF'
-#!/bin/sh
-[ "$#" -eq 0 ] || exit 90
-[ "$TERM" = xterm-256color ] || exit 91
-IFS= read -r prompt
-[ "$prompt" = "Return only the exact installed-purpose token." ] || exit 92
-printf '%s\n' TERM_PURPOSE_TOKEN
+cat >"$tmp/term-launcher.c" <<'EOF'
+#include <stdlib.h>
+#include <string.h>
+#include <termios.h>
+#include <unistd.h>
+
+int main(int argc, char **argv) {
+  const char expected[] = "Return only the exact installed-purpose token.\x1b[13;1u";
+  const char enabled[] = "\x1b[>7u";
+  struct termios tty;
+  char input[sizeof(expected) - 1];
+  size_t offset = 0;
+  (void)argv;
+  if (argc != 1 || strcmp(getenv("TERM"), "xterm-256color") != 0) return 90;
+  if (tcgetattr(STDIN_FILENO, &tty) != 0) return 91;
+  cfmakeraw(&tty);
+  if (tcsetattr(STDIN_FILENO, TCSANOW, &tty) != 0) return 92;
+  if (write(STDOUT_FILENO, enabled, sizeof(enabled) - 1) != sizeof(enabled) - 1) return 93;
+  while (offset < sizeof(input)) {
+    ssize_t count = read(STDIN_FILENO, input + offset, sizeof(input) - offset);
+    if (count <= 0) return 94;
+    offset += (size_t)count;
+  }
+  if (memcmp(input, expected, sizeof(input)) != 0) return 95;
+  if (write(STDOUT_FILENO, "TERM_PURPOSE_TOKEN\n", 19) != 19) return 96;
+  return 0;
+}
 EOF
-chmod 0700 "$tmp/term-launcher"
+xcrun clang -Wall -Wextra -Werror -o "$tmp/term-launcher" "$tmp/term-launcher.c"
 TERM=dumb "$tmp/runner" --cwd "$mountpoint" --timeout 45s --env TERM=xterm-256color -- /usr/bin/expect "$root/config/acceptance/launcher-smoke.exp" "$tmp/term-launcher" TERM_PURPOSE_TOKEN >/dev/null || { echo "Interactive launcher smoke inherited a hostile TERM or lost its purpose prompt." >&2; exit 1; }
 mkdir -m 0700 "$mountpoint/home" "$mountpoint/home/.codex" "$mountpoint/tmp" "$mountpoint/cache" "$mountpoint/config" "$mountpoint/runtime" "$mountpoint/memory"
 "$tmp/support" render-profile --template "$root/config/acceptance/lifecycle.sb.in" --value "$mountpoint" >"$tmp/lifecycle.sb"
@@ -90,7 +110,7 @@ mounted=0
 for graph_device in "$image_whole" "$physical_store" "$container_device" "$device"; do diskutil info "$graph_device" >/dev/null 2>&1 && { echo "Primitive APFS device survived detach: $graph_device" >&2; exit 1; }; done
 [[ "$(hdiutil info -plist | plutil -convert json -o - -- - | jq --arg image "$image" '[.images[]|select(.["image-path"]==$image)]|length')" == 0 ]] || { echo "Primitive image remained attached." >&2; exit 1; }
 [[ ! -e "$tmp/denied" ]] || { echo "Denied primitive write changed protected state." >&2; exit 1; }
-rm "$image" "$tmp/attach.plist" "$tmp/lifecycle.sb" "$tmp/smoke.sb" "$tmp/support" "$tmp/runner" "$tmp/candidate" "$tmp/candidate.out" "$tmp/install.out" "$tmp/term-launcher"
+rm "$image" "$tmp/attach.plist" "$tmp/lifecycle.sb" "$tmp/smoke.sb" "$tmp/support" "$tmp/runner" "$tmp/candidate" "$tmp/candidate.out" "$tmp/install.out" "$tmp/term-launcher" "$tmp/term-launcher.c"
 rmdir "$mountpoint" "$tmp"
 trap - EXIT
 echo "acceptance primitive integration passed."

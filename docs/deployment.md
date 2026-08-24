@@ -96,7 +96,11 @@ divert the purpose prompt into Codex's terminal-safety confirmation. Other
 candidate lifecycle commands retain their existing sanitized environment. The
 named instance's manifest-bound private `codex/config.toml` trusts only its
 exact absolute workspace, so the smoke sends no first-run workspace-trust
-answer. Approval and sandbox policy remain Codex defaults. The
+answer. After Codex explicitly enables CSI-u enhanced keyboard reporting, the
+driver submits the literal purpose prompt with the protocol Enter sequence
+`ESC [ 13 ; 1 u`; a raw carriage return is not accepted as equivalent. The
+driver then closes its PTY, with the bounded process runner retaining descendant
+cleanup authority. Approval and sandbox policy remain Codex defaults. The
 copy is removed with the instance. The
 same file-backed OAuth credential is deliberately not routed through
 `codex login --with-api-key`.

@@ -17,6 +17,9 @@ grep -Fq 'cmp "$acceptance_auth_file" "$primary_root/codex/auth.json"' "$supervi
 if grep -Fq '/usr/bin/script -q /dev/null' "$supervisor"; then exit 1; fi
 grep -Fq 'config/acceptance/launcher-smoke.exp' "$supervisor"
 grep -Fq 'spawn -noecho $launcher' "$root/config/acceptance/launcher-smoke.exp"
+grep -Fq -- '-exact "\033\[>7u"' "$root/config/acceptance/launcher-smoke.exp"
+grep -Fq 'send -- "\033\[13;1u"' "$root/config/acceptance/launcher-smoke.exp"
+if grep -Fq 'installed-purpose token.\r' "$root/config/acceptance/launcher-smoke.exp"; then exit 1; fi
 if grep -Eiq 'continue anyway|trust( this)? (workspace|folder)|send.*(yes|y\\r)' "$root/config/acceptance/launcher-smoke.exp"; then exit 1; fi
 grep -Fq -- '--env TERM=xterm-256color' "$supervisor"
 if grep -Fq 'TERM="${TERM' "$supervisor"; then exit 1; fi
