@@ -2,6 +2,7 @@
 package assistantinstance
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -15,6 +16,7 @@ import (
 	"sort"
 	"strings"
 	"syscall"
+	"unicode/utf8"
 )
 
 const ContractVersion = 1
@@ -23,15 +25,17 @@ var namePattern = regexp.MustCompile(`^[a-z0-9](?:[a-z0-9-]{0,30}[a-z0-9])?$`)
 var reserved = map[string]bool{"codex": true, "my-friday": true, "default": true, "current": true, "new": true}
 
 type Manifest struct {
-	ContractVersion int      `json:"contract_version"`
-	Name            string   `json:"name"`
-	Root            string   `json:"root"`
-	Owned           []string `json:"owned"`
-	Launcher        string   `json:"launcher"`
-	LauncherSHA256  string   `json:"launcher_sha256"`
-	CodexExecutable string   `json:"codex_executable"`
-	CodexSHA256     string   `json:"codex_sha256"`
-	AssistantID     string   `json:"assistant_id,omitempty"`
+	ContractVersion   int      `json:"contract_version"`
+	Name              string   `json:"name"`
+	Root              string   `json:"root"`
+	Owned             []string `json:"owned"`
+	Launcher          string   `json:"launcher"`
+	LauncherSHA256    string   `json:"launcher_sha256"`
+	CodexExecutable   string   `json:"codex_executable"`
+	CodexSHA256       string   `json:"codex_sha256"`
+	CodexConfig       string   `json:"codex_config"`
+	CodexConfigSHA256 string   `json:"codex_config_sha256"`
+	AssistantID       string   `json:"assistant_id,omitempty"`
 }
 
 type Paths struct {
@@ -82,6 +86,48 @@ func Derive(home, name string) (Paths, error) {
 }
 
 func digest(b []byte) string { h := sha256.Sum256(b); return hex.EncodeToString(h[:]) }
+
+func tomlBasicString(value string) (string, error) {
+	if !utf8.ValidString(value) {
+		return "", errors.New("path is not valid UTF-8")
+	}
+	var b strings.Builder
+	b.WriteByte('"')
+	for _, r := range value {
+		switch r {
+		case '"':
+			b.WriteString(`\"`)
+		case '\\':
+			b.WriteString(`\\`)
+		case '\b':
+			b.WriteString(`\b`)
+		case '\t':
+			b.WriteString(`\t`)
+		case '\n':
+			b.WriteString(`\n`)
+		case '\f':
+			b.WriteString(`\f`)
+		case '\r':
+			b.WriteString(`\r`)
+		default:
+			if r < 0x20 || r == 0x7f {
+				fmt.Fprintf(&b, `\u%04X`, r)
+			} else {
+				b.WriteRune(r)
+			}
+		}
+	}
+	b.WriteByte('"')
+	return b.String(), nil
+}
+
+func managedCodexConfig(p Paths) ([]byte, error) {
+	workspace, err := tomlBasicString(filepath.Join(p.Root, "workspace"))
+	if err != nil {
+		return nil, err
+	}
+	return []byte("[projects." + workspace + "]\ntrust_level = \"trusted\"\n"), nil
+}
 
 func regular(path string) ([]byte, fs.FileInfo, error) {
 	info, err := os.Lstat(path)
@@ -239,7 +285,7 @@ func PlanCreate(home, name, executable, codex string) (Plan, error) {
 	if _, _, err = regular(codex); err != nil {
 		return Plan{}, fmt.Errorf("Codex executable refused: %w", err)
 	}
-	return Plan{Action: "create", Paths: p, Items: []string{"create private instance root", "create codex, runtime, memory, workspace, and dependencies", "install exact native launcher with no replacement", "leave HOME, shell files, user Codex state, and launcher siblings unchanged"}}, nil
+	return Plan{Action: "create", Paths: p, Items: []string{"create private instance root", "create codex, runtime, memory, workspace, and dependencies", "trust only the exact instance workspace in private Codex config", "install exact native launcher with no replacement", "leave HOME, shell files, user Codex state, and launcher siblings unchanged"}}, nil
 }
 
 func WithRepositories(plan Plan, runtime, memory, assistantID string) (Plan, error) {
@@ -357,12 +403,18 @@ func createLocked(plan Plan, executable, codex string, afterVerify func() error)
 	owned := []string{"codex", "dependencies", "memory", "runtime", "workspace"}
 	sort.Strings(owned)
 	managedCodex := filepath.Join(p.Root, "dependencies", "codex")
+	managedConfig := filepath.Join(p.Root, "codex", "config.toml")
 	codexBytes, _, err := regular(codex)
 	if err != nil {
 		clean()
 		return err
 	}
-	m := Manifest{ContractVersion: ContractVersion, Name: p.Name, Root: p.Root, Owned: owned, Launcher: p.Launcher, LauncherSHA256: digest(launcher), CodexExecutable: managedCodex, CodexSHA256: digest(codexBytes), AssistantID: plan.AssistantID}
+	configBytes, err := managedCodexConfig(p)
+	if err != nil {
+		clean()
+		return err
+	}
+	m := Manifest{ContractVersion: ContractVersion, Name: p.Name, Root: p.Root, Owned: owned, Launcher: p.Launcher, LauncherSHA256: digest(launcher), CodexExecutable: managedCodex, CodexSHA256: digest(codexBytes), CodexConfig: managedConfig, CodexConfigSHA256: digest(configBytes), AssistantID: plan.AssistantID}
 	mb, err := json.MarshalIndent(m, "", "  ")
 	if err != nil {
 		clean()
@@ -374,6 +426,10 @@ func createLocked(plan Plan, executable, codex string, afterVerify func() error)
 		return err
 	}
 	if err = os.WriteFile(filepath.Join(stage, "dependencies", "codex"), codexBytes, 0700); err != nil {
+		clean()
+		return err
+	}
+	if err = os.WriteFile(filepath.Join(stage, "codex", "config.toml"), configBytes, 0600); err != nil {
 		clean()
 		return err
 	}
@@ -444,10 +500,27 @@ func readManifest(p Paths) (Manifest, error) {
 	}
 	want := []string{"codex", "dependencies", "memory", "runtime", "workspace"}
 	wantCodex := filepath.Join(p.Root, "dependencies", "codex")
-	if m.ContractVersion != ContractVersion || m.Name != p.Name || m.Root != p.Root || m.Launcher != p.Launcher || m.CodexExecutable != wantCodex || !validDigest(m.CodexSHA256) || strings.Join(m.Owned, "\x00") != strings.Join(want, "\x00") {
+	wantConfig := filepath.Join(p.Root, "codex", "config.toml")
+	configBytes, configErr := managedCodexConfig(p)
+	if configErr != nil || m.ContractVersion != ContractVersion || m.Name != p.Name || m.Root != p.Root || m.Launcher != p.Launcher || m.CodexExecutable != wantCodex || !validDigest(m.CodexSHA256) || m.CodexConfig != wantConfig || m.CodexConfigSHA256 != digest(configBytes) || strings.Join(m.Owned, "\x00") != strings.Join(want, "\x00") {
 		return m, errors.New("manifest ownership contract mismatch")
 	}
 	return m, nil
+}
+
+func verifyManagedConfig(p Paths, m Manifest) error {
+	b, info, err := regular(m.CodexConfig)
+	if err != nil {
+		return fmt.Errorf("managed Codex config unavailable: %w", err)
+	}
+	expected, err := managedCodexConfig(p)
+	if err != nil {
+		return err
+	}
+	if info.Mode().Perm() != 0600 || digest(b) != m.CodexConfigSHA256 || !bytes.Equal(b, expected) {
+		return errors.New("managed Codex config drift")
+	}
+	return nil
 }
 
 func Verify(home, name string) (Manifest, error) { return verify(home, name) }
@@ -482,6 +555,9 @@ func verify(home, name string) (Manifest, error) {
 	}
 	if cinfo.Mode().Perm() != 0700 || digest(cb) != m.CodexSHA256 {
 		return m, errors.New("managed Codex executable drift")
+	}
+	if err = verifyManagedConfig(p, m); err != nil {
+		return m, err
 	}
 	return m, nil
 }
@@ -620,6 +696,9 @@ func recoverableManifest(p Paths) (Manifest, error) {
 	cb, info, err := regular(m.CodexExecutable)
 	if err != nil || info.Mode().Perm() != 0700 || digest(cb) != m.CodexSHA256 {
 		return m, errors.New("recovery refused: managed Codex executable drift")
+	}
+	if err = verifyManagedConfig(p, m); err != nil {
+		return m, fmt.Errorf("recovery refused: %w", err)
 	}
 	if _, launcherErr := os.Lstat(p.Launcher); launcherErr == nil {
 		return m, errors.New("recovery refused: launcher exists but the instance is not healthy")

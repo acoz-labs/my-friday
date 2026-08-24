@@ -51,6 +51,10 @@ pre-detach observation is evidence-bound.
 The PTY contract fixes `TERM=xterm-256color` only for the interactive launcher
 smoke; native primitive coverage starts from `TERM=dumb` and proves the
 empty-argument smoke still delivers its purpose prompt and observes its token.
+Named-instance regressions prove the private Codex config TOML-escapes special
+workspace paths, trusts only the exact instance workspace, separates two
+instances, and denies verify, remove, and recovery authority after config
+tampering. The acceptance contract forbids scripting an onboarding response.
 The native primitive performs a fresh valid install under the final lifecycle
 profile (including Git/xcrun), while regressions cover immediate double-fork
 setsid escape, ambiguous-attach preservation, exact-entry cleanup refusal,

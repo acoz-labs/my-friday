@@ -292,6 +292,118 @@ func TestTwoInstancesAreIndependent(t *testing.T) {
 	}
 }
 
+func TestCreateTrustsOnlyExactInstanceWorkspaceWithTOMLEscaping(t *testing.T) {
+	base := t.TempDir()
+	home := filepath.Join(base, "home \"quoted\" \\ path")
+	if err := os.MkdirAll(filepath.Join(home, ".local", "bin"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	exe, codex := filepath.Join(home, "my-friday"), filepath.Join(home, "codex")
+	for path, body := range map[string]string{exe: "launcher", codex: "codex"} {
+		if err := os.WriteFile(path, []byte(body), 0700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	p, err := PlanCreate(home, "alfred", exe, codex)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = Create(p, exe, codex); err != nil {
+		t.Fatal(err)
+	}
+	config, err := os.ReadFile(filepath.Join(p.Paths.Root, "codex", "config.toml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	escapedWorkspace := strings.NewReplacer(`\`, `\\`, `"`, `\"`).Replace(filepath.Join(p.Paths.Root, "workspace"))
+	want := "[projects.\"" + escapedWorkspace + "\"]\ntrust_level = \"trusted\"\n"
+	if string(config) != want {
+		t.Fatalf("unexpected instance trust config\nwant: %q\n got: %q", want, config)
+	}
+	for _, forbidden := range []string{home, p.Paths.Root, "*", "approval_policy", "sandbox_mode"} {
+		if forbidden != filepath.Join(p.Paths.Root, "workspace") && strings.Contains(string(config), "projects.\""+forbidden+"\"") {
+			t.Fatalf("broader trust scope rendered: %q", forbidden)
+		}
+	}
+}
+
+func TestInstanceWorkspaceTrustIsSeparatedAndTamperFailsClosed(t *testing.T) {
+	home, exe, codex := fixture(t)
+	paths := make(map[string]Paths)
+	for _, name := range []string{"alfred", "robin"} {
+		p, err := PlanCreate(home, name, exe, codex)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err = Create(p, exe, codex); err != nil {
+			t.Fatal(err)
+		}
+		paths[name] = p.Paths
+	}
+	alfredConfig, err := os.ReadFile(filepath.Join(paths["alfred"].Root, "codex", "config.toml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(alfredConfig), paths["robin"].Root) {
+		t.Fatal("one instance trusted another instance")
+	}
+	configPath := filepath.Join(paths["alfred"].Root, "codex", "config.toml")
+	if err = os.WriteFile(configPath, append(alfredConfig, []byte("[projects.\"/tmp\"]\ntrust_level = \"trusted\"\n")...), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = Verify(home, "alfred"); err == nil || !strings.Contains(err.Error(), "config") {
+		t.Fatalf("tampered trust config accepted: %v", err)
+	}
+	if _, err = PlanRemove(home, "alfred"); err == nil {
+		t.Fatal("tampered trust config granted removal authority")
+	}
+	if err = os.Remove(paths["alfred"].Launcher); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = Recover(home, "alfred"); err == nil || !strings.Contains(err.Error(), "config") {
+		t.Fatalf("tampered trust config granted recovery authority: %v", err)
+	}
+	if _, err = Verify(home, "robin"); err != nil {
+		t.Fatalf("sibling instance changed: %v", err)
+	}
+}
+
+func TestForgedManagedConfigManifestIsDenied(t *testing.T) {
+	for _, mutate := range []func(*Manifest){
+		func(m *Manifest) { m.CodexConfig = filepath.Join(m.Root, "codex", "other.toml") },
+		func(m *Manifest) { m.CodexConfigSHA256 = strings.Repeat("a", 64) },
+	} {
+		home, exe, codex := fixture(t)
+		p, err := PlanCreate(home, "alfred", exe, codex)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err = Create(p, exe, codex); err != nil {
+			t.Fatal(err)
+		}
+		manifestPath := filepath.Join(p.Paths.Root, "manifest.json")
+		b, err := os.ReadFile(manifestPath)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var m Manifest
+		if err = json.Unmarshal(b, &m); err != nil {
+			t.Fatal(err)
+		}
+		mutate(&m)
+		b, err = json.MarshalIndent(m, "", "  ")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err = os.WriteFile(manifestPath, append(b, '\n'), 0600); err != nil {
+			t.Fatal(err)
+		}
+		if _, err = Verify(home, "alfred"); err == nil || !strings.Contains(err.Error(), "manifest ownership contract mismatch") {
+			t.Fatalf("forged config manifest accepted: %v", err)
+		}
+	}
+}
+
 func TestRecoverCompletesInterruptedRemoval(t *testing.T) {
 	home, exe, codex := fixture(t)
 	p, err := PlanCreate(home, "alfred", exe, codex)
