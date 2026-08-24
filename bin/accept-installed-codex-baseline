@@ -316,7 +316,7 @@ failure_scope="candidate"
 
 candidate_env=(--env HOME="$volume/home" --env TMPDIR="$volume/tmp" --env XDG_CACHE_HOME="$volume/xdg-cache" --env XDG_CONFIG_HOME="$volume/xdg-config" --env CFFIXED_USER_HOME="$volume/home" --env CLANG_MODULE_CACHE_PATH="$volume/xdg-cache/clang" --env LANG=en_US.UTF-8 --env PATH="$(dirname "$codex_binary"):/usr/bin:/bin:/usr/sbin:/sbin")
 run_bounded() { "$run_root/acceptance-runner" --cwd "$real_home" --timeout 45s "${candidate_env[@]}" -- "$@"; }
-run_interactive_smoke() { "$run_root/acceptance-runner" --cwd "$real_home" --timeout 45s "${candidate_env[@]}" --env TERM=xterm-256color -- "$@"; }
+run_interactive_smoke() { "$run_root/acceptance-runner" --cwd "$real_home" --timeout 90s "${candidate_env[@]}" --env TERM=xterm-256color -- "$@"; }
 run_ambient() { "$run_root/acceptance-runner" --cwd "$real_home" --timeout 45s --env HOME="$real_home" --env CODEX_HOME="$live_codex_home" --env LANG=en_US.UTF-8 --env PATH="$(dirname "$codex_binary"):/usr/bin:/bin:/usr/sbin:/sbin" -- "$@"; }
 run_candidate() { run_bounded "$candidate" "$@"; }
 confirm_candidate() { printf '%s\n' "$1" | run_candidate "${@:2}"; }

@@ -44,33 +44,52 @@ go build -o "$tmp/candidate" "$root/cmd/my-friday"
 cat >"$tmp/term-launcher.c" <<'EOF'
 #include <stdlib.h>
 #include <string.h>
+#include <fcntl.h>
+#include <sys/ioctl.h>
 #include <termios.h>
 #include <unistd.h>
 
 int main(int argc, char **argv) {
   const char expected[] = "Return only the exact installed-purpose token.\x1b[13;1u";
   const char enabled[] = "\x1b[>7u";
+  const char ready[] = "Ask Codex to do anything";
   struct termios tty;
+  struct winsize size;
   char input[sizeof(expected) - 1];
+  char discarded[128];
   size_t offset = 0;
   (void)argv;
   if (argc != 1 || strcmp(getenv("TERM"), "xterm-256color") != 0) return 90;
   if (tcgetattr(STDIN_FILENO, &tty) != 0) return 91;
   cfmakeraw(&tty);
   if (tcsetattr(STDIN_FILENO, TCSANOW, &tty) != 0) return 92;
+  if (ioctl(STDIN_FILENO, TIOCGWINSZ, &size) != 0 || size.ws_row != 30 || size.ws_col != 120) return 93;
   if (write(STDOUT_FILENO, enabled, sizeof(enabled) - 1) != sizeof(enabled) - 1) return 93;
+  int flags = fcntl(STDIN_FILENO, F_GETFL);
+  if (flags < 0 || fcntl(STDIN_FILENO, F_SETFL, flags | O_NONBLOCK) != 0) return 94;
+  for (int attempt = 0; attempt < 10; attempt++) {
+    while (read(STDIN_FILENO, discarded, sizeof(discarded)) > 0) {}
+    usleep(50000);
+  }
+  while (read(STDIN_FILENO, discarded, sizeof(discarded)) > 0) {}
+  if (fcntl(STDIN_FILENO, F_SETFL, flags) != 0) return 95;
+  if (write(STDOUT_FILENO, ready, sizeof(ready) - 1) != sizeof(ready) - 1) return 96;
   while (offset < sizeof(input)) {
     ssize_t count = read(STDIN_FILENO, input + offset, sizeof(input) - offset);
-    if (count <= 0) return 94;
+    if (count <= 0) return 97;
     offset += (size_t)count;
   }
-  if (memcmp(input, expected, sizeof(input)) != 0) return 95;
-  if (write(STDOUT_FILENO, "TERM_PURPOSE_TOKEN\n", 19) != 19) return 96;
+  if (memcmp(input, expected, sizeof(input)) != 0) return 98;
+  if (write(STDOUT_FILENO, "TERM_PURPOSE_TOKEN\n", 19) != 19) return 99;
   return 0;
 }
 EOF
 xcrun clang -Wall -Wextra -Werror -o "$tmp/term-launcher" "$tmp/term-launcher.c"
-TERM=dumb "$tmp/runner" --cwd "$mountpoint" --timeout 45s --env TERM=xterm-256color -- /usr/bin/expect "$root/config/acceptance/launcher-smoke.exp" "$tmp/term-launcher" TERM_PURPOSE_TOKEN >/dev/null || { echo "Interactive launcher smoke inherited a hostile TERM or lost its purpose prompt." >&2; exit 1; }
+if ! term_output="$(TERM=dumb "$tmp/runner" --cwd "$mountpoint" --timeout 90s --env TERM=xterm-256color -- /usr/bin/expect "$root/config/acceptance/launcher-smoke.exp" "$tmp/term-launcher" TERM_PURPOSE_TOKEN 2>&1)"; then
+  printf '%s\n' "$term_output" >&2
+  echo "Interactive launcher smoke inherited a hostile TERM, wrong geometry, or sent input before readiness." >&2
+  exit 1
+fi
 mkdir -m 0700 "$mountpoint/home" "$mountpoint/home/.codex" "$mountpoint/tmp" "$mountpoint/cache" "$mountpoint/config" "$mountpoint/runtime" "$mountpoint/memory"
 "$tmp/support" render-profile --template "$root/config/acceptance/lifecycle.sb.in" --value "$mountpoint" >"$tmp/lifecycle.sb"
 "$tmp/support" render-profile --template "$root/config/acceptance/codex-smoke.sb.in" --value "$mountpoint" >"$tmp/smoke.sb"
