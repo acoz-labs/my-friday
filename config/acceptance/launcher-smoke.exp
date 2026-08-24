@@ -1,0 +1,18 @@
+#!/usr/bin/expect -f
+if {$argc != 2} { exit 64 }
+set timeout 40
+set launcher [lindex $argv 0]
+set token [lindex $argv 1]
+spawn -noecho -- $launcher
+after 1500
+send -- "Return only the exact installed-purpose token.\r"
+expect {
+  -exact $token {}
+  timeout { exit 1 }
+  eof { exit 1 }
+}
+send -- "\003"
+after 250
+send -- "\003"
+close
+catch wait

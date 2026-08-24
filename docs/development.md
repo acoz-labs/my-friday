@@ -29,12 +29,17 @@ primitive test on Apple silicon macOS, and a static Darwin/ARM64 build with
 before an installed-baseline candidate is nominated.
 `bin/test-acceptance-contract` locks the supervisor's fixture grammar,
 file-backed authentication without a login command, named-instance scenario
-matrix, bounded runner, working-byte checks, mount authority, profile
+matrix, genuine empty-argv interactive PTY smoke, bounded manifest-proven
+failure cleanup, caller-shell and launcher-sibling canaries, working-byte checks,
+mount authority, profile
 placeholder, and durable failure-evidence requirements. Go tests under `tools/`
 exercise valid contract-v1 rendering, Scheme escaping, stop-journal validation,
 candidate/Codex profile launch, process-start-bound setsid descendant cleanup,
 filesystem-linked stop receipts, no-follow root/marker cleanup, strict evidence
 semantics/re-fetches, legacy-schema refusal, and process-group timeout behavior.
+`tools/acceptance-support` cleanup regressions exercise every post-create phase,
+including copied credentials and launcher-absent recovery, while proving the
+ambient auth source remains unchanged.
 The native primitive performs a fresh valid install under the final lifecycle
 profile (including Git/xcrun), while regressions cover immediate double-fork
 setsid escape, ambiguous-attach preservation, exact-entry cleanup refusal,

@@ -87,8 +87,10 @@ The acceptor supplies the regular, current-user-owned `auth.json` from an
 existing Codex login. The supervisor does not perform or refresh a login and
 does not read credential bytes into shell variables, argv, output, or evidence.
 It first proves an ambient bounded model call, copies the file byte-for-byte to
-one disposable named instance's `CODEX_HOME`, proves a bounded call through the
-instance-owned Codex executable, and removes that copy with the instance. The
+one disposable named instance's `CODEX_HOME`, then launches the native instance
+with no forwarded arguments under a bounded interactive PTY. The PTY submits a
+purpose question and must observe the unique installed-purpose token from the
+instance-owned Codex executable. The copy is removed with the instance. The
 same file-backed OAuth credential is deliberately not routed through
 `codex login --with-api-key`.
 
@@ -101,6 +103,11 @@ isolation, collision preservation, interrupted-remove recovery, complete
 reversal, ambient-state preservation, and real-Codex instruction discovery. It
 prints an `evidence-v1` authority only after every instance root, launcher,
 credential copy, APFS helper image, run root, and evidence root is proven absent.
+Failure cleanup uses manifest authority for instance roots and launchers and
+no-follow device/inode/digest receipts for the temporary collision and unrelated
+launcher-sibling leaves. It is bounded, runs at every post-create failure phase,
+never removes the ambient auth source, and reports the cleanup facts it actually
+proved rather than converting a partial cleanup into approval authority.
 
 Product acceptance accepts that authority, not an opaque evidence URL. Release
 finalization re-fetches both evidence comments and rejects edits, deletion,
@@ -120,6 +127,9 @@ archive/executable hashes, transitive helper build closure, platform and APFS
 graph, normalized-profile controls, expected state/exit class for every
 named-instance scenario, the separate file-backed smoke semantics, process
 quiescence, protected metadata/content counts and digests, and the cleanup set.
+Preservation claims are limited to measured state: live Codex/runtime snapshots,
+a disposable caller-`HOME` shell canary, an unrelated real launcher sibling,
+the foreign collision leaf, and unchanged ambient-auth metadata.
 The verifier rejects the superseded single-home evidence schema. Both comments
 are fetched twice for stability; final
 protected-state and provisional body digests must agree exactly.

@@ -6,7 +6,16 @@ grep -Fq 'auth.json' "$supervisor"
 grep -Fq 'dscl . -read "/Users/$(id -un)" NFSHomeDirectory' "$supervisor"
 grep -Fq -- '--env HOME="$volume/home"' "$supervisor"
 grep -Fq 'cmp "$acceptance_auth_file" "$primary_root/codex/auth.json"' "$supervisor"
-grep -Fq '/usr/bin/script -q /dev/null' "$supervisor"
+if grep -Fq '/usr/bin/script -q /dev/null' "$supervisor"; then exit 1; fi
+grep -Fq 'config/acceptance/launcher-smoke.exp' "$supervisor"
+grep -Fq 'cleanup-named --home "$real_home"' "$supervisor"
+grep -Fq 'cleanup_named_state' "$supervisor"
+grep -Fq 'cleanup_named_state || true' "$supervisor"
+grep -Fq 'shell_canary_equal' "$supervisor"
+grep -Fq 'launcher_sibling_equal' "$supervisor"
+for phase in primary-created secondary-created collision-created recovery-complete auth-copied smoke-complete; do
+  grep -Fq "named_phase=\"$phase\"" "$supervisor"
+done
 for scenario in create verify pty_launch two_instance_isolation collision interrupted_remove_recovery reversal ambient_state_preservation file_backed_smoke; do
   grep -Fq "$scenario" "$supervisor"
 done
