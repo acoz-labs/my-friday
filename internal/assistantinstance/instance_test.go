@@ -2,6 +2,7 @@ package assistantinstance
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -162,5 +163,48 @@ func TestRecoverCompletesInterruptedRemoval(t *testing.T) {
 	}
 	if _, err = os.Stat(p.Paths.Root); !os.IsNotExist(err) {
 		t.Fatal("recovery retained root")
+	}
+}
+
+func TestLauncherEnvironmentAndArguments(t *testing.T) {
+	if os.Getenv("MY_FRIDAY_LAUNCH_HELPER") == "1" {
+		if err := Launch(os.Getenv("MY_FRIDAY_TEST_HOME"), "alfred", []string{"hello world", "--cd", "/foreign"}); err != nil {
+			t.Fatal(err)
+		}
+		return
+	}
+	home := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(home, ".local", "bin"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	exe, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	capture := filepath.Join(home, "capture")
+	codex := filepath.Join(home, "codex-stub")
+	stub := "#!/bin/sh\nprintf '%s\\n' \"$HOME\" \"$CODEX_HOME\" \"$@\" > \"$MY_FRIDAY_CAPTURE\"\n"
+	if err = os.WriteFile(codex, []byte(stub), 0700); err != nil {
+		t.Fatal(err)
+	}
+	p, err := PlanCreate(home, "alfred", exe, codex)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = Create(p, exe, codex); err != nil {
+		t.Fatal(err)
+	}
+	cmd := exec.Command(exe, "-test.run=TestLauncherEnvironmentAndArguments")
+	cmd.Env = append(os.Environ(), "MY_FRIDAY_LAUNCH_HELPER=1", "MY_FRIDAY_TEST_HOME="+home, "MY_FRIDAY_CAPTURE="+capture, "HOME="+home, "CODEX_HOME=/foreign/codex")
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("launch helper: %v: %s", err, out)
+	}
+	b, err := os.ReadFile(capture)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := strings.Join([]string{home, filepath.Join(p.Paths.Root, "codex"), "--cd", filepath.Join(p.Paths.Root, "workspace"), "--", "hello world", "--cd", "/foreign", ""}, "\n")
+	if string(b) != want {
+		t.Fatalf("launcher contract\nwant: %q\n got: %q", want, b)
 	}
 }
