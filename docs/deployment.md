@@ -118,6 +118,13 @@ copy is removed with the instance. The
 same file-backed OAuth credential is deliberately not routed through
 `codex login --with-api-key`.
 
+Failure cleanup removes the disposable credential before invoking ordinary
+manifest-gated instance removal. This acceptance-only authority is limited to
+the exact verified instance root's `codex/auth.json`: a no-follow opened regular
+file with matching entry identity, current-user ownership, mode `0600`, and one
+link. Any alternate or unexpected Codex-home entry is preserved and makes the
+cleanup result fail closed; production `assistant remove` is unchanged.
+
 The command requires
 ordinary-user Apple silicon macOS, APFS, GitHub comment authority, Codex, Go,
 and the reviewed `sandbox-exec` behavior. It uses randomized leaves under the

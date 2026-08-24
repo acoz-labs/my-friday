@@ -14,7 +14,138 @@ import (
 
 	"github.com/acoz-labs/my-friday/internal/assistantinstance"
 	"github.com/acoz-labs/my-friday/internal/codexhome"
+	bootstrap "github.com/acoz-labs/my-friday/internal/plan"
+	"github.com/acoz-labs/my-friday/internal/profile"
+	"github.com/acoz-labs/my-friday/internal/repository"
 )
+
+func managedNamedFixture(t *testing.T) (string, assistantinstance.Paths) {
+	t.Helper()
+	home := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(home, ".local", "bin"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	runtimeRoot, memoryRoot := filepath.Join(home, "source-runtime"), filepath.Join(home, "source-memory")
+	p, err := profile.New("Acceptance Assistant", "", "Return only FIXTURE_PURPOSE", "concise", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	repositories, err := bootstrap.Build(p, runtimeRoot, memoryRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = repository.Create(repositories, runtimeRoot, memoryRoot); err != nil {
+		t.Fatal(err)
+	}
+	executable, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	codex := filepath.Join(home, "codex-stub")
+	if err = os.WriteFile(codex, []byte("codex"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	instance, err := assistantinstance.PlanCreate(home, "primary", executable, codex)
+	if err != nil {
+		t.Fatal(err)
+	}
+	instance, err = assistantinstance.WithRepositories(instance, runtimeRoot, memoryRoot, repositories.AssistantID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = assistantinstance.Create(instance, executable, codex); err != nil {
+		t.Fatal(err)
+	}
+	return home, instance.Paths
+}
+
+func TestCleanupNamedRemovesOnlySafeDisposableAuthBeforeInstance(t *testing.T) {
+	home, paths := managedNamedFixture(t)
+	auth := filepath.Join(paths.Root, "codex", "auth.json")
+	if err := os.WriteFile(auth, []byte("opaque-fixture"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := cleanupNamed(home, []string{"primary"}, nil); err != nil {
+		t.Fatal(err)
+	}
+	for _, path := range []string{auth, paths.Root, paths.Launcher} {
+		if _, err := os.Lstat(path); !errors.Is(err, os.ErrNotExist) {
+			t.Fatalf("cleanup retained %s", path)
+		}
+	}
+}
+
+func TestCleanupNamedRefusesUnsafeDisposableAuthAndUnexpectedEntries(t *testing.T) {
+	tests := map[string]func(*testing.T, assistantinstance.Paths) string{
+		"symlink": func(t *testing.T, paths assistantinstance.Paths) string {
+			target := filepath.Join(paths.Root, "auth-target")
+			if err := os.WriteFile(target, []byte("preserve"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			path := filepath.Join(paths.Root, "codex", "auth.json")
+			if err := os.Symlink(target, path); err != nil {
+				t.Fatal(err)
+			}
+			return path
+		},
+		"hardlink": func(t *testing.T, paths assistantinstance.Paths) string {
+			target := filepath.Join(paths.Root, "auth-target")
+			if err := os.WriteFile(target, []byte("preserve"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			path := filepath.Join(paths.Root, "codex", "auth.json")
+			if err := os.Link(target, path); err != nil {
+				t.Fatal(err)
+			}
+			return path
+		},
+		"wrong-mode": func(t *testing.T, paths assistantinstance.Paths) string {
+			path := filepath.Join(paths.Root, "codex", "auth.json")
+			if err := os.WriteFile(path, []byte("preserve"), 0o640); err != nil {
+				t.Fatal(err)
+			}
+			return path
+		},
+		"alternate-path": func(t *testing.T, paths assistantinstance.Paths) string {
+			path := filepath.Join(paths.Root, "codex", "auth-copy.json")
+			if err := os.WriteFile(path, []byte("preserve"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			return path
+		},
+		"unrelated-extra": func(t *testing.T, paths assistantinstance.Paths) string {
+			if err := os.WriteFile(filepath.Join(paths.Root, "codex", "auth.json"), []byte("opaque-fixture"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			path := filepath.Join(paths.Root, "codex", "unrelated")
+			if err := os.WriteFile(path, []byte("preserve"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			return path
+		},
+	}
+	for name, arrange := range tests {
+		t.Run(name, func(t *testing.T) {
+			home, paths := managedNamedFixture(t)
+			preserved := arrange(t, paths)
+			if err := cleanupNamed(home, []string{"primary"}, nil); err == nil {
+				t.Fatal("unsafe disposable credential state was removed")
+			}
+			if _, err := os.Lstat(paths.Root); err != nil {
+				t.Fatalf("instance root changed: %v", err)
+			}
+			if _, err := os.Lstat(preserved); err != nil {
+				t.Fatalf("unsafe entry was not preserved: %v", err)
+			}
+		})
+	}
+}
+
+func TestDisposableAuthOwnershipPredicateRejectsWrongOwner(t *testing.T) {
+	if disposableAuthStatSafe(0o100600, uint32(os.Getuid()+1), 1) {
+		t.Fatal("foreign owner accepted")
+	}
+}
 
 func exactLeafForTest(t *testing.T, path string) exactLeaf {
 	t.Helper()

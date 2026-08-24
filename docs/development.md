@@ -40,6 +40,12 @@ semantics/re-fetches, legacy-schema refusal, and process-group timeout behavior.
 `tools/acceptance-support` cleanup regressions exercise every post-create phase,
 including copied credentials and launcher-absent recovery, while proving the
 ambient auth source remains unchanged.
+Before production removal, the acceptance-only named cleanup proves the
+manifest-owned instance, permits only the exact private `codex/auth.json`
+addition, and no-follow unlinks it only when its opened and directory-entry
+identity agree and it is a current-user-owned, mode-`0600`, single-link regular
+file. Symlinks, hardlinks, wrong metadata, alternate credential paths, and
+unrelated private Codex entries are preserved and reported.
 They also prove a drifted collision/sibling receipt is reported and preserved
 without blocking manifest-proven instance and copied-credential cleanup, while
 an out-of-scope receipt remains a fail-closed pre-mutation error.

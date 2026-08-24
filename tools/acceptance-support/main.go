@@ -339,6 +339,93 @@ func removeExactLeaf(leaf exactLeaf) error {
 	return unix.Unlinkat(parentFD, filepath.Base(leaf.Path), 0)
 }
 
+func disposableAuthStatSafe(mode uint16, uid uint32, nlink uint64) bool {
+	return mode&unix.S_IFMT == unix.S_IFREG && mode&0o777 == 0o600 && uid == uint32(os.Getuid()) && nlink == 1
+}
+
+func openedDirectoryMatchesPath(fd int, path string) bool {
+	var opened unix.Stat_t
+	info, err := os.Lstat(path)
+	if unix.Fstat(fd, &opened) != nil || err != nil || !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
+		return false
+	}
+	entry := info.Sys().(*syscall.Stat_t)
+	return uint64(opened.Dev) == uint64(entry.Dev) && opened.Ino == entry.Ino
+}
+
+func verifyCodexCleanupEntries(codexRoot string, manifest assistantinstance.Manifest, allowAuth bool) error {
+	fd, err := openAbsoluteDirNoFollow(codexRoot)
+	if err != nil {
+		return err
+	}
+	dir := os.NewFile(uintptr(fd), codexRoot)
+	defer dir.Close()
+	entries, err := dir.Readdirnames(-1)
+	if err != nil {
+		return err
+	}
+	allowed := map[string]bool{"config.toml": true}
+	if manifest.CodexInstructions != "" {
+		allowed["AGENTS.md"] = true
+	}
+	if allowAuth {
+		allowed["auth.json"] = true
+	}
+	for _, entry := range entries {
+		if !allowed[entry] {
+			return fmt.Errorf("unexpected disposable Codex entry preserved: %s", entry)
+		}
+	}
+	return nil
+}
+
+func cleanupDisposableAuth(home, name string) error {
+	paths, err := assistantinstance.Derive(home, name)
+	if err != nil {
+		return err
+	}
+	authPath := filepath.Join(paths.Root, "codex", "auth.json")
+	_, authErr := os.Lstat(authPath)
+	manifest, verifyErr := assistantinstance.Verify(home, name)
+	if verifyErr != nil {
+		if errors.Is(authErr, os.ErrNotExist) {
+			return nil
+		}
+		return fmt.Errorf("disposable auth cleanup lacks manifest authority: %w", verifyErr)
+	}
+	codexRoot := filepath.Join(paths.Root, "codex")
+	if err = verifyCodexCleanupEntries(codexRoot, manifest, !errors.Is(authErr, os.ErrNotExist)); err != nil {
+		return err
+	}
+	if errors.Is(authErr, os.ErrNotExist) {
+		return nil
+	}
+	if authErr != nil {
+		return authErr
+	}
+	parentFD, err := openAbsoluteDirNoFollow(codexRoot)
+	if err != nil {
+		return err
+	}
+	defer unix.Close(parentFD)
+	fd, err := unix.Openat(parentFD, "auth.json", unix.O_RDONLY|unix.O_CLOEXEC|unix.O_NOFOLLOW, 0)
+	if err != nil {
+		return fmt.Errorf("disposable auth is unsafe: %w", err)
+	}
+	defer unix.Close(fd)
+	var opened, entry unix.Stat_t
+	if unix.Fstat(fd, &opened) != nil || unix.Fstatat(parentFD, "auth.json", &entry, unix.AT_SYMLINK_NOFOLLOW) != nil || opened.Dev != entry.Dev || opened.Ino != entry.Ino || !disposableAuthStatSafe(opened.Mode, opened.Uid, uint64(opened.Nlink)) || !disposableAuthStatSafe(entry.Mode, entry.Uid, uint64(entry.Nlink)) {
+		return errors.New("disposable auth identity or ownership is unsafe")
+	}
+	if !openedDirectoryMatchesPath(parentFD, codexRoot) {
+		return errors.New("disposable auth directory identity changed")
+	}
+	if err = unix.Unlinkat(parentFD, "auth.json", 0); err != nil {
+		return err
+	}
+	return verifyCodexCleanupEntries(codexRoot, manifest, false)
+}
+
 func cleanupNamed(home string, names []string, leaves []exactLeaf) error {
 	for _, leaf := range leaves {
 		if filepath.Dir(leaf.Path) != filepath.Join(home, ".local", "bin") || !strings.HasPrefix(filepath.Base(leaf.Path), "mfac-") {
@@ -356,6 +443,10 @@ func cleanupNamed(home string, names []string, leaves []exactLeaf) error {
 		_, rootErr := os.Lstat(root)
 		_, launcherErr := os.Lstat(launcher)
 		if errors.Is(rootErr, os.ErrNotExist) && errors.Is(launcherErr, os.ErrNotExist) {
+			continue
+		}
+		if err := cleanupDisposableAuth(home, name); err != nil {
+			failures = append(failures, err.Error())
 			continue
 		}
 		plan, planErr := assistantinstance.PlanRemove(home, name)
