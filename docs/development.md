@@ -51,6 +51,10 @@ pre-detach observation is evidence-bound.
 The PTY contract fixes `TERM=xterm-256color` only for the interactive launcher
 smoke; native primitive coverage starts from `TERM=dumb` and proves the
 empty-argument smoke still delivers its purpose prompt and observes its token.
+The native fixture places its pseudo-terminal in raw mode, emits Codex's
+`CSI > 7 u` enhanced-keyboard enablement, and accepts only the exact prompt
+bytes followed by `ESC [ 13 ; 1 u`. This prevents line-discipline CR-to-NL
+translation from making an invalid PTY driver appear correct.
 Named-instance regressions prove the private Codex config TOML-escapes special
 workspace paths, trusts only the exact instance workspace, separates two
 instances, and denies verify, remove, and recovery authority after config
