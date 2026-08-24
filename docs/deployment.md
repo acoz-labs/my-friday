@@ -97,8 +97,10 @@ candidate lifecycle commands retain their existing sanitized environment. The
 named instance's manifest-bound private `codex/config.toml` trusts only its
 exact absolute workspace, so the smoke sends no first-run workspace-trust
 answer. After Codex explicitly enables CSI-u enhanced keyboard reporting, the
-driver waits for the rendered `Ask Codex to do anything` composer and a short
-settle, then submits the literal purpose prompt with the protocol Enter sequence
+driver observes the initial `Ask Codex to do anything` composer, requires
+concrete MCP boot progress, then waits for a post-progress composer followed by
+three seconds of output quiescence. Only then does it submit the literal purpose
+prompt with the protocol Enter sequence
 `ESC [ 13 ; 1 u`; a raw carriage return is not accepted as equivalent. The
 child PTY is initialized to 30 rows by 120 columns before spawn so the exact
 token remains contiguous. The interactive smoke has a 90-second outer bound;
