@@ -58,3 +58,6 @@ Named-instance coverage lives in `internal/assistantinstance`. Use
 Fixtures create their own roots, launcher siblings, repository pairs, and
 credential-free executable stubs; they never inspect or mutate developer
 Codex, shell, launcher, or credential state.
+Regression coverage includes PATH symlink resolution, caller-`HOME` refusal as
+authority, forged managed-executable manifests, same-name concurrency, and
+migration success plus injected legacy-cleanup failure.

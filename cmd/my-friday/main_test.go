@@ -3,11 +3,43 @@ package main
 import (
 	"errors"
 	"io"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/acoz-labs/my-friday/internal/codexhome"
 )
+
+func TestRealHomeIgnoresCallerHOME(t *testing.T) {
+	want, err := realHome()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("HOME", t.TempDir())
+	got, err := realHome()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != want {
+		t.Fatalf("caller HOME became authority: got %q want %q", got, want)
+	}
+	if os.Getenv("HOME") == want {
+		t.Fatal("test did not override child HOME environment")
+	}
+}
+
+func TestAssistantLegacyMigrationHomeUsesAccountBoundary(t *testing.T) {
+	accountHome, err := realHome()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("CODEX_HOME", filepath.Join(os.Getenv("HOME"), ".codex"))
+	if _, err = codexHomeWithin(accountHome); err == nil {
+		t.Fatal("foreign caller HOME granted migration cleanup authority")
+	}
+}
 
 func TestExitCategories(t *testing.T) {
 	cases := []struct {

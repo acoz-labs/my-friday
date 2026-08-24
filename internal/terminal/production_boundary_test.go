@@ -15,7 +15,7 @@ func TestProductionNetworkAndSubprocessBoundary(t *testing.T) {
 	root := filepath.Join("..", "..")
 	allowedImports := map[string]bool{
 		"bufio": true, "bytes": true, "crypto/rand": true, "crypto/sha256": true, "encoding/hex": true, "encoding/json": true,
-		"errors": true, "fmt": true, "io": true, "io/fs": true, "os": true, "os/exec": true, "path/filepath": true,
+		"errors": true, "fmt": true, "io": true, "io/fs": true, "os": true, "os/exec": true, "os/user": true, "path/filepath": true,
 		"regexp": true, "runtime": true, "slices": true, "sort": true, "strconv": true, "strings": true, "syscall": true,
 		"unicode": true, "unicode/utf8": true, "unsafe": true,
 		"github.com/acoz-labs/my-friday/internal/environment":       true,

@@ -30,6 +30,7 @@ type Manifest struct {
 	Launcher        string   `json:"launcher"`
 	LauncherSHA256  string   `json:"launcher_sha256"`
 	CodexExecutable string   `json:"codex_executable"`
+	CodexSHA256     string   `json:"codex_sha256"`
 	AssistantID     string   `json:"assistant_id,omitempty"`
 }
 
@@ -141,6 +142,32 @@ func prepareAssistantsRoot(home string) error {
 	return nil
 }
 
+func withNameLock(home, name string, operation func() error) error {
+	p, err := Derive(home, name)
+	if err != nil {
+		return err
+	}
+	if err = prepareAssistantsRoot(p.Home); err != nil {
+		return err
+	}
+	lockPath := filepath.Join(p.Home, ".my-friday", "assistants", "."+name+".lock")
+	fd, err := syscall.Open(lockPath, syscall.O_RDWR|syscall.O_CREAT|syscall.O_CLOEXEC|syscall.O_NOFOLLOW, 0600)
+	if err != nil {
+		return err
+	}
+	f := os.NewFile(uintptr(fd), lockPath)
+	defer f.Close()
+	var lockStat syscall.Stat_t
+	if err = syscall.Fstat(fd, &lockStat); err != nil || lockStat.Mode&syscall.S_IFMT != syscall.S_IFREG || int(lockStat.Uid) != os.Getuid() || lockStat.Mode&0777 != 0600 || lockStat.Nlink != 1 {
+		return fmt.Errorf("unsafe instance lock %s", lockPath)
+	}
+	if err = syscall.Flock(int(f.Fd()), syscall.LOCK_EX); err != nil {
+		return err
+	}
+	defer syscall.Flock(int(f.Fd()), syscall.LOCK_UN)
+	return operation()
+}
+
 func PlanCreate(home, name, executable, codex string) (Plan, error) {
 	p, err := Derive(home, name)
 	if err != nil {
@@ -222,6 +249,12 @@ func copyTree(source, destination string) error {
 }
 
 func Create(plan Plan, executable, codex string) error {
+	return withNameLock(plan.Paths.Home, plan.Paths.Name, func() error { return createLocked(plan, executable, codex) })
+}
+
+var mutationHook func(string)
+
+func createLocked(plan Plan, executable, codex string) error {
 	if plan.Action != "create" {
 		return errors.New("invalid create plan")
 	}
@@ -238,15 +271,15 @@ func Create(plan Plan, executable, codex string) error {
 	if err = safeLauncherDirectory(p.Home); err != nil {
 		return err
 	}
-	if err = prepareAssistantsRoot(p.Home); err != nil {
-		return err
-	}
 	launcher, _, err := regular(executable)
 	if err != nil {
 		return err
 	}
 	if _, _, err = regular(codex); err != nil {
 		return err
+	}
+	if mutationHook != nil {
+		mutationHook("create-preflight")
 	}
 	stage := p.Root + ".creating"
 	if _, err = os.Lstat(stage); !errors.Is(err, os.ErrNotExist) {
@@ -265,7 +298,12 @@ func Create(plan Plan, executable, codex string) error {
 	owned := []string{"codex", "dependencies", "memory", "runtime", "workspace"}
 	sort.Strings(owned)
 	managedCodex := filepath.Join(p.Root, "dependencies", "codex")
-	m := Manifest{ContractVersion: ContractVersion, Name: p.Name, Root: p.Root, Owned: owned, Launcher: p.Launcher, LauncherSHA256: digest(launcher), CodexExecutable: managedCodex, AssistantID: plan.AssistantID}
+	codexBytes, _, err := regular(codex)
+	if err != nil {
+		clean()
+		return err
+	}
+	m := Manifest{ContractVersion: ContractVersion, Name: p.Name, Root: p.Root, Owned: owned, Launcher: p.Launcher, LauncherSHA256: digest(launcher), CodexExecutable: managedCodex, CodexSHA256: digest(codexBytes), AssistantID: plan.AssistantID}
 	mb, err := json.MarshalIndent(m, "", "  ")
 	if err != nil {
 		clean()
@@ -273,11 +311,6 @@ func Create(plan Plan, executable, codex string) error {
 	}
 	mb = append(mb, '\n')
 	if err = os.WriteFile(filepath.Join(stage, "manifest.json"), mb, 0600); err != nil {
-		clean()
-		return err
-	}
-	codexBytes, _, err := regular(codex)
-	if err != nil {
 		clean()
 		return err
 	}
@@ -346,7 +379,8 @@ func readManifest(p Paths) (Manifest, error) {
 		return m, err
 	}
 	want := []string{"codex", "dependencies", "memory", "runtime", "workspace"}
-	if m.ContractVersion != ContractVersion || m.Name != p.Name || m.Root != p.Root || m.Launcher != p.Launcher || strings.Join(m.Owned, "\x00") != strings.Join(want, "\x00") {
+	wantCodex := filepath.Join(p.Root, "dependencies", "codex")
+	if m.ContractVersion != ContractVersion || m.Name != p.Name || m.Root != p.Root || m.Launcher != p.Launcher || m.CodexExecutable != wantCodex || !validDigest(m.CodexSHA256) || strings.Join(m.Owned, "\x00") != strings.Join(want, "\x00") {
 		return m, errors.New("manifest ownership contract mismatch")
 	}
 	return m, nil
@@ -376,8 +410,12 @@ func Verify(home, name string) (Manifest, error) {
 	if info.Mode().Perm() != 0700 || digest(lb) != m.LauncherSHA256 {
 		return m, errors.New("launcher artifact drift")
 	}
-	if _, _, err = regular(m.CodexExecutable); err != nil {
+	cb, cinfo, err := regular(m.CodexExecutable)
+	if err != nil {
 		return m, fmt.Errorf("managed Codex executable unavailable: %w", err)
+	}
+	if cinfo.Mode().Perm() != 0700 || digest(cb) != m.CodexSHA256 {
+		return m, errors.New("managed Codex executable drift")
 	}
 	return m, nil
 }
@@ -422,6 +460,10 @@ func removeOwnedRoot(p Paths, m Manifest) error {
 }
 
 func Remove(plan Plan) error {
+	return withNameLock(plan.Paths.Home, plan.Paths.Name, func() error { return removeLocked(plan) })
+}
+
+func removeLocked(plan Plan) error {
 	if plan.Action != "remove" {
 		return errors.New("invalid remove plan")
 	}
@@ -448,6 +490,12 @@ func Remove(plan Plan) error {
 // proves the exact instance root. A missing launcher makes absence the safe
 // deterministic result; a complete triple is left active.
 func Recover(home, name string) (string, error) {
+	var result string
+	err := withNameLock(home, name, func() error { var lockedErr error; result, lockedErr = recoverLocked(home, name); return lockedErr })
+	return result, err
+}
+
+func recoverLocked(home, name string) (string, error) {
 	p, err := Derive(home, name)
 	if err != nil {
 		return "", err
@@ -468,6 +516,23 @@ func Recover(home, name string) (string, error) {
 		return "", fmt.Errorf("recovery refused: %w", err)
 	}
 	return "restored absent state", nil
+}
+
+// Migrate serializes the named replacement through final verification and the
+// caller-supplied manifest-governed legacy cleanup transaction.
+func Migrate(plan Plan, executable, codex string, cleanup func() error) error {
+	return withNameLock(plan.Paths.Home, plan.Paths.Name, func() error {
+		if err := createLocked(plan, executable, codex); err != nil {
+			return err
+		}
+		if _, err := Verify(plan.Paths.Home, plan.Paths.Name); err != nil {
+			return fmt.Errorf("migration recovery required before prior cleanup: %w", err)
+		}
+		if err := cleanup(); err != nil {
+			return fmt.Errorf("named instance active; prior projection cleanup recovery required: %w", err)
+		}
+		return nil
+	})
 }
 
 func Launch(home, name string, args []string) error {
@@ -503,10 +568,19 @@ func FindCodex() (string, error) {
 			continue
 		}
 		candidate := filepath.Join(dir, "codex")
-		_, info, err := regular(candidate)
+		resolved, err := filepath.EvalSymlinks(candidate)
+		if err != nil {
+			continue
+		}
+		_, info, err := regular(resolved)
 		if err == nil && info.Mode().Perm()&0111 != 0 {
-			return candidate, nil
+			return resolved, nil
 		}
 	}
 	return "", errors.New("Codex executable not found on absolute PATH entries")
+}
+
+func validDigest(value string) bool {
+	decoded, err := hex.DecodeString(value)
+	return err == nil && len(decoded) == sha256.Size && value == strings.ToLower(value)
 }

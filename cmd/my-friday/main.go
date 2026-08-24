@@ -2,9 +2,11 @@ package main
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"io"
 	"os"
+	"os/user"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -70,14 +72,6 @@ func readConfirmation(input io.Reader, token string) (bool, error) {
 
 func run() error {
 	if name := filepath.Base(os.Args[0]); assistantinstance.ValidateName(name) == nil {
-		home, err := realHome()
-		if err != nil {
-			return err
-		}
-		paths, err := assistantinstance.Derive(home, name)
-		if err != nil {
-			return err
-		}
 		executable, err := os.Executable()
 		if err != nil {
 			return err
@@ -86,8 +80,19 @@ func run() error {
 		if err != nil {
 			return err
 		}
-		if executable == paths.Launcher {
-			return assistantinstance.Launch(home, name, os.Args[1:])
+		launcherDir := filepath.Dir(executable)
+		if filepath.Base(launcherDir) == "bin" && filepath.Base(filepath.Dir(launcherDir)) == ".local" {
+			home, err := realHome()
+			if err != nil {
+				return err
+			}
+			paths, err := assistantinstance.Derive(home, name)
+			if err != nil {
+				return err
+			}
+			if executable == paths.Launcher {
+				return assistantinstance.Launch(home, name, os.Args[1:])
+			}
 		}
 	}
 	command := "init"
@@ -136,11 +141,14 @@ func run() error {
 }
 
 func realHome() (string, error) {
-	home, err := os.UserHomeDir()
+	account, err := user.Current()
 	if err != nil {
 		return "", err
 	}
-	return filepath.EvalSymlinks(home)
+	if account.HomeDir == "" {
+		return "", errors.New("current account home is unavailable")
+	}
+	return filepath.EvalSymlinks(account.HomeDir)
 }
 
 func runAssistant() error {
@@ -248,7 +256,7 @@ func runAssistant() error {
 		if err != nil {
 			return err
 		}
-		oldHome, err := codexHome()
+		oldHome, err := codexHomeWithin(home)
 		if err != nil {
 			return err
 		}
@@ -268,14 +276,8 @@ func runAssistant() error {
 			fmt.Fprintln(os.Stdout, "No changes made")
 			return nil
 		}
-		if err = assistantinstance.Create(p, exe, codex); err != nil {
+		if err = assistantinstance.Migrate(p, exe, codex, func() error { return codexhome.Execute(oldPlan) }); err != nil {
 			return err
-		}
-		if _, err = assistantinstance.Verify(home, name); err != nil {
-			return fmt.Errorf("migration recovery required before prior cleanup: %w", err)
-		}
-		if err = codexhome.Execute(oldPlan); err != nil {
-			return fmt.Errorf("named instance active; prior projection cleanup recovery required: %w", err)
 		}
 		fmt.Fprintf(os.Stdout, "Assistant %s migrated and prior projection removed\n", name)
 		return nil
@@ -326,6 +328,10 @@ func codexHome() (string, error) {
 	if err != nil {
 		return "", err
 	}
+	return codexHomeWithin(home)
+}
+
+func codexHomeWithin(home string) (string, error) {
 	if value := os.Getenv("CODEX_HOME"); value != "" {
 		absolute, err := filepath.Abs(value)
 		if err != nil {

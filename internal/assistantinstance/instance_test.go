@@ -1,12 +1,15 @@
 package assistantinstance
 
 import (
+	"encoding/json"
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 )
 
 func fixture(t *testing.T) (string, string, string) {
@@ -23,6 +26,29 @@ func fixture(t *testing.T) (string, string, string) {
 		}
 	}
 	return home, exe, codex
+}
+
+func TestFindCodexResolvesPATHSymlink(t *testing.T) {
+	home, _, codex := fixture(t)
+	bin := filepath.Join(home, "path-bin")
+	if err := os.Mkdir(bin, 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(codex, filepath.Join(bin, "codex")); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin)
+	got, err := FindCodex()
+	if err != nil {
+		t.Fatal(err)
+	}
+	want, err := filepath.EvalSymlinks(codex)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != want {
+		t.Fatalf("got %q want resolved %q", got, want)
+	}
 }
 
 func TestNameAndPaths(t *testing.T) {
@@ -119,6 +145,37 @@ func TestForeignLauncherAndDriftFailClosed(t *testing.T) {
 	}
 }
 
+func TestForgedCodexExecutableIsDenied(t *testing.T) {
+	home, exe, codex := fixture(t)
+	p, err := PlanCreate(home, "alfred", exe, codex)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = Create(p, exe, codex); err != nil {
+		t.Fatal(err)
+	}
+	manifestPath := filepath.Join(p.Paths.Root, "manifest.json")
+	b, err := os.ReadFile(manifestPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var m Manifest
+	if err = json.Unmarshal(b, &m); err != nil {
+		t.Fatal(err)
+	}
+	m.CodexExecutable = "/bin/echo"
+	b, err = json.MarshalIndent(m, "", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = os.WriteFile(manifestPath, append(b, '\n'), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = Verify(home, "alfred"); err == nil || !strings.Contains(err.Error(), "manifest ownership contract mismatch") {
+		t.Fatalf("forged executable accepted: %v", err)
+	}
+}
+
 func TestTwoInstancesAreIndependent(t *testing.T) {
 	home, exe, codex := fixture(t)
 	for _, name := range []string{"alfred", "robin"} {
@@ -163,6 +220,77 @@ func TestRecoverCompletesInterruptedRemoval(t *testing.T) {
 	}
 	if _, err = os.Stat(p.Paths.Root); !os.IsNotExist(err) {
 		t.Fatal("recovery retained root")
+	}
+}
+
+func TestSameNameCreateIsSerialized(t *testing.T) {
+	home, exe, codex := fixture(t)
+	p, err := PlanCreate(home, "alfred", exe, codex)
+	if err != nil {
+		t.Fatal(err)
+	}
+	entered, release := make(chan struct{}, 2), make(chan struct{})
+	mutationHook = func(phase string) {
+		if phase == "create-preflight" {
+			entered <- struct{}{}
+			<-release
+		}
+	}
+	defer func() { mutationHook = nil }()
+	results := make(chan error, 2)
+	go func() { results <- Create(p, exe, codex) }()
+	<-entered
+	go func() { results <- Create(p, exe, codex) }()
+	select {
+	case <-entered:
+		t.Fatal("second same-name create entered mutation while first held lock")
+	case <-time.After(100 * time.Millisecond):
+	}
+	close(release)
+	err1, err2 := <-results, <-results
+	if (err1 == nil) == (err2 == nil) {
+		t.Fatalf("want one success and one collision, got %v and %v", err1, err2)
+	}
+	if _, err = Verify(home, "alfred"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = os.Stat(p.Paths.Root + ".creating"); !os.IsNotExist(err) {
+		t.Fatal("shared stage remains")
+	}
+}
+
+func TestMigrationSuccessAndCleanupFault(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		cleanupErr error
+	}{{"success", nil}, {"cleanup-fault", errors.New("injected legacy cleanup fault")}} {
+		t.Run(tc.name, func(t *testing.T) {
+			home, exe, codex := fixture(t)
+			p, err := PlanCreate(home, "alfred", exe, codex)
+			if err != nil {
+				t.Fatal(err)
+			}
+			cleanupCalled := false
+			err = Migrate(p, exe, codex, func() error {
+				cleanupCalled = true
+				if _, verifyErr := Verify(home, "alfred"); verifyErr != nil {
+					t.Fatalf("cleanup ran before replacement verified: %v", verifyErr)
+				}
+				return tc.cleanupErr
+			})
+			if !cleanupCalled {
+				t.Fatal("legacy cleanup was not called")
+			}
+			if tc.cleanupErr == nil && err != nil {
+				t.Fatal(err)
+			}
+			if tc.cleanupErr != nil && (err == nil || !strings.Contains(err.Error(), tc.cleanupErr.Error())) {
+				t.Fatalf("cleanup fault not retained: %v", err)
+			}
+			if _, verifyErr := Verify(home, "alfred"); verifyErr != nil {
+				t.Fatalf("named replacement not retained: %v", verifyErr)
+			}
+		})
 	}
 }
 
