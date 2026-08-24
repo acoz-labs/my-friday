@@ -36,6 +36,8 @@ container_device="$(jq -r '[.["system-entities"][]|select(.["unmapped-content-hi
 [[ "$device" == /dev/disk* ]] || { echo "Primitive attach omitted a device." >&2; exit 1; }
 mounted=1
 [[ "$(diskutil info -plist "$mountpoint" | plutil -convert json -o - -- - | jq -r .FilesystemType)" == apfs ]] || { echo "Primitive volume is not APFS." >&2; exit 1; }
+initial_root_nlink="$(stat -f %l "$mountpoint")"
+[[ "$initial_root_nlink" =~ ^[0-9]+$ && initial_root_nlink -ge 1 && initial_root_nlink -le 64 ]] || { echo "Initial APFS root link count was unsafe." >&2; exit 1; }
 go build -o "$tmp/support" "$root/tools/acceptance-support"
 go build -o "$tmp/runner" "$root/tools/acceptance-runner"
 go build -o "$tmp/candidate" "$root/cmd/my-friday"
@@ -69,6 +71,9 @@ if sandbox-exec -f "$tmp/lifecycle.sb" /usr/bin/curl -fsS --max-time 3 https://e
   echo "Primitive lifecycle profile allowed network." >&2
   exit 1
 fi
+final_root_nlink="$(stat -f %l "$mountpoint")"
+[[ "$final_root_nlink" =~ ^[0-9]+$ && final_root_nlink -ge 1 && final_root_nlink -le 64 ]] || { echo "Final APFS root link count was unsafe." >&2; exit 1; }
+[[ "$final_root_nlink" != "$initial_root_nlink" ]] || { echo "Primitive did not exercise APFS root link-count change." >&2; exit 1; }
 hdiutil detach "$device" >/dev/null
 mounted=0
 [[ -z "$(mount | grep -F " on $mountpoint " || true)" ]] || { echo "Primitive mount survived detach." >&2; exit 1; }

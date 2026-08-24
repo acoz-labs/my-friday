@@ -194,9 +194,12 @@ snapshot_protected() {
 snapshot_protected before
 
 verify_mount_authority() {
-  [[ "${device:-}" == /dev/disk* && "${image_whole:-}" == /dev/disk* && "${physical_store:-}" == /dev/disk* && "${container_device:-}" == /dev/disk* && -n "${volume_uuid:-}" && -n "${mount_device:-}" && -n "${mount_inode:-}" && -n "${mount_mode:-}" && "${mount_nlink:-}" =~ ^[0-9]+$ && mount_nlink -ge 1 && mount_nlink -le 64 && -f "${image:-}" ]] || return 1
+  [[ "${device:-}" == /dev/disk* && "${image_whole:-}" == /dev/disk* && "${physical_store:-}" == /dev/disk* && "${container_device:-}" == /dev/disk* && -n "${volume_uuid:-}" && -n "${mount_device:-}" && -n "${mount_inode:-}" && -n "${mount_mode:-}" && -f "${image:-}" ]] || return 1
+  local current_mount_nlink
+  current_mount_nlink="$(stat -f %l "$mountpoint")" || return 1
+  [[ "$current_mount_nlink" =~ ^[0-9]+$ && current_mount_nlink -ge 1 && current_mount_nlink -le 64 ]] || return 1
   [[ "$(stat -f %d:%i:%u:%p:%l "$image")" == "$image_device:$image_inode:$(id -u):100600:1" ]] || return 1
-  [[ ! -L "$mountpoint" && "$(stat -f %d:%i:%u:%p:%l "$mountpoint")" == "$mount_device:$mount_inode:$(id -u):$mount_mode:$mount_nlink" ]] || return 1
+  [[ ! -L "$mountpoint" && "$(stat -f %d:%i:%u:%p "$mountpoint")" == "$mount_device:$mount_inode:$(id -u):$mount_mode" ]] || return 1
   local info mount_line
   info="$(diskutil info -plist "$mountpoint" 2>/dev/null | plutil -convert json -o - -- - 2>/dev/null)" || return 1
   [[ "$(jq -r .FilesystemType <<<"$info")" == apfs && "$(jq -r .MountPoint <<<"$info")" == "$mountpoint" && "$(jq -r .VolumeUUID <<<"$info")" == "$volume_uuid" && "$(jq -r .DeviceNode <<<"$info")" == "$device" && "$(jq -r .Writable <<<"$info")" == true ]] || return 1
@@ -392,6 +395,8 @@ sentinel_pid=""
 
 failure_scope="harness"; failure_class="containment"
 sync
+mount_nlink="$(stat -f %l "$mountpoint")"
+[[ "$mount_nlink" =~ ^[0-9]+$ && mount_nlink -ge 1 && mount_nlink -le 64 ]] || fail "final mounted root link count is unsafe"
 verify_mount_authority || fail "mount authority changed before detach"
 hdiutil detach "$device" >/dev/null
 mounted=0
