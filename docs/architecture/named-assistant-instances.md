@@ -26,10 +26,13 @@ valid manifest and matching launcher, removes that exact leaf, then the selected
 root. `assistant recover <name>` finishes an interrupted removal only when the
 launcher is absent and the retained manifest still proves the exact root.
 Foreign, linked, drifted, unsupported, or contradictory state is preserved.
-Mutating operations acquire a per-name foreground advisory lock beneath the
-assistants control root. The lock spans replacement creation, final
-verification, and legacy cleanup during migration; different names use
-different lock files and need no daemon.
+Atomic staging serializes competing creates. Other mutations use a non-blocking,
+transaction-owned advisory lock inside the selected instance root; create
+carries that in-root lock through promotion, final verification, and legacy
+cleanup during migration. Refused waiters never retain an unlinked lock inode,
+and successful completion removes the transient lock while still holding it.
+No per-name control leaf survives outside the root or after removal, and no
+daemon is involved.
 
 The launcher is a copy of the native `my-friday` executable. Invocation by its
 instance basename selects launcher mode, verifies ownership, preserves `HOME`,

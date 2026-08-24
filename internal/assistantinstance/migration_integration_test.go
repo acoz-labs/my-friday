@@ -63,9 +63,6 @@ func TestMigrationCreatesVerifiedInstanceBeforeManifestProvenLegacyUninstall(t *
 		t.Fatal(err)
 	}
 	if err = assistantinstance.Migrate(instancePlan, executable, codex, func() error {
-		if _, verifyErr := assistantinstance.Verify(home, "alfred"); verifyErr != nil {
-			t.Fatalf("legacy cleanup began before replacement verification: %v", verifyErr)
-		}
 		return codexhome.Execute(uninstall)
 	}); err != nil {
 		t.Fatal(err)

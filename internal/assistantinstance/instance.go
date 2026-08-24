@@ -142,30 +142,55 @@ func prepareAssistantsRoot(home string) error {
 	return nil
 }
 
-func withNameLock(home, name string, operation func() error) error {
-	p, err := Derive(home, name)
-	if err != nil {
-		return err
-	}
-	if err = prepareAssistantsRoot(p.Home); err != nil {
-		return err
-	}
-	lockPath := filepath.Join(p.Home, ".my-friday", "assistants", "."+name+".lock")
+type transactionLock struct {
+	file *os.File
+	path string
+}
+
+func acquireTransactionLock(root string) (*transactionLock, error) {
+	lockPath := filepath.Join(root, ".transaction.lock")
 	fd, err := syscall.Open(lockPath, syscall.O_RDWR|syscall.O_CREAT|syscall.O_CLOEXEC|syscall.O_NOFOLLOW, 0600)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	f := os.NewFile(uintptr(fd), lockPath)
-	defer f.Close()
 	var lockStat syscall.Stat_t
 	if err = syscall.Fstat(fd, &lockStat); err != nil || lockStat.Mode&syscall.S_IFMT != syscall.S_IFREG || int(lockStat.Uid) != os.Getuid() || lockStat.Mode&0777 != 0600 || lockStat.Nlink != 1 {
-		return fmt.Errorf("unsafe instance lock %s", lockPath)
+		f.Close()
+		return nil, fmt.Errorf("unsafe instance transaction lock %s", lockPath)
 	}
-	if err = syscall.Flock(int(f.Fd()), syscall.LOCK_EX); err != nil {
-		return err
+	if err = syscall.Flock(int(f.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
+		f.Close()
+		return nil, fmt.Errorf("instance transaction already active: %w", err)
 	}
-	defer syscall.Flock(int(f.Fd()), syscall.LOCK_UN)
-	return operation()
+	return &transactionLock{file: f, path: lockPath}, nil
+}
+
+func (l *transactionLock) release() error {
+	if l == nil {
+		return nil
+	}
+	removeErr := os.Remove(l.path)
+	unlockErr := syscall.Flock(int(l.file.Fd()), syscall.LOCK_UN)
+	closeErr := l.file.Close()
+	if removeErr != nil && !errors.Is(removeErr, os.ErrNotExist) {
+		return removeErr
+	}
+	if unlockErr != nil {
+		return unlockErr
+	}
+	return closeErr
+}
+
+func finishTransaction(lock *transactionLock, operationErr error) error {
+	releaseErr := lock.release()
+	if operationErr != nil {
+		return operationErr
+	}
+	if releaseErr != nil {
+		return fmt.Errorf("transaction cleanup failed: %w", releaseErr)
+	}
+	return nil
 }
 
 func PlanCreate(home, name, executable, codex string) (Plan, error) {
@@ -249,12 +274,12 @@ func copyTree(source, destination string) error {
 }
 
 func Create(plan Plan, executable, codex string) error {
-	return withNameLock(plan.Paths.Home, plan.Paths.Name, func() error { return createLocked(plan, executable, codex) })
+	return createLocked(plan, executable, codex, nil)
 }
 
 var mutationHook func(string)
 
-func createLocked(plan Plan, executable, codex string) error {
+func createLocked(plan Plan, executable, codex string, afterVerify func() error) (resultErr error) {
 	if plan.Action != "create" {
 		return errors.New("invalid create plan")
 	}
@@ -271,6 +296,9 @@ func createLocked(plan Plan, executable, codex string) error {
 	if err = safeLauncherDirectory(p.Home); err != nil {
 		return err
 	}
+	if err = prepareAssistantsRoot(p.Home); err != nil {
+		return err
+	}
 	launcher, _, err := regular(executable)
 	if err != nil {
 		return err
@@ -278,17 +306,29 @@ func createLocked(plan Plan, executable, codex string) error {
 	if _, _, err = regular(codex); err != nil {
 		return err
 	}
-	if mutationHook != nil {
-		mutationHook("create-preflight")
-	}
 	stage := p.Root + ".creating"
-	if _, err = os.Lstat(stage); !errors.Is(err, os.ErrNotExist) {
-		return fmt.Errorf("recovery required: retained stage %s", stage)
-	}
-	if err = os.MkdirAll(stage, 0700); err != nil {
+	if err = os.Mkdir(stage, 0700); err != nil {
+		if errors.Is(err, os.ErrExist) {
+			return fmt.Errorf("instance transaction already active or recovery required at %s", stage)
+		}
 		return err
 	}
 	clean := func() { _ = os.RemoveAll(stage) }
+	lock, err := acquireTransactionLock(stage)
+	if err != nil {
+		clean()
+		return err
+	}
+	if mutationHook != nil {
+		mutationHook("create-preflight")
+	}
+	lockAtRoot := false
+	defer func() {
+		if lockAtRoot {
+			lock.path = filepath.Join(p.Root, ".transaction.lock")
+		}
+		resultErr = finishTransaction(lock, resultErr)
+	}()
 	for _, child := range []string{"codex", "runtime", "memory", "workspace", "dependencies"} {
 		if err = os.Mkdir(filepath.Join(stage, child), 0700); err != nil {
 			clean()
@@ -341,6 +381,7 @@ func createLocked(plan Plan, executable, codex string) error {
 		clean()
 		return err
 	}
+	lockAtRoot = true
 	tmp := filepath.Join(filepath.Dir(p.Launcher), "."+p.Name+".my-friday-new")
 	f, openErr := os.OpenFile(tmp, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0700)
 	if openErr != nil {
@@ -363,8 +404,13 @@ func createLocked(plan Plan, executable, codex string) error {
 		return fmt.Errorf("launcher no-replace promotion failed: %w", err)
 	}
 	_ = os.Remove(tmp)
-	if _, err = Verify(p.Home, p.Name); err != nil {
+	if _, err = verify(p.Home, p.Name, true); err != nil {
 		return fmt.Errorf("recovery required: create verification failed: %w", err)
+	}
+	if afterVerify != nil {
+		if err = afterVerify(); err != nil {
+			return fmt.Errorf("named instance active; prior projection cleanup recovery required: %w", err)
+		}
 	}
 	return nil
 }
@@ -386,13 +432,22 @@ func readManifest(p Paths) (Manifest, error) {
 	return m, nil
 }
 
-func Verify(home, name string) (Manifest, error) {
+func Verify(home, name string) (Manifest, error) { return verify(home, name, false) }
+
+func verify(home, name string, transactionOwned bool) (Manifest, error) {
 	p, err := Derive(home, name)
 	if err != nil {
 		return Manifest{}, err
 	}
 	if err = safeDir(p.Root, 0700); err != nil {
 		return Manifest{}, err
+	}
+	if !transactionOwned {
+		if _, lockErr := os.Lstat(filepath.Join(p.Root, ".transaction.lock")); lockErr == nil {
+			return Manifest{}, errors.New("instance transaction or recovery is active")
+		} else if !errors.Is(lockErr, os.ErrNotExist) {
+			return Manifest{}, lockErr
+		}
 	}
 	m, err := readManifest(p)
 	if err != nil {
@@ -460,14 +515,18 @@ func removeOwnedRoot(p Paths, m Manifest) error {
 }
 
 func Remove(plan Plan) error {
-	return withNameLock(plan.Paths.Home, plan.Paths.Name, func() error { return removeLocked(plan) })
+	lock, err := acquireTransactionLock(plan.Paths.Root)
+	if err != nil {
+		return err
+	}
+	return finishTransaction(lock, removeLocked(plan))
 }
 
 func removeLocked(plan Plan) error {
 	if plan.Action != "remove" {
 		return errors.New("invalid remove plan")
 	}
-	m, err := Verify(plan.Paths.Home, plan.Paths.Name)
+	m, err := verify(plan.Paths.Home, plan.Paths.Name, true)
 	if err != nil {
 		return fmt.Errorf("remove refused: %w", err)
 	}
@@ -490,9 +549,16 @@ func removeLocked(plan Plan) error {
 // proves the exact instance root. A missing launcher makes absence the safe
 // deterministic result; a complete triple is left active.
 func Recover(home, name string) (string, error) {
-	var result string
-	err := withNameLock(home, name, func() error { var lockedErr error; result, lockedErr = recoverLocked(home, name); return lockedErr })
-	return result, err
+	p, err := Derive(home, name)
+	if err != nil {
+		return "", err
+	}
+	lock, err := acquireTransactionLock(p.Root)
+	if err != nil {
+		return "", err
+	}
+	result, operationErr := recoverLocked(home, name)
+	return result, finishTransaction(lock, operationErr)
 }
 
 func recoverLocked(home, name string) (string, error) {
@@ -500,7 +566,7 @@ func recoverLocked(home, name string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if _, err = Verify(home, name); err == nil {
+	if _, err = verify(home, name, true); err == nil {
 		return "already healthy", nil
 	}
 	m, manifestErr := readManifest(p)
@@ -521,18 +587,7 @@ func recoverLocked(home, name string) (string, error) {
 // Migrate serializes the named replacement through final verification and the
 // caller-supplied manifest-governed legacy cleanup transaction.
 func Migrate(plan Plan, executable, codex string, cleanup func() error) error {
-	return withNameLock(plan.Paths.Home, plan.Paths.Name, func() error {
-		if err := createLocked(plan, executable, codex); err != nil {
-			return err
-		}
-		if _, err := Verify(plan.Paths.Home, plan.Paths.Name); err != nil {
-			return fmt.Errorf("migration recovery required before prior cleanup: %w", err)
-		}
-		if err := cleanup(); err != nil {
-			return fmt.Errorf("named instance active; prior projection cleanup recovery required: %w", err)
-		}
-		return nil
-	})
+	return createLocked(plan, executable, codex, cleanup)
 }
 
 func Launch(home, name string, args []string) error {

@@ -110,6 +110,15 @@ func TestCreateVerifyRemovePreservesSiblings(t *testing.T) {
 	if _, err = os.Stat(p.Paths.Root); !os.IsNotExist(err) {
 		t.Fatal("root remains")
 	}
+	entries, err := os.ReadDir(filepath.Join(home, ".my-friday", "assistants"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, entry := range entries {
+		if strings.Contains(entry.Name(), "alfred") {
+			t.Fatalf("per-name artifact remains after removal: %s", entry.Name())
+		}
+	}
 }
 
 func TestForeignLauncherAndDriftFailClosed(t *testing.T) {
@@ -142,6 +151,23 @@ func TestForeignLauncherAndDriftFailClosed(t *testing.T) {
 	}
 	if _, err = os.Stat(p.Paths.Root); err != nil {
 		t.Fatal("drift removed root")
+	}
+}
+
+func TestPostPreviewForeignCollisionLeavesNoInstanceControlArtifact(t *testing.T) {
+	home, exe, codex := fixture(t)
+	p, err := PlanCreate(home, "alfred", exe, codex)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = os.WriteFile(p.Paths.Launcher, []byte("foreign"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err = Create(p, exe, codex); err == nil {
+		t.Fatal("post-preview collision accepted")
+	}
+	if _, err = os.Stat(filepath.Join(home, ".my-friday")); !os.IsNotExist(err) {
+		t.Fatalf("collision created control state: %v", err)
 	}
 }
 
@@ -273,9 +299,6 @@ func TestMigrationSuccessAndCleanupFault(t *testing.T) {
 			cleanupCalled := false
 			err = Migrate(p, exe, codex, func() error {
 				cleanupCalled = true
-				if _, verifyErr := Verify(home, "alfred"); verifyErr != nil {
-					t.Fatalf("cleanup ran before replacement verified: %v", verifyErr)
-				}
 				return tc.cleanupErr
 			})
 			if !cleanupCalled {
