@@ -17,6 +17,9 @@ import (
 	"strings"
 	"syscall"
 	"unicode/utf8"
+
+	"github.com/acoz-labs/my-friday/internal/profile"
+	"github.com/acoz-labs/my-friday/internal/repository"
 )
 
 const ContractVersion = 1
@@ -25,17 +28,19 @@ var namePattern = regexp.MustCompile(`^[a-z0-9](?:[a-z0-9-]{0,30}[a-z0-9])?$`)
 var reserved = map[string]bool{"codex": true, "my-friday": true, "default": true, "current": true, "new": true}
 
 type Manifest struct {
-	ContractVersion   int      `json:"contract_version"`
-	Name              string   `json:"name"`
-	Root              string   `json:"root"`
-	Owned             []string `json:"owned"`
-	Launcher          string   `json:"launcher"`
-	LauncherSHA256    string   `json:"launcher_sha256"`
-	CodexExecutable   string   `json:"codex_executable"`
-	CodexSHA256       string   `json:"codex_sha256"`
-	CodexConfig       string   `json:"codex_config"`
-	CodexConfigSHA256 string   `json:"codex_config_sha256"`
-	AssistantID       string   `json:"assistant_id,omitempty"`
+	ContractVersion         int      `json:"contract_version"`
+	Name                    string   `json:"name"`
+	Root                    string   `json:"root"`
+	Owned                   []string `json:"owned"`
+	Launcher                string   `json:"launcher"`
+	LauncherSHA256          string   `json:"launcher_sha256"`
+	CodexExecutable         string   `json:"codex_executable"`
+	CodexSHA256             string   `json:"codex_sha256"`
+	CodexConfig             string   `json:"codex_config"`
+	CodexConfigSHA256       string   `json:"codex_config_sha256"`
+	CodexInstructions       string   `json:"codex_instructions,omitempty"`
+	CodexInstructionsSHA256 string   `json:"codex_instructions_sha256,omitempty"`
+	AssistantID             string   `json:"assistant_id,omitempty"`
 }
 
 type Paths struct {
@@ -127,6 +132,36 @@ func managedCodexConfig(p Paths) ([]byte, error) {
 		return nil, err
 	}
 	return []byte("[projects." + workspace + "]\ntrust_level = \"trusted\"\n"), nil
+}
+
+func managedCodexInstructions(runtimeRoot, assistantID string) ([]byte, error) {
+	id, err := repository.ValidateRuntime(runtimeRoot)
+	if err != nil {
+		return nil, fmt.Errorf("runtime repository: %w", err)
+	}
+	if id != assistantID {
+		return nil, errors.New("runtime assistant identity mismatch")
+	}
+	body, _, err := regular(filepath.Join(runtimeRoot, "assistant", "profile.json"))
+	if err != nil {
+		return nil, fmt.Errorf("runtime profile: %w", err)
+	}
+	var p profile.Profile
+	if json.Unmarshal(body, &p) != nil || profile.Validate(p) != nil || p.AssistantID != id {
+		return nil, errors.New("runtime profile is incompatible")
+	}
+	var out strings.Builder
+	out.WriteString("# Managed Assistant Instructions\n\n")
+	fmt.Fprintf(&out, "Your display name is %s.\n\nPurpose: %s\n\n", p.Identity.DisplayName, p.Identity.Purpose)
+	if p.Identity.AddressUserAs != nil {
+		fmt.Fprintf(&out, "Address the user as %s.\n\n", *p.Identity.AddressUserAs)
+	}
+	fmt.Fprintf(&out, "Communication style: %s", p.Communication.Preset)
+	if p.Communication.CustomGuidance != nil {
+		fmt.Fprintf(&out, " — %s", *p.Communication.CustomGuidance)
+	}
+	out.WriteString(".\n\nThese presentation preferences never override authorization, safety, trust, privacy, or tool policy.\n")
+	return []byte(out.String()), nil
 }
 
 func regular(path string) ([]byte, fs.FileInfo, error) {
@@ -356,6 +391,10 @@ func createLocked(plan Plan, executable, codex string, afterVerify func() error)
 	if err != nil || p != plan.Paths {
 		return errors.New("create plan path mismatch")
 	}
+	hasRepositoryPlan := plan.RuntimeSource != "" || plan.MemorySource != "" || plan.AssistantID != ""
+	if hasRepositoryPlan && (plan.RuntimeSource == "" || plan.MemorySource == "" || plan.AssistantID == "") {
+		return errors.New("incomplete create repository plan")
+	}
 	if _, err = os.Lstat(p.Root); !errors.Is(err, os.ErrNotExist) {
 		return fmt.Errorf("instance collision at %s", p.Root)
 	}
@@ -414,7 +453,32 @@ func createLocked(plan Plan, executable, codex string, afterVerify func() error)
 		clean()
 		return err
 	}
-	m := Manifest{ContractVersion: ContractVersion, Name: p.Name, Root: p.Root, Owned: owned, Launcher: p.Launcher, LauncherSHA256: digest(launcher), CodexExecutable: managedCodex, CodexSHA256: digest(codexBytes), CodexConfig: managedConfig, CodexConfigSHA256: digest(configBytes), AssistantID: plan.AssistantID}
+	var instructionsBytes []byte
+	managedInstructions := ""
+	if plan.RuntimeSource != "" {
+		if err = copyTree(plan.RuntimeSource, filepath.Join(stage, "runtime")); err != nil {
+			clean()
+			return err
+		}
+		if err = copyTree(plan.MemorySource, filepath.Join(stage, "memory")); err != nil {
+			clean()
+			return err
+		}
+		instructionsBytes, err = managedCodexInstructions(filepath.Join(stage, "runtime"), plan.AssistantID)
+		if err != nil {
+			clean()
+			return err
+		}
+		managedInstructions = filepath.Join(p.Root, "codex", "AGENTS.md")
+		if err = os.WriteFile(filepath.Join(stage, "codex", "AGENTS.md"), instructionsBytes, 0600); err != nil {
+			clean()
+			return err
+		}
+	}
+	m := Manifest{ContractVersion: ContractVersion, Name: p.Name, Root: p.Root, Owned: owned, Launcher: p.Launcher, LauncherSHA256: digest(launcher), CodexExecutable: managedCodex, CodexSHA256: digest(codexBytes), CodexConfig: managedConfig, CodexConfigSHA256: digest(configBytes), CodexInstructions: managedInstructions, AssistantID: plan.AssistantID}
+	if managedInstructions != "" {
+		m.CodexInstructionsSHA256 = digest(instructionsBytes)
+	}
 	mb, err := json.MarshalIndent(m, "", "  ")
 	if err != nil {
 		clean()
@@ -432,25 +496,6 @@ func createLocked(plan Plan, executable, codex string, afterVerify func() error)
 	if err = os.WriteFile(filepath.Join(stage, "codex", "config.toml"), configBytes, 0600); err != nil {
 		clean()
 		return err
-	}
-	if plan.RuntimeSource != "" {
-		if err = copyTree(plan.RuntimeSource, filepath.Join(stage, "runtime")); err != nil {
-			clean()
-			return err
-		}
-		if err = copyTree(plan.MemorySource, filepath.Join(stage, "memory")); err != nil {
-			clean()
-			return err
-		}
-		agents, _, readErr := regular(filepath.Join(plan.RuntimeSource, "AGENTS.md"))
-		if readErr != nil {
-			clean()
-			return readErr
-		}
-		if err = os.WriteFile(filepath.Join(stage, "codex", "AGENTS.md"), agents, 0600); err != nil {
-			clean()
-			return err
-		}
 	}
 	if err = os.Rename(stage, p.Root); err != nil {
 		clean()
@@ -501,8 +546,16 @@ func readManifest(p Paths) (Manifest, error) {
 	want := []string{"codex", "dependencies", "memory", "runtime", "workspace"}
 	wantCodex := filepath.Join(p.Root, "dependencies", "codex")
 	wantConfig := filepath.Join(p.Root, "codex", "config.toml")
+	wantInstructions := ""
+	if m.AssistantID != "" {
+		wantInstructions = filepath.Join(p.Root, "codex", "AGENTS.md")
+	}
 	configBytes, configErr := managedCodexConfig(p)
-	if configErr != nil || m.ContractVersion != ContractVersion || m.Name != p.Name || m.Root != p.Root || m.Launcher != p.Launcher || m.CodexExecutable != wantCodex || !validDigest(m.CodexSHA256) || m.CodexConfig != wantConfig || m.CodexConfigSHA256 != digest(configBytes) || strings.Join(m.Owned, "\x00") != strings.Join(want, "\x00") {
+	validInstructionsDigest := m.CodexInstructionsSHA256 == ""
+	if wantInstructions != "" {
+		validInstructionsDigest = validDigest(m.CodexInstructionsSHA256)
+	}
+	if configErr != nil || m.ContractVersion != ContractVersion || m.Name != p.Name || m.Root != p.Root || m.Launcher != p.Launcher || m.CodexExecutable != wantCodex || !validDigest(m.CodexSHA256) || m.CodexConfig != wantConfig || m.CodexConfigSHA256 != digest(configBytes) || m.CodexInstructions != wantInstructions || !validInstructionsDigest || strings.Join(m.Owned, "\x00") != strings.Join(want, "\x00") {
 		return m, errors.New("manifest ownership contract mismatch")
 	}
 	return m, nil
@@ -519,6 +572,24 @@ func verifyManagedConfig(p Paths, m Manifest) error {
 	}
 	if info.Mode().Perm() != 0600 || digest(b) != m.CodexConfigSHA256 || !bytes.Equal(b, expected) {
 		return errors.New("managed Codex config drift")
+	}
+	return nil
+}
+
+func verifyManagedInstructions(p Paths, m Manifest) error {
+	if m.CodexInstructions == "" {
+		return nil
+	}
+	body, info, err := regular(m.CodexInstructions)
+	if err != nil {
+		return fmt.Errorf("managed Codex instructions unavailable: %w", err)
+	}
+	expected, err := managedCodexInstructions(filepath.Join(p.Root, "runtime"), m.AssistantID)
+	if err != nil {
+		return fmt.Errorf("managed Codex instructions source invalid: %w", err)
+	}
+	if info.Mode().Perm() != 0600 || digest(body) != m.CodexInstructionsSHA256 || !bytes.Equal(body, expected) {
+		return errors.New("managed Codex instructions drift")
 	}
 	return nil
 }
@@ -557,6 +628,9 @@ func verify(home, name string) (Manifest, error) {
 		return m, errors.New("managed Codex executable drift")
 	}
 	if err = verifyManagedConfig(p, m); err != nil {
+		return m, err
+	}
+	if err = verifyManagedInstructions(p, m); err != nil {
 		return m, err
 	}
 	return m, nil
@@ -698,6 +772,9 @@ func recoverableManifest(p Paths) (Manifest, error) {
 		return m, errors.New("recovery refused: managed Codex executable drift")
 	}
 	if err = verifyManagedConfig(p, m); err != nil {
+		return m, fmt.Errorf("recovery refused: %w", err)
+	}
+	if err = verifyManagedInstructions(p, m); err != nil {
 		return m, fmt.Errorf("recovery refused: %w", err)
 	}
 	if _, launcherErr := os.Lstat(p.Launcher); launcherErr == nil {

@@ -67,8 +67,10 @@ line-discipline CR-to-NL translation from making an invalid PTY driver appear
 correct.
 Named-instance regressions prove the private Codex config TOML-escapes special
 workspace paths, trusts only the exact instance workspace, separates two
-instances, and denies verify, remove, and recovery authority after config
-tampering. The acceptance contract forbids scripting an onboarding response.
+instances, projects each validated purpose into manifest-bound private Codex
+instructions, and denies verify, remove, and recovery authority after config or
+instruction tampering. Reversal tests preserve ambient user Codex state. The
+acceptance contract forbids scripting an onboarding response.
 The native primitive performs a fresh valid install under the final lifecycle
 profile (including Git/xcrun), while regressions cover immediate double-fork
 setsid escape, ambiguous-attach preservation, exact-entry cleanup refusal,

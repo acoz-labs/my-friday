@@ -12,25 +12,32 @@ preserves the caller's `HOME` value unchanged.
 
 The root contains `manifest.json` plus `codex/`, `runtime/`, `memory/`,
 `workspace/`, and `dependencies/`. Runtime and memory are copied from a
-validated generated pair; `codex/AGENTS.md` comes from that runtime and Codex
-is copied to `dependencies/codex`. Creation also renders
+validated generated pair. Creation validates the copied runtime profile and
+renders its non-secret display name, purpose, form of address, and communication
+guidance directly into `codex/AGENTS.md`; Codex therefore discovers its purpose
+without resolving a caller-working-directory-relative profile path or using a
+tool. No symlink or additional projection is introduced. Codex is copied to
+`dependencies/codex`. Creation also renders
 `codex/config.toml` with only the exact absolute workspace in
 `projects.<path>.trust_level = "trusted"`. The path is TOML-escaped as data;
 no ancestor, wildcard, caller workspace, sibling instance, approval policy, or
 sandbox policy is configured. The manifest fixes the schema, name, root,
 owned children, launcher path/digest, the exact
 `<root>/dependencies/codex` path and digest, the exact private config path and
-rendered digest, and assistant ID. PATH discovery
+rendered digest, the exact private instructions path and rendered digest, and
+assistant ID. PATH discovery
 may traverse a symlink, but creation resolves it first and copies only the
 resolved current-user regular executable into managed state.
 
 Create verifies the existing current-user-owned `$HOME/.local/bin`, refuses
 collisions, stages the root, then uses a no-replace launcher projection. Verify
-re-derives paths and checks the layout, launcher bytes, managed Codex, and exact
-private trust config. Remove requires that complete verification before it
+re-derives paths and checks the layout, launcher bytes, managed Codex, exact
+private trust config, and instructions re-rendered from the validated copied
+profile. Remove requires that complete verification before it
 removes the launcher and selected root. `assistant recover <name>` finishes an
 interrupted removal only when the launcher is absent and the retained manifest,
-managed Codex, and exact trust config still prove the exact root.
+managed Codex, exact trust config, and managed instructions still prove the
+exact root.
 Foreign, linked, drifted, unsupported, or contradictory state is preserved.
 Atomic staging serializes competing creates. The transaction holds a
 non-blocking advisory lock on the no-follow opened staging directory and carries

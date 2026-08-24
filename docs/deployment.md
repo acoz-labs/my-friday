@@ -70,7 +70,11 @@ configuration or secrets are used at runtime.
 Named-instance acceptance must exercise create, verify, launch, two-instance
 coexistence, collision refusal, interrupted-remove recovery, and reversal as
 the current non-root user. The accepted `my-friday` bytes become the launcher;
-Codex is copied into the instance dependency directory. A separately
+Codex is copied into the instance dependency directory. The instance-private
+`codex/AGENTS.md` is rendered from the validated copied runtime profile, binds
+its exact path and bytes in the instance manifest, and contains the non-secret
+identity and purpose directly rather than an unresolved relative profile
+instruction. A separately
 credentialed live smoke cannot substitute for credential-free containment.
 
 Installed-baseline acceptance runs from a clean checkout at the freshly
