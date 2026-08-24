@@ -171,6 +171,73 @@ func TestPostPreviewForeignCollisionLeavesNoInstanceControlArtifact(t *testing.T
 	}
 }
 
+func TestRemovePathReplacementPreservesForeignRootExactly(t *testing.T) {
+	home, exe, codex := fixture(t)
+	p, err := PlanCreate(home, "alfred", exe, codex)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = Create(p, exe, codex); err != nil {
+		t.Fatal(err)
+	}
+	removePlan, err := PlanRemove(home, "alfred")
+	if err != nil {
+		t.Fatal(err)
+	}
+	original := p.Paths.Root + ".original"
+	if err = os.Rename(p.Paths.Root, original); err != nil {
+		t.Fatal(err)
+	}
+	if err = os.Mkdir(p.Paths.Root, 0700); err != nil {
+		t.Fatal(err)
+	}
+	canary := filepath.Join(p.Paths.Root, "foreign-canary")
+	if err = os.WriteFile(canary, []byte("unchanged"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err = Remove(removePlan); err == nil {
+		t.Fatal("replaced root accepted")
+	}
+	entries, err := os.ReadDir(p.Paths.Root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 1 || entries[0].Name() != "foreign-canary" {
+		t.Fatalf("foreign entries changed: %v", entries)
+	}
+	if b, err := os.ReadFile(canary); err != nil || string(b) != "unchanged" {
+		t.Fatalf("foreign content changed: %q %v", b, err)
+	}
+}
+
+func TestRecoverForeignRootPreservesEntriesAndContent(t *testing.T) {
+	home, _, _ := fixture(t)
+	p, err := Derive(home, "alfred")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = os.MkdirAll(p.Root, 0700); err != nil {
+		t.Fatal(err)
+	}
+	canary := filepath.Join(p.Root, "foreign-canary")
+	if err = os.WriteFile(canary, []byte("unchanged"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = Recover(home, "alfred"); err == nil {
+		t.Fatal("foreign recovery root accepted")
+	}
+	entries, err := os.ReadDir(p.Root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 1 || entries[0].Name() != "foreign-canary" {
+		t.Fatalf("foreign entries changed: %v", entries)
+	}
+	if b, err := os.ReadFile(canary); err != nil || string(b) != "unchanged" {
+		t.Fatalf("foreign content changed: %q %v", b, err)
+	}
+}
+
 func TestForgedCodexExecutableIsDenied(t *testing.T) {
 	home, exe, codex := fixture(t)
 	p, err := PlanCreate(home, "alfred", exe, codex)

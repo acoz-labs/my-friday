@@ -38,6 +38,8 @@ type Paths struct {
 	Home, Name, Root, Launcher string
 }
 
+type rootProof struct{ Device, Inode uint64 }
+
 type Plan struct {
 	Action        string
 	Paths         Paths
@@ -143,39 +145,60 @@ func prepareAssistantsRoot(home string) error {
 }
 
 type transactionLock struct {
-	file *os.File
-	path string
+	file  *os.File
+	proof rootProof
 }
 
-func acquireTransactionLock(root string) (*transactionLock, error) {
-	lockPath := filepath.Join(root, ".transaction.lock")
-	fd, err := syscall.Open(lockPath, syscall.O_RDWR|syscall.O_CREAT|syscall.O_CLOEXEC|syscall.O_NOFOLLOW, 0600)
+func acquireTransactionLock(root string, expected *rootProof) (*transactionLock, error) {
+	fd, err := syscall.Open(root, syscall.O_RDONLY|syscall.O_DIRECTORY|syscall.O_CLOEXEC|syscall.O_NOFOLLOW, 0)
 	if err != nil {
 		return nil, err
 	}
-	f := os.NewFile(uintptr(fd), lockPath)
+	f := os.NewFile(uintptr(fd), root)
 	var lockStat syscall.Stat_t
-	if err = syscall.Fstat(fd, &lockStat); err != nil || lockStat.Mode&syscall.S_IFMT != syscall.S_IFREG || int(lockStat.Uid) != os.Getuid() || lockStat.Mode&0777 != 0600 || lockStat.Nlink != 1 {
+	if err = syscall.Fstat(fd, &lockStat); err != nil || lockStat.Mode&syscall.S_IFMT != syscall.S_IFDIR || int(lockStat.Uid) != os.Getuid() || lockStat.Mode&0777 != 0700 {
 		f.Close()
-		return nil, fmt.Errorf("unsafe instance transaction lock %s", lockPath)
+		return nil, fmt.Errorf("unsafe instance transaction root %s", root)
+	}
+	proof := rootProof{Device: uint64(lockStat.Dev), Inode: uint64(lockStat.Ino)}
+	if expected != nil && proof != *expected {
+		f.Close()
+		return nil, errors.New("instance root identity changed before transaction lock")
+	}
+	if err = matchOpenedRoot(root, proof); err != nil {
+		f.Close()
+		return nil, err
 	}
 	if err = syscall.Flock(int(f.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
 		f.Close()
 		return nil, fmt.Errorf("instance transaction already active: %w", err)
 	}
-	return &transactionLock{file: f, path: lockPath}, nil
+	if err = matchOpenedRoot(root, proof); err != nil {
+		syscall.Flock(fd, syscall.LOCK_UN)
+		f.Close()
+		return nil, err
+	}
+	return &transactionLock{file: f, proof: proof}, nil
+}
+
+func matchOpenedRoot(path string, proof rootProof) error {
+	info, err := os.Lstat(path)
+	if err != nil {
+		return err
+	}
+	st, ok := info.Sys().(*syscall.Stat_t)
+	if !ok || !info.IsDir() || info.Mode()&os.ModeSymlink != 0 || uint64(st.Dev) != proof.Device || uint64(st.Ino) != proof.Inode {
+		return errors.New("instance root path changed during transaction lock")
+	}
+	return nil
 }
 
 func (l *transactionLock) release() error {
 	if l == nil {
 		return nil
 	}
-	removeErr := os.Remove(l.path)
 	unlockErr := syscall.Flock(int(l.file.Fd()), syscall.LOCK_UN)
 	closeErr := l.file.Close()
-	if removeErr != nil && !errors.Is(removeErr, os.ErrNotExist) {
-		return removeErr
-	}
 	if unlockErr != nil {
 		return unlockErr
 	}
@@ -314,7 +337,7 @@ func createLocked(plan Plan, executable, codex string, afterVerify func() error)
 		return err
 	}
 	clean := func() { _ = os.RemoveAll(stage) }
-	lock, err := acquireTransactionLock(stage)
+	lock, err := acquireTransactionLock(stage, nil)
 	if err != nil {
 		clean()
 		return err
@@ -322,11 +345,7 @@ func createLocked(plan Plan, executable, codex string, afterVerify func() error)
 	if mutationHook != nil {
 		mutationHook("create-preflight")
 	}
-	lockAtRoot := false
 	defer func() {
-		if lockAtRoot {
-			lock.path = filepath.Join(p.Root, ".transaction.lock")
-		}
 		resultErr = finishTransaction(lock, resultErr)
 	}()
 	for _, child := range []string{"codex", "runtime", "memory", "workspace", "dependencies"} {
@@ -381,7 +400,6 @@ func createLocked(plan Plan, executable, codex string, afterVerify func() error)
 		clean()
 		return err
 	}
-	lockAtRoot = true
 	tmp := filepath.Join(filepath.Dir(p.Launcher), "."+p.Name+".my-friday-new")
 	f, openErr := os.OpenFile(tmp, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0700)
 	if openErr != nil {
@@ -404,7 +422,7 @@ func createLocked(plan Plan, executable, codex string, afterVerify func() error)
 		return fmt.Errorf("launcher no-replace promotion failed: %w", err)
 	}
 	_ = os.Remove(tmp)
-	if _, err = verify(p.Home, p.Name, true); err != nil {
+	if _, err = verify(p.Home, p.Name); err != nil {
 		return fmt.Errorf("recovery required: create verification failed: %w", err)
 	}
 	if afterVerify != nil {
@@ -432,22 +450,15 @@ func readManifest(p Paths) (Manifest, error) {
 	return m, nil
 }
 
-func Verify(home, name string) (Manifest, error) { return verify(home, name, false) }
+func Verify(home, name string) (Manifest, error) { return verify(home, name) }
 
-func verify(home, name string, transactionOwned bool) (Manifest, error) {
+func verify(home, name string) (Manifest, error) {
 	p, err := Derive(home, name)
 	if err != nil {
 		return Manifest{}, err
 	}
 	if err = safeDir(p.Root, 0700); err != nil {
 		return Manifest{}, err
-	}
-	if !transactionOwned {
-		if _, lockErr := os.Lstat(filepath.Join(p.Root, ".transaction.lock")); lockErr == nil {
-			return Manifest{}, errors.New("instance transaction or recovery is active")
-		} else if !errors.Is(lockErr, os.ErrNotExist) {
-			return Manifest{}, lockErr
-		}
 	}
 	m, err := readManifest(p)
 	if err != nil {
@@ -515,7 +526,8 @@ func removeOwnedRoot(p Paths, m Manifest) error {
 }
 
 func Remove(plan Plan) error {
-	lock, err := acquireTransactionLock(plan.Paths.Root)
+	expected := rootProof{Device: plan.rootDevice, Inode: plan.rootInode}
+	lock, err := acquireTransactionLock(plan.Paths.Root, &expected)
 	if err != nil {
 		return err
 	}
@@ -526,7 +538,7 @@ func removeLocked(plan Plan) error {
 	if plan.Action != "remove" {
 		return errors.New("invalid remove plan")
 	}
-	m, err := verify(plan.Paths.Home, plan.Paths.Name, true)
+	m, err := verify(plan.Paths.Home, plan.Paths.Name)
 	if err != nil {
 		return fmt.Errorf("remove refused: %w", err)
 	}
@@ -553,35 +565,68 @@ func Recover(home, name string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	lock, err := acquireTransactionLock(p.Root)
+	if _, err = Verify(home, name); err == nil {
+		return "already healthy", nil
+	}
+	info, err := os.Lstat(p.Root)
 	if err != nil {
 		return "", err
 	}
-	result, operationErr := recoverLocked(home, name)
+	st := info.Sys().(*syscall.Stat_t)
+	expected := rootProof{Device: uint64(st.Dev), Inode: uint64(st.Ino)}
+	m, err := recoverableManifest(p)
+	if err != nil {
+		return "", err
+	}
+	if err = matchOpenedRoot(p.Root, expected); err != nil {
+		return "", fmt.Errorf("recovery refused: %w", err)
+	}
+	lock, err := acquireTransactionLock(p.Root, &expected)
+	if err != nil {
+		return "", err
+	}
+	result, operationErr := recoverLocked(p, m, lock.proof)
 	return result, finishTransaction(lock, operationErr)
 }
 
-func recoverLocked(home, name string) (string, error) {
-	p, err := Derive(home, name)
-	if err != nil {
+func recoverLocked(p Paths, m Manifest, proof rootProof) (string, error) {
+	if err := matchOpenedRoot(p.Root, proof); err != nil {
 		return "", err
-	}
-	if _, err = verify(home, name, true); err == nil {
-		return "already healthy", nil
-	}
-	m, manifestErr := readManifest(p)
-	if manifestErr != nil {
-		return "", fmt.Errorf("recovery refused: %w", manifestErr)
 	}
 	if _, launcherErr := os.Lstat(p.Launcher); launcherErr == nil {
 		return "", errors.New("recovery refused: launcher exists but the instance is not healthy")
 	} else if !errors.Is(launcherErr, os.ErrNotExist) {
 		return "", launcherErr
 	}
-	if err = removeOwnedRoot(p, m); err != nil {
+	if err := removeOwnedRoot(p, m); err != nil {
 		return "", fmt.Errorf("recovery refused: %w", err)
 	}
 	return "restored absent state", nil
+}
+
+func recoverableManifest(p Paths) (Manifest, error) {
+	if err := safeDir(p.Root, 0700); err != nil {
+		return Manifest{}, fmt.Errorf("recovery refused: %w", err)
+	}
+	m, err := readManifest(p)
+	if err != nil {
+		return m, fmt.Errorf("recovery refused: %w", err)
+	}
+	for _, child := range m.Owned {
+		if err = safeDir(filepath.Join(p.Root, child), 0700); err != nil {
+			return m, fmt.Errorf("recovery refused: %w", err)
+		}
+	}
+	cb, info, err := regular(m.CodexExecutable)
+	if err != nil || info.Mode().Perm() != 0700 || digest(cb) != m.CodexSHA256 {
+		return m, errors.New("recovery refused: managed Codex executable drift")
+	}
+	if _, launcherErr := os.Lstat(p.Launcher); launcherErr == nil {
+		return m, errors.New("recovery refused: launcher exists but the instance is not healthy")
+	} else if !errors.Is(launcherErr, os.ErrNotExist) {
+		return m, launcherErr
+	}
+	return m, nil
 }
 
 // Migrate serializes the named replacement through final verification and the
