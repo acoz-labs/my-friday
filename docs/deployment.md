@@ -104,9 +104,10 @@ reversal, ambient-state preservation, and real-Codex instruction discovery. It
 prints an `evidence-v1` authority only after every instance root, launcher,
 credential copy, APFS helper image, run root, and evidence root is proven absent.
 The supervisor sets umask `077` before local mutation, so caller umask cannot
-weaken sparse-image or evidence permissions. Mounted APFS root identity binds
-the observed link count as a positive integer no greater than 64; current macOS
-values such as 3 are retained in strict evidence rather than hardcoded to 1.
+weaken sparse-image or evidence permissions. Mounted APFS root identity checks
+the currently observed link count as a positive integer no greater than 64 at
+each proof; it is not immutable because top-level directory creation changes it.
+The final pre-detach observation is retained in strict evidence.
 Failure cleanup uses manifest authority for instance roots and launchers and
 no-follow device/inode/digest receipts for the temporary collision and unrelated
 launcher-sibling leaves. It is bounded, runs at every post-create failure phase,
