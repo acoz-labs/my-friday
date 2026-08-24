@@ -1,14 +1,21 @@
 #!/usr/bin/expect -f
 if {$argc != 2} { exit 64 }
-set timeout 40
+set timeout 80
 set launcher [lindex $argv 0]
 set token [lindex $argv 1]
+set stty_init "rows 30 columns 120"
 spawn -noecho $launcher
 expect {
   -exact "\033\[>7u" {}
   timeout { exit 1 }
   eof { exit 1 }
 }
+expect {
+  -exact "Ask Codex to do anything" {}
+  timeout { exit 1 }
+  eof { exit 1 }
+}
+after 500
 send -- "Return only the exact installed-purpose token."
 send -- "\033\[13;1u"
 expect {
