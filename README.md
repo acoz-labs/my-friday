@@ -31,7 +31,29 @@ anything. Return at confirmation safely exits. Validate a generated pair with:
 ./my-friday validate --runtime /path/to/my-friday-runtime --memory /path/to/my-friday-memory
 ```
 
-## Managed Codex baseline
+## Named assistant instances
+
+Create a private named instance from a validated runtime/memory pair. The
+launcher directory must already exist as `$HOME/.local/bin`:
+
+```sh
+./my-friday assistant create alfred --runtime /path/to/runtime --memory /path/to/memory
+$HOME/.local/bin/alfred
+./my-friday assistant verify alfred
+./my-friday assistant remove alfred
+```
+
+Mutations print a plan and require the exact action word. Each instance owns
+separate `codex`, `runtime`, `memory`, `workspace`, and `dependencies`
+directories. Its native launcher is the sole outside projection. It preserves
+real `HOME`, sets instance `CODEX_HOME`, fixes Codex `--cd` to the workspace,
+and forwards literal arguments. Put file-backed credentials only in that
+instance's `codex` directory; My Friday does not read, copy, or report them.
+To migrate a manifest-owned legacy projection, use the same arguments with
+`assistant migrate`; My Friday verifies the named replacement before executing
+the legacy projection's separately previewed, manifest-proven uninstall.
+
+## Legacy managed Codex baseline
 
 Install the generated runtime's global instructions after reviewing the full
 preview:
@@ -41,7 +63,8 @@ preview:
 ./my-friday codex verify
 ```
 
-The confirmation word is the exact case-sensitive action name followed by
+These commands retain the prior single-home projection's repair and rollback
+lifecycle for explicit recovery. The confirmation word is the exact case-sensitive action name followed by
 Return; surrounding whitespace and unterminated input are refused. My Friday owns only
 `$CODEX_HOME/AGENTS.md` and `$CODEX_HOME/.my-friday`; it never edits Codex
 configuration, authentication, sessions, logs, skills, packages, or project

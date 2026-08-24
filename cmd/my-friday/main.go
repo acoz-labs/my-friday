@@ -9,6 +9,7 @@ import (
 	"runtime"
 	"strings"
 
+	"github.com/acoz-labs/my-friday/internal/assistantinstance"
 	"github.com/acoz-labs/my-friday/internal/codexhome"
 	"github.com/acoz-labs/my-friday/internal/repository"
 	"github.com/acoz-labs/my-friday/internal/terminal"
@@ -68,6 +69,27 @@ func readConfirmation(input io.Reader, token string) (bool, error) {
 }
 
 func run() error {
+	if name := filepath.Base(os.Args[0]); assistantinstance.ValidateName(name) == nil {
+		home, err := realHome()
+		if err != nil {
+			return err
+		}
+		paths, err := assistantinstance.Derive(home, name)
+		if err != nil {
+			return err
+		}
+		executable, err := os.Executable()
+		if err != nil {
+			return err
+		}
+		executable, err = filepath.EvalSymlinks(executable)
+		if err != nil {
+			return err
+		}
+		if executable == paths.Launcher {
+			return assistantinstance.Launch(home, name, os.Args[1:])
+		}
+	}
 	command := "init"
 	if len(os.Args) >= 2 {
 		command = os.Args[1]
@@ -100,6 +122,8 @@ func run() error {
 		return e
 	case "codex":
 		return runCodex()
+	case "assistant":
+		return runAssistant()
 	case "version":
 		if len(os.Args) != 2 {
 			return fmt.Errorf("usage: my-friday version")
@@ -108,6 +132,188 @@ func run() error {
 		return nil
 	default:
 		return fmt.Errorf("unknown command %q", os.Args[1])
+	}
+}
+
+func realHome() (string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.EvalSymlinks(home)
+}
+
+func runAssistant() error {
+	if len(os.Args) < 4 {
+		return fmt.Errorf("usage: my-friday assistant <create|migrate|verify|remove|recover> NAME")
+	}
+	home, err := realHome()
+	if err != nil {
+		return err
+	}
+	action, name := os.Args[2], os.Args[3]
+	switch action {
+	case "verify":
+		if len(os.Args) != 4 {
+			return fmt.Errorf("usage: my-friday assistant verify NAME")
+		}
+		m, err := assistantinstance.Verify(home, name)
+		if err != nil {
+			return err
+		}
+		fmt.Fprintf(os.Stdout, "Assistant %s healthy\nRoot: %s\nLauncher: %s\n", name, m.Root, m.Launcher)
+		return nil
+	case "create":
+		if len(os.Args) != 8 || os.Args[4] != "--runtime" || os.Args[6] != "--memory" {
+			return fmt.Errorf("usage: my-friday assistant create NAME --runtime PATH --memory PATH")
+		}
+		exe, err := os.Executable()
+		if err != nil {
+			return err
+		}
+		exe, err = filepath.EvalSymlinks(exe)
+		if err != nil {
+			return err
+		}
+		codex, err := assistantinstance.FindCodex()
+		if err != nil {
+			return fmt.Errorf("Codex executable required on PATH: %w", err)
+		}
+		codex, err = filepath.EvalSymlinks(codex)
+		if err != nil {
+			return err
+		}
+		p, err := assistantinstance.PlanCreate(home, name, exe, codex)
+		if err != nil {
+			return err
+		}
+		assistantID, err := repository.ValidateRuntime(os.Args[5])
+		if err != nil {
+			return err
+		}
+		if err = repository.ValidatePair(os.Args[5], os.Args[7]); err != nil {
+			return err
+		}
+		p, err = assistantinstance.WithRepositories(p, os.Args[5], os.Args[7], assistantID)
+		if err != nil {
+			return err
+		}
+		fmt.Fprint(os.Stdout, p.String())
+		fmt.Fprint(os.Stdout, "Type Create to continue: ")
+		ok, err := readConfirmation(os.Stdin, "Create")
+		if err != nil {
+			return err
+		}
+		if !ok {
+			fmt.Fprintln(os.Stdout, "No changes made")
+			return nil
+		}
+		if err = assistantinstance.Create(p, exe, codex); err != nil {
+			return err
+		}
+		fmt.Fprintf(os.Stdout, "Assistant %s created\n", name)
+		return nil
+	case "migrate":
+		if len(os.Args) != 8 || os.Args[4] != "--runtime" || os.Args[6] != "--memory" {
+			return fmt.Errorf("usage: my-friday assistant migrate NAME --runtime PATH --memory PATH")
+		}
+		exe, err := os.Executable()
+		if err != nil {
+			return err
+		}
+		exe, err = filepath.EvalSymlinks(exe)
+		if err != nil {
+			return err
+		}
+		codex, err := assistantinstance.FindCodex()
+		if err != nil {
+			return err
+		}
+		codex, err = filepath.EvalSymlinks(codex)
+		if err != nil {
+			return err
+		}
+		p, err := assistantinstance.PlanCreate(home, name, exe, codex)
+		if err != nil {
+			return err
+		}
+		assistantID, err := repository.ValidateRuntime(os.Args[5])
+		if err != nil {
+			return err
+		}
+		if err = repository.ValidatePair(os.Args[5], os.Args[7]); err != nil {
+			return err
+		}
+		p, err = assistantinstance.WithRepositories(p, os.Args[5], os.Args[7], assistantID)
+		if err != nil {
+			return err
+		}
+		oldHome, err := codexHome()
+		if err != nil {
+			return err
+		}
+		oldPlan, err := codexhome.Plan(codexhome.ActionUninstall, "", oldHome)
+		if err != nil {
+			return fmt.Errorf("prior projection proof refused: %w", err)
+		}
+		fmt.Fprint(os.Stdout, p.String())
+		fmt.Fprintln(os.Stdout, "After the named instance verifies, remove only this proven prior projection:")
+		fmt.Fprint(os.Stdout, oldPlan.String())
+		fmt.Fprint(os.Stdout, "Type Migrate to continue: ")
+		ok, err := readConfirmation(os.Stdin, "Migrate")
+		if err != nil {
+			return err
+		}
+		if !ok {
+			fmt.Fprintln(os.Stdout, "No changes made")
+			return nil
+		}
+		if err = assistantinstance.Create(p, exe, codex); err != nil {
+			return err
+		}
+		if _, err = assistantinstance.Verify(home, name); err != nil {
+			return fmt.Errorf("migration recovery required before prior cleanup: %w", err)
+		}
+		if err = codexhome.Execute(oldPlan); err != nil {
+			return fmt.Errorf("named instance active; prior projection cleanup recovery required: %w", err)
+		}
+		fmt.Fprintf(os.Stdout, "Assistant %s migrated and prior projection removed\n", name)
+		return nil
+	case "remove":
+		if len(os.Args) != 4 {
+			return fmt.Errorf("usage: my-friday assistant remove NAME")
+		}
+		p, err := assistantinstance.PlanRemove(home, name)
+		if err != nil {
+			return err
+		}
+		fmt.Fprint(os.Stdout, p.String())
+		fmt.Fprint(os.Stdout, "Type Remove to continue: ")
+		ok, err := readConfirmation(os.Stdin, "Remove")
+		if err != nil {
+			return err
+		}
+		if !ok {
+			fmt.Fprintln(os.Stdout, "No changes made")
+			return nil
+		}
+		if err = assistantinstance.Remove(p); err != nil {
+			return err
+		}
+		fmt.Fprintf(os.Stdout, "Assistant %s removed\n", name)
+		return nil
+	case "recover":
+		if len(os.Args) != 4 {
+			return fmt.Errorf("usage: my-friday assistant recover NAME")
+		}
+		result, err := assistantinstance.Recover(home, name)
+		if err != nil {
+			return err
+		}
+		fmt.Fprintf(os.Stdout, "Assistant %s recovery: %s\n", name, result)
+		return nil
+	default:
+		return fmt.Errorf("usage: my-friday assistant <create|migrate|verify|remove|recover> NAME")
 	}
 }
 
