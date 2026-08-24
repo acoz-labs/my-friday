@@ -56,10 +56,12 @@ The native fixture places its pseudo-terminal in raw mode, emits Codex's
 an early composer, an MCP boot-progress state, repeated boot-time composers,
 spinner titles, the post-progress plain `OSC 0;workspace` title, and finally the
 stable composer. Persistent harmless redraw output continues after readiness,
-so a quiescence-based driver cannot pass. The fixture accepts only the exact
-prompt bytes followed by `ESC [ 13 ; 1 u` after the final state and requires the
+so a quiescence-based driver cannot pass. The fixture accepts the exact prompt,
+discards any Enter bytes queued before it echoes that prompt, and accepts
+`ESC [ 13 ; 1 u` only after the echo. It also requires the
 pre-spawn child geometry to be exactly 30×120. This prevents zero-size
-rendering, first-composer timing, blind-delay or quiescence timing, and
+rendering, first-composer timing, blind-delay or quiescence timing, adjacent
+prompt/Enter ordering, and
 line-discipline CR-to-NL translation from making an invalid PTY driver appear
 correct.
 Named-instance regressions prove the private Codex config TOML-escapes special

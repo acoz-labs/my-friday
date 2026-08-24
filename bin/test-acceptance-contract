@@ -26,6 +26,11 @@ grep -Fq -- '-exact "\033]0;workspace\033\\"' "$root/config/acceptance/launcher-
 if grep -Eq 'quiescen|bootstrap_deadline|post_boot_composer' "$root/config/acceptance/launcher-smoke.exp"; then exit 1; fi
 if grep -Eq '^after [0-9]+' "$root/config/acceptance/launcher-smoke.exp"; then exit 1; fi
 grep -Fq 'send -- "\033\[13;1u"' "$root/config/acceptance/launcher-smoke.exp"
+prompt_send_line="$(grep -nF 'send -- $prompt' "$root/config/acceptance/launcher-smoke.exp" | cut -d: -f1)"
+prompt_echo_line="$(grep -nF -- '-exact $prompt' "$root/config/acceptance/launcher-smoke.exp" | cut -d: -f1)"
+enter_send_line="$(grep -nF 'send -- "\033\[13;1u"' "$root/config/acceptance/launcher-smoke.exp" | cut -d: -f1)"
+[[ -n "$prompt_send_line" && -n "$prompt_echo_line" && -n "$enter_send_line" ]]
+(( prompt_send_line < prompt_echo_line && prompt_echo_line < enter_send_line ))
 if grep -Fq 'installed-purpose token.\r' "$root/config/acceptance/launcher-smoke.exp"; then exit 1; fi
 if grep -Eiq 'continue anyway|trust( this)? (workspace|folder)|send.*(yes|y\\r)' "$root/config/acceptance/launcher-smoke.exp"; then exit 1; fi
 grep -Fq -- '--env TERM=xterm-256color' "$supervisor"
