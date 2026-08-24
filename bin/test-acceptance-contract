@@ -20,6 +20,10 @@ grep -Fq 'spawn -noecho $launcher' "$root/config/acceptance/launcher-smoke.exp"
 grep -Fq 'set stty_init "rows 30 columns 120"' "$root/config/acceptance/launcher-smoke.exp"
 grep -Fq -- '-exact "\033\[>7u"' "$root/config/acceptance/launcher-smoke.exp"
 grep -Fq -- '-exact "Ask Codex to do anything"' "$root/config/acceptance/launcher-smoke.exp"
+grep -Fq -- '-re {(Booting MCP server:|Starting MCP servers)}' "$root/config/acceptance/launcher-smoke.exp"
+grep -Fq 'set bootstrap_deadline' "$root/config/acceptance/launcher-smoke.exp"
+grep -Fq 'if {!$post_boot_composer} { exit 1 }' "$root/config/acceptance/launcher-smoke.exp"
+if grep -Eq '^after [0-9]+' "$root/config/acceptance/launcher-smoke.exp"; then exit 1; fi
 grep -Fq 'send -- "\033\[13;1u"' "$root/config/acceptance/launcher-smoke.exp"
 if grep -Fq 'installed-purpose token.\r' "$root/config/acceptance/launcher-smoke.exp"; then exit 1; fi
 if grep -Eiq 'continue anyway|trust( this)? (workspace|folder)|send.*(yes|y\\r)' "$root/config/acceptance/launcher-smoke.exp"; then exit 1; fi

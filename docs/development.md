@@ -53,9 +53,11 @@ smoke; native primitive coverage starts from `TERM=dumb` and proves the
 empty-argument smoke still delivers its purpose prompt and observes its token.
 The native fixture places its pseudo-terminal in raw mode, emits Codex's
 `CSI > 7 u` enhanced-keyboard enablement, discards premature input, then emits
-the composer-ready marker and accepts only the exact prompt bytes followed by
-`ESC [ 13 ; 1 u`. It also requires the pre-spawn child geometry to be exactly
-30×120. This prevents zero-size rendering, blind-delay timing, and
+an early composer, an MCP boot-progress state, repeated boot-time composers,
+and finally the stable composer. It accepts only the exact prompt bytes followed
+by `ESC [ 13 ; 1 u` after the final state. It also requires the pre-spawn child
+geometry to be exactly 30×120. This prevents zero-size rendering,
+first-composer timing, blind-delay timing, and
 line-discipline CR-to-NL translation from making an invalid PTY driver appear
 correct.
 Named-instance regressions prove the private Codex config TOML-escapes special

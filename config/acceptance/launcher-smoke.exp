@@ -15,7 +15,29 @@ expect {
   timeout { exit 1 }
   eof { exit 1 }
 }
-after 500
+expect {
+  -re {(Booting MCP server:|Starting MCP servers)} {}
+  timeout { exit 1 }
+  eof { exit 1 }
+}
+set bootstrap_deadline [expr {[clock milliseconds] + 70000}]
+set post_boot_composer 0
+set timeout 3
+expect {
+  -exact "Ask Codex to do anything" {
+    set post_boot_composer 1
+    exp_continue
+  }
+  -re {(?s).} {
+    if {[clock milliseconds] >= $bootstrap_deadline} { exit 1 }
+    exp_continue
+  }
+  timeout {
+    if {!$post_boot_composer} { exit 1 }
+  }
+  eof { exit 1 }
+}
+set timeout 80
 send -- "Return only the exact installed-purpose token."
 send -- "\033\[13;1u"
 expect {
