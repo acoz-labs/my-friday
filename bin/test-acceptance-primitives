@@ -51,6 +51,9 @@ cat >"$tmp/term-launcher.c" <<'EOF'
 
 int main(int argc, char **argv) {
   const char prompt[] = "Return only the exact installed-purpose token.";
+  const char prompt_prefix[] = "Return only the exact installed-purpose";
+  const char prompt_suffix[] = "token.";
+  const char cursor_position[] = "\x1b[1;37H";
   const char enter[] = "\x1b[13;1u";
   const char enabled[] = "\x1b[>7u";
   const char ready[] = "Ask Codex to do anything";
@@ -97,9 +100,11 @@ int main(int argc, char **argv) {
   }
   if (offset != sizeof(input)) return 101;
   if (memcmp(input, prompt, sizeof(input)) != 0) return 102;
+  if (write(STDOUT_FILENO, prompt_prefix, sizeof(prompt_prefix) - 1) != sizeof(prompt_prefix) - 1) return 103;
+  if (write(STDOUT_FILENO, cursor_position, sizeof(cursor_position) - 1) != sizeof(cursor_position) - 1) return 103;
   usleep(50000);
   while (read(STDIN_FILENO, discarded, sizeof(discarded)) > 0) {}
-  if (write(STDOUT_FILENO, prompt, sizeof(prompt) - 1) != sizeof(prompt) - 1) return 103;
+  if (write(STDOUT_FILENO, prompt_suffix, sizeof(prompt_suffix) - 1) != sizeof(prompt_suffix) - 1) return 103;
   offset = 0;
   for (int attempt = 0; attempt < 100 && offset < sizeof(submitted); attempt++) {
     ssize_t count = read(STDIN_FILENO, submitted + offset, sizeof(submitted) - offset);

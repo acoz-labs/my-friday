@@ -57,11 +57,12 @@ an early composer, an MCP boot-progress state, repeated boot-time composers,
 spinner titles, the post-progress plain `OSC 0;workspace` title, and finally the
 stable composer. Persistent harmless redraw output continues after readiness,
 so a quiescence-based driver cannot pass. The fixture accepts the exact prompt,
-discards any Enter bytes queued before it echoes that prompt, and accepts
-`ESC [ 13 ; 1 u` only after the echo. It also requires the
+echoes its exact prefix and `token.` suffix around an ANSI cursor-position
+sequence, discards any Enter bytes queued before the suffix, and accepts
+`ESC [ 13 ; 1 u` only after both fragments. It also requires the
 pre-spawn child geometry to be exactly 30×120. This prevents zero-size
-rendering, first-composer timing, blind-delay or quiescence timing, adjacent
-prompt/Enter ordering, and
+rendering, first-composer timing, blind-delay or quiescence timing, fragmented
+prompt rendering, adjacent prompt/Enter ordering, and
 line-discipline CR-to-NL translation from making an invalid PTY driver appear
 correct.
 Named-instance regressions prove the private Codex config TOML-escapes special
