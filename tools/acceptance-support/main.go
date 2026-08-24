@@ -344,9 +344,6 @@ func cleanupNamed(home string, names []string, leaves []exactLeaf) error {
 		if filepath.Dir(leaf.Path) != filepath.Join(home, ".local", "bin") || !strings.HasPrefix(filepath.Base(leaf.Path), "mfac-") {
 			return errors.New("exact cleanup leaf escaped acceptance launcher scope")
 		}
-		if err := inspectExactLeaf(leaf); err != nil {
-			return err
-		}
 	}
 	var failures []string
 	for _, name := range names {

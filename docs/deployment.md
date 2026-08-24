@@ -108,6 +108,10 @@ no-follow device/inode/digest receipts for the temporary collision and unrelated
 launcher-sibling leaves. It is bounded, runs at every post-create failure phase,
 never removes the ambient auth source, and reports the cleanup facts it actually
 proved rather than converting a partial cleanup into approval authority.
+Receipt path and acceptance-namespace scope are validated before mutation. Once
+that scope is valid, a drifted foreign leaf is preserved and reported but cannot
+prevent independent manifest-proven instance cleanup or deletion of the copied
+credential; other exact leaves are still attempted and refusals are aggregated.
 
 Product acceptance accepts that authority, not an opaque evidence URL. Release
 finalization re-fetches both evidence comments and rejects edits, deletion,

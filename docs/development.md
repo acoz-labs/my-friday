@@ -40,6 +40,9 @@ semantics/re-fetches, legacy-schema refusal, and process-group timeout behavior.
 `tools/acceptance-support` cleanup regressions exercise every post-create phase,
 including copied credentials and launcher-absent recovery, while proving the
 ambient auth source remains unchanged.
+They also prove a drifted collision/sibling receipt is reported and preserved
+without blocking manifest-proven instance and copied-credential cleanup, while
+an out-of-scope receipt remains a fail-closed pre-mutation error.
 The native primitive performs a fresh valid install under the final lifecycle
 profile (including Git/xcrun), while regressions cover immediate double-fork
 setsid escape, ambiguous-attach preservation, exact-entry cleanup refusal,

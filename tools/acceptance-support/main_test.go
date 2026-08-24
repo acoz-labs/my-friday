@@ -110,6 +110,57 @@ func TestCleanupNamedRefusesReceiptOutsideAcceptanceLauncherScope(t *testing.T) 
 	}
 }
 
+func TestCleanupNamedPreservesDriftedLeafButRemovesInstanceAndCredential(t *testing.T) {
+	home := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(home, ".local", "bin"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	exe, codex := filepath.Join(home, "candidate"), filepath.Join(home, "codex")
+	for _, path := range []string{exe, codex} {
+		if err := os.WriteFile(path, []byte(path), 0o700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	p, err := assistantinstance.PlanCreate(home, "primary", exe, codex)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = assistantinstance.Create(p, exe, codex); err != nil {
+		t.Fatal(err)
+	}
+	auth := filepath.Join(home, ".my-friday", "assistants", "primary", "codex", "auth.json")
+	if err = os.WriteFile(auth, []byte("copied-credential"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	leaf := filepath.Join(home, ".local", "bin", "mfac-sibling")
+	if err = os.WriteFile(leaf, []byte("original"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	receipt := exactLeafForTest(t, leaf)
+	exactLeafPath := filepath.Join(home, ".local", "bin", "mfac-collision")
+	if err = os.WriteFile(exactLeafPath, []byte("exact-delete"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	exactReceipt := exactLeafForTest(t, exactLeafPath)
+	if err = os.WriteFile(leaf, []byte("drifted-preserve"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err = cleanupNamed(home, []string{"primary"}, []exactLeaf{receipt, exactReceipt}); err == nil {
+		t.Fatal("drifted leaf was not reported")
+	}
+	for _, path := range []string{filepath.Join(home, ".my-friday", "assistants", "primary"), filepath.Join(home, ".local", "bin", "primary"), auth} {
+		if _, statErr := os.Lstat(path); !errors.Is(statErr, os.ErrNotExist) {
+			t.Fatalf("manifest-owned state survived: %s", path)
+		}
+	}
+	if body, readErr := os.ReadFile(leaf); readErr != nil || string(body) != "drifted-preserve" {
+		t.Fatal("drifted foreign leaf changed")
+	}
+	if _, statErr := os.Lstat(exactLeafPath); !errors.Is(statErr, os.ErrNotExist) {
+		t.Fatal("exact foreign leaf was not independently cleaned")
+	}
+}
+
 func TestFixtureIsValidAndRendersToken(t *testing.T) {
 	root := t.TempDir()
 	runtime := filepath.Join(root, "runtime")
