@@ -43,6 +43,9 @@ ambient auth source remains unchanged.
 They also prove a drifted collision/sibling receipt is reported and preserved
 without blocking manifest-proven instance and copied-credential cleanup, while
 an out-of-scope receipt remains a fail-closed pre-mutation error.
+Contract regressions also require an internal `077` umask before local mutation
+and a captured, evidence-bound APFS mounted-root link count in the safe 1–64
+range, rather than assuming the root has one link.
 The native primitive performs a fresh valid install under the final lifecycle
 profile (including Git/xcrun), while regressions cover immediate double-fork
 setsid escape, ambiguous-attach preservation, exact-entry cleanup refusal,

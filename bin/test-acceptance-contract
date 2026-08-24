@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 root="$(cd "$(dirname "$0")/.." && pwd)"; supervisor="$root/bin/accept-installed-codex-baseline"
+grep -Fq 'umask 077' "$supervisor"
+[[ "$(grep -n '^umask 077$' "$supervisor" | cut -d: -f1)" -lt "$(grep -n '^root=' "$supervisor" | cut -d: -f1)" ]]
+grep -Fq 'mount_nlink="$(stat -f %l "$mountpoint")"' "$supervisor"
+grep -Fq 'mount_nlink -ge 1 && mount_nlink -le 64' "$supervisor"
+if grep -Fq '$mount_mode:1"' "$supervisor"; then exit 1; fi
 if grep -Eq 'OPENAI_API_KEY|login --with-api-key| codex login ' "$supervisor"; then exit 1; fi
 grep -Fq 'auth.json' "$supervisor"
 grep -Fq 'dscl . -read "/Users/$(id -un)" NFSHomeDirectory' "$supervisor"
