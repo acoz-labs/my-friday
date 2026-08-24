@@ -98,9 +98,9 @@ named instance's manifest-bound private `codex/config.toml` trusts only its
 exact absolute workspace, so the smoke sends no first-run workspace-trust
 answer. After Codex explicitly enables CSI-u enhanced keyboard reporting, the
 driver observes the initial `Ask Codex to do anything` composer, requires
-concrete MCP boot progress, then waits for a post-progress composer followed by
-three seconds of output quiescence. Only then does it submit the literal purpose
-prompt with the protocol Enter sequence
+concrete MCP boot progress, then requires the post-progress exact plain
+`OSC 0;workspace` title (terminated by BEL or standard ST) and the following
+composer. Only then does it submit the literal purpose prompt with the protocol Enter sequence
 `ESC [ 13 ; 1 u`; a raw carriage return is not accepted as equivalent. The
 child PTY is initialized to 30 rows by 120 columns before spawn so the exact
 token remains contiguous. The interactive smoke has a 90-second outer bound;
