@@ -1,5 +1,23 @@
 # Runbook
 
+## Recover a named assistant instance
+
+Run `my-friday assistant verify <name>` first. If removal stopped after the
+exact launcher disappeared, run `my-friday assistant recover <name>`; a valid
+manifest authorizes removal of only that instance root. If a launcher remains
+but verification fails, or any manifest, root, managed executable, or launcher
+proof drifted, recovery fails closed. Preserve both paths for diagnosis; do not
+replace the launcher or recursively delete the root manually.
+
+The prior single-home projection remains governed by the separate `my-friday
+codex` commands below. Named creation never deletes or adopts it.
+
+For explicit migration, set the same effective legacy `CODEX_HOME` used by the
+old lifecycle and run `assistant migrate <name> --runtime <path> --memory
+<path>`. Review both plans. The named instance is promoted and verified before
+legacy uninstall begins. If cleanup fails, keep the working named instance and
+run only the legacy recovery command printed by the failure.
+
 ## Remove an incorrect stable release alias
 
 First download the stable asset and compare its GitHub asset digest, local

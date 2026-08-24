@@ -52,3 +52,12 @@ Focused commands are `go test ./...`, `go test -race ./...`, and
 Installed-baseline tests must pass explicit temporary Codex-home and runtime
 roots to `internal/codexhome`; they must never target a developer's effective
 `CODEX_HOME` or `~/.codex`. Only the command layer resolves the production home.
+
+Named-instance coverage lives in `internal/assistantinstance`. Use
+`go test -race ./internal/assistantinstance ./cmd/my-friday` while iterating.
+Fixtures create their own roots, launcher siblings, repository pairs, and
+credential-free executable stubs; they never inspect or mutate developer
+Codex, shell, launcher, or credential state.
+Regression coverage includes PATH symlink resolution, caller-`HOME` refusal as
+authority, forged managed-executable manifests, same-name concurrency, and
+migration success plus injected legacy-cleanup failure.

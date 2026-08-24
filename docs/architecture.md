@@ -2,9 +2,9 @@
 
 My Friday is a local native command that compiles normalized wizard answers
 into deterministic, previewed plans. It creates two separate user-owned Git
-repositories and can project one manifest-owned runtime `AGENTS.md` into the
-effective Codex home. It has no service, database, network integration, Codex
-executable installer, or background process.
+repositories and can compose them into named, manifest-owned assistant
+instances. It has no service, database, network integration, or background
+process.
 
 ```mermaid
 flowchart LR
@@ -27,6 +27,7 @@ flowchart LR
 | `internal/repository` | Render, empty-template Git init, schema/Git validation | Git is the only subprocess |
 | `internal/transaction` | Stage, validate, promote, roll back, recover | No overwrite of non-empty targets |
 | `internal/codexhome` | Inspect, preview, mutate, verify, and recover one projection | Authority limited to `AGENTS.md` and `.my-friday` |
+| `internal/assistantinstance` | Create, verify, launch, remove, and recover named instances | One fixed private root plus one exact launcher leaf |
 
 Runtime identity and governed memory share only a deterministic non-secret
 assistant identifier. Absolute paths and plan IDs are not written into either
@@ -35,3 +36,5 @@ policy. See [repository bootstrap](architecture/repository-bootstrap.md) and
 [ADR 0001](decisions/0001-native-bootstrap-command.md). The installed-state
 boundary is specified in [installed Codex baseline](architecture/installed-codex-baseline.md)
 and [ADR 0002](decisions/0002-manifest-owned-codex-baseline.md).
+The normal installed boundary is specified in [named assistant instances](architecture/named-assistant-instances.md)
+and [ADR 0003](decisions/0003-native-named-assistant-launcher.md).
