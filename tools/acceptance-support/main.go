@@ -19,6 +19,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/acoz-labs/my-friday/internal/assistantinstance"
 	"github.com/acoz-labs/my-friday/internal/codexhome"
 	"github.com/acoz-labs/my-friday/internal/plan"
 	"github.com/acoz-labs/my-friday/internal/profile"
@@ -33,7 +34,7 @@ func (v *stringList) Set(s string) error { *v = append(*v, s); return nil }
 
 func main() {
 	if len(os.Args) < 2 {
-		fatal("usage: acceptance-support <fixture|update|resolve-executable|render-profile|protected-content|secure-roots>")
+		fatal("usage: acceptance-support <fixture|update|resolve-executable|render-profile|protected-content|secure-roots|cleanup-named>")
 	}
 	switch os.Args[1] {
 	case "fixture":
@@ -251,6 +252,24 @@ func main() {
 			fatal(err.Error())
 		}
 		unix.Close(hfd)
+	case "cleanup-named":
+		fs := flag.NewFlagSet("cleanup-named", flag.ExitOnError)
+		home := fs.String("home", "", "account home")
+		var names, leafReceipts stringList
+		fs.Var(&names, "name", "manifest-owned instance name")
+		fs.Var(&leafReceipts, "leaf-receipt", "JSON exact-leaf cleanup receipt")
+		_ = fs.Parse(os.Args[2:])
+		var leaves []exactLeaf
+		for _, encoded := range leafReceipts {
+			var leaf exactLeaf
+			if json.Unmarshal([]byte(encoded), &leaf) != nil {
+				fatal("invalid exact-leaf receipt")
+			}
+			leaves = append(leaves, leaf)
+		}
+		if err := cleanupNamed(*home, names, leaves); err != nil {
+			fatal(err.Error())
+		}
 	case "setsid-probe":
 		executable, err := os.Executable()
 		if err != nil {
@@ -268,6 +287,106 @@ func main() {
 	default:
 		fatal("unknown acceptance-support command")
 	}
+}
+
+type exactLeaf struct {
+	Path   string `json:"path"`
+	Device uint64 `json:"device"`
+	Inode  uint64 `json:"inode"`
+	SHA256 string `json:"sha256"`
+}
+
+func inspectExactLeaf(leaf exactLeaf) error {
+	if !filepath.IsAbs(leaf.Path) || len(leaf.SHA256) != 64 {
+		return errors.New("invalid exact-leaf authority")
+	}
+	info, err := os.Lstat(leaf.Path)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil || !info.Mode().IsRegular() || info.Mode().Perm() != 0o700 || info.Sys().(*syscall.Stat_t).Uid != uint32(os.Getuid()) || info.Sys().(*syscall.Stat_t).Nlink != 1 {
+		return errors.New("exact cleanup leaf is unsafe")
+	}
+	st := info.Sys().(*syscall.Stat_t)
+	body, ok, err := noFollowRead(leaf.Path)
+	if err != nil || uint64(st.Dev) != leaf.Device || st.Ino != leaf.Inode || fmt.Sprintf("%x", sha256.Sum256(body)) != leaf.SHA256 {
+		return errors.New("exact cleanup leaf identity changed")
+	}
+	if !ok {
+		return nil
+	}
+	return nil
+}
+
+func removeExactLeaf(leaf exactLeaf) error {
+	parentFD, err := openAbsoluteDirNoFollow(filepath.Dir(leaf.Path))
+	if err != nil {
+		return err
+	}
+	defer unix.Close(parentFD)
+	fd, err := unix.Openat(parentFD, filepath.Base(leaf.Path), unix.O_RDONLY|unix.O_CLOEXEC|unix.O_NOFOLLOW, 0)
+	if errors.Is(err, unix.ENOENT) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	defer unix.Close(fd)
+	var opened, entry unix.Stat_t
+	if unix.Fstat(fd, &opened) != nil || unix.Fstatat(parentFD, filepath.Base(leaf.Path), &entry, unix.AT_SYMLINK_NOFOLLOW) != nil || opened.Dev != entry.Dev || opened.Ino != entry.Ino || uint64(opened.Dev) != leaf.Device || opened.Ino != leaf.Inode {
+		return errors.New("exact cleanup leaf changed before unlink")
+	}
+	return unix.Unlinkat(parentFD, filepath.Base(leaf.Path), 0)
+}
+
+func cleanupNamed(home string, names []string, leaves []exactLeaf) error {
+	for _, leaf := range leaves {
+		if filepath.Dir(leaf.Path) != filepath.Join(home, ".local", "bin") || !strings.HasPrefix(filepath.Base(leaf.Path), "mfac-") {
+			return errors.New("exact cleanup leaf escaped acceptance launcher scope")
+		}
+	}
+	var failures []string
+	for _, name := range names {
+		if len(name) < 1 || len(name) > 32 || strings.Trim(name, "abcdefghijklmnopqrstuvwxyz0123456789-") != "" || strings.HasPrefix(name, "-") || strings.HasSuffix(name, "-") || strings.Contains(name, "--") {
+			failures = append(failures, "invalid cleanup instance name")
+			continue
+		}
+		root := filepath.Join(home, ".my-friday", "assistants", name)
+		launcher := filepath.Join(home, ".local", "bin", name)
+		_, rootErr := os.Lstat(root)
+		_, launcherErr := os.Lstat(launcher)
+		if errors.Is(rootErr, os.ErrNotExist) && errors.Is(launcherErr, os.ErrNotExist) {
+			continue
+		}
+		plan, planErr := assistantinstance.PlanRemove(home, name)
+		if planErr == nil {
+			if err := assistantinstance.Remove(plan); err == nil {
+				continue
+			}
+		}
+		if errors.Is(launcherErr, os.ErrNotExist) {
+			if _, err := assistantinstance.Recover(home, name); err == nil {
+				continue
+			}
+		}
+		failures = append(failures, "manifest-proven cleanup refused for "+name)
+	}
+	for _, leaf := range leaves {
+		if _, err := os.Lstat(leaf.Path); errors.Is(err, os.ErrNotExist) {
+			continue
+		}
+		if err := inspectExactLeaf(leaf); err != nil {
+			failures = append(failures, err.Error())
+			continue
+		}
+		if err := removeExactLeaf(leaf); err != nil {
+			failures = append(failures, err.Error())
+		}
+	}
+	if len(failures) > 0 {
+		return errors.New(strings.Join(failures, "; "))
+	}
+	return nil
 }
 
 func validSandboxDiagnostic(version, diagnostic string) bool {

@@ -71,13 +71,19 @@ Implementation: `internal/codexhome/lifecycle.go`; command grammar:
 ## Acceptance boundary
 
 Release acceptance runs the exact nominated Darwin/ARM64 executable under
-`bin/accept-installed-codex-baseline`. The foreground supervisor creates a
-marker-owned APFS disk image below the acceptor's canonical home, supplies
-synthetic user, Codex, temporary, XDG, runtime, and candidate paths, and runs
-candidate processes under fixed deny-default sandbox profiles. Lifecycle
-commands and descendants have volume-only write authority and no network. The
-fixed Codex login/exec/logout smoke keeps the write boundary but permits broad
-outbound network; it makes no endpoint-restriction claim.
+`bin/accept-installed-codex-baseline`. The legacy lifecycle remains covered by
+tests and sandbox controls, but it is no longer the release acceptance product
+surface. Candidate lifecycle operations use randomized named-instance leaves
+beneath the operating-system account's real home and prove the matrix described
+in [Named assistant instances](named-assistant-instances.md).
+
+The foreground supervisor also creates a marker-owned APFS disk image below the
+acceptor's canonical home for generated repository fixtures, candidate artifact
+extraction, helper controls, and redacted evidence state. Candidate named
+instances are not redirected into a synthetic `HOME`. The separate live smoke
+permits broad outbound network and uses a byte-for-byte copy of an existing
+file-backed Codex login in a disposable instance; no login command is run and
+no endpoint-restriction claim is made.
 The installed Codex command may be a current-user-owned symlink chain; the
 supervisor resolves and pins its owned regular executable before mutation.
 Profile templates are rendered by literal placeholder replacement rather than
@@ -93,18 +99,11 @@ empty output or its one exact literal deprecation line. Version authority is
 validated before content, including empty content; suffixes, multiline output,
 duplicates, and unknown allowlist versions fail closed.
 
-The supervisor externally stops and kills exact candidate process groups only
-after `tools/acceptance-stop-barrier` observes a schema-valid recoverable journal
-behind an all-members-stopped barrier. The barrier binds PID, PGID, process
-start identity, pinned Codex-home device/inode, complete proof digests,
-action-specific before/after invariants, allowed durable phase, and adjacent
-staging authority against descriptor-opened projection, manifest, canonical,
-previous, and staged bytes before signaling. Three stable stopped reads and an
-identical post-kill filesystem receipt are required. Each operation gets up to
-three fresh synthetic homes/fixtures; a missed window carries no evidence into
-the next attempt. Ordinary `codex recover` must then
-restore install, upgrade, and uninstall cases. No fault-enabled candidate or
-background service exists.
+Interrupted-remove recovery is exercised through the supported durable state:
+the exact manifest-owned launcher is absent while the verified instance root
+remains. The public `assistant recover` command must remove that root and leave
+no per-name control leaf. No fault-enabled candidate or background service
+exists.
 
 Before setup and after ordinary detach, private inventories compare metadata
 for live Codex/runtime roots and exact bytes only for schema-allowlisted,
@@ -113,7 +112,8 @@ opened for evidence. A provisional GitHub comment has no authority. A separate
 post-cleanup finalization comment cross-binds its immutable ID and body digest;
 acceptance and release re-fetch and verify both comments. This is same-UID
 write containment, not distinct-principal isolation, read confidentiality, or
-a fresh login keychain.
+a fresh login keychain. Final cleanup additionally proves all randomized
+instance roots, launchers, and the disposable credential copy absent.
 
 The supervisor itself is byte-bound to the candidate checkout: clean status is
 combined with Git blob checks for the complete repository-owned transitive Go

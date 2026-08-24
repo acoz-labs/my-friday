@@ -43,6 +43,22 @@ Codex with `--cd <workspace> --`. No shell, startup file, PATH edit, daemon, or
 second outside projection participates. This is lifecycle isolation under one
 UID, not a confidentiality boundary.
 
+Release acceptance runs randomized instances beneath the current account's
+real root, regardless of caller `HOME`, and proves create, verify, PTY launch,
+two-instance isolation, foreign collision preservation, interrupted-remove
+recovery, and complete reversal. Credential-free lifecycle evidence is
+mandatory. A separate live smoke may copy an existing current-user `auth.json`
+byte-for-byte into one disposable instance, but it performs no login, records
+no credential-derived value, and must prove both the copy and every disposable
+instance leaf absent before its exact-candidate evidence can authorize release.
+That smoke invokes the launcher with an empty forwarded argv under a real PTY,
+submits the purpose prompt interactively, and requires the installed token in
+the response. Failure cleanup reuses manifest verification/removal or recovery
+for instances and exact no-follow receipts for harness-created foreign leaves.
+The preservation record separately identifies its disposable caller-shell
+canary and unrelated launcher sibling; it does not generalize those observations
+into an unmeasured byte-for-byte claim about the entire account home.
+
 The legacy `codex` lifecycle remains available for explicit prior-projection
 repair, rollback, uninstall, and recovery. `assistant migrate` plans both
 halves, creates and verifies the named replacement first, then delegates old

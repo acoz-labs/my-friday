@@ -5,9 +5,6 @@ authority="${1:-}"
 issue="${2:-}"
 repo="${GITHUB_REPOSITORY:-acoz-labs/my-friday}"
 authority_pattern='^artifact-v1:run=([0-9]+):id=([0-9]+):name=([A-Za-z0-9._-]+):sha256=([0-9a-f]{64})$'
-acceptance_api_key="${OPENAI_API_KEY:-}"
-unset OPENAI_API_KEY
-[[ -n "$acceptance_api_key" ]] || { echo "acceptance refused: OPENAI_API_KEY must be injected before acceptance preflight" >&2; exit 64; }
 
 refuse() { echo "acceptance refused: $*" >&2; exit 64; }
 fail() { echo "acceptance failed: $*" >&2; exit 1; }
@@ -17,7 +14,7 @@ artifact_digest="${BASH_REMATCH[4]}"
 [[ "$(uname -s)" == Darwin && "$(uname -m)" == arm64 ]] || refuse "Apple silicon macOS is required"
 [[ "$(id -u)" != 0 ]] || refuse "root execution is prohibited"
 [[ -t 0 && -t 1 ]] || refuse "an interactive terminal is required"
-for tool in codex df diskutil git gh go hdiutil jq mount plutil realpath sandbox-exec shasum stat; do
+for tool in codex df diskutil dscl expect git gh go hdiutil jq mount plutil realpath sandbox-exec shasum stat; do
   command -v "$tool" >/dev/null 2>&1 || refuse "missing prerequisite: $tool"
 done
 codex_command="$(command -v codex)"
@@ -29,7 +26,7 @@ cd "$root"
 head_sha="$(git rev-parse HEAD)"
 [[ -z "$(git status --porcelain=v1 --untracked-files=all)" ]] || refuse "checkout must be clean"
 [[ "$(git remote get-url origin)" == "https://github.com/$repo.git" ]] || refuse "origin does not match $repo"
-closure_list=$'go.mod\ngo.sum\nbin/accept-installed-codex-baseline\nbin/prepare-release-artifact\nbin/package-release-artifact\nbin/verify-acceptance-evidence\nconfig/acceptance/lifecycle.sb.in\nconfig/acceptance/codex-smoke.sb.in\n'
+closure_list=$'go.mod\ngo.sum\nbin/accept-installed-codex-baseline\nbin/prepare-release-artifact\nbin/package-release-artifact\nbin/verify-acceptance-evidence\nconfig/acceptance/lifecycle.sb.in\nconfig/acceptance/codex-smoke.sb.in\nconfig/acceptance/launcher-smoke.exp\n'
 if ! dependency_json="$(CGO_ENABLED=0 go list -deps -json ./tools/acceptance-runner ./tools/acceptance-stop-barrier ./tools/acceptance-support)"; then
   refuse "helper dependency discovery failed"
 fi
@@ -67,7 +64,8 @@ path_has_symlink() {
   done
   return 1
 }
-real_home="$(cd "${HOME:?}" && pwd -P)"
+account_home="$(dscl . -read "/Users/$(id -un)" NFSHomeDirectory | awk '{print $2}')"
+real_home="$(cd "${account_home:?}" && pwd -P)"
 [[ "$real_home" == /Users/* && ! -L "$real_home" ]] || refuse "canonical home is unsupported"
 path_has_symlink "$real_home" && refuse "canonical home ancestry contains a symlink"
 go run ./tools/acceptance-support validate-root --path "$real_home" >/dev/null || refuse "canonical home ancestry is unsafe"
@@ -78,6 +76,10 @@ home_mount="$(jq -r .MountPoint <<<"$home_info")"
 home_mount_line="$(mount | grep -F " on $home_mount " || true)"
 [[ "$(wc -l <<<"$home_mount_line" | tr -d ' ')" == 1 && "$home_mount_line" == *local* ]] || refuse "canonical home must be on a local mount"
 live_codex_home="${CODEX_HOME:-$real_home/.codex}"
+acceptance_auth_file="${MY_FRIDAY_CODEX_AUTH_FILE:-$live_codex_home/auth.json}"
+[[ "$acceptance_auth_file" == /* && -f "$acceptance_auth_file" && ! -L "$acceptance_auth_file" ]] || refuse "MY_FRIDAY_CODEX_AUTH_FILE must name a regular auth.json"
+[[ "$(stat -f %u "$acceptance_auth_file")" == "$(id -u)" ]] || refuse "acceptance auth.json must be owned by the current user"
+auth_source_identity="$(stat -f %d:%i:%u:%p:%z:%m "$acceptance_auth_file")"
 runtime_projection="${MY_FRIDAY_RUNTIME_PROJECTION:-}"
 [[ "$live_codex_home" == "$real_home"/* ]] || refuse "effective CODEX_HOME must be below the canonical home"
 go run ./tools/acceptance-support validate-root --path "$(dirname "$live_codex_home")" >/dev/null || refuse "Codex-home entered ancestry is unsafe"
@@ -109,6 +111,17 @@ mount_mode=""
 sentinel_pid=""
 failure_class="refused"
 failure_scope="harness"
+named_phase="pre-create"
+primary_name=""; secondary_name=""; collision_receipt=""; sibling_receipt=""
+cleanup_named_state() {
+  [[ -x "${run_root:-}/acceptance-support" ]] || return 0
+  local args=(cleanup-named --home "$real_home")
+  [[ -z "${primary_name:-}" ]] || args+=(--name "$primary_name")
+  [[ -z "${secondary_name:-}" ]] || args+=(--name "$secondary_name")
+  [[ -z "${collision_receipt:-}" ]] || args+=(--leaf-receipt "$collision_receipt")
+  [[ -z "${sibling_receipt:-}" ]] || args+=(--leaf-receipt "$sibling_receipt")
+  "$run_root/acceptance-runner" --cwd "$real_home" --timeout 20s --env HOME="$volume/home" -- "$run_root/acceptance-support" "${args[@]}"
+}
 cleanup_failure() {
   local exit_status=$?
   local failure_detached=false
@@ -117,6 +130,13 @@ cleanup_failure() {
     wait "$sentinel_pid" 2>/dev/null || true
   fi
   if [[ "${preserve:-1}" == 1 ]]; then
+    cleanup_named_state || true
+    local_named_removed=true credential_copy_deleted=true ambient_auth_unchanged=true
+    for leaf in "${primary_root:-}" "${secondary_root:-}" "${primary_launcher:-}" "${secondary_launcher:-}" "${collision_launcher:-}" "${sibling_launcher:-}"; do
+      [[ -z "$leaf" || (! -e "$leaf" && ! -L "$leaf") ]] || local_named_removed=false
+    done
+    [[ -z "${primary_root:-}" || ! -e "$primary_root/codex/auth.json" ]] || credential_copy_deleted=false
+    [[ -z "${auth_source_identity:-}" || "$(stat -f %d:%i:%u:%p:%z:%m "$acceptance_auth_file" 2>/dev/null || true)" == "$auth_source_identity" ]] || ambient_auth_unchanged=false
     if [[ "${attach_started:-0}" == 0 && -z "${device:-}" && -n "${marker_sha:-}" && -n "${root_identities:-}" && -d "${run_root:-/nonexistent}" ]]; then
       go run ./tools/acceptance-support cleanup-roots --home "$real_home" --run-id "$run_id" --receipt "$root_identities" --marker-sha256 "$marker_sha" \
         --expected-entry .my-friday-acceptance:marker.json --expected-entry .my-friday-acceptance-evidence:marker.json >/dev/null 2>&1 || true
@@ -126,8 +146,8 @@ cleanup_failure() {
     fi
     [[ -z "${run_root:-}" ]] || echo "Private diagnostic state preserved at $run_root and $evidence_root" >&2
     if [[ -n "${head_sha:-}" && -n "${authority:-}" && -n "${repo:-}" ]]; then
-      failure_json="$(jq -nc --arg sha "$head_sha" --arg artifact "$authority" --arg class "${failure_class:-refused}" --arg scope "${failure_scope:-harness}" --arg run "${run_id:-preflight}" --argjson detached "$failure_detached" '{schema:"installed-baseline-evidence-v1",authority:"failure",issue:4,candidate:$sha,artifact:$artifact,run_id:$run,failure_scope:$scope,failure_class:$class,cleanup:{detached:$detached,state_preserved:true},redacted:true}')"
-      failure_body="<!-- installed-baseline-evidence-v1 authority=failure -->
+      failure_json="$(jq -nc --arg sha "$head_sha" --arg artifact "$authority" --arg class "${failure_class:-refused}" --arg scope "${failure_scope:-harness}" --arg run "${run_id:-preflight}" --arg phase "${named_phase:-pre-create}" --argjson detached "$failure_detached" --argjson named "$local_named_removed" --argjson credential "$credential_copy_deleted" --argjson ambient "$ambient_auth_unchanged" '{schema:"named-instance-acceptance-evidence-v1",authority:"failure",issue:4,candidate:$sha,artifact:$artifact,run_id:$run,failure_scope:$scope,failure_class:$class,failure_phase:$phase,cleanup:{ambient_auth_unchanged:$ambient,credential_copy_deleted:$credential,detached:$detached,named_state_removed:$named},redacted:true}')"
+      failure_body="<!-- named-instance-acceptance-evidence-v1 authority=failure -->
 $failure_json"
       if failure_url="$(gh api -X POST "repos/$repo/issues/$issue/comments" -f body="$failure_body" --jq .url 2>/dev/null)"; then
         printf 'failure-v1:comment=%s:%s\n' "${failure_url##*/}" "$(printf %s "$failure_body" | shasum -a 256 | awk '{print $1}')" >&2
@@ -287,17 +307,17 @@ chmod 0700 "$run_root/acceptance-stop-barrier"
 failure_class="candidate"
 failure_scope="candidate"
 
-candidate_env=(--env HOME="$volume/home" --env CODEX_HOME="$volume/home/.codex" --env TMPDIR="$volume/tmp" --env XDG_CACHE_HOME="$volume/xdg-cache" --env XDG_CONFIG_HOME="$volume/xdg-config" --env CFFIXED_USER_HOME="$volume/home" --env CLANG_MODULE_CACHE_PATH="$volume/xdg-cache/clang" --env LANG=en_US.UTF-8 --env PATH="$(dirname "$codex_binary"):/usr/bin:/bin:/usr/sbin:/sbin")
-run_bounded() { "$run_root/acceptance-runner" --cwd "$volume/home" --timeout 45s "${candidate_env[@]}" -- "$@"; }
-run_candidate() { run_bounded sandbox-exec -f "$run_root/lifecycle.sb" "$candidate" "$@"; }
+candidate_env=(--env HOME="$volume/home" --env TMPDIR="$volume/tmp" --env XDG_CACHE_HOME="$volume/xdg-cache" --env XDG_CONFIG_HOME="$volume/xdg-config" --env CFFIXED_USER_HOME="$volume/home" --env CLANG_MODULE_CACHE_PATH="$volume/xdg-cache/clang" --env LANG=en_US.UTF-8 --env PATH="$(dirname "$codex_binary"):/usr/bin:/bin:/usr/sbin:/sbin")
+run_bounded() { "$run_root/acceptance-runner" --cwd "$real_home" --timeout 45s "${candidate_env[@]}" -- "$@"; }
+run_ambient() { "$run_root/acceptance-runner" --cwd "$real_home" --timeout 45s --env HOME="$real_home" --env CODEX_HOME="$live_codex_home" --env LANG=en_US.UTF-8 --env PATH="$(dirname "$codex_binary"):/usr/bin:/bin:/usr/sbin:/sbin" -- "$@"; }
+run_candidate() { run_bounded "$candidate" "$@"; }
 confirm_candidate() { printf '%s\n' "$1" | run_candidate "${@:2}"; }
-recover_candidate() { run_candidate codex recover --transaction "$volume/home/.codex/.my-friday/transaction.json"; }
 verify_candidate_digest() { [[ "$(shasum -a 256 "$candidate" | awk '{print $1}')" == "$artifact_digest" ]] || fail "candidate changed between scenario groups"; }
 
 set +e
-candidate_probe="$(run_candidate codex verify 2>&1)"; candidate_probe_status=$?
+candidate_probe="$(run_candidate assistant verify "mfac-${run_id:0:8}-probe" 2>&1)"; candidate_probe_status=$?
 set -e
-[[ "$candidate_probe_status" == 3 && "$candidate_probe" == *"Codex baseline: not-installed"* && "$candidate_probe" != *"fatal error:"* ]] || fail "candidate-like lifecycle sandbox launch control failed"
+[[ "$candidate_probe_status" != 0 && "$candidate_probe" != *"fatal error:"* ]] || fail "candidate-like lifecycle launch control failed"
 set +e
 codex_probe="$(run_bounded sandbox-exec -f "$run_root/codex-smoke.sb" "$codex_binary" --version 2>&1)"; codex_probe_status=$?
 set -e
@@ -309,71 +329,59 @@ if "$run_root/acceptance-runner" --cwd "$volume/home" --timeout 200ms "${candida
   fail "setsid descendant control unexpectedly succeeded"
 fi
 
-# Externally interrupt ordinary production install, upgrade, and uninstall
-# transactions. The helper stops the exact candidate session, validates a
-# durable journal while every member remains stopped, kills that group, and
-# leaves recovery to the public command.
-verify_candidate_digest
-for interrupted_action in install upgrade uninstall; do
-  captured=0
-  for capture_attempt in 1 2 3; do
-    attempt_root="$volume/interruption/$interrupted_action/$capture_attempt"
-    attempt_home="$attempt_root/home"; attempt_codex="$attempt_home/.codex"; attempt_runtime="$attempt_root/runtime"; attempt_memory="$attempt_root/memory"
-    for attempt_path in "$attempt_codex" "$attempt_root/tmp" "$attempt_root/xdg-cache" "$attempt_root/xdg-config"; do install -d -m 0700 "$attempt_path"; done
-    "$run_root/acceptance-support" fixture --padding --runtime "$attempt_runtime" --memory "$attempt_memory" --token "INTERRUPT_${interrupted_action}_${capture_attempt}_$run_id"
-    attempt_env=(--env HOME="$attempt_home" --env CODEX_HOME="$attempt_codex" --env TMPDIR="$attempt_root/tmp" --env XDG_CACHE_HOME="$attempt_root/xdg-cache" --env XDG_CONFIG_HOME="$attempt_root/xdg-config" --env CFFIXED_USER_HOME="$attempt_home" --env CLANG_MODULE_CACHE_PATH="$attempt_root/xdg-cache/clang" --env LANG=en_US.UTF-8 --env PATH="$(dirname "$codex_binary"):/usr/bin:/bin:/usr/sbin:/sbin")
-    run_attempt() { "$run_root/acceptance-runner" --cwd "$attempt_home" --timeout 45s "${attempt_env[@]}" -- sandbox-exec -f "$run_root/lifecycle.sb" "$candidate" "$@"; }
-    confirm_attempt() { printf '%s\n' "$1" | run_attempt "${@:2}"; }
-    if [[ "$interrupted_action" == upgrade || "$interrupted_action" == uninstall ]]; then confirm_attempt Install codex install --runtime "$attempt_runtime"; fi
-    if [[ "$interrupted_action" == upgrade ]]; then "$run_root/acceptance-support" update --runtime "$attempt_runtime" --token "UPGRADE_${capture_attempt}_$run_id"; fi
-    if "$run_root/acceptance-stop-barrier" --profile "$run_root/lifecycle.sb" --candidate "$candidate" --runtime "$attempt_runtime" --home "$attempt_codex" --action "$interrupted_action"; then
-      run_attempt codex verify >/dev/null 2>&1 && fail "interrupted $interrupted_action verified as healthy"
-      run_attempt codex recover --transaction "$attempt_codex/.my-friday/transaction.json"
-      captured=1
-      break
-    fi
-  done
-  [[ "$captured" == 1 ]] || fail "no recoverable $interrupted_action interruption was captured in three fresh attempts"
-done
-
-# Restore the compact fixture for the deterministic foreground matrix.
+# Build a valid generated repository pair on the disposable volume, then run
+# the named lifecycle against randomized leaves in the current account's real
+# home. No caller HOME value is used to choose those leaves.
 "$run_root/acceptance-support" fixture --runtime "$volume/fixtures/runtime" --memory "$volume/fixtures/memory" --token "MY_FRIDAY_ACCEPTANCE_$run_id"
 verify_candidate_digest
+primary_name="mfac-${run_id:0:8}-a"; secondary_name="mfac-${run_id:0:8}-b"; collision_name="mfac-${run_id:0:8}-c"
+primary_root="$real_home/.my-friday/assistants/$primary_name"; secondary_root="$real_home/.my-friday/assistants/$secondary_name"
+primary_launcher="$real_home/.local/bin/$primary_name"; secondary_launcher="$real_home/.local/bin/$secondary_name"; collision_launcher="$real_home/.local/bin/$collision_name"
+sibling_name="mfac-${run_id:0:8}-s"; sibling_launcher="$real_home/.local/bin/$sibling_name"
+for leaf in "$primary_root" "$secondary_root" "$primary_launcher" "$secondary_launcher" "$collision_launcher" "$sibling_launcher"; do [[ ! -e "$leaf" && ! -L "$leaf" ]] || refuse "randomized acceptance leaf already exists"; done
+printf 'caller-shell-canary\n' >"$volume/home/.zshrc"; chmod 0600 "$volume/home/.zshrc"; shell_canary_before="$(shasum -a 256 "$volume/home/.zshrc" | awk '{print $1}')"
+printf 'foreign-collision\n' >"$collision_launcher"; chmod 0700 "$collision_launcher"
+printf 'unrelated-launcher-sibling\n' >"$sibling_launcher"; chmod 0700 "$sibling_launcher"
+leaf_receipt() { jq -nc --arg path "$1" --argjson device "$(stat -f %d "$1")" --argjson inode "$(stat -f %i "$1")" --arg sha "$(shasum -a 256 "$1" | awk '{print $1}')" '{path:$path,device:$device,inode:$inode,sha256:$sha}'; }
+collision_receipt="$(leaf_receipt "$collision_launcher")"; sibling_receipt="$(leaf_receipt "$sibling_launcher")"
+collision_before="$(shasum -a 256 "$collision_launcher" | awk '{print $1}')"; sibling_before="$(shasum -a 256 "$sibling_launcher" | awk '{print $1}')"
+named_phase="collision-created"
+confirm_candidate Create assistant create "$primary_name" --runtime "$volume/fixtures/runtime" --memory "$volume/fixtures/memory"
+named_phase="primary-created"
+confirm_candidate Create assistant create "$secondary_name" --runtime "$volume/fixtures/runtime" --memory "$volume/fixtures/memory"
+named_phase="secondary-created"
+run_candidate assistant verify "$primary_name"; run_candidate assistant verify "$secondary_name"
+[[ "$primary_root" != "$secondary_root" && "$(jq -r .root "$primary_root/manifest.json")" == "$primary_root" && "$(jq -r .root "$secondary_root/manifest.json")" == "$secondary_root" ]] || fail "two-instance isolation proof failed"
+run_candidate assistant create "$collision_name" --runtime "$volume/fixtures/runtime" --memory "$volume/fixtures/memory" >/dev/null 2>&1 && fail "foreign launcher collision was accepted"
+[[ "$(shasum -a 256 "$collision_launcher" | awk '{print $1}')" == "$collision_before" ]] || fail "foreign collision changed"
 
-# Full foreground lifecycle, including cancellation, collision, drift, repair,
-# generation movement, source-independent rollback/uninstall, and reversal.
-run_candidate codex install --runtime "$volume/fixtures/runtime" </dev/null
-[[ ! -e "$volume/home/.codex/AGENTS.md" ]] || fail "cancelled install mutated state"
-printf 'foreign\n' >"$volume/home/.codex/AGENTS.md"
-run_candidate codex install --runtime "$volume/fixtures/runtime" >/dev/null 2>&1 && fail "foreign projection collision was accepted"
-[[ "$(cat "$volume/home/.codex/AGENTS.md")" == foreign ]] || fail "foreign projection collision was changed"
-rm "$volume/home/.codex/AGENTS.md"
-printf 'unrelated\n' >"$volume/home/.codex/unrelated-canary"
-confirm_candidate Install codex install --runtime "$volume/fixtures/runtime"
-run_candidate codex verify
-cp "$volume/home/.codex/AGENTS.md" "$volume/home/.codex/AGENTS.before"
-printf '\n# drift\n' >>"$volume/home/.codex/AGENTS.md"
-run_candidate codex verify >/dev/null 2>&1 && fail "verify accepted drift"
-confirm_candidate Repair codex repair
-"$run_root/acceptance-support" update --runtime "$volume/fixtures/runtime" --token "MY_FRIDAY_UPGRADE_$run_id"
-confirm_candidate Upgrade codex upgrade --runtime "$volume/fixtures/runtime"
-confirm_candidate Rollback codex rollback
-mv "$volume/fixtures/runtime" "$volume/fixtures/runtime-missing"
-run_candidate codex verify
-confirm_candidate Uninstall codex uninstall
-run_candidate codex verify >/dev/null 2>&1 && fail "not-installed verify unexpectedly succeeded"
-[[ ! -e "$volume/home/.codex/AGENTS.md" && ! -e "$volume/home/.codex/.my-friday" ]] || fail "uninstall did not completely reverse ownership"
-[[ "$(cat "$volume/home/.codex/unrelated-canary")" == unrelated ]] || fail "unrelated synthetic canary changed"
+# A missing manifest-owned launcher is the supported interrupted-remove state.
+# Remove that exact proven leaf, recover through the public command, and prove
+# no per-name state survives.
+rm "$secondary_launcher"
+run_candidate assistant recover "$secondary_name"
+[[ ! -e "$secondary_root" && ! -e "$secondary_launcher" ]] || fail "interrupted remove recovery was incomplete"
+named_phase="recovery-complete"
 
-# Real Codex discovery is fixed and secret input is never placed in argv/logs.
-verify_candidate_digest
-mv "$volume/fixtures/runtime-missing" "$volume/fixtures/runtime"
-printf '%s' "$acceptance_api_key" | run_bounded sandbox-exec -f "$run_root/codex-smoke.sb" "$codex_binary" login --with-api-key >/dev/null
-acceptance_api_key=""
-confirm_candidate Install codex install --runtime "$volume/fixtures/runtime"
-smoke="$(run_bounded sandbox-exec -f "$run_root/codex-smoke.sb" "$codex_binary" exec --skip-git-repo-check "Return the exact unique token stated in your installed purpose." 2>/dev/null)"
+# The live smoke is separately credentialed from an existing file-backed Codex
+# login. It performs no login command and never reads credential bytes into a
+# shell value, argv, output, or evidence.
+ambient_smoke="$(run_ambient "$codex_binary" exec --skip-git-repo-check "Reply with exactly AMBIENT_OK" 2>/dev/null)"
+grep -Fq AMBIENT_OK <<<"$ambient_smoke" || fail "ambient credentialed Codex smoke failed"
+snapshot_protected instance-before
+cp -p "$acceptance_auth_file" "$primary_root/codex/auth.json"
+chmod 0600 "$primary_root/codex/auth.json"
+cmp "$acceptance_auth_file" "$primary_root/codex/auth.json" >/dev/null || fail "file-backed credential copy changed"
+named_phase="auth-copied"
+smoke="$(run_bounded /usr/bin/expect "$root/config/acceptance/launcher-smoke.exp" "$primary_launcher" "MY_FRIDAY_ACCEPTANCE_$run_id" 2>/dev/null)"
 grep -Fq "MY_FRIDAY_ACCEPTANCE_$run_id" <<<"$smoke" || fail "Codex did not discover installed instructions"
-run_bounded sandbox-exec -f "$run_root/codex-smoke.sb" "$codex_binary" logout >/dev/null || true
+named_phase="smoke-complete"
+[[ "$(shasum -a 256 "$collision_launcher" | awk '{print $1}')" == "$collision_before" ]] || fail "unrelated launcher changed"
+[[ "$(shasum -a 256 "$sibling_launcher" | awk '{print $1}')" == "$sibling_before" ]] || fail "unrelated launcher sibling changed"
+[[ "$(shasum -a 256 "$volume/home/.zshrc" | awk '{print $1}')" == "$shell_canary_before" ]] || fail "caller shell canary changed"
+[[ "$(stat -f %d:%i:%u:%p:%z:%m "$acceptance_auth_file")" == "$auth_source_identity" ]] || fail "ambient auth metadata changed"
+cleanup_named_state
+for leaf in "$primary_root" "$secondary_root" "$primary_launcher" "$secondary_launcher" "$collision_launcher" "$sibling_launcher"; do [[ ! -e "$leaf" && ! -L "$leaf" ]] || fail "acceptance leaf survived reversal"; done
 kill "$sentinel_pid"
 wait "$sentinel_pid" 2>/dev/null || true
 sentinel_pid=""
@@ -385,8 +393,8 @@ hdiutil detach "$device" >/dev/null
 mounted=0
 verify_detached_absence || fail "detached APFS graph remains present"
 snapshot_protected after
-cmp "$evidence_root/before-metadata.private" "$evidence_root/after-metadata.private" >/dev/null || fail "protected metadata changed"
-cmp "$evidence_root/before-content.private" "$evidence_root/after-content.private" >/dev/null || fail "allowlisted protected content changed"
+cmp "$evidence_root/instance-before-metadata.private" "$evidence_root/after-metadata.private" >/dev/null || fail "protected metadata changed during named-instance acceptance"
+cmp "$evidence_root/instance-before-content.private" "$evidence_root/after-content.private" >/dev/null || fail "allowlisted protected content changed during named-instance acceptance"
 protected_metadata_digest="$(cut -d: -f1 "$evidence_root/after-digests")"
 protected_metadata_count="$(wc -l <"$evidence_root/after-metadata.private" | tr -d ' ')"
 protected_content_digest="$(jq -r .digest "$evidence_root/after-content.private")"
@@ -403,18 +411,20 @@ go_version="$(go env GOVERSION)"; build_goos="$(go env GOOS)"; build_goarch="$(g
 platform_build="$(sw_vers -buildVersion)"; hardware_model="$(sysctl -n hw.model)"; git_version="$(git --version)"; codex_version="$("$codex_binary" --version)"
 provisional_json="$(jq -nc --arg sha "$head_sha" --arg artifact "$authority" --arg run "$run_id" --arg tree "$(git rev-parse 'HEAD^{tree}')" --arg closure "$helper_source_sha" --arg lifecycle "$profile_lifecycle" --arg smoke "$profile_smoke" --arg supervisor "$supervisor_blob" --arg barrier "$barrier_blob" --arg runner "$runner_blob" --arg support "$support_blob" --arg helper "$helper_binary_sha" --arg executable "$artifact_digest" --arg archive "$archive_sha" --arg go_version "$go_version" --arg goos "$build_goos" --arg goarch "$build_goarch" --arg metadata "$protected_metadata_digest" --argjson metadata_count "$protected_metadata_count" --arg content "$protected_content_digest" --argjson content_count "$protected_content_count" --arg device "$device" --arg uuid "$volume_uuid" --arg image_device "$image_device" --arg image_inode "$image_inode" --arg whole "$image_whole" --arg store "$physical_store" --arg container "$container_device" --arg build "$platform_build" --arg model "$hardware_model" --arg git "$git_version" --arg codex "$codex_version" '
   def passed($state;$exit): {passed:true,expected_state:$state,exit_class:$exit};
-  {schema:"installed-baseline-evidence-v1",authority:"provisional",issue:4,candidate:$sha,artifact:$artifact,run_id:$run,
+  {schema:"named-instance-acceptance-evidence-v1",authority:"provisional",issue:4,candidate:$sha,artifact:$artifact,run_id:$run,
    checkout:{tree:$tree,source_closure_sha256:$closure,supervisor_blob:$supervisor,barrier_blob:$barrier,runner_blob:$runner,support_blob:$support,helper_binary_sha256:$helper,executable_sha256:$executable,archive_sha256:$archive,go_version:$go_version,goos:$goos,goarch:$goarch,cgo_enabled:"0",build_flags:"-trimpath -buildvcs=true"},
    platform:{architecture:"arm64",hardware_model:$model,os_build:$build,filesystem:"apfs",git:$git,codex:$codex},
    mount:{device:$device,uuid:$uuid,image_device:$image_device,image_inode:$image_inode,image_whole:$whole,physical_store:$store,container_device:$container,detached:true,detach_absent:true,non_forced:true},
    profiles:{lifecycle_sha256:$lifecycle,smoke_sha256:$smoke,normalized:true,diagnostics_allowlisted:true},
    controls:{unsandboxed_network:true,lifecycle_network_denied:true,evidence_write_denied:true,protected_canary_denied:true,signal_denied:true,descendant:true,setsid_descendant:true,candidate_launch:true,codex_launch:true,smoke_preflight:true},
-   scenarios:{cancel:passed("not-installed";"cancelled"),collision:passed("foreign-preserved";"collision"),install:passed("healthy";"success"),verify:passed("healthy";"success"),repair:passed("healthy";"success"),upgrade:passed("healthy-new-generation";"success"),rollback:passed("healthy-prior-generation";"success"),interrupted_install:passed("recovered";"interrupted"),interrupted_upgrade:passed("recovered";"interrupted"),interrupted_uninstall:passed("recovered";"interrupted"),uninstall:passed("not-installed-unrelated-preserved";"success"),smoke:passed("instruction-discovered-auth-disposable";"success")},
+   scenarios:{create:passed("two-healthy-instances";"success"),verify:passed("manifest-owned";"success"),pty_launch:passed("interactive-purpose-token";"success"),two_instance_isolation:passed("distinct-private-roots";"success"),collision:passed("foreign-preserved";"collision"),interrupted_remove_recovery:passed("launcher-absent-root-recovered";"success"),reversal:passed("all-instance-leaves-absent";"success"),ambient_state_preservation:passed("measured-state-equal";"success"),file_backed_smoke:passed("interactive-launcher-auth-copy";"success")},
+   smoke:{ambient_call:true,auth_copy:"byte-for-byte",bounded:true,instance_codex_home:true,instance_owned_executable:true,interactive_pty:true,launcher_argv_empty:true,login_performed:false,passed:true,purpose_token:true,secrets_disclosed:false,source:"existing-codex-auth-file"},
+   preservation:{ambient_codex_equal:true,launcher_sibling_equal:true,runtime_equal:true,shell_canary_equal:true,shell_scope:"disposable-caller-home"},
    processes:{stop_barrier:true,quiescent:true,post_kill_equal:true,escaped_descendants_absent:true},
    protected_state:{metadata_digest:$metadata,metadata_count:$metadata_count,metadata_equal:true,content_digest:$content,content_count:$content_count,content_equal:true,canaries_equal:true},
-   cleanup_expected:["ordinary-detach","graph-absence","image","mountpoint","run-root","evidence-root"],redacted:true,
-   limitations:["broad-smoke-egress","no-fresh-keychain","no-read-confidentiality","same-uid"]}')"
-provisional="<!-- installed-baseline-evidence-v1 authority=provisional -->
+   cleanup_expected:["ordinary-detach","graph-absence","image","mountpoint","instance-roots","launchers","credential-copy","collision-fixture","launcher-sibling","run-root","evidence-root"],redacted:true,
+   limitations:["broad-smoke-egress","no-read-confidentiality","same-uid"]}')"
+provisional="<!-- named-instance-acceptance-evidence-v1 authority=provisional -->
 $provisional_json"
 failure_class="evidence"
 provisional_url="$(gh api -X POST "repos/$repo/issues/$issue/comments" -f body="$provisional" --jq .url)"
@@ -436,6 +446,8 @@ cleanup_expected=(
   .my-friday-acceptance:artifact/my-friday-darwin-arm64.tar.gz .my-friday-acceptance:artifact/SHA256SUMS
   .my-friday-acceptance-evidence:marker.json .my-friday-acceptance-evidence:before-metadata.private
   .my-friday-acceptance-evidence:before-content.private .my-friday-acceptance-evidence:before-digests
+  .my-friday-acceptance-evidence:instance-before-metadata.private .my-friday-acceptance-evidence:instance-before-content.private
+  .my-friday-acceptance-evidence:instance-before-digests
   .my-friday-acceptance-evidence:after-metadata.private .my-friday-acceptance-evidence:after-content.private
   .my-friday-acceptance-evidence:after-digests
 )
@@ -444,8 +456,8 @@ for expected_entry in "${cleanup_expected[@]}"; do cleanup_args+=(--expected-ent
 "$run_root/acceptance-support" cleanup-roots --home "$real_home" --run-id "$run_id" --receipt "$root_identities" --marker-sha256 "$marker_sha" "${cleanup_args[@]}"
 [[ ! -e "$run_root" && ! -e "$evidence_root" ]] || fail "local cleanup incomplete"
 
-final_json="$(jq -nc --arg sha "$head_sha" --arg artifact "$authority" --argjson id "$provisional_id" --arg digest "$provisional_digest" --arg protected "$protected_metadata_digest:$protected_content_digest" '{schema:"installed-baseline-evidence-v1",authority:"final",issue:4,candidate:$sha,artifact:$artifact,provisional:{id:$id,digest:$digest},protected_state_digest:$protected,cleanup:{non_forced_detach:true,mount_absent:true,image_deleted:true,run_root_deleted:true,evidence_root_deleted:true}}')"
-final="<!-- installed-baseline-evidence-v1 authority=final -->
+final_json="$(jq -nc --arg sha "$head_sha" --arg artifact "$authority" --argjson id "$provisional_id" --arg digest "$provisional_digest" --arg protected "$protected_metadata_digest:$protected_content_digest" '{schema:"named-instance-acceptance-evidence-v1",authority:"final",issue:4,candidate:$sha,artifact:$artifact,provisional:{id:$id,digest:$digest},protected_state_digest:$protected,cleanup:{ambient_auth_unchanged:true,collision_fixture_deleted:true,credential_copy_deleted:true,evidence_root_deleted:true,image_deleted:true,instance_roots_deleted:true,launcher_sibling_deleted:true,launchers_deleted:true,mount_absent:true,non_forced_detach:true,run_root_deleted:true}}')"
+final="<!-- named-instance-acceptance-evidence-v1 authority=final -->
 $final_json"
 final_url="$(gh api -X POST "repos/$repo/issues/$issue/comments" -f body="$final" --jq .url)"
 final_id="${final_url##*/}"

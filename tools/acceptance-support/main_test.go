@@ -2,16 +2,164 @@ package main
 
 import (
 	"crypto/sha256"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"syscall"
 	"testing"
 
+	"github.com/acoz-labs/my-friday/internal/assistantinstance"
 	"github.com/acoz-labs/my-friday/internal/codexhome"
 )
+
+func exactLeafForTest(t *testing.T, path string) exactLeaf {
+	t.Helper()
+	info, err := os.Lstat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	st := info.Sys().(*syscall.Stat_t)
+	return exactLeaf{Path: path, Device: uint64(st.Dev), Inode: st.Ino, SHA256: fmt.Sprintf("%x", sha256.Sum256(body))}
+}
+
+func TestCleanupNamedCoversEveryPostCreatePhase(t *testing.T) {
+	for _, phase := range []string{"primary-created", "secondary-created", "collision-created", "recovery-complete", "auth-copied", "smoke-complete"} {
+		t.Run(phase, func(t *testing.T) {
+			home := t.TempDir()
+			if err := os.MkdirAll(filepath.Join(home, ".local", "bin"), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			exe, codex := filepath.Join(home, "candidate"), filepath.Join(home, "codex")
+			for _, path := range []string{exe, codex} {
+				if err := os.WriteFile(path, []byte(path), 0o700); err != nil {
+					t.Fatal(err)
+				}
+			}
+			create := func(name string) {
+				p, err := assistantinstance.PlanCreate(home, name, exe, codex)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if err = assistantinstance.Create(p, exe, codex); err != nil {
+					t.Fatal(err)
+				}
+			}
+			create("primary")
+			if phase != "primary-created" {
+				create("secondary")
+			}
+			var leaves []exactLeaf
+			if phase == "collision-created" || phase == "recovery-complete" || phase == "auth-copied" || phase == "smoke-complete" {
+				for _, name := range []string{"mfac-collision", "mfac-sibling"} {
+					path := filepath.Join(home, ".local", "bin", name)
+					if err := os.WriteFile(path, []byte(name), 0o700); err != nil {
+						t.Fatal(err)
+					}
+					leaves = append(leaves, exactLeafForTest(t, path))
+				}
+			}
+			if phase == "recovery-complete" || phase == "auth-copied" || phase == "smoke-complete" {
+				if err := os.Remove(filepath.Join(home, ".local", "bin", "secondary")); err != nil {
+					t.Fatal(err)
+				}
+			}
+			source := filepath.Join(home, "source-auth.json")
+			if err := os.WriteFile(source, []byte("ambient-secret"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			if phase == "auth-copied" || phase == "smoke-complete" {
+				body, _ := os.ReadFile(source)
+				if err := os.WriteFile(filepath.Join(home, ".my-friday", "assistants", "primary", "codex", "auth.json"), body, 0o600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if err := cleanupNamed(home, []string{"primary", "secondary"}, leaves); err != nil {
+				t.Fatal(err)
+			}
+			for _, path := range []string{filepath.Join(home, ".my-friday", "assistants", "primary"), filepath.Join(home, ".my-friday", "assistants", "secondary"), filepath.Join(home, ".local", "bin", "primary"), filepath.Join(home, ".local", "bin", "secondary"), filepath.Join(home, ".local", "bin", "mfac-collision"), filepath.Join(home, ".local", "bin", "mfac-sibling")} {
+				if _, err := os.Lstat(path); !errors.Is(err, os.ErrNotExist) {
+					t.Fatalf("survived: %s", path)
+				}
+			}
+			if body, err := os.ReadFile(source); err != nil || string(body) != "ambient-secret" {
+				t.Fatal("ambient auth changed")
+			}
+		})
+	}
+}
+
+func TestCleanupNamedRefusesReceiptOutsideAcceptanceLauncherScope(t *testing.T) {
+	home := t.TempDir()
+	foreign := filepath.Join(home, "foreign")
+	if err := os.WriteFile(foreign, []byte("preserve"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := cleanupNamed(home, nil, []exactLeaf{exactLeafForTest(t, foreign)}); err == nil {
+		t.Fatal("out-of-scope receipt accepted")
+	}
+	if body, err := os.ReadFile(foreign); err != nil || string(body) != "preserve" {
+		t.Fatal("foreign leaf changed")
+	}
+}
+
+func TestCleanupNamedPreservesDriftedLeafButRemovesInstanceAndCredential(t *testing.T) {
+	home := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(home, ".local", "bin"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	exe, codex := filepath.Join(home, "candidate"), filepath.Join(home, "codex")
+	for _, path := range []string{exe, codex} {
+		if err := os.WriteFile(path, []byte(path), 0o700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	p, err := assistantinstance.PlanCreate(home, "primary", exe, codex)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = assistantinstance.Create(p, exe, codex); err != nil {
+		t.Fatal(err)
+	}
+	auth := filepath.Join(home, ".my-friday", "assistants", "primary", "codex", "auth.json")
+	if err = os.WriteFile(auth, []byte("copied-credential"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	leaf := filepath.Join(home, ".local", "bin", "mfac-sibling")
+	if err = os.WriteFile(leaf, []byte("original"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	receipt := exactLeafForTest(t, leaf)
+	exactLeafPath := filepath.Join(home, ".local", "bin", "mfac-collision")
+	if err = os.WriteFile(exactLeafPath, []byte("exact-delete"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	exactReceipt := exactLeafForTest(t, exactLeafPath)
+	if err = os.WriteFile(leaf, []byte("drifted-preserve"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err = cleanupNamed(home, []string{"primary"}, []exactLeaf{receipt, exactReceipt}); err == nil {
+		t.Fatal("drifted leaf was not reported")
+	}
+	for _, path := range []string{filepath.Join(home, ".my-friday", "assistants", "primary"), filepath.Join(home, ".local", "bin", "primary"), auth} {
+		if _, statErr := os.Lstat(path); !errors.Is(statErr, os.ErrNotExist) {
+			t.Fatalf("manifest-owned state survived: %s", path)
+		}
+	}
+	if body, readErr := os.ReadFile(leaf); readErr != nil || string(body) != "drifted-preserve" {
+		t.Fatal("drifted foreign leaf changed")
+	}
+	if _, statErr := os.Lstat(exactLeafPath); !errors.Is(statErr, os.ErrNotExist) {
+		t.Fatal("exact foreign leaf was not independently cleaned")
+	}
+}
 
 func TestFixtureIsValidAndRendersToken(t *testing.T) {
 	root := t.TempDir()

@@ -78,20 +78,40 @@ nominated candidate SHA:
 
 ```sh
 MY_FRIDAY_RUNTIME_PROJECTION=/absolute/path/to/deployed/runtime \
+MY_FRIDAY_CODEX_AUTH_FILE=/absolute/path/to/existing/auth.json \
   bin/accept-installed-codex-baseline \
   'artifact-v1:run=…:id=…:name=my-friday-darwin-arm64:sha256=…' 4
 ```
 
-The acceptor injects a test-only `OPENAI_API_KEY` through the process
-environment; it is piped to `codex login --with-api-key`, never placed in argv
-or evidence, is required, captured, and removed from the exported environment
-before the first child process or local mutation, and persists only in the
-disposable image. The command requires
+The acceptor supplies the regular, current-user-owned `auth.json` from an
+existing Codex login. The supervisor does not perform or refresh a login and
+does not read credential bytes into shell variables, argv, output, or evidence.
+It first proves an ambient bounded model call, copies the file byte-for-byte to
+one disposable named instance's `CODEX_HOME`, then launches the native instance
+with no forwarded arguments under a bounded interactive PTY. The PTY submits a
+purpose question and must observe the unique installed-purpose token from the
+instance-owned Codex executable. The copy is removed with the instance. The
+same file-backed OAuth credential is deliberately not routed through
+`codex login --with-api-key`.
+
+The command requires
 ordinary-user Apple silicon macOS, APFS, GitHub comment authority, Codex, Go,
-and the reviewed `sandbox-exec` behavior. It exercises lifecycle denials,
-repair/upgrade/rollback, externally interrupted recovery, uninstall reversal,
-and real-Codex instruction discovery in a marker-owned APFS image. It prints an
-`evidence-v1` authority only after non-forced detach and exact local cleanup.
+and the reviewed `sandbox-exec` behavior. It uses randomized leaves under the
+current account's real named-instance root and launcher directory, independently
+of caller `HOME`. It exercises create, verify, PTY launch, two-instance
+isolation, collision preservation, interrupted-remove recovery, complete
+reversal, ambient-state preservation, and real-Codex instruction discovery. It
+prints an `evidence-v1` authority only after every instance root, launcher,
+credential copy, APFS helper image, run root, and evidence root is proven absent.
+Failure cleanup uses manifest authority for instance roots and launchers and
+no-follow device/inode/digest receipts for the temporary collision and unrelated
+launcher-sibling leaves. It is bounded, runs at every post-create failure phase,
+never removes the ambient auth source, and reports the cleanup facts it actually
+proved rather than converting a partial cleanup into approval authority.
+Receipt path and acceptance-namespace scope are validated before mutation. Once
+that scope is valid, a drifted foreign leaf is preserved and reported but cannot
+prevent independent manifest-proven instance cleanup or deletion of the copied
+credential; other exact leaves are still attempted and refusals are aggregated.
 
 Product acceptance accepts that authority, not an opaque evidence URL. Release
 finalization re-fetches both evidence comments and rejects edits, deletion,
@@ -105,11 +125,17 @@ or release. It distinguishes candidate behavior from harness/environment
 failure and records only a redacted failure class, run binding, preservation,
 and safe-detach result.
 
-The successful authority uses exact typed provisional/final schemas. It binds
+The successful `named-instance-acceptance-evidence-v1` authority uses exact
+typed provisional/final schemas. It binds
 archive/executable hashes, transitive helper build closure, platform and APFS
 graph, normalized-profile controls, expected state/exit class for every
-scenario, process quiescence, protected metadata/content counts and digests,
-and the cleanup set. Both comments are fetched twice for stability; final
+named-instance scenario, the separate file-backed smoke semantics, process
+quiescence, protected metadata/content counts and digests, and the cleanup set.
+Preservation claims are limited to measured state: live Codex/runtime snapshots,
+a disposable caller-`HOME` shell canary, an unrelated real launcher sibling,
+the foreign collision leaf, and unchanged ambient-auth metadata.
+The verifier rejects the superseded single-home evidence schema. Both comments
+are fetched twice for stability; final
 protected-state and provisional body digests must agree exactly.
 
 Rollback of source is a Git revert. It must never delete repositories already
