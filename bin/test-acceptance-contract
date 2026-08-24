@@ -1,11 +1,17 @@
 #!/usr/bin/env bash
 set -euo pipefail
 root="$(cd "$(dirname "$0")/.." && pwd)"; supervisor="$root/bin/accept-installed-codex-baseline"
-grep -Fq 'unset OPENAI_API_KEY' "$supervisor"
-[[ "$(grep -n 'unset OPENAI_API_KEY' "$supervisor" | cut -d: -f1)" -lt "$(grep -n 'uname -s' "$supervisor" | cut -d: -f1)" ]]
+if grep -Eq 'OPENAI_API_KEY|login --with-api-key| codex login ' "$supervisor"; then exit 1; fi
+grep -Fq 'auth.json' "$supervisor"
+grep -Fq 'dscl . -read "/Users/$(id -un)" NFSHomeDirectory' "$supervisor"
+grep -Fq -- '--env HOME="$volume/home"' "$supervisor"
+grep -Fq 'cmp "$acceptance_auth_file" "$primary_root/codex/auth.json"' "$supervisor"
+grep -Fq '/usr/bin/script -q /dev/null' "$supervisor"
+for scenario in create verify pty_launch two_instance_isolation collision interrupted_remove_recovery reversal ambient_state_preservation file_backed_smoke; do
+  grep -Fq "$scenario" "$supervisor"
+done
 if grep -Fq 'repair --runtime' "$supervisor"; then exit 1; fi
 grep -Fq 'acceptance-support" fixture' "$supervisor"
-grep -Fq 'acceptance-support" update' "$supervisor"
 grep -Fq 'acceptance-runner" --cwd' "$supervisor"
 grep -Fq 'verify_mount_authority' "$supervisor"
 # shellcheck disable=SC2016
@@ -24,7 +30,7 @@ grep -Fq -- '--expected-entry' "$supervisor"
 grep -Fq 'file-write-data (literal "/dev/null")' "$root/config/acceptance/lifecycle.sb.in"
 grep -Fq 'verify_detached_absence' "$supervisor"
 grep -Fq 'cleanup-roots --home' "$supervisor"
-grep -Fq 'candidate-like lifecycle sandbox launch control failed' "$supervisor"
+grep -Fq 'candidate-like lifecycle launch control failed' "$supervisor"
 grep -Fq 'setsid descendant control' "$supervisor"
 grep -Fq 'protected-metadata' "$supervisor"
 grep -Fq 'published evidence did not survive exact re-fetch verification' "$supervisor"
