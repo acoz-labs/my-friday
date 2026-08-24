@@ -19,7 +19,7 @@ cleanup() {
   if [[ "$mounted" == 1 && "$device" == /dev/disk* ]]; then
     hdiutil detach "$device" >/dev/null 2>&1 || true
   fi
-  rm -f "$image" "$tmp/attach.plist" "$tmp/lifecycle.sb" "$tmp/smoke.sb" "$tmp/support" "$tmp/runner" "$tmp/candidate" "$tmp/candidate.out" "$tmp/install.out"
+  rm -f "$image" "$tmp/attach.plist" "$tmp/lifecycle.sb" "$tmp/smoke.sb" "$tmp/support" "$tmp/runner" "$tmp/candidate" "$tmp/candidate.out" "$tmp/install.out" "$tmp/term-launcher"
   rmdir "$mountpoint" "$tmp" 2>/dev/null || true
 }
 trap cleanup EXIT
@@ -41,6 +41,16 @@ initial_root_nlink="$(stat -f %l "$mountpoint")"
 go build -o "$tmp/support" "$root/tools/acceptance-support"
 go build -o "$tmp/runner" "$root/tools/acceptance-runner"
 go build -o "$tmp/candidate" "$root/cmd/my-friday"
+cat >"$tmp/term-launcher" <<'EOF'
+#!/bin/sh
+[ "$#" -eq 0 ] || exit 90
+[ "$TERM" = xterm-256color ] || exit 91
+IFS= read -r prompt
+[ "$prompt" = "Return only the exact installed-purpose token." ] || exit 92
+printf '%s\n' TERM_PURPOSE_TOKEN
+EOF
+chmod 0700 "$tmp/term-launcher"
+TERM=dumb "$tmp/runner" --cwd "$mountpoint" --timeout 45s --env TERM=xterm-256color -- /usr/bin/expect "$root/config/acceptance/launcher-smoke.exp" "$tmp/term-launcher" TERM_PURPOSE_TOKEN >/dev/null || { echo "Interactive launcher smoke inherited a hostile TERM or lost its purpose prompt." >&2; exit 1; }
 mkdir -m 0700 "$mountpoint/home" "$mountpoint/home/.codex" "$mountpoint/tmp" "$mountpoint/cache" "$mountpoint/config" "$mountpoint/runtime" "$mountpoint/memory"
 "$tmp/support" render-profile --template "$root/config/acceptance/lifecycle.sb.in" --value "$mountpoint" >"$tmp/lifecycle.sb"
 "$tmp/support" render-profile --template "$root/config/acceptance/codex-smoke.sb.in" --value "$mountpoint" >"$tmp/smoke.sb"
@@ -80,7 +90,7 @@ mounted=0
 for graph_device in "$image_whole" "$physical_store" "$container_device" "$device"; do diskutil info "$graph_device" >/dev/null 2>&1 && { echo "Primitive APFS device survived detach: $graph_device" >&2; exit 1; }; done
 [[ "$(hdiutil info -plist | plutil -convert json -o - -- - | jq --arg image "$image" '[.images[]|select(.["image-path"]==$image)]|length')" == 0 ]] || { echo "Primitive image remained attached." >&2; exit 1; }
 [[ ! -e "$tmp/denied" ]] || { echo "Denied primitive write changed protected state." >&2; exit 1; }
-rm "$image" "$tmp/attach.plist" "$tmp/lifecycle.sb" "$tmp/smoke.sb" "$tmp/support" "$tmp/runner" "$tmp/candidate" "$tmp/candidate.out" "$tmp/install.out"
+rm "$image" "$tmp/attach.plist" "$tmp/lifecycle.sb" "$tmp/smoke.sb" "$tmp/support" "$tmp/runner" "$tmp/candidate" "$tmp/candidate.out" "$tmp/install.out" "$tmp/term-launcher"
 rmdir "$mountpoint" "$tmp"
 trap - EXIT
 echo "acceptance primitive integration passed."

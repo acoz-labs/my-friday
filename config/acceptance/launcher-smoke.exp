@@ -3,7 +3,7 @@ if {$argc != 2} { exit 64 }
 set timeout 40
 set launcher [lindex $argv 0]
 set token [lindex $argv 1]
-spawn -noecho -- $launcher
+spawn -noecho $launcher
 after 1500
 send -- "Return only the exact installed-purpose token.\r"
 expect {
