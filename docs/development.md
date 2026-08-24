@@ -48,6 +48,9 @@ and a current APFS mounted-root link count in the safe 1–64 range at every
 authority check. The native primitive changes that count by creating root
 directories, then proves detach authority still succeeds; only the final
 pre-detach observation is evidence-bound.
+The PTY contract fixes `TERM=xterm-256color` only for the interactive launcher
+smoke; native primitive coverage starts from `TERM=dumb` and proves the
+empty-argument smoke still delivers its purpose prompt and observes its token.
 The native primitive performs a fresh valid install under the final lifecycle
 profile (including Git/xcrun), while regressions cover immediate double-fork
 setsid escape, ambiguous-attach preservation, exact-entry cleanup refusal,

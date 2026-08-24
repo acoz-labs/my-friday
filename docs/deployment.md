@@ -90,7 +90,11 @@ It first proves an ambient bounded model call, copies the file byte-for-byte to
 one disposable named instance's `CODEX_HOME`, then launches the native instance
 with no forwarded arguments under a bounded interactive PTY. The PTY submits a
 purpose question and must observe the unique installed-purpose token from the
-instance-owned Codex executable. The copy is removed with the instance. The
+instance-owned Codex executable. That smoke receives the reviewed
+`TERM=xterm-256color` explicitly, so a hostile or `dumb` caller terminal cannot
+divert the purpose prompt into Codex's terminal-safety confirmation. Other
+candidate lifecycle commands retain their existing sanitized environment. The
+copy is removed with the instance. The
 same file-backed OAuth credential is deliberately not routed through
 `codex login --with-api-key`.
 
