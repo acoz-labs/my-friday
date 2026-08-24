@@ -339,7 +339,7 @@ func removeExactLeaf(leaf exactLeaf) error {
 	return unix.Unlinkat(parentFD, filepath.Base(leaf.Path), 0)
 }
 
-func disposableAuthStatSafe(mode uint16, uid uint32, nlink uint64) bool {
+func disposableAuthStatSafe(mode uint32, uid uint32, nlink uint64) bool {
 	return mode&unix.S_IFMT == unix.S_IFREG && mode&0o777 == 0o600 && uid == uint32(os.Getuid()) && nlink == 1
 }
 
@@ -414,7 +414,7 @@ func cleanupDisposableAuth(home, name string) error {
 	}
 	defer unix.Close(fd)
 	var opened, entry unix.Stat_t
-	if unix.Fstat(fd, &opened) != nil || unix.Fstatat(parentFD, "auth.json", &entry, unix.AT_SYMLINK_NOFOLLOW) != nil || opened.Dev != entry.Dev || opened.Ino != entry.Ino || !disposableAuthStatSafe(opened.Mode, opened.Uid, uint64(opened.Nlink)) || !disposableAuthStatSafe(entry.Mode, entry.Uid, uint64(entry.Nlink)) {
+	if unix.Fstat(fd, &opened) != nil || unix.Fstatat(parentFD, "auth.json", &entry, unix.AT_SYMLINK_NOFOLLOW) != nil || opened.Dev != entry.Dev || opened.Ino != entry.Ino || !disposableAuthStatSafe(uint32(opened.Mode), opened.Uid, uint64(opened.Nlink)) || !disposableAuthStatSafe(uint32(entry.Mode), entry.Uid, uint64(entry.Nlink)) {
 		return errors.New("disposable auth identity or ownership is unsafe")
 	}
 	if !openedDirectoryMatchesPath(parentFD, codexRoot) {
