@@ -13,18 +13,24 @@ preserves the caller's `HOME` value unchanged.
 The root contains `manifest.json` plus `codex/`, `runtime/`, `memory/`,
 `workspace/`, and `dependencies/`. Runtime and memory are copied from a
 validated generated pair; `codex/AGENTS.md` comes from that runtime and Codex
-is copied to `dependencies/codex`. The manifest fixes the schema, name, root,
+is copied to `dependencies/codex`. Creation also renders
+`codex/config.toml` with only the exact absolute workspace in
+`projects.<path>.trust_level = "trusted"`. The path is TOML-escaped as data;
+no ancestor, wildcard, caller workspace, sibling instance, approval policy, or
+sandbox policy is configured. The manifest fixes the schema, name, root,
 owned children, launcher path/digest, the exact
-`<root>/dependencies/codex` path and digest, and assistant ID. PATH discovery
+`<root>/dependencies/codex` path and digest, the exact private config path and
+rendered digest, and assistant ID. PATH discovery
 may traverse a symlink, but creation resolves it first and copies only the
 resolved current-user regular executable into managed state.
 
 Create verifies the existing current-user-owned `$HOME/.local/bin`, refuses
 collisions, stages the root, then uses a no-replace launcher projection. Verify
-re-derives paths and checks the layout and launcher bytes. Remove requires a
-valid manifest and matching launcher, removes that exact leaf, then the selected
-root. `assistant recover <name>` finishes an interrupted removal only when the
-launcher is absent and the retained manifest still proves the exact root.
+re-derives paths and checks the layout, launcher bytes, managed Codex, and exact
+private trust config. Remove requires that complete verification before it
+removes the launcher and selected root. `assistant recover <name>` finishes an
+interrupted removal only when the launcher is absent and the retained manifest,
+managed Codex, and exact trust config still prove the exact root.
 Foreign, linked, drifted, unsupported, or contradictory state is preserved.
 Atomic staging serializes competing creates. The transaction holds a
 non-blocking advisory lock on the no-follow opened staging directory and carries
@@ -53,7 +59,9 @@ no credential-derived value, and must prove both the copy and every disposable
 instance leaf absent before its exact-candidate evidence can authorize release.
 That smoke invokes the launcher with an empty forwarded argv under a real PTY,
 submits the purpose prompt interactively, and requires the installed token in
-the response. Failure cleanup reuses manifest verification/removal or recovery
+the response without sending an onboarding/trust answer: the instance-private
+exact-workspace trust entry makes that empty-argv launch ready for the purpose
+prompt. Failure cleanup reuses manifest verification/removal or recovery
 for instances and exact no-follow receipts for harness-created foreign leaves.
 The preservation record separately identifies its disposable caller-shell
 canary and unrelated launcher sibling; it does not generalize those observations
