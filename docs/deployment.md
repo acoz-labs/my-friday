@@ -100,8 +100,10 @@ answer. After Codex explicitly enables CSI-u enhanced keyboard reporting, the
 driver observes the initial `Ask Codex to do anything` composer, requires
 concrete MCP boot progress, then requires the post-progress exact plain
 `OSC 0;workspace` title (terminated by BEL or standard ST) and the following
-composer. Only then does it submit the literal purpose prompt with the protocol Enter sequence
-`ESC [ 13 ; 1 u`; a raw carriage return is not accepted as equivalent. The
+composer. Only then does it send the literal purpose prompt, require Codex to
+render that exact text in the composer, and submit the protocol Enter sequence
+`ESC [ 13 ; 1 u`; adjacent unacknowledged submission and a raw carriage return
+are not accepted as equivalent. The
 child PTY is initialized to 30 rows by 120 columns before spawn so the exact
 token remains contiguous. The interactive smoke has a 90-second outer bound;
 the driver then closes its PTY, with the bounded process runner retaining

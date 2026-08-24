@@ -50,7 +50,8 @@ cat >"$tmp/term-launcher.c" <<'EOF'
 #include <unistd.h>
 
 int main(int argc, char **argv) {
-  const char expected[] = "Return only the exact installed-purpose token.\x1b[13;1u";
+  const char prompt[] = "Return only the exact installed-purpose token.";
+  const char enter[] = "\x1b[13;1u";
   const char enabled[] = "\x1b[>7u";
   const char ready[] = "Ask Codex to do anything";
   const char booting[] = "Booting MCP server: codex_apps";
@@ -59,7 +60,8 @@ int main(int argc, char **argv) {
   const char redraw[] = "\x1b[?2026h\x1b[?2026l";
   struct termios tty;
   struct winsize size;
-  char input[sizeof(expected) - 1];
+  char input[sizeof(prompt) - 1];
+  char submitted[sizeof(enter) - 1];
   char discarded[128];
   size_t offset = 0;
   (void)argv;
@@ -94,8 +96,20 @@ int main(int argc, char **argv) {
     usleep(50000);
   }
   if (offset != sizeof(input)) return 101;
-  if (memcmp(input, expected, sizeof(input)) != 0) return 102;
-  if (write(STDOUT_FILENO, "TERM_PURPOSE_TOKEN\n", 19) != 19) return 103;
+  if (memcmp(input, prompt, sizeof(input)) != 0) return 102;
+  usleep(50000);
+  while (read(STDIN_FILENO, discarded, sizeof(discarded)) > 0) {}
+  if (write(STDOUT_FILENO, prompt, sizeof(prompt) - 1) != sizeof(prompt) - 1) return 103;
+  offset = 0;
+  for (int attempt = 0; attempt < 100 && offset < sizeof(submitted); attempt++) {
+    ssize_t count = read(STDIN_FILENO, submitted + offset, sizeof(submitted) - offset);
+    if (count > 0) offset += (size_t)count;
+    if (write(STDOUT_FILENO, redraw, sizeof(redraw) - 1) != sizeof(redraw) - 1) return 104;
+    usleep(50000);
+  }
+  if (offset != sizeof(submitted)) return 105;
+  if (memcmp(submitted, enter, sizeof(submitted)) != 0) return 106;
+  if (write(STDOUT_FILENO, "TERM_PURPOSE_TOKEN\n", 19) != 19) return 107;
   return 0;
 }
 EOF

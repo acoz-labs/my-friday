@@ -3,6 +3,7 @@ if {$argc != 2} { exit 64 }
 set timeout 80
 set launcher [lindex $argv 0]
 set token [lindex $argv 1]
+set prompt "Return only the exact installed-purpose token."
 set stty_init "rows 30 columns 120"
 spawn -noecho $launcher
 expect {
@@ -31,7 +32,12 @@ expect {
   timeout { exit 1 }
   eof { exit 1 }
 }
-send -- "Return only the exact installed-purpose token."
+send -- $prompt
+expect {
+  -exact $prompt {}
+  timeout { exit 1 }
+  eof { exit 1 }
+}
 send -- "\033\[13;1u"
 expect {
   -exact $token {}
