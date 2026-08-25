@@ -22,8 +22,8 @@ symlink. Review, enhancement, and activation would share one tree.
 
 ### C. Bootstrap a core builder and copy strict projections per instance
 
-Add explicit runtime and named-instance contract-v2 migrations. Keep complete
-packages in `runtime/skills/<slug>`, copy only the validated `skill/` subtree
+Add explicit standalone-runtime and named-instance contract-v2 migrations. Keep
+complete packages in `runtime/skills/<slug>`, copy only the validated `skill/` subtree
 into `<instance>/workspace/.agents/skills/<slug>`, and own installed receipts
 under the private instance. New instances start at v2; existing v1 state remains
 valid until the user explicitly upgrades.
@@ -39,7 +39,7 @@ profiles before shipping the first capability.
 |---|---|---|
 | A: global skills | Minimal Codex integration | Breaks named-instance isolation, broadens collision/removal scope, and mutates unrelated assistants |
 | B: source equals projection | No copy or receipt drift | Source edits activate immediately, defeating review/confirmation and source-versus-installed evidence |
-| C: core builder + copies | Preserves authority, isolation, inspectability, and reversal using current patterns | Requires two explicit migrations and duplicate bytes; current-session unloading is not guaranteed |
+| C: core builder + copies | Preserves authority, isolation, inspectability, and reversal using current patterns | Requires explicit contract migration and duplicate bytes; current-session unloading is not guaranteed |
 | D: general plugin system | Future breadth | Violates C1's trust boundary and adds code, dependency, registry, permission, and publishing questions before evidence warrants them |
 
 Using Codex configuration to disable skills was also rejected for C1 lifecycle:
@@ -57,9 +57,11 @@ from ordinary removal.
 
 Runtime source contract v2 adds typed instruction-only package schemas and
 replaces the placeholder with zero or more packages. Instance contract v2 adds
-builder and managed-capability state. The migrations are ordered but independent:
-runtime first, instance second. Ordinary user capability operations thereafter
-mutate only the instance.
+builder and managed-capability state. A standalone runtime initializes in its
+own transaction for use by future instance creation. An existing instance has
+no external source pointer, so `assistant upgrade` atomically migrates its
+private runtime copy and builder projection within the one instance root.
+Ordinary user capability operations thereafter mutate only that instance.
 
 The design deliberately separates deterministic package tests from model
 behavior. `capability test` never calls a model or network service. Independent
@@ -73,7 +75,7 @@ candidate acceptance uses Codex to demonstrate actual discovery and behavior.
 | Installed target under instance workspace | Codex discovers repo-scoped skills from fixed launcher CWD | Official Codex skill docs; `internal/assistantinstance` |
 | Copy, never symlink | Prevents source edits from activating and supports digest ownership | Existing copied instance model |
 | Built-in builder as v2 bootstrap projection | Resolves the builder-before-first-capability loop | Approved C1 product contract |
-| Separate runtime and instance migrations | Avoids ambiguous cross-root transactions | Existing single-root transaction precedent |
+| One migration per owned root | Avoids invented source linkage and cross-root transactions | `internal/assistantinstance` copies runtime without retaining its source path |
 | Explicit invocation for user skills | Limits unexpected instruction injection in C1 | `agents/openai.yaml` official contract; security review |
 | Fixed rendered `agents/openai.yaml` | Users cannot add dependencies or broaden invocation policy | Strict instruction-only profile |
 | Static deterministic tests plus live acceptance | Honest boundary between repeatable validation and model behavior | No deterministic offline model executor exists |

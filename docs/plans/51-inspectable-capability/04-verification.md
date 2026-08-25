@@ -81,7 +81,8 @@ existing disposable no-admin APFS/sandbox harness and:
    removes, and proves source remains while all instance control/projection is
    gone;
 7. injects one post-mutation interruption and completes exact recovery;
-8. migrates disposable v1 runtime/instance fixtures and proves rollback/reversal;
+8. separately migrates a standalone v1 runtime and a disposable v1 instance,
+   proving that instance upgrade uses only its private copy and supports rollback;
 9. verifies ambient HOME, global Codex skills/config, credential source, sibling
    instance, and protected canaries are unchanged.
 
@@ -146,8 +147,12 @@ These are implementation/acceptance prerequisites, not unresolved plan choices.
 - **Workflow:** existing nomination, acceptance, product-acceptance, production
   receipt, finalization, and release-asset scripts remain authoritative and are
   extended only for issue #51 evidence grammar.
-- **Activation:** release publication does not mutate users. Each runtime and
-  existing named assistant requires its own explicit migration.
+- **Deploy:** this artifact product has no service deployment; publishing the
+  exact accepted GitHub Release through the existing production workflow is the
+  deploy action, and no user root is mutated automatically.
+- **Activation:** release publication does not mutate users. A standalone runtime
+  and an existing named assistant each require an explicit migration; the latter
+  migrates its private runtime copy rather than following external source.
 - **Verification:** exact archive digest, CLI version/help, v1 compatibility,
   v2 bootstrap, complete capability lifecycle, fresh-task Codex behavior,
   ambient preservation, and reversal are named above.

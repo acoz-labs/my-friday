@@ -72,8 +72,9 @@ and the governed-memory capability in #52.
 - O1 runtime repositories and O2 named-instance ownership are shipped inputs;
   both require forward-compatible v1-to-v2 migration without weakening v1
   verification or recovery.
-- Named instances contain copied runtime source. Editing the original runtime
-  does not mutate an installed assistant; upgrade must be explicit.
+- Named instances contain a copied Git runtime and retain no external source
+  pointer. Editing an original runtime does not mutate an installed assistant;
+  existing-instance upgrade must migrate the private copy under its own lock.
 - A user-authored `SKILL.md` can contain harmful instructions even without code.
   Structural validation reduces effects but cannot certify semantics.
 - Codex may retain a skill within a running task. Install/upgrade/disable/remove

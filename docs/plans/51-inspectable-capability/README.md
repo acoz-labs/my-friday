@@ -1,19 +1,18 @@
 # Solution Design: Inspectable Capability Builder
 
-- **Status:** Draft
+- **Status:** Final
 - **Issue:** #51
-- **Planning PR:** Pending
+- **Planning PR:** #54
 - **Repository basis:** f35f08fb07e51299657841ac626ebdfba492e80e
 - **Execution envelope:** through-production
 
 ## Decision
 
 Ship a narrow, source-first `instruction-only` capability profile and a built-in
-capability-builder skill. Existing runtime repositories and named assistants
-move to contract v2 through two explicit, independently recoverable migrations:
-`capability initialize` evolves the runtime source contract, then `assistant
-upgrade` installs the builder into that assistant's repository-scoped Codex
-skill projection. User-authored packages remain versioned under
+capability-builder skill. Standalone runtime repositories move to contract v2
+through explicit `capability initialize`; an existing named assistant moves its
+private copied runtime and installed workspace to v2 atomically through
+`assistant upgrade`. User-authored packages remain versioned under
 `runtime/skills/<slug>/`; only their reviewed `skill/` subtree is copied into
 the named assistant workspace after deterministic checks and exact confirmation.
 
@@ -31,10 +30,10 @@ None.
   capability.** New contract-v2 instances receive it at creation; existing
   instances receive it only through explicit `assistant upgrade`. This resolves
   the bootstrap loop without special-casing user packages.
-- **Runtime and instance upgrades are separate transactions.** The runtime is
-  initialized first and remains the source of truth; the instance upgrade then
-  consumes that verified source. A failure cannot leave two roots under one
-  ambiguous transaction.
+- **Each owned root has one migration boundary.** Standalone runtime initialization
+  prepares source for future instances. An existing assistant has no external
+  source pointer, so its upgrade atomically migrates the runtime copy and builder
+  projection inside the one locked instance root.
 - **User capabilities install into
   `<instance>/workspace/.agents/skills/<slug>`.** Codex discovers this scope from
   the launcher's fixed workspace, preserving named-instance isolation instead of

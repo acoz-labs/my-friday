@@ -26,11 +26,13 @@ flowchart TD
   HEALTHY --> REMOVE[Remove: prove ownership, clear projection/control]
 ```
 
-Before this loop, `capability initialize --runtime PATH` migrates runtime v1 to
-v2 with exact `Initialize`; `assistant upgrade NAME` consumes the validated v2
-copy and migrates instance v1 to v2 with exact `Upgrade`. Each uses its own lock,
-journal, preview, and recovery command. New repositories/instances are created
-at v2 and need neither migration.
+For a standalone runtime used to create future assistants, `capability
+initialize --runtime PATH` migrates v1 to v2 with exact `Initialize`. For an
+existing assistant, `assistant upgrade NAME` migrates its private copied runtime,
+instance manifest, capability control, and builder projection atomically inside
+the one locked instance root with exact `Upgrade`; it does not consult an
+external runtime. Each path has its own journal, preview, and recovery command.
+New repositories/instances are created at v2 and need neither migration.
 
 ## State And Data Model
 
@@ -198,5 +200,5 @@ content. C1 never reads `$HOME/.agents/skills` or unrelated Codex configuration.
 | Enhancement | source-changed → ready → healthy | edit, test, upgrade | fresh Upgrade plan; no in-place edit |
 | Disable/remove/re-enable | retained generation/control | disable, enable, remove | exact ownership; source preserved |
 | Collision/drift/interruption | derived state + journal | verify, recover | refuse foreign/drift; explicit recovery |
-| Existing user migration | runtime v2 + instance v2 | initialize, assistant upgrade | separate exact transactions and rollback evidence |
+| Existing user migration | private runtime copy + instance v2 | assistant upgrade | one instance-root transaction and rollback evidence |
 | Real Codex usefulness | explicit projection on fresh task | `$skill-name` acceptance prompt | immutable candidate, independent acceptor |
