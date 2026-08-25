@@ -353,7 +353,7 @@ func openedDirectoryMatchesPath(fd int, path string) bool {
 	return uint64(opened.Dev) == uint64(entry.Dev) && opened.Ino == entry.Ino
 }
 
-func verifyCodexCleanupEntriesAt(fd int, codexRoot string, manifest assistantinstance.Manifest, allowAuth bool) error {
+func verifyCodexCleanupEntriesAt(fd int, codexRoot string, manifest assistantinstance.Manifest, allowedExtras ...string) error {
 	duplicate, err := unix.Dup(fd)
 	if err != nil {
 		return err
@@ -368,8 +368,8 @@ func verifyCodexCleanupEntriesAt(fd int, codexRoot string, manifest assistantins
 	if manifest.CodexInstructions != "" {
 		allowed["AGENTS.md"] = true
 	}
-	if allowAuth {
-		allowed["auth.json"] = true
+	for _, extra := range allowedExtras {
+		allowed[extra] = true
 	}
 	for _, entry := range entries {
 		if !allowed[entry] {
@@ -379,10 +379,96 @@ func verifyCodexCleanupEntriesAt(fd int, codexRoot string, manifest assistantins
 	return nil
 }
 
+func verifyRootCleanupEntriesAt(fd int, root string, manifest assistantinstance.Manifest, allowedExtras ...string) error {
+	duplicate, err := unix.Openat(fd, ".", unix.O_RDONLY|unix.O_DIRECTORY|unix.O_CLOEXEC|unix.O_NOFOLLOW, 0)
+	if err != nil {
+		return err
+	}
+	dir := os.NewFile(uintptr(duplicate), root)
+	defer dir.Close()
+	entries, err := dir.Readdirnames(-1)
+	if err != nil {
+		return err
+	}
+	allowed := map[string]bool{"manifest.json": true}
+	for _, owned := range manifest.Owned {
+		allowed[owned] = true
+	}
+	for _, extra := range allowedExtras {
+		allowed[extra] = true
+	}
+	for _, entry := range entries {
+		if !allowed[entry] {
+			return fmt.Errorf("unexpected disposable instance-root entry preserved: %s", entry)
+		}
+	}
+	return nil
+}
+
 var cleanupMutationHook func(string)
+
+const authQuarantinePrefix = ".auth.json.my-friday-cleanup-"
 
 func restoreQuarantinedAuth(fromFD int, quarantine string, codexFD int) error {
 	return renameNoReplace(fromFD, quarantine, codexFD, "auth.json")
+}
+
+func quarantineNamesAt(fd int, label string) ([]string, error) {
+	duplicate, err := unix.Openat(fd, ".", unix.O_RDONLY|unix.O_DIRECTORY|unix.O_CLOEXEC|unix.O_NOFOLLOW, 0)
+	if err != nil {
+		return nil, err
+	}
+	dir := os.NewFile(uintptr(duplicate), label)
+	defer dir.Close()
+	names, err := dir.Readdirnames(-1)
+	if err != nil {
+		return nil, err
+	}
+	var found []string
+	for _, name := range names {
+		if strings.HasPrefix(name, authQuarantinePrefix) {
+			found = append(found, name)
+		}
+	}
+	return found, nil
+}
+
+func openVerifiedQuarantine(dirFD int, name string) (int, unix.Stat_t, error) {
+	fd, err := unix.Openat(dirFD, name, unix.O_RDWR|unix.O_CLOEXEC|unix.O_NOFOLLOW, 0)
+	if err != nil {
+		return -1, unix.Stat_t{}, err
+	}
+	var opened, entry unix.Stat_t
+	if unix.Fstat(fd, &opened) != nil || unix.Fstatat(dirFD, name, &entry, unix.AT_SYMLINK_NOFOLLOW) != nil || opened.Dev != entry.Dev || opened.Ino != entry.Ino || name != fmt.Sprintf("%s%x-%x", authQuarantinePrefix, uint64(opened.Dev), opened.Ino) || !disposableAuthStatSafe(uint32(opened.Mode), opened.Uid, uint64(opened.Nlink)) || !disposableAuthStatSafe(uint32(entry.Mode), entry.Uid, uint64(entry.Nlink)) {
+		unix.Close(fd)
+		return -1, unix.Stat_t{}, errors.New("disposable auth quarantine identity or ownership is unsafe")
+	}
+	return fd, opened, nil
+}
+
+func neutralizeVerifiedAuth(dirFD int, name string) error {
+	fd, opened, err := openVerifiedQuarantine(dirFD, name)
+	if err != nil {
+		return err
+	}
+	defer unix.Close(fd)
+	if cleanupMutationHook != nil {
+		cleanupMutationHook("auth-before-neutralize")
+	}
+	if err = unix.Ftruncate(fd, 0); err != nil {
+		return err
+	}
+	if err = unix.Fsync(fd); err != nil {
+		return err
+	}
+	var entry unix.Stat_t
+	if unix.Fstatat(dirFD, name, &entry, unix.AT_SYMLINK_NOFOLLOW) != nil || entry.Dev != opened.Dev || entry.Ino != opened.Ino || !disposableAuthStatSafe(uint32(entry.Mode), entry.Uid, uint64(entry.Nlink)) {
+		return errors.New("neutralized disposable auth pathname was replaced; replacement preserved")
+	}
+	if cleanupMutationHook != nil {
+		cleanupMutationHook("auth-after-neutralize")
+	}
+	return nil
 }
 
 func cleanupDisposableAuth(home, name string) error {
@@ -413,41 +499,74 @@ func cleanupDisposableAuth(home, name string) error {
 	if !openedDirectoryMatchesPath(parentFD, codexRoot) {
 		return errors.New("disposable auth directory identity changed during verification")
 	}
-	if err = verifyCodexCleanupEntriesAt(parentFD, codexRoot, manifest, !errors.Is(authErr, unix.ENOENT)); err != nil {
+	if !openedDirectoryMatchesPath(rootFD, paths.Root) {
+		return errors.New("disposable auth instance-root identity changed during verification")
+	}
+	codexQuarantines, err := quarantineNamesAt(parentFD, codexRoot)
+	if err != nil {
 		return err
 	}
-	if errors.Is(authErr, unix.ENOENT) {
+	rootQuarantines, err := quarantineNamesAt(rootFD, paths.Root)
+	if err != nil {
+		return err
+	}
+	if len(codexQuarantines) > 1 || len(rootQuarantines) > 1 || (!errors.Is(authErr, unix.ENOENT) && (len(codexQuarantines) != 0 || len(rootQuarantines) != 0)) || (len(codexQuarantines) != 0 && len(rootQuarantines) != 0) {
+		return errors.New("ambiguous disposable auth quarantine state preserved")
+	}
+	if err = verifyRootCleanupEntriesAt(rootFD, paths.Root, manifest, rootQuarantines...); err != nil {
+		return err
+	}
+	var codexExtras []string
+	if !errors.Is(authErr, unix.ENOENT) {
+		codexExtras = append(codexExtras, "auth.json")
+	}
+	codexExtras = append(codexExtras, codexQuarantines...)
+	if err = verifyCodexCleanupEntriesAt(parentFD, codexRoot, manifest, codexExtras...); err != nil {
+		return err
+	}
+	if len(rootQuarantines) == 1 {
+		return neutralizeVerifiedAuth(rootFD, rootQuarantines[0])
+	}
+	if errors.Is(authErr, unix.ENOENT) && len(codexQuarantines) == 0 {
 		return nil
 	}
-	if authErr != nil {
+	if authErr != nil && len(codexQuarantines) == 0 {
 		return authErr
 	}
-	fd, err := unix.Openat(parentFD, "auth.json", unix.O_RDONLY|unix.O_CLOEXEC|unix.O_NOFOLLOW, 0)
+	quarantine := ""
+	if len(codexQuarantines) == 1 {
+		quarantine = codexQuarantines[0]
+	} else {
+		fd, openErr := unix.Openat(parentFD, "auth.json", unix.O_RDWR|unix.O_CLOEXEC|unix.O_NOFOLLOW, 0)
+		if openErr != nil {
+			return fmt.Errorf("disposable auth is unsafe: %w", openErr)
+		}
+		var opened, entry unix.Stat_t
+		if unix.Fstat(fd, &opened) != nil || unix.Fstatat(parentFD, "auth.json", &entry, unix.AT_SYMLINK_NOFOLLOW) != nil || opened.Dev != entry.Dev || opened.Ino != entry.Ino || !disposableAuthStatSafe(uint32(opened.Mode), opened.Uid, uint64(opened.Nlink)) || !disposableAuthStatSafe(uint32(entry.Mode), entry.Uid, uint64(entry.Nlink)) {
+			unix.Close(fd)
+			return errors.New("disposable auth identity or ownership is unsafe")
+		}
+		if cleanupMutationHook != nil {
+			cleanupMutationHook("auth-before-quarantine")
+		}
+		quarantine = fmt.Sprintf("%s%x-%x", authQuarantinePrefix, uint64(opened.Dev), opened.Ino)
+		if err = renameNoReplace(parentFD, "auth.json", parentFD, quarantine); err != nil {
+			unix.Close(fd)
+			return err
+		}
+		unix.Close(fd)
+		if cleanupMutationHook != nil {
+			cleanupMutationHook("auth-after-codex-quarantine")
+		}
+	}
+	qfd, moved, err := openVerifiedQuarantine(parentFD, quarantine)
 	if err != nil {
-		return fmt.Errorf("disposable auth is unsafe: %w", err)
-	}
-	defer unix.Close(fd)
-	var opened, entry unix.Stat_t
-	if unix.Fstat(fd, &opened) != nil || unix.Fstatat(parentFD, "auth.json", &entry, unix.AT_SYMLINK_NOFOLLOW) != nil || opened.Dev != entry.Dev || opened.Ino != entry.Ino || !disposableAuthStatSafe(uint32(opened.Mode), opened.Uid, uint64(opened.Nlink)) || !disposableAuthStatSafe(uint32(entry.Mode), entry.Uid, uint64(entry.Nlink)) {
-		return errors.New("disposable auth identity or ownership is unsafe")
-	}
-	if cleanupMutationHook != nil {
-		cleanupMutationHook("auth-before-quarantine")
-	}
-	if !openedDirectoryMatchesPath(parentFD, codexRoot) {
-		return errors.New("disposable auth directory identity changed")
-	}
-	quarantine := fmt.Sprintf(".auth.json.my-friday-cleanup-%x-%x", uint64(opened.Dev), opened.Ino)
-	if err = renameNoReplace(parentFD, "auth.json", parentFD, quarantine); err != nil {
+		if restoreErr := restoreQuarantinedAuth(parentFD, quarantine, parentFD); restoreErr != nil {
+			return fmt.Errorf("disposable auth quarantine refused and preserved after restore failure: %w", restoreErr)
+		}
 		return err
 	}
-	var moved unix.Stat_t
-	if unix.Fstatat(parentFD, quarantine, &moved, unix.AT_SYMLINK_NOFOLLOW) != nil || moved.Dev != opened.Dev || moved.Ino != opened.Ino || !disposableAuthStatSafe(uint32(moved.Mode), moved.Uid, uint64(moved.Nlink)) {
-		if restoreErr := restoreQuarantinedAuth(parentFD, quarantine, parentFD); restoreErr != nil {
-			return fmt.Errorf("disposable auth replacement preserved at quarantine after restore refusal: %w", restoreErr)
-		}
-		return errors.New("disposable auth changed before atomic quarantine")
-	}
+	unix.Close(qfd)
 	if cleanupMutationHook != nil {
 		cleanupMutationHook("auth-quarantine-verified")
 	}
@@ -461,8 +580,11 @@ func cleanupDisposableAuth(home, name string) error {
 	if err = renameNoReplace(parentFD, quarantine, rootFD, rootQuarantine); err != nil {
 		return err
 	}
+	if cleanupMutationHook != nil {
+		cleanupMutationHook("auth-after-root-quarantine")
+	}
 	var rootMoved unix.Stat_t
-	if unix.Fstatat(rootFD, rootQuarantine, &rootMoved, unix.AT_SYMLINK_NOFOLLOW) != nil || rootMoved.Dev != opened.Dev || rootMoved.Ino != opened.Ino || !disposableAuthStatSafe(uint32(rootMoved.Mode), rootMoved.Uid, uint64(rootMoved.Nlink)) {
+	if unix.Fstatat(rootFD, rootQuarantine, &rootMoved, unix.AT_SYMLINK_NOFOLLOW) != nil || rootMoved.Dev != moved.Dev || rootMoved.Ino != moved.Ino || !disposableAuthStatSafe(uint32(rootMoved.Mode), rootMoved.Uid, uint64(rootMoved.Nlink)) {
 		if restoreErr := restoreQuarantinedAuth(rootFD, rootQuarantine, parentFD); restoreErr != nil {
 			return fmt.Errorf("verified disposable auth preserved in root quarantine after identity refusal: %w", restoreErr)
 		}
@@ -474,10 +596,10 @@ func cleanupDisposableAuth(home, name string) error {
 		}
 		return errors.New("disposable auth directory changed during root quarantine transfer")
 	}
-	if err = unix.Unlinkat(rootFD, rootQuarantine, 0); err != nil {
+	if err = neutralizeVerifiedAuth(rootFD, rootQuarantine); err != nil {
 		return err
 	}
-	return verifyCodexCleanupEntriesAt(parentFD, codexRoot, manifest, false)
+	return verifyCodexCleanupEntriesAt(parentFD, codexRoot, manifest)
 }
 
 func cleanupNamed(home string, names []string, leaves []exactLeaf) error {

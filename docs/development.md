@@ -48,9 +48,14 @@ quarantine name, proves that moved entry is the already-opened file, then
 atomically transfers that exact inode into a no-replace quarantine entry held
 by the manifest-verified instance-root descriptor. The Codex pathname is
 re-proved before the transfer is accepted; a replacement restores the file
-through the still-open original directory and is reported. Final unlink is
-descriptor-relative to the verified instance root, so later Codex-directory
-replacement cannot redirect deletion. The file must also be a
+through the still-open original directory and is reported. Final unlink is not
+used: credential contents are truncated and synced through the already-open
+verified file descriptor, and the neutralized root quarantine remains for
+ordinary manifest-gated instance-root removal. Later pathname replacement is
+preserved and reported rather than deleted. Retries recognize and revalidate
+the exact deterministic quarantine after either rename or neutralization;
+multiple entries, destination collisions, or mismatched identity remain
+untouched. The file must also be a
 current-user-owned, mode-`0600`, single-link regular file. Deterministic file-
 and directory-replacement races, symlinks, hardlinks, wrong metadata, alternate
 credential paths, and unrelated private Codex entries are preserved and

@@ -123,6 +123,16 @@ func TestCleanupNamedRefusesUnsafeDisposableAuthAndUnexpectedEntries(t *testing.
 			}
 			return path
 		},
+		"unrelated-root-extra": func(t *testing.T, paths assistantinstance.Paths) string {
+			if err := os.WriteFile(filepath.Join(paths.Root, "codex", "auth.json"), []byte("opaque-fixture"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			path := filepath.Join(paths.Root, "unrelated")
+			if err := os.WriteFile(path, []byte("preserve"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			return path
+		},
 	}
 	for name, arrange := range tests {
 		t.Run(name, func(t *testing.T) {
@@ -263,6 +273,146 @@ func TestCleanupNamedPreservesCodexDirectoryReplacementAfterQuarantine(t *testin
 		if strings.HasPrefix(entry.Name(), ".auth.json.my-friday-cleanup-") {
 			t.Fatalf("credential stranded in root quarantine: %s", entry.Name())
 		}
+	}
+}
+
+func authQuarantineNameForTest(t *testing.T, path string) string {
+	t.Helper()
+	info, err := os.Lstat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	st := info.Sys().(*syscall.Stat_t)
+	return fmt.Sprintf("%s%x-%x", authQuarantinePrefix, uint64(st.Dev), st.Ino)
+}
+
+func TestCleanupNamedPreservesFinalPathReplacementAfterNeutralization(t *testing.T) {
+	home, paths := managedNamedFixture(t)
+	auth := filepath.Join(paths.Root, "codex", "auth.json")
+	if err := os.WriteFile(auth, []byte("verified-original"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	quarantine := filepath.Join(paths.Root, authQuarantineNameForTest(t, auth))
+	preservedOriginal := filepath.Join(paths.Root, "neutralized-original")
+	previousHook := cleanupMutationHook
+	cleanupMutationHook = func(phase string) {
+		if phase != "auth-before-neutralize" {
+			return
+		}
+		cleanupMutationHook = nil
+		if err := os.Rename(quarantine, preservedOriginal); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(quarantine, []byte("foreign-replacement"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	defer func() { cleanupMutationHook = previousHook }()
+	if err := cleanupNamed(home, []string{"primary"}, nil); err == nil {
+		t.Fatal("final path replacement was accepted")
+	}
+	if body, err := os.ReadFile(quarantine); err != nil || string(body) != "foreign-replacement" {
+		t.Fatalf("replacement was changed: %q %v", body, err)
+	}
+	if info, err := os.Stat(preservedOriginal); err != nil || info.Size() != 0 {
+		t.Fatalf("verified credential was not descriptor-neutralized and preserved: %#v %v", info, err)
+	}
+	if _, err := os.Lstat(paths.Root); err != nil {
+		t.Fatalf("instance changed after refusal: %v", err)
+	}
+}
+
+func TestCleanupNamedRecoversInterruptedAuthQuarantines(t *testing.T) {
+	for _, phase := range []string{"auth-after-codex-quarantine", "auth-after-root-quarantine", "auth-after-neutralize"} {
+		t.Run(phase, func(t *testing.T) {
+			home, paths := managedNamedFixture(t)
+			auth := filepath.Join(paths.Root, "codex", "auth.json")
+			if err := os.WriteFile(auth, []byte("verified-original"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			previousHook := cleanupMutationHook
+			cleanupMutationHook = func(observed string) {
+				if observed == phase {
+					panic("simulated interruption")
+				}
+			}
+			func() {
+				defer func() {
+					if recover() == nil {
+						t.Fatal("cleanup did not reach interruption hook")
+					}
+				}()
+				_ = cleanupNamed(home, []string{"primary"}, nil)
+			}()
+			cleanupMutationHook = nil
+			defer func() { cleanupMutationHook = previousHook }()
+			if err := cleanupNamed(home, []string{"primary"}, nil); err != nil {
+				t.Fatalf("retry did not recover %s: %v", phase, err)
+			}
+			if _, err := os.Lstat(paths.Root); !errors.Is(err, os.ErrNotExist) {
+				t.Fatalf("retry did not fully reverse instance: %v", err)
+			}
+		})
+	}
+}
+
+func TestCleanupNamedPreservesRootDestinationCollisionAfterCodexQuarantine(t *testing.T) {
+	home, paths := managedNamedFixture(t)
+	auth := filepath.Join(paths.Root, "codex", "auth.json")
+	if err := os.WriteFile(auth, []byte("verified-original"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	name := authQuarantineNameForTest(t, auth)
+	previousHook := cleanupMutationHook
+	cleanupMutationHook = func(phase string) {
+		if phase != "auth-after-codex-quarantine" {
+			return
+		}
+		cleanupMutationHook = nil
+		if err := os.WriteFile(filepath.Join(paths.Root, name), []byte("foreign-root-collision"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	defer func() { cleanupMutationHook = previousHook }()
+	if err := cleanupNamed(home, []string{"primary"}, nil); err == nil {
+		t.Fatal("root destination collision was accepted")
+	}
+	for path, want := range map[string]string{
+		filepath.Join(paths.Root, "codex", name): "verified-original",
+		filepath.Join(paths.Root, name):          "foreign-root-collision",
+	} {
+		if body, err := os.ReadFile(path); err != nil || string(body) != want {
+			t.Fatalf("destination collision changed at %s: %q %v", path, body, err)
+		}
+	}
+}
+
+func TestCleanupNamedPreservesAmbiguousQuarantineCollisions(t *testing.T) {
+	for _, location := range []string{"codex", "root"} {
+		t.Run(location, func(t *testing.T) {
+			home, paths := managedNamedFixture(t)
+			auth := filepath.Join(paths.Root, "codex", "auth.json")
+			if err := os.WriteFile(auth, []byte("verified-original"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			name := authQuarantineNameForTest(t, auth)
+			dir := paths.Root
+			if location == "codex" {
+				dir = filepath.Join(paths.Root, "codex")
+			}
+			collision := filepath.Join(dir, name)
+			if err := os.WriteFile(collision, []byte("foreign-collision"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			if err := cleanupNamed(home, []string{"primary"}, nil); err == nil {
+				t.Fatal("ambiguous quarantine collision was accepted")
+			}
+			for path, want := range map[string]string{auth: "verified-original", collision: "foreign-collision"} {
+				if body, err := os.ReadFile(path); err != nil || string(body) != want {
+					t.Fatalf("collision state changed at %s: %q %v", path, body, err)
+				}
+			}
+		})
 	}
 }
 

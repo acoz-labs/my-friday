@@ -127,8 +127,12 @@ with the already-opened regular file. That inode is then atomically transferred
 to a no-replace quarantine entry held by the manifest-verified instance-root
 descriptor. The Codex pathname is re-proved before accepting the transfer; a
 replacement restores the credential through the open original directory and is
-reported. Final deletion is descriptor-relative to the verified instance root,
-so a later Codex-directory replacement cannot redirect it. Current-
+reported. Credential contents are then truncated and synced through the
+already-open verified file descriptor; no compare-then-unlink is used. The
+neutralized root quarantine remains for ordinary manifest-gated instance-root
+removal. Retry recognizes and revalidates the deterministic intermediate after
+either rename or neutralization. Multiple entries, destination collisions, or
+identity ambiguity are preserved and reported. Current-
 user ownership, mode `0600`, and one link are required. Any alternate or
 unexpected Codex-home entry is preserved and makes cleanup fail closed;
 production `assistant remove` is unchanged.
