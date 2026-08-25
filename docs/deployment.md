@@ -222,6 +222,11 @@ driven from an active ambient Codex session; changes there cannot be attributed
 to the candidate. Exact ambient-auth metadata, stable Codex configuration and
 skills, runtime state, launcher/shell canaries, and the candidate's isolated
 `CODEX_HOME` remain directly proven.
+Provisional evidence records that distinction as
+`ambient_codex_stable_subset_equal` plus the exact ordered
+`ambient_codex_metadata_excluded` path classes. Verifiers reject the old broad
+`ambient_codex_equal` claim, omitted classes, reordered classes, and altered
+classes.
 The verifier rejects the superseded single-home evidence schema. Both comments
 are fetched twice for stability; final
 protected-state and provisional body digests must agree exactly.

@@ -42,6 +42,9 @@ grep -Fq 'cleanup_named_state' "$supervisor"
 grep -Fq 'cleanup_named_state || true' "$supervisor"
 grep -Fq 'shell_canary_equal' "$supervisor"
 grep -Fq 'launcher_sibling_equal' "$supervisor"
+grep -Fq 'ambient_codex_stable_subset_equal' "$supervisor"
+grep -Fq 'ambient_codex_metadata_excluded' "$supervisor"
+if grep -Fq 'ambient_codex_equal' "$supervisor"; then exit 1; fi
 for phase in primary-created secondary-created collision-created recovery-complete auth-copied smoke-complete; do
   grep -Fq "named_phase=\"$phase\"" "$supervisor"
 done

@@ -99,6 +99,10 @@ Ambient `auth.json` retains a separate exact metadata identity check, protected
 config/instructions/skills and unrelated state remain in the stable snapshot,
 and launcher/CODEX_HOME isolation tests prove the candidate never receives the
 ambient Codex home.
+The machine authority names this proof
+`ambient_codex_stable_subset_equal` and carries the exact ordered
+`ambient_codex_metadata_excluded` classes; the superseded broad
+`ambient_codex_equal` field is invalid evidence.
 They also prove a drifted collision/sibling receipt is reported and preserved
 without blocking manifest-proven instance and copied-credential cleanup, while
 an out-of-scope receipt remains a fail-closed pre-mutation error.
