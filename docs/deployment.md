@@ -118,6 +118,37 @@ copy is removed with the instance. The
 same file-backed OAuth credential is deliberately not routed through
 `codex login --with-api-key`.
 
+Failure cleanup removes the disposable credential before invoking ordinary
+manifest-gated instance removal. This acceptance-only authority is limited to
+the exact verified instance root's `codex/auth.json`: one no-follow opened Codex
+directory is held through verification and mutation, and the credential is
+atomically moved with a no-replace rename before its moved identity is compared
+with the already-opened regular file. That inode is then atomically transferred
+to a no-replace quarantine entry held by the manifest-verified instance-root
+descriptor. The Codex pathname is re-proved before accepting the transfer; a
+replacement restores the credential through the open original directory and is
+reported. Credential contents are then truncated and synced through the
+already-open verified file descriptor; no compare-then-unlink is used. The
+neutralized root quarantine remains for ordinary manifest-gated instance-root
+removal. Retry recognizes and revalidates the deterministic intermediate after
+either rename or neutralization. Multiple entries, destination collisions, or
+identity ambiguity are preserved and reported. Current-
+user ownership, mode `0600`, and one link are required. Any alternate or
+unexpected Codex-home entry is preserved and makes cleanup fail closed;
+production `assistant remove` is unchanged.
+
+Before every credential mutation, the supervisor re-verifies the manifest,
+all required owned roots, managed config and instructions, exact root/Codex
+entry sets with every expected name observed once and no extras, and held
+directory identities. The current-user disposable tree
+must remain quiescent after those checks return. This is ordinary concurrent-
+change detection inside the same-UID acceptance boundary, not protection from
+an actively malicious owner process that keeps replacing entries after checks;
+ADR 0002 and the acceptance architecture explicitly exclude malicious same-UID
+resistance. Descriptor-bound neutralization still ensures that mutation applies
+only to the already-open proven credential inode, never to a later pathname
+replacement.
+
 The command requires
 ordinary-user Apple silicon macOS, APFS, GitHub comment authority, Codex, Go,
 and the reviewed `sandbox-exec` behavior. It uses randomized leaves under the
