@@ -262,7 +262,7 @@ profile, new dependency class, network access, credentials, or data migration,
 the workflow stops and identifies the missing authority rather than smuggling
 it into an ordinary update.
 
-## Decision and sequencing
+## Decision
 
 If approved, this discovery supersedes the current O3-before-O4 sequence while
 preserving O1 and O2 as shipped foundations.
@@ -363,7 +363,7 @@ Neither issue is closed or rewritten before exact-head Gate 1 approval.
 - **Dependencies:** None; this is a product trust boundary.
 - **Sequence:** Not planned.
 
-## Success, change, pause, and stop signals
+## Success and stop signals
 
 ### Continue
 
@@ -410,7 +410,7 @@ Neither issue is closed or rewritten before exact-head Gate 1 approval.
 - Users prefer curated core capabilities and do not attempt or retain their own
   extensions.
 
-## Privacy and trust handling
+## Privacy and evidence handling
 
 This discovery uses public, sanitized product evidence and no private evidence
 references. The paused implementation is described only by repository-safe
