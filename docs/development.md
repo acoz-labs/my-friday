@@ -73,8 +73,12 @@ no-follow receipt only after the bounded Codex process exits, descendants are
 reaped, and no cooperating writer remains. The receipt binds the candidate,
 run, instance-root and Codex-directory identities plus every generated cache,
 session, log, database, and other non-managed entry. Cleanup requires that exact
-device/inode/type/owner/mode/link-count/size/mtime tree on every revalidation; a new,
-missing, replaced, linked, or symlinked entry is preserved and refused. The
+device/inode/type/owner/mode/link-count/size/mtime tree on every revalidation.
+Codex may create single-link argument-zero helper symlinks; the receipt accepts
+only links whose captured target is the manifest-bound instance Codex
+executable and binds that target on every replay. A new, missing, replaced,
+hard-linked, alternate-target, or otherwise unbound symlink is preserved and
+refused. The
 helper receives the same reviewed Git-capable PATH as candidate lifecycle
 commands so complete manifest verification cannot depend on ambient shell PATH.
 The complete receipt and manifest authority are replayed once more immediately

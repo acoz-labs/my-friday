@@ -35,6 +35,7 @@ func (v *stringList) Set(s string) error { *v = append(*v, s); return nil }
 
 type codexCleanupEntry struct {
 	Path   string `json:"path"`
+	Target string `json:"target,omitempty"`
 	Device uint64 `json:"device"`
 	Inode  uint64 `json:"inode"`
 	Mode   uint32 `json:"mode"`
@@ -489,8 +490,9 @@ func validateReceiptShape(receipt codexCleanupReceipt, candidate, runID string) 
 	for _, entry := range receipt.Entries {
 		clean := filepath.ToSlash(filepath.Clean(entry.Path))
 		kind, permissions := entry.Mode&unix.S_IFMT, entry.Mode&0o777
-		unsafePermissions := permissions&0o022 != 0 || (kind == unix.S_IFREG && permissions&0o600 != 0o600) || (kind == unix.S_IFDIR && permissions&0o700 != 0o700)
-		if entry.Path == "" || clean != entry.Path || strings.HasPrefix(clean, "../") || strings.HasPrefix(clean, "/") || seen[entry.Path] || entry.Device == 0 || entry.Inode == 0 || entry.UID != uint32(os.Getuid()) || entry.Nlink == 0 || entry.Size < 0 || (kind != unix.S_IFREG && kind != unix.S_IFDIR) || (kind == unix.S_IFREG && entry.Nlink != 1) || unsafePermissions {
+		unsafePermissions := (kind != unix.S_IFLNK && permissions&0o022 != 0) || (kind == unix.S_IFREG && permissions&0o600 != 0o600) || (kind == unix.S_IFDIR && permissions&0o700 != 0o700)
+		targetMismatch := (kind == unix.S_IFLNK) != (entry.Target != "")
+		if entry.Path == "" || clean != entry.Path || strings.HasPrefix(clean, "../") || strings.HasPrefix(clean, "/") || seen[entry.Path] || entry.Device == 0 || entry.Inode == 0 || entry.UID != uint32(os.Getuid()) || entry.Nlink == 0 || entry.Size < 0 || (kind != unix.S_IFREG && kind != unix.S_IFDIR && kind != unix.S_IFLNK) || ((kind == unix.S_IFREG || kind == unix.S_IFLNK) && entry.Nlink != 1) || unsafePermissions || targetMismatch || (kind == unix.S_IFLNK && !filepath.IsAbs(entry.Target)) {
 			return errors.New("generated Codex-state receipt entry is malformed")
 		}
 		seen[entry.Path] = true
@@ -503,7 +505,8 @@ func captureCodexCleanupReceipt(home, name, candidate, runID string) (codexClean
 	if err != nil {
 		return codexCleanupReceipt{}, err
 	}
-	if _, err = assistantinstance.Verify(home, name); err != nil {
+	manifest, err := assistantinstance.Verify(home, name)
+	if err != nil {
 		return codexCleanupReceipt{}, err
 	}
 	codexRoot := filepath.Join(paths.Root, "codex")
@@ -535,15 +538,23 @@ func captureCodexCleanupReceipt(home, name, candidate, runID string) (codexClean
 			return nil
 		}
 		info, statErr := os.Lstat(path)
-		if statErr != nil || info.Mode()&os.ModeSymlink != 0 {
+		if statErr != nil {
 			return fmt.Errorf("unsafe generated Codex entry: %s", relative)
 		}
 		st := info.Sys().(*syscall.Stat_t)
-		if st.Uid != uint32(os.Getuid()) || (!info.IsDir() && (!info.Mode().IsRegular() || st.Nlink != 1)) {
+		isSymlink := info.Mode()&os.ModeSymlink != 0
+		if st.Uid != uint32(os.Getuid()) || (!info.IsDir() && !info.Mode().IsRegular() && !isSymlink) || ((info.Mode().IsRegular() || isSymlink) && st.Nlink != 1) {
 			return fmt.Errorf("unsafe generated Codex metadata: %s", relative)
 		}
+		target := ""
+		if isSymlink {
+			target, statErr = os.Readlink(path)
+			if statErr != nil || target != manifest.CodexExecutable {
+				return fmt.Errorf("unsafe generated Codex symlink: %s", relative)
+			}
+		}
 		mtimeS, mtimeN := statMtime(st)
-		entries = append(entries, codexCleanupEntry{Path: relative, Device: uint64(st.Dev), Inode: st.Ino, Mode: uint32(st.Mode), UID: st.Uid, Nlink: uint64(st.Nlink), Size: st.Size, MtimeS: mtimeS, MtimeN: mtimeN})
+		entries = append(entries, codexCleanupEntry{Path: relative, Target: target, Device: uint64(st.Dev), Inode: st.Ino, Mode: uint32(st.Mode), UID: st.Uid, Nlink: uint64(st.Nlink), Size: st.Size, MtimeS: mtimeS, MtimeN: mtimeN})
 		return nil
 	})
 	if err != nil {

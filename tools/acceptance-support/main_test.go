@@ -106,6 +106,75 @@ func TestCleanupNamedRemovesReceiptBoundGeneratedCodexState(t *testing.T) {
 	}
 }
 
+func TestCleanupNamedRemovesReceiptBoundCodexArg0Symlink(t *testing.T) {
+	home, paths := managedNamedFixture(t)
+	auth := filepath.Join(paths.Root, "codex", "auth.json")
+	generatedDir := filepath.Join(paths.Root, "codex", "tmp", "arg0", "codex-fixture")
+	if err := os.MkdirAll(generatedDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(auth, []byte("opaque-fixture"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	manifest, err := assistantinstance.Verify(home, "primary")
+	if err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(generatedDir, "apply_patch")
+	if err = os.Symlink(manifest.CodexExecutable, link); err != nil {
+		t.Fatal(err)
+	}
+	receipt, err := captureCodexCleanupReceipt(home, "primary", testCleanupCandidate, testCleanupRunID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = cleanupNamed(home, []string{"primary"}, nil, map[string]codexCleanupReceipt{"primary": receipt}, testCleanupCandidate, testCleanupRunID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = os.Lstat(paths.Root); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("receipt-bound arg0 symlink survived reversal: %v", err)
+	}
+}
+
+func TestGeneratedCodexReceiptPreservesChangedArg0Symlink(t *testing.T) {
+	home, paths := managedNamedFixture(t)
+	auth := filepath.Join(paths.Root, "codex", "auth.json")
+	generatedDir := filepath.Join(paths.Root, "codex", "tmp", "arg0", "codex-fixture")
+	if err := os.MkdirAll(generatedDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(auth, []byte("opaque-fixture"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	manifest, err := assistantinstance.Verify(home, "primary")
+	if err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(generatedDir, "apply_patch")
+	if err = os.Symlink(manifest.CodexExecutable, link); err != nil {
+		t.Fatal(err)
+	}
+	receipt, err := captureCodexCleanupReceipt(home, "primary", testCleanupCandidate, testCleanupRunID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = os.Remove(link); err != nil {
+		t.Fatal(err)
+	}
+	if err = os.Symlink(filepath.Join(paths.Root, "foreign"), link); err != nil {
+		t.Fatal(err)
+	}
+	if err = cleanupNamed(home, []string{"primary"}, nil, map[string]codexCleanupReceipt{"primary": receipt}, testCleanupCandidate, testCleanupRunID); err == nil {
+		t.Fatal("changed generated Codex symlink was accepted")
+	}
+	if target, readErr := os.Readlink(link); readErr != nil || target != filepath.Join(paths.Root, "foreign") {
+		t.Fatalf("changed generated symlink was not preserved: %q %v", target, readErr)
+	}
+	if body, readErr := os.ReadFile(auth); readErr != nil || string(body) != "opaque-fixture" {
+		t.Fatalf("credential changed: %q %v", body, readErr)
+	}
+}
+
 func TestCleanupNamedPreservesChangedGeneratedCodexState(t *testing.T) {
 	home, paths := managedNamedFixture(t)
 	auth := filepath.Join(paths.Root, "codex", "auth.json")
