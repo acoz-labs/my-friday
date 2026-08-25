@@ -314,8 +314,8 @@ func TestCleanupNamedPreservesFinalPathReplacementAfterNeutralization(t *testing
 	if body, err := os.ReadFile(quarantine); err != nil || string(body) != "foreign-replacement" {
 		t.Fatalf("replacement was changed: %q %v", body, err)
 	}
-	if info, err := os.Stat(preservedOriginal); err != nil || info.Size() != 0 {
-		t.Fatalf("verified credential was not descriptor-neutralized and preserved: %#v %v", info, err)
+	if body, err := os.ReadFile(preservedOriginal); err != nil || string(body) != "verified-original" {
+		t.Fatalf("verified credential changed before refused disposal: %q %v", body, err)
 	}
 	if _, err := os.Lstat(paths.Root); err != nil {
 		t.Fatalf("instance changed after refusal: %v", err)
@@ -384,6 +384,54 @@ func TestCleanupNamedPreservesRootDestinationCollisionAfterCodexQuarantine(t *te
 		if body, err := os.ReadFile(path); err != nil || string(body) != want {
 			t.Fatalf("destination collision changed at %s: %q %v", path, body, err)
 		}
+	}
+}
+
+func TestCleanupNamedRefusesRequiredProjectionDisappearanceBeforeMutation(t *testing.T) {
+	tests := []struct {
+		phase              string
+		requiredRelative   string
+		credentialLocation string
+	}{
+		{"auth-before-quarantine", "manifest.json", "codex/auth.json"},
+		{"auth-after-codex-quarantine", "codex/config.toml", "codex/quarantine"},
+		{"auth-quarantine-verified", "codex/AGENTS.md", "codex/auth.json"},
+		{"auth-after-root-quarantine", "dependencies", "quarantine"},
+		{"auth-before-neutralize", "workspace", "quarantine"},
+	}
+	for _, test := range tests {
+		t.Run(test.phase, func(t *testing.T) {
+			home, paths := managedNamedFixture(t)
+			auth := filepath.Join(paths.Root, "codex", "auth.json")
+			if err := os.WriteFile(auth, []byte("verified-original"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			quarantine := authQuarantineNameForTest(t, auth)
+			required := filepath.Join(paths.Root, filepath.FromSlash(test.requiredRelative))
+			preservedRequired := required + ".removed-by-test"
+			previousHook := cleanupMutationHook
+			cleanupMutationHook = func(phase string) {
+				if phase != test.phase {
+					return
+				}
+				cleanupMutationHook = nil
+				if err := os.Rename(required, preservedRequired); err != nil {
+					t.Fatal(err)
+				}
+			}
+			defer func() { cleanupMutationHook = previousHook }()
+			if err := cleanupNamed(home, []string{"primary"}, nil); err == nil {
+				t.Fatal("required projection disappearance was accepted")
+			}
+			credential := filepath.Join(paths.Root, filepath.FromSlash(test.credentialLocation))
+			credential = strings.ReplaceAll(credential, "quarantine", quarantine)
+			if body, err := os.ReadFile(credential); err != nil || string(body) != "verified-original" {
+				t.Fatalf("credential mutated after required projection disappeared: %q %v", body, err)
+			}
+			if _, err := os.Lstat(preservedRequired); err != nil {
+				t.Fatalf("disappeared projection was further changed: %v", err)
+			}
+		})
 	}
 }
 

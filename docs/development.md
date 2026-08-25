@@ -60,6 +60,13 @@ current-user-owned, mode-`0600`, single-link regular file. Deterministic file-
 and directory-replacement races, symlinks, hardlinks, wrong metadata, alternate
 credential paths, and unrelated private Codex entries are preserved and
 reported.
+Immediately before each rename or descriptor-bound neutralization, cleanup
+re-verifies the manifest, every required owned root, managed Codex config and
+instructions, exact root/Codex entry sets, and held directory identities.
+Acceptance requires the current user's disposable instance tree to remain
+quiescent after those checks return. Consistent with ADR 0002, this detects
+ordinary replacement but does not claim isolation from an actively malicious
+same-UID process that can continuously rewrite owner-controlled directories.
 They also prove a drifted collision/sibling receipt is reported and preserved
 without blocking manifest-proven instance and copied-credential cleanup, while
 an out-of-scope receipt remains a fail-closed pre-mutation error.

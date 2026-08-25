@@ -137,6 +137,17 @@ user ownership, mode `0600`, and one link are required. Any alternate or
 unexpected Codex-home entry is preserved and makes cleanup fail closed;
 production `assistant remove` is unchanged.
 
+Before every credential mutation, the supervisor re-verifies the manifest,
+all required owned roots, managed config and instructions, exact root/Codex
+entry sets, and held directory identities. The current-user disposable tree
+must remain quiescent after those checks return. This is ordinary concurrent-
+change detection inside the same-UID acceptance boundary, not protection from
+an actively malicious owner process that keeps replacing entries after checks;
+ADR 0002 and the acceptance architecture explicitly exclude malicious same-UID
+resistance. Descriptor-bound neutralization still ensures that mutation applies
+only to the already-open proven credential inode, never to a later pathname
+replacement.
+
 The command requires
 ordinary-user Apple silicon macOS, APFS, GitHub comment authority, Codex, Go,
 and the reviewed `sandbox-exec` behavior. It uses randomized leaves under the
