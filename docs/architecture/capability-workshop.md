@@ -24,6 +24,13 @@ managed state, clears projection and control state, and never deletes source.
 Changed or missing installed bytes are drift and are preserved. Lifecycle
 effects are guaranteed for fresh Codex tasks only.
 
+Every mutation takes a non-blocking exclusive lock on the instance capability
+root, recomputes the previewed source/projection facts, and writes
+`capabilities/<slug>/transaction.json` before changing state. A retained journal
+blocks later lifecycle plans. `capability recover NAME SLUG` uses only the
+receipt and retained generation to restore installed, disabled, or absent state;
+it does not read, rewrite, or remove source.
+
 The bootstrap-owned `capability-builder` is private to each named instance and
 is not an ordinary removable package. Its instructions permit source editing
 and read-only checks while prohibiting lifecycle mutations and confirmation

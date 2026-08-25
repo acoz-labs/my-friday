@@ -306,6 +306,8 @@ type transaction struct {
 	ProjectionDigest string `json:"projection_digest"`
 }
 
+var mutationHook func(string) error
+
 func InitializeInstance(root string) error {
 	for _, p := range []string{filepath.Join(root, "capabilities"), filepath.Join(root, "workspace", ".agents", "skills")} {
 		if err := os.MkdirAll(p, 0o700); err != nil {
@@ -552,6 +554,11 @@ func Execute(p LifecyclePlan) (resultErr error) {
 	if err = os.WriteFile(journalPath, journalBody, 0o600); err != nil {
 		return err
 	}
+	if mutationHook != nil {
+		if err = mutationHook("journal-written"); err != nil {
+			return err
+		}
+	}
 	defer func() {
 		if resultErr == nil {
 			_ = os.Remove(journalPath)
@@ -573,6 +580,11 @@ func Execute(p LifecyclePlan) (resultErr error) {
 		}
 		if err = writeProjection(p.Projection, projection); err != nil {
 			return err
+		}
+		if mutationHook != nil {
+			if err = mutationHook("projection-written"); err != nil {
+				return err
+			}
 		}
 		generation := 1
 		if p.Receipt != nil {

@@ -10,6 +10,12 @@ Disable retains a generation for enable. Remove clears only the selected
 instance projection and control state and leaves runtime source intact.
 Lifecycle changes require a fresh Codex task.
 
+`capability recovery required` means a durable transaction journal remains.
+Review the named instance and run `my-friday capability recover NAME SLUG`;
+after exact confirmation it serializes on the instance lock and restores the
+receipt-declared projection from retained bytes. If no receipt exists, recovery
+restores absence. Do not delete the journal or generation manually.
+
 ## Recover a named assistant instance
 
 Run `my-friday assistant verify <name>` first. If removal stopped after the

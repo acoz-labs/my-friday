@@ -1,9 +1,11 @@
 package capability
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
 )
 
@@ -182,5 +184,97 @@ func TestRecoverRestoresReceiptBoundProjection(t *testing.T) {
 	status, err := Inspect(instance, p)
 	if err != nil || status.State != StateInstalledHealthy {
 		t.Fatalf("status=%#v err=%v", status, err)
+	}
+}
+
+func TestExecuteRefusesStaleSourcePlan(t *testing.T) {
+	root := t.TempDir()
+	p := writePackage(t, root, "daily-brief", "1.0.0")
+	instance := filepath.Join(root, "instance")
+	if err := os.MkdirAll(filepath.Join(instance, "workspace"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := InitializeInstance(instance); err != nil {
+		t.Fatal(err)
+	}
+	pl, err := Plan(instance, p, ActionInstall)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = os.WriteFile(filepath.Join(p, "skill", "SKILL.md"), []byte("changed after preview"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err = Execute(pl); err == nil || !strings.Contains(err.Error(), "stale capability plan") {
+		t.Fatalf("stale plan accepted: %v", err)
+	}
+	if _, err = os.Stat(projectionPath(instance, "daily-brief")); !os.IsNotExist(err) {
+		t.Fatal("stale plan mutated projection")
+	}
+}
+
+func TestExecuteSerializesInstanceMutations(t *testing.T) {
+	root := t.TempDir()
+	p := writePackage(t, root, "daily-brief", "1.0.0")
+	instance := filepath.Join(root, "instance")
+	if err := os.MkdirAll(filepath.Join(instance, "workspace"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := InitializeInstance(instance); err != nil {
+		t.Fatal(err)
+	}
+	pl, err := Plan(instance, p, ActionInstall)
+	if err != nil {
+		t.Fatal(err)
+	}
+	lock, err := os.Open(filepath.Join(instance, "capabilities"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer lock.Close()
+	if err = syscall.Flock(int(lock.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
+		t.Fatal(err)
+	}
+	defer syscall.Flock(int(lock.Fd()), syscall.LOCK_UN)
+	if err = Execute(pl); err == nil || !strings.Contains(err.Error(), "transaction already active") {
+		t.Fatalf("concurrent mutation accepted: %v", err)
+	}
+}
+
+func TestFaultAfterMutationLeavesJournalAndRecoveryRestoresStableState(t *testing.T) {
+	root := t.TempDir()
+	p := writePackage(t, root, "daily-brief", "1.0.0")
+	instance := filepath.Join(root, "instance")
+	if err := os.MkdirAll(filepath.Join(instance, "workspace"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := InitializeInstance(instance); err != nil {
+		t.Fatal(err)
+	}
+	pl, err := Plan(instance, p, ActionInstall)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mutationHook = func(phase string) error {
+		if phase == "projection-written" {
+			return errors.New("injected stop")
+		}
+		return nil
+	}
+	defer func() { mutationHook = nil }()
+	if err = Execute(pl); err == nil || !strings.Contains(err.Error(), "injected stop") {
+		t.Fatalf("fault not injected: %v", err)
+	}
+	mutationHook = nil
+	if _, err = Plan(instance, p, ActionInstall); err == nil || !strings.Contains(err.Error(), "recovery required") {
+		t.Fatalf("journal did not block plan: %v", err)
+	}
+	if err = Recover(instance, "daily-brief"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = os.Stat(projectionPath(instance, "daily-brief")); !os.IsNotExist(err) {
+		t.Fatal("pre-receipt fault did not restore absence")
+	}
+	if _, err = os.Stat(filepath.Join(instance, "capabilities", "daily-brief")); !os.IsNotExist(err) {
+		t.Fatal("pre-receipt control remains")
 	}
 }
