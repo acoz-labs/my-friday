@@ -3,17 +3,83 @@ package repository
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 
 	"github.com/acoz-labs/my-friday/internal/gitexec"
 	"github.com/acoz-labs/my-friday/internal/plan"
 	"github.com/acoz-labs/my-friday/internal/profile"
 	"github.com/santhosh-tekuri/jsonschema/v6"
 )
+
+type capabilityMigration struct {
+	ContractVersion int    `json:"contract_version"`
+	Action          string `json:"action"`
+}
+
+var capabilityMigrationHook func(string) error
+
+func migrationPath(root string) string {
+	return filepath.Join(root, ".my-friday", "capability-migration.json")
+}
+func withRootLock(root string, fn func() error) error {
+	f, err := os.Open(root)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	if err = syscall.Flock(int(f.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
+		return errors.New("runtime capability migration already active")
+	}
+	defer syscall.Flock(int(f.Fd()), syscall.LOCK_UN)
+	return fn()
+}
+func writeMigration(root, action string) error {
+	body, _ := json.MarshalIndent(capabilityMigration{1, action}, "", "  ")
+	body = append(body, '\n')
+	f, err := os.OpenFile(migrationPath(root), os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+	if err != nil {
+		return err
+	}
+	_, werr := f.Write(body)
+	cerr := f.Close()
+	if werr != nil {
+		return werr
+	}
+	return cerr
+}
+func readMigration(root string) (capabilityMigration, error) {
+	path := migrationPath(root)
+	info, err := os.Lstat(path)
+	if err != nil {
+		return capabilityMigration{}, err
+	}
+	st, ok := info.Sys().(*syscall.Stat_t)
+	if !ok || !info.Mode().IsRegular() || info.Mode().Perm() != 0o600 || st.Nlink != 1 {
+		return capabilityMigration{}, errors.New("unsafe runtime migration journal")
+	}
+	body, err := os.ReadFile(path)
+	if err != nil {
+		return capabilityMigration{}, err
+	}
+	var m capabilityMigration
+	d := json.NewDecoder(bytes.NewReader(body))
+	d.DisallowUnknownFields()
+	if err = d.Decode(&m); err != nil {
+		return m, err
+	}
+	canonical, _ := json.MarshalIndent(m, "", "  ")
+	canonical = append(canonical, '\n')
+	if !bytes.Equal(body, canonical) || m.ContractVersion != 1 || (m.Action != "initialize" && m.Action != "rollback") {
+		return m, errors.New("invalid runtime migration journal")
+	}
+	return m, nil
+}
 
 func Create(pl plan.CreationPlan, runtime, memory string) error {
 	return CreateWithCheckpoint(pl, runtime, memory, nil)
@@ -36,6 +102,11 @@ func CreateWithCheckpoint(pl plan.CreationPlan, runtime, memory string, checkpoi
 				return err
 			}
 			if err := os.WriteFile(dst, f.Bytes, 0600); err != nil {
+				return err
+			}
+		}
+		if target.role == "runtime" {
+			if err := os.MkdirAll(filepath.Join(target.path, "skills"), 0700); err != nil {
 				return err
 			}
 		}
@@ -98,6 +169,142 @@ func ValidatePair(runtime, memory string) error {
 // require access to the separate memory repository.
 func ValidateRuntime(runtime string) (string, error) {
 	return validate(runtime, "runtime", false)
+}
+
+// InitializeCapabilities migrates a validated v1 runtime source to the strict
+// instruction-only source contract. It never touches installed instances.
+func InitializeCapabilities(runtime string) error {
+	return withRootLock(runtime, func() error {
+		if _, err := ValidateRuntime(runtime); err != nil {
+			return err
+		}
+		if err := writeMigration(runtime, "initialize"); err != nil {
+			return err
+		}
+		return completeCapabilityMigration(runtime, "initialize")
+	})
+}
+func completeCapabilityMigration(runtime, action string) error {
+	contractPath := filepath.Join(runtime, ".my-friday", "capability-contract.json")
+	schemaPath := filepath.Join(runtime, ".my-friday", "schemas", "capability-contract.v1.schema.json")
+	if action == "rollback" {
+		entries, err := os.ReadDir(filepath.Join(runtime, "skills"))
+		if err != nil {
+			return err
+		}
+		for _, e := range entries {
+			if e.Name() != ".gitkeep" {
+				return errors.New("runtime capability rollback refused: capability source exists")
+			}
+		}
+		if err = os.WriteFile(filepath.Join(runtime, "skills", ".gitkeep"), nil, 0o600); err != nil && !errors.Is(err, os.ErrExist) {
+			return err
+		}
+		if err = os.Remove(contractPath); err != nil && !errors.Is(err, os.ErrNotExist) {
+			return err
+		}
+		if err = os.Remove(schemaPath); err != nil && !errors.Is(err, os.ErrNotExist) {
+			return err
+		}
+		if capabilityMigrationHook != nil {
+			if err = capabilityMigrationHook("rollback-applied"); err != nil {
+				return err
+			}
+		}
+		if err = os.Remove(migrationPath(runtime)); err != nil {
+			return err
+		}
+		_, err = ValidateRuntime(runtime)
+		return err
+	}
+	if _, err := os.Lstat(contractPath); err == nil {
+		body, _ := os.ReadFile(contractPath)
+		if !bytes.Equal(body, []byte(plan.CapabilityContract())) {
+			return errors.New("runtime capability contract collision")
+		}
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	if _, err := os.Lstat(schemaPath); err == nil {
+		body, _ := os.ReadFile(schemaPath)
+		if !bytes.Equal(body, []byte(plan.CapabilityContractSchema())) {
+			return errors.New("runtime capability schema collision")
+		}
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	contractTmp := contractPath + ".new"
+	schemaTmp := schemaPath + ".new"
+	cleanup := func() { _ = os.Remove(contractTmp); _ = os.Remove(schemaTmp) }
+	if err := os.WriteFile(schemaTmp, []byte(plan.CapabilityContractSchema()), 0o600); err != nil {
+		if !errors.Is(err, os.ErrExist) {
+			return err
+		}
+	}
+	if err := os.WriteFile(contractTmp, []byte(plan.CapabilityContract()), 0o600); err != nil {
+		cleanup()
+		return err
+	}
+	if err := os.Rename(schemaTmp, schemaPath); err != nil {
+		if !errors.Is(err, os.ErrNotExist) {
+			cleanup()
+			return err
+		}
+	}
+	if err := os.Rename(contractTmp, contractPath); err != nil {
+		if !errors.Is(err, os.ErrNotExist) {
+			cleanup()
+			return err
+		}
+	}
+	if err := os.Remove(filepath.Join(runtime, "skills", ".gitkeep")); err != nil && !errors.Is(err, os.ErrNotExist) {
+		_ = os.Remove(contractPath)
+		_ = os.Remove(schemaPath)
+		return err
+	}
+	if capabilityMigrationHook != nil {
+		if err := capabilityMigrationHook("initialize-applied"); err != nil {
+			return err
+		}
+	}
+	if err := os.Remove(migrationPath(runtime)); err != nil {
+		return err
+	}
+	if _, err := ValidateRuntime(runtime); err != nil {
+		return fmt.Errorf("runtime capability initialization recovery required: %w", err)
+	}
+	return nil
+}
+
+func RecoverCapabilities(runtime string) error {
+	return withRootLock(runtime, func() error {
+		m, err := readMigration(runtime)
+		if err != nil {
+			return err
+		}
+		return completeCapabilityMigration(runtime, m.Action)
+	})
+}
+
+// RollbackCapabilities restores the v1 reserved source layout only when no
+// capability package exists.
+func RollbackCapabilities(runtime string) error {
+	return withRootLock(runtime, func() error {
+		if _, err := ValidateRuntime(runtime); err != nil {
+			return err
+		}
+		entries, err := os.ReadDir(filepath.Join(runtime, "skills"))
+		if err != nil {
+			return err
+		}
+		if len(entries) != 0 {
+			return errors.New("runtime capability rollback refused: capability source exists")
+		}
+		if err = writeMigration(runtime, "rollback"); err != nil {
+			return err
+		}
+		return completeCapabilityMigration(runtime, "rollback")
+	})
 }
 
 func ValidateFreshPair(runtime, memory string) error {
@@ -182,6 +389,17 @@ func validate(root, role string, allowMarker bool) (string, error) {
 	}
 	if role == "runtime" {
 		allowed["schemas/assistant-profile.v1.schema.json"] = true
+		contractPath := filepath.Join(root, ".my-friday/capability-contract.json")
+		schemaPath := filepath.Join(root, ".my-friday/schemas/capability-contract.v1.schema.json")
+		contract, contractErr := os.ReadFile(contractPath)
+		schema, schemaErr := os.ReadFile(schemaPath)
+		if contractErr == nil || schemaErr == nil {
+			if contractErr != nil || schemaErr != nil || !bytes.Equal(contract, []byte(plan.CapabilityContract())) || !bytes.Equal(schema, []byte(plan.CapabilityContractSchema())) {
+				return "", errors.New("runtime capability contract differs from embedded contract")
+			}
+			allowed["capability-contract.json"] = true
+			allowed["schemas/capability-contract.v1.schema.json"] = true
+		}
 	}
 	if err = filepath.WalkDir(filepath.Join(root, ".my-friday"), func(path string, entry fs.DirEntry, walkErr error) error {
 		if walkErr != nil {
@@ -323,6 +541,9 @@ func exactFreshGitMetadata(root string) bool {
 }
 func noUnexpected(root string, pl plan.CreationPlan, role string, allowMarker bool) bool {
 	allowed := map[string]bool{".": true, ".git": true}
+	if role == "runtime" {
+		allowed["skills"] = true
+	}
 	if allowMarker {
 		allowed[".my-friday/creation-state.json"] = true
 	}

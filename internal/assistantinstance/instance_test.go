@@ -3,6 +3,9 @@ package assistantinstance
 import (
 	"encoding/json"
 	"errors"
+	bootstrap "github.com/acoz-labs/my-friday/internal/plan"
+	"github.com/acoz-labs/my-friday/internal/profile"
+	"github.com/acoz-labs/my-friday/internal/repository"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -118,6 +121,278 @@ func TestCreateVerifyRemovePreservesSiblings(t *testing.T) {
 		if strings.Contains(entry.Name(), "alfred") {
 			t.Fatalf("per-name artifact remains after removal: %s", entry.Name())
 		}
+	}
+}
+
+func TestUpgradeV1InstanceProjectsManifestBoundBuilder(t *testing.T) {
+	home, exe, codex := fixture(t)
+	p, err := PlanCreate(home, "alfred", exe, codex)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = Create(p, exe, codex); err != nil {
+		t.Fatal(err)
+	}
+	manifestPath := filepath.Join(p.Paths.Root, "manifest.json")
+	body, err := os.ReadFile(manifestPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var m Manifest
+	if err = json.Unmarshal(body, &m); err != nil {
+		t.Fatal(err)
+	}
+	m.ContractVersion = 1
+	m.Owned = []string{"codex", "dependencies", "memory", "runtime", "workspace"}
+	m.CapabilityBuilder = ""
+	m.CapabilityBuilderSHA256 = ""
+	m.CapabilityPolicySHA256 = ""
+	body, _ = json.MarshalIndent(m, "", "  ")
+	body = append(body, '\n')
+	if err = os.WriteFile(manifestPath, body, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err = os.RemoveAll(filepath.Join(p.Paths.Root, "capabilities")); err != nil {
+		t.Fatal(err)
+	}
+	if err = os.RemoveAll(filepath.Join(p.Paths.Root, "workspace", ".agents")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = Verify(home, "alfred"); err != nil {
+		t.Fatalf("v1 compatibility: %v", err)
+	}
+	upgrade, err := PlanUpgrade(home, "alfred")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = Upgrade(upgrade); err != nil {
+		t.Fatal(err)
+	}
+	upgraded, err := Verify(home, "alfred")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if upgraded.ContractVersion != 2 || upgraded.CapabilityBuilderSHA256 == "" {
+		t.Fatalf("not upgraded: %#v", upgraded)
+	}
+	if err = os.WriteFile(filepath.Join(upgraded.CapabilityBuilder, "SKILL.md"), []byte("drift"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = Verify(home, "alfred"); err == nil || !strings.Contains(err.Error(), "builder drift") {
+		t.Fatalf("builder drift accepted: %v", err)
+	}
+}
+
+func TestCapabilityEmptyInstanceCanRollbackToV1(t *testing.T) {
+	home, exe, codex := fixture(t)
+	p, err := PlanCreate(home, "alfred", exe, codex)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = Create(p, exe, codex); err != nil {
+		t.Fatal(err)
+	}
+	rollback, err := PlanRollback(home, "alfred")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = Rollback(rollback); err != nil {
+		t.Fatal(err)
+	}
+	m, err := Verify(home, "alfred")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if m.ContractVersion != 1 || m.CapabilityBuilder != "" {
+		t.Fatalf("rollback failed: %#v", m)
+	}
+}
+
+func TestUpgradeFailurePreservesPreexistingWorkspaceAgents(t *testing.T) {
+	home, exe, codex := fixture(t)
+	p, err := PlanCreate(home, "alfred", exe, codex)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = Create(p, exe, codex); err != nil {
+		t.Fatal(err)
+	}
+	manifestPath := filepath.Join(p.Paths.Root, "manifest.json")
+	body, err := os.ReadFile(manifestPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var m Manifest
+	if err = json.Unmarshal(body, &m); err != nil {
+		t.Fatal(err)
+	}
+	m.ContractVersion = 1
+	m.Owned = []string{"codex", "dependencies", "memory", "runtime", "workspace"}
+	m.CapabilityBuilder = ""
+	m.CapabilityBuilderSHA256 = ""
+	m.CapabilityPolicySHA256 = ""
+	body, _ = json.MarshalIndent(m, "", "  ")
+	body = append(body, '\n')
+	if err = os.WriteFile(manifestPath, body, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err = os.RemoveAll(filepath.Join(p.Paths.Root, "capabilities")); err != nil {
+		t.Fatal(err)
+	}
+	if err = os.RemoveAll(filepath.Join(p.Paths.Root, "workspace", ".agents")); err != nil {
+		t.Fatal(err)
+	}
+	keep := filepath.Join(p.Paths.Root, "workspace", ".agents", "keep")
+	if err = os.MkdirAll(keep, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err = os.WriteFile(filepath.Join(keep, "foreign"), []byte("keep"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	pl, err := PlanUpgrade(home, "alfred")
+	if err != nil {
+		t.Fatal(err)
+	}
+	upgradeHook = func(string) error { return errors.New("injected upgrade failure") }
+	defer func() { upgradeHook = nil }()
+	if err = Upgrade(pl); err == nil {
+		t.Fatal("upgrade fault missing")
+	}
+	if b, err := os.ReadFile(filepath.Join(keep, "foreign")); err != nil || string(b) != "keep" {
+		t.Fatal("foreign workspace state changed")
+	}
+	upgradeHook = nil
+	result, err := Recover(home, "alfred")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(result, "completed capability upgrade") {
+		t.Fatalf("result=%q", result)
+	}
+	m, err = Verify(home, "alfred")
+	if err != nil || m.ContractVersion != 2 {
+		t.Fatalf("upgrade recovery failed: %#v %v", m, err)
+	}
+	if b, err := os.ReadFile(filepath.Join(keep, "foreign")); err != nil || string(b) != "keep" {
+		t.Fatal("foreign state changed during recovery")
+	}
+}
+
+func TestRollbackRechecksWorkspaceSkillsUnderLock(t *testing.T) {
+	home, exe, codex := fixture(t)
+	p, err := PlanCreate(home, "alfred", exe, codex)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = Create(p, exe, codex); err != nil {
+		t.Fatal(err)
+	}
+	pl, err := PlanRollback(home, "alfred")
+	if err != nil {
+		t.Fatal(err)
+	}
+	sibling := filepath.Join(p.Paths.Root, "workspace", ".agents", "skills", "foreign")
+	if err = os.Mkdir(sibling, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err = Rollback(pl); err == nil {
+		t.Fatal("rollback ignored new sibling")
+	}
+	if _, err = os.Stat(filepath.Join(p.Paths.Root, "workspace", ".agents", "skills", "capability-builder", "SKILL.md")); err != nil {
+		t.Fatal("builder damaged")
+	}
+	if _, err = os.Stat(sibling); err != nil {
+		t.Fatal("foreign sibling removed")
+	}
+}
+
+func TestRollbackFaultRecoversFromQuarantinedOwnedState(t *testing.T) {
+	home, exe, codex := fixture(t)
+	p, err := PlanCreate(home, "alfred", exe, codex)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = Create(p, exe, codex); err != nil {
+		t.Fatal(err)
+	}
+	pl, err := PlanRollback(home, "alfred")
+	if err != nil {
+		t.Fatal(err)
+	}
+	rollbackHook = func(string) error { return errors.New("injected rollback stop") }
+	if err = Rollback(pl); err == nil {
+		t.Fatal("fault missing")
+	}
+	rollbackHook = nil
+	result, err := Recover(home, "alfred")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(result, "completed capability rollback") {
+		t.Fatalf("result=%q", result)
+	}
+	m, err := Verify(home, "alfred")
+	if err != nil || m.ContractVersion != 1 {
+		t.Fatalf("rollback recovery failed: %#v %v", m, err)
+	}
+}
+
+func TestUpgradeInitializesOnlyPrivateCopiedRuntime(t *testing.T) {
+	home, exe, codex := fixture(t)
+	runtimeRoot := filepath.Join(home, "source-runtime")
+	memoryRoot := filepath.Join(home, "source-memory")
+	configured, _ := profile.New("Friday", "", "Help", "balanced", "")
+	rp, _ := bootstrap.Build(configured, runtimeRoot, memoryRoot)
+	if err := repository.Create(rp, runtimeRoot, memoryRoot); err != nil {
+		t.Fatal(err)
+	}
+	p, err := PlanCreate(home, "alfred", exe, codex)
+	if err != nil {
+		t.Fatal(err)
+	}
+	p, err = WithRepositories(p, runtimeRoot, memoryRoot, rp.AssistantID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = Create(p, exe, codex); err != nil {
+		t.Fatal(err)
+	}
+	privateRuntime := filepath.Join(p.Paths.Root, "runtime")
+	if err = repository.RollbackCapabilities(privateRuntime); err != nil {
+		t.Fatal(err)
+	}
+	manifestPath := filepath.Join(p.Paths.Root, "manifest.json")
+	body, _ := os.ReadFile(manifestPath)
+	var m Manifest
+	_ = json.Unmarshal(body, &m)
+	m.ContractVersion = 1
+	m.Owned = []string{"codex", "dependencies", "memory", "runtime", "workspace"}
+	m.CapabilityBuilder = ""
+	m.CapabilityBuilderSHA256 = ""
+	m.CapabilityPolicySHA256 = ""
+	body, _ = json.MarshalIndent(m, "", "  ")
+	body = append(body, '\n')
+	if err = os.WriteFile(manifestPath, body, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err = os.RemoveAll(filepath.Join(p.Paths.Root, "capabilities")); err != nil {
+		t.Fatal(err)
+	}
+	if err = os.RemoveAll(filepath.Join(p.Paths.Root, "workspace", ".agents")); err != nil {
+		t.Fatal(err)
+	}
+	pl, err := PlanUpgrade(home, "alfred")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = Upgrade(pl); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = os.Stat(filepath.Join(privateRuntime, ".my-friday", "capability-contract.json")); err != nil {
+		t.Fatal("private runtime not initialized")
+	}
+	if _, err = os.Stat(filepath.Join(runtimeRoot, ".my-friday", "capability-contract.json")); err != nil {
+		t.Fatal("external source unexpectedly changed")
 	}
 }
 

@@ -20,6 +20,7 @@ func TestProductionNetworkAndSubprocessBoundary(t *testing.T) {
 		"unicode": true, "unicode/utf8": true, "unsafe": true,
 		"github.com/acoz-labs/my-friday/internal/environment":       true,
 		"github.com/acoz-labs/my-friday/internal/assistantinstance": true,
+		"github.com/acoz-labs/my-friday/internal/capability":        true,
 		"github.com/acoz-labs/my-friday/internal/codexhome":         true,
 		"github.com/acoz-labs/my-friday/internal/gitexec":           true,
 		"github.com/acoz-labs/my-friday/internal/plan":              true,

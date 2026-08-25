@@ -1,5 +1,13 @@
 # Deployment
 
+Capability-bearing candidates must additionally prove the strict package
+contract, builder isolation, exact install/upgrade plans, drift and collision
+refusal, retained-generation enable, complete reversal with source preserved,
+and fresh-task Codex discovery. Existing v1 roots remain unchanged until an
+explicit migration; release publication never mutates a user root. Acceptance
+must use the nominated immutable artifact and independent evidence rather than
+contributor-local model behavior.
+
 ## Delivery profile
 
 My Friday is an `artifact`: one native macOS/ARM64 command. It has no staging

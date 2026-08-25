@@ -18,6 +18,9 @@ flowchart LR
   M --> Z
   R --> B[Managed Codex baseline plan]
   B --> H[CODEX_HOME/AGENTS.md]
+  R --> S[Versioned capability source]
+  S --> Q[Deterministic checks]
+  Q --> I[Instance skill projection]
 ```
 
 | Component | Responsibility | Boundary |
@@ -28,6 +31,7 @@ flowchart LR
 | `internal/transaction` | Stage, validate, promote, roll back, recover | No overwrite of non-empty targets |
 | `internal/codexhome` | Inspect, preview, mutate, verify, and recover one projection | Authority limited to `AGENTS.md` and `.my-friday` |
 | `internal/assistantinstance` | Create, verify, launch, remove, and recover named instances | One fixed private root plus one exact launcher leaf |
+| `internal/capability` | Validate strict packages and manage copied skill projections | One named instance; no global skills, code, network, credentials, or dependencies |
 
 Runtime identity and governed memory share only a deterministic non-secret
 assistant identifier. Absolute paths and plan IDs are not written into either
@@ -38,3 +42,6 @@ boundary is specified in [installed Codex baseline](architecture/installed-codex
 and [ADR 0002](decisions/0002-manifest-owned-codex-baseline.md).
 The normal installed boundary is specified in [named assistant instances](architecture/named-assistant-instances.md)
 and [ADR 0003](decisions/0003-native-named-assistant-launcher.md).
+The source/projection lifecycle is specified in
+[capability workshop](architecture/capability-workshop.md) and
+[ADR 0004](decisions/0004-source-first-instruction-capabilities.md).

@@ -190,7 +190,7 @@ func render(role string, p profile.Profile) []File {
 	if role == "runtime" {
 		pb, _ := json.MarshalIndent(p, "", "  ")
 		pb = append(pb, '\n')
-		files = append(files, file(role, "assistant/profile.json", pb), file(role, "skills/.gitkeep", nil), file(role, ".my-friday/schemas/assistant-profile.v1.schema.json", []byte(profileSchema)), file(role, ".my-friday/schemas/repository-manifest.v1.schema.json", []byte(manifestSchema)))
+		files = append(files, file(role, "assistant/profile.json", pb), file(role, ".my-friday/capability-contract.json", []byte(capabilityContract)), file(role, ".my-friday/schemas/capability-contract.v1.schema.json", []byte(capabilityContractSchema)), file(role, ".my-friday/schemas/assistant-profile.v1.schema.json", []byte(profileSchema)), file(role, ".my-friday/schemas/repository-manifest.v1.schema.json", []byte(manifestSchema)))
 	} else {
 		files = append(files, file(role, "data/observations/.gitkeep", nil), file(role, "data/journals/.gitkeep", nil), file(role, "data/proposals/.gitkeep", nil), file(role, "data/memories/.gitkeep", nil), file(role, "schemas/README.md", []byte("# Memory schemas\n\nReserved for versioned governed-memory schemas in a future outcome.\n")), file(role, ".my-friday/schemas/repository-manifest.v1.schema.json", []byte(manifestSchema)))
 	}
@@ -213,6 +213,10 @@ func agents(role string) string {
 
 const manifestSchema = `{"$schema":"https://json-schema.org/draft/2020-12/schema","$id":"https://schemas.my-friday.dev/repository-manifest.v1.schema.json","type":"object","additionalProperties":false,"required":["contract_version","repository_role","assistant_id","generation"],"properties":{"contract_version":{"const":1},"repository_role":{"enum":["runtime","memory"]},"assistant_id":{"type":"string","pattern":"^asst-[0-9a-f]{32}$"},"generation":{"type":"object","additionalProperties":false,"required":["tool","tool_contract_version"],"properties":{"tool":{"const":"my-friday"},"tool_contract_version":{"const":1}}}}}`
 const profileSchema = `{"$schema":"https://json-schema.org/draft/2020-12/schema","$id":"https://schemas.my-friday.dev/assistant-profile.v1.schema.json","type":"object","additionalProperties":false,"required":["contract_version","assistant_id","identity","communication"],"properties":{"contract_version":{"const":1},"assistant_id":{"type":"string","pattern":"^asst-[0-9a-f]{32}$"},"identity":{"type":"object","additionalProperties":false,"required":["display_name","address_user_as","purpose"],"properties":{"display_name":{"type":"string","minLength":1,"x-my-friday-max-graphemes":60},"address_user_as":{"type":["string","null"],"minLength":1,"x-my-friday-max-graphemes":60},"purpose":{"type":"string","minLength":1,"x-my-friday-max-graphemes":240}}},"communication":{"type":"object","additionalProperties":false,"required":["preset","custom_guidance"],"properties":{"preset":{"enum":["balanced","concise","conversational","custom"]},"custom_guidance":{"type":["string","null"],"x-my-friday-max-graphemes":240}}}}}`
+const capabilityContract = "{\"contract_version\":1,\"profile\":\"instruction-only\"}\n"
+const capabilityContractSchema = `{"$schema":"https://json-schema.org/draft/2020-12/schema","type":"object","additionalProperties":false,"required":["contract_version","profile"],"properties":{"contract_version":{"const":1},"profile":{"const":"instruction-only"}}}`
 
-func ManifestSchema() string { return manifestSchema }
-func ProfileSchema() string  { return profileSchema }
+func ManifestSchema() string           { return manifestSchema }
+func ProfileSchema() string            { return profileSchema }
+func CapabilityContract() string       { return capabilityContract }
+func CapabilityContractSchema() string { return capabilityContractSchema }

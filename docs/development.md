@@ -161,3 +161,8 @@ Codex, shell, launcher, or credential state.
 Regression coverage includes PATH symlink resolution, caller-`HOME` refusal as
 authority, forged managed-executable manifests, same-name concurrency, and
 migration success plus injected legacy-cleanup failure.
+
+Capability contract and lifecycle tests live under `internal/capability`.
+They use deterministic temporary fixtures and never invoke Codex or the
+network. Run `go test -race ./internal/capability` while iterating and the full
+`bin/container bin/ci` before review.

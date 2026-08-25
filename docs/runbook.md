@@ -1,5 +1,33 @@
 # Runbook
 
+## Capability lifecycle diagnosis
+
+Start with `my-friday capability inspect NAME SLUG --plain`, then run
+`validate`, `test`, and `verify`. `source-changed` requires a fresh tested
+upgrade plan. Drift or collision is preserved; restore the receipt-bound
+projection or resolve a foreign collision only after identifying its owner.
+Disable retains a generation for enable. Remove clears only the selected
+instance projection and control state and leaves runtime source intact.
+Lifecycle changes require a fresh Codex task.
+
+`capability recovery required` means a durable transaction journal remains.
+Review the named instance and run `my-friday capability recover NAME SLUG`;
+after exact confirmation it serializes on the instance lock and restores the
+receipt-declared projection from retained bytes. If no receipt exists, recovery
+restores absence. Do not delete the journal or generation manually.
+
+Use `my-friday capability rollback --runtime PATH` or `my-friday assistant
+rollback NAME` only for an unused v2 boundary. Runtime rollback refuses any
+package source; assistant rollback refuses any receipt, generation,
+transaction, or additional workspace skill. Preserve the compatible v2 binary
+if either refusal occurs.
+
+Runtime migration recovery is `my-friday capability recover --runtime PATH`.
+Named-instance migration recovery is `my-friday assistant recover NAME`. Both
+require exact `Recover` confirmation and accept only canonical owned journals;
+do not repair, replace, or delete a malformed journal by hand. Preserve foreign
+projection, control, and workspace entries for ownership diagnosis.
+
 ## Recover a named assistant instance
 
 Run `my-friday assistant verify <name>` first. If removal stopped after the
