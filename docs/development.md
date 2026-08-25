@@ -68,6 +68,17 @@ Acceptance requires the current user's disposable instance tree to remain
 quiescent after those checks return. Consistent with ADR 0002, this detects
 ordinary replacement but does not claim isolation from an actively malicious
 same-UID process that can continuously rewrite owner-controlled directories.
+For the credentialed TUI smoke, the supervisor captures a metadata-only,
+no-follow receipt only after the bounded Codex process exits, descendants are
+reaped, and no cooperating writer remains. The receipt binds the candidate,
+run, instance-root and Codex-directory identities plus every generated cache,
+session, log, database, and other non-managed entry. Cleanup requires that exact
+device/inode/type/owner/mode/link-count/size/mtime tree on every revalidation; a new,
+missing, replaced, linked, or symlinked entry is preserved and refused. The
+helper receives the same reviewed Git-capable PATH as candidate lifecycle
+commands so complete manifest verification cannot depend on ambient shell PATH.
+The complete receipt and manifest authority are replayed once more immediately
+before unchanged production removal planning.
 They also prove a drifted collision/sibling receipt is reported and preserved
 without blocking manifest-proven instance and copied-credential cleanup, while
 an out-of-scope receipt remains a fail-closed pre-mutation error.

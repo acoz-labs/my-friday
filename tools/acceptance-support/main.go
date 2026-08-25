@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"sort"
 	"strconv"
@@ -31,6 +32,42 @@ type stringList []string
 
 func (v *stringList) String() string     { return strings.Join(*v, ",") }
 func (v *stringList) Set(s string) error { *v = append(*v, s); return nil }
+
+type codexCleanupEntry struct {
+	Path   string `json:"path"`
+	Device uint64 `json:"device"`
+	Inode  uint64 `json:"inode"`
+	Mode   uint32 `json:"mode"`
+	UID    uint32 `json:"uid"`
+	Nlink  uint64 `json:"nlink"`
+	Size   int64  `json:"size"`
+	MtimeS int64  `json:"mtime_s"`
+	MtimeN int64  `json:"mtime_ns"`
+}
+
+type codexCleanupReceipt struct {
+	Schema      string              `json:"schema"`
+	Candidate   string              `json:"candidate"`
+	RunID       string              `json:"run_id"`
+	Name        string              `json:"name"`
+	RootDevice  uint64              `json:"root_device"`
+	RootInode   uint64              `json:"root_inode"`
+	CodexDevice uint64              `json:"codex_device"`
+	CodexInode  uint64              `json:"codex_inode"`
+	Entries     []codexCleanupEntry `json:"entries"`
+}
+
+func decodeCodexCleanupReceipts(encoded []string, candidate, runID string) (map[string]codexCleanupReceipt, error) {
+	receipts := make(map[string]codexCleanupReceipt, len(encoded))
+	for _, value := range encoded {
+		var receipt codexCleanupReceipt
+		if json.Unmarshal([]byte(value), &receipt) != nil || validateReceiptShape(receipt, candidate, runID) != nil || receipts[receipt.Name].Name != "" {
+			return nil, errors.New("invalid or duplicate generated Codex-state receipt")
+		}
+		receipts[receipt.Name] = receipt
+	}
+	return receipts, nil
+}
 
 func main() {
 	if len(os.Args) < 2 {
@@ -255,9 +292,12 @@ func main() {
 	case "cleanup-named":
 		fs := flag.NewFlagSet("cleanup-named", flag.ExitOnError)
 		home := fs.String("home", "", "account home")
-		var names, leafReceipts stringList
+		candidate := fs.String("candidate", "", "exact candidate SHA")
+		runID := fs.String("run-id", "", "acceptance run identifier")
+		var names, leafReceipts, codexReceipts stringList
 		fs.Var(&names, "name", "manifest-owned instance name")
 		fs.Var(&leafReceipts, "leaf-receipt", "JSON exact-leaf cleanup receipt")
+		fs.Var(&codexReceipts, "codex-receipt", "JSON exact generated Codex-state receipt")
 		_ = fs.Parse(os.Args[2:])
 		var leaves []exactLeaf
 		for _, encoded := range leafReceipts {
@@ -267,9 +307,26 @@ func main() {
 			}
 			leaves = append(leaves, leaf)
 		}
-		if err := cleanupNamed(*home, names, leaves); err != nil {
+		receipts, receiptErr := decodeCodexCleanupReceipts(codexReceipts, *candidate, *runID)
+		if receiptErr != nil {
+			fatal(receiptErr.Error())
+		}
+		if err := cleanupNamed(*home, names, leaves, receipts, *candidate, *runID); err != nil {
 			fatal(err.Error())
 		}
+	case "codex-cleanup-receipt":
+		fs := flag.NewFlagSet("codex-cleanup-receipt", flag.ExitOnError)
+		home := fs.String("home", "", "account home")
+		name := fs.String("name", "", "manifest-owned instance name")
+		candidate := fs.String("candidate", "", "exact candidate SHA")
+		runID := fs.String("run-id", "", "acceptance run identifier")
+		_ = fs.Parse(os.Args[2:])
+		receipt, err := captureCodexCleanupReceipt(*home, *name, *candidate, *runID)
+		if err != nil {
+			fatal(err.Error())
+		}
+		body, _ := json.Marshal(receipt)
+		fmt.Println(string(body))
 	case "setsid-probe":
 		executable, err := os.Executable()
 		if err != nil {
@@ -423,6 +480,109 @@ var cleanupMutationHook func(string)
 
 const authQuarantinePrefix = ".auth.json.my-friday-cleanup-"
 
+func validateReceiptShape(receipt codexCleanupReceipt, candidate, runID string) error {
+	decodedCandidate, candidateErr := hex.DecodeString(candidate)
+	if receipt.Schema != "generated-codex-cleanup-receipt-v1" || receipt.Candidate != candidate || receipt.RunID != runID || receipt.Name == "" || candidateErr != nil || len(decodedCandidate) != 20 || candidate != strings.ToLower(candidate) || runID == "" || runID != filepath.Base(runID) || strings.ContainsAny(runID, "/\\") || receipt.RootDevice == 0 || receipt.RootInode == 0 || receipt.CodexDevice == 0 || receipt.CodexInode == 0 {
+		return errors.New("generated Codex-state receipt authority is malformed")
+	}
+	seen := make(map[string]bool, len(receipt.Entries))
+	for _, entry := range receipt.Entries {
+		clean := filepath.ToSlash(filepath.Clean(entry.Path))
+		kind, permissions := entry.Mode&unix.S_IFMT, entry.Mode&0o777
+		unsafePermissions := permissions&0o022 != 0 || (kind == unix.S_IFREG && permissions&0o600 != 0o600) || (kind == unix.S_IFDIR && permissions&0o700 != 0o700)
+		if entry.Path == "" || clean != entry.Path || strings.HasPrefix(clean, "../") || strings.HasPrefix(clean, "/") || seen[entry.Path] || entry.Device == 0 || entry.Inode == 0 || entry.UID != uint32(os.Getuid()) || entry.Nlink == 0 || entry.Size < 0 || (kind != unix.S_IFREG && kind != unix.S_IFDIR) || (kind == unix.S_IFREG && entry.Nlink != 1) || unsafePermissions {
+			return errors.New("generated Codex-state receipt entry is malformed")
+		}
+		seen[entry.Path] = true
+	}
+	return nil
+}
+
+func captureCodexCleanupReceipt(home, name, candidate, runID string) (codexCleanupReceipt, error) {
+	paths, err := assistantinstance.Derive(home, name)
+	if err != nil {
+		return codexCleanupReceipt{}, err
+	}
+	if _, err = assistantinstance.Verify(home, name); err != nil {
+		return codexCleanupReceipt{}, err
+	}
+	codexRoot := filepath.Join(paths.Root, "codex")
+	rootInfo, err := os.Lstat(paths.Root)
+	if err != nil || !rootInfo.IsDir() || rootInfo.Mode()&os.ModeSymlink != 0 {
+		return codexCleanupReceipt{}, errors.New("unsafe generated Codex receipt root")
+	}
+	codexInfo, err := os.Lstat(codexRoot)
+	if err != nil || !codexInfo.IsDir() || codexInfo.Mode()&os.ModeSymlink != 0 {
+		return codexCleanupReceipt{}, errors.New("unsafe generated Codex receipt directory")
+	}
+	rootStat := rootInfo.Sys().(*syscall.Stat_t)
+	codexStat := codexInfo.Sys().(*syscall.Stat_t)
+	var entries []codexCleanupEntry
+	err = filepath.WalkDir(codexRoot, func(path string, entry os.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		relative, relErr := filepath.Rel(codexRoot, path)
+		if relErr != nil || relative == "." {
+			return relErr
+		}
+		relative = filepath.ToSlash(relative)
+		top := strings.Split(relative, "/")[0]
+		if top == "config.toml" || top == "AGENTS.md" || top == "auth.json" || strings.HasPrefix(top, authQuarantinePrefix) {
+			if strings.Contains(relative, "/") {
+				return fmt.Errorf("managed Codex cleanup leaf became a directory: %s", relative)
+			}
+			return nil
+		}
+		info, statErr := os.Lstat(path)
+		if statErr != nil || info.Mode()&os.ModeSymlink != 0 {
+			return fmt.Errorf("unsafe generated Codex entry: %s", relative)
+		}
+		st := info.Sys().(*syscall.Stat_t)
+		if st.Uid != uint32(os.Getuid()) || (!info.IsDir() && (!info.Mode().IsRegular() || st.Nlink != 1)) {
+			return fmt.Errorf("unsafe generated Codex metadata: %s", relative)
+		}
+		mtimeS, mtimeN := statMtime(st)
+		entries = append(entries, codexCleanupEntry{Path: relative, Device: uint64(st.Dev), Inode: st.Ino, Mode: uint32(st.Mode), UID: st.Uid, Nlink: uint64(st.Nlink), Size: st.Size, MtimeS: mtimeS, MtimeN: mtimeN})
+		return nil
+	})
+	if err != nil {
+		return codexCleanupReceipt{}, err
+	}
+	sort.Slice(entries, func(i, j int) bool { return entries[i].Path < entries[j].Path })
+	receipt := codexCleanupReceipt{Schema: "generated-codex-cleanup-receipt-v1", Candidate: candidate, RunID: runID, Name: name, RootDevice: uint64(rootStat.Dev), RootInode: rootStat.Ino, CodexDevice: uint64(codexStat.Dev), CodexInode: codexStat.Ino, Entries: entries}
+	if err = validateReceiptShape(receipt, candidate, runID); err != nil {
+		return codexCleanupReceipt{}, err
+	}
+	return receipt, nil
+}
+
+func validateCodexCleanupReceipt(home, name, candidate, runID string, receipt *codexCleanupReceipt) ([]string, error) {
+	if receipt == nil {
+		return nil, nil
+	}
+	if validateReceiptShape(*receipt, candidate, runID) != nil || receipt.Name != name {
+		return nil, errors.New("generated Codex-state receipt names another instance")
+	}
+	current, err := captureCodexCleanupReceipt(home, name, candidate, runID)
+	if err != nil {
+		return nil, err
+	}
+	if current.RootDevice != receipt.RootDevice || current.RootInode != receipt.RootInode || current.CodexDevice != receipt.CodexDevice || current.CodexInode != receipt.CodexInode || !reflect.DeepEqual(current.Entries, receipt.Entries) {
+		return nil, errors.New("generated Codex state changed after receipt capture")
+	}
+	tops := make(map[string]bool)
+	for _, entry := range receipt.Entries {
+		tops[strings.Split(entry.Path, "/")[0]] = true
+	}
+	result := make([]string, 0, len(tops))
+	for top := range tops {
+		result = append(result, top)
+	}
+	sort.Strings(result)
+	return result, nil
+}
+
 func restoreQuarantinedAuth(fromFD int, quarantine string, codexFD int) error {
 	return renameNoReplace(fromFD, quarantine, codexFD, "auth.json")
 }
@@ -488,7 +648,7 @@ func neutralizeVerifiedAuth(dirFD int, name string, beforeMutation func() error)
 	return nil
 }
 
-func verifyDisposableAuthAuthority(home, name string, paths assistantinstance.Paths, rootFD, codexFD int, codexExtras, rootExtras []string) (assistantinstance.Manifest, error) {
+func verifyDisposableAuthAuthority(home, name, candidate, runID string, paths assistantinstance.Paths, rootFD, codexFD int, codexExtras, rootExtras []string, receipt *codexCleanupReceipt) (assistantinstance.Manifest, error) {
 	manifest, err := assistantinstance.Verify(home, name)
 	if err != nil {
 		return manifest, fmt.Errorf("disposable auth cleanup lacks manifest authority: %w", err)
@@ -496,6 +656,11 @@ func verifyDisposableAuthAuthority(home, name string, paths assistantinstance.Pa
 	if cleanupMutationHook != nil {
 		cleanupMutationHook("authority-after-manifest-verify")
 	}
+	generatedExtras, err := validateCodexCleanupReceipt(home, name, candidate, runID, receipt)
+	if err != nil {
+		return manifest, err
+	}
+	codexExtras = append(append([]string(nil), codexExtras...), generatedExtras...)
 	if !openedDirectoryMatchesPath(rootFD, paths.Root) || !openedDirectoryMatchesPath(codexFD, filepath.Join(paths.Root, "codex")) {
 		return manifest, errors.New("disposable auth cleanup directory identity changed")
 	}
@@ -508,7 +673,7 @@ func verifyDisposableAuthAuthority(home, name string, paths assistantinstance.Pa
 	return manifest, nil
 }
 
-func cleanupDisposableAuth(home, name string) error {
+func cleanupDisposableAuth(home, name, candidate, runID string, receipt *codexCleanupReceipt) error {
 	paths, err := assistantinstance.Derive(home, name)
 	if err != nil {
 		return err
@@ -554,6 +719,11 @@ func cleanupDisposableAuth(home, name string) error {
 		return err
 	}
 	var codexExtras []string
+	generatedExtras, err := validateCodexCleanupReceipt(home, name, candidate, runID, receipt)
+	if err != nil {
+		return err
+	}
+	codexExtras = append(codexExtras, generatedExtras...)
 	if !errors.Is(authErr, unix.ENOENT) {
 		codexExtras = append(codexExtras, "auth.json")
 	}
@@ -563,7 +733,7 @@ func cleanupDisposableAuth(home, name string) error {
 	}
 	if len(rootQuarantines) == 1 {
 		return neutralizeVerifiedAuth(rootFD, rootQuarantines[0], func() error {
-			_, verifyErr := verifyDisposableAuthAuthority(home, name, paths, rootFD, parentFD, nil, rootQuarantines)
+			_, verifyErr := verifyDisposableAuthAuthority(home, name, candidate, runID, paths, rootFD, parentFD, nil, rootQuarantines, receipt)
 			return verifyErr
 		})
 	}
@@ -589,7 +759,7 @@ func cleanupDisposableAuth(home, name string) error {
 		if cleanupMutationHook != nil {
 			cleanupMutationHook("auth-before-quarantine")
 		}
-		if _, err = verifyDisposableAuthAuthority(home, name, paths, rootFD, parentFD, []string{"auth.json"}, nil); err != nil {
+		if _, err = verifyDisposableAuthAuthority(home, name, candidate, runID, paths, rootFD, parentFD, []string{"auth.json"}, nil, receipt); err != nil {
 			unix.Close(fd)
 			return err
 		}
@@ -602,7 +772,7 @@ func cleanupDisposableAuth(home, name string) error {
 		if cleanupMutationHook != nil {
 			cleanupMutationHook("auth-after-codex-quarantine")
 		}
-		if _, err = verifyDisposableAuthAuthority(home, name, paths, rootFD, parentFD, []string{quarantine}, nil); err != nil {
+		if _, err = verifyDisposableAuthAuthority(home, name, candidate, runID, paths, rootFD, parentFD, []string{quarantine}, nil, receipt); err != nil {
 			return err
 		}
 	}
@@ -617,7 +787,7 @@ func cleanupDisposableAuth(home, name string) error {
 	if cleanupMutationHook != nil {
 		cleanupMutationHook("auth-quarantine-verified")
 	}
-	if _, err = verifyDisposableAuthAuthority(home, name, paths, rootFD, parentFD, []string{quarantine}, nil); err != nil {
+	if _, err = verifyDisposableAuthAuthority(home, name, candidate, runID, paths, rootFD, parentFD, []string{quarantine}, nil, receipt); err != nil {
 		if restoreErr := restoreQuarantinedAuth(parentFD, quarantine, parentFD); restoreErr != nil {
 			return fmt.Errorf("verified disposable auth preserved at quarantine after authority refusal: %w", restoreErr)
 		}
@@ -636,7 +806,7 @@ func cleanupDisposableAuth(home, name string) error {
 	if cleanupMutationHook != nil {
 		cleanupMutationHook("auth-after-root-quarantine")
 	}
-	if _, err = verifyDisposableAuthAuthority(home, name, paths, rootFD, parentFD, nil, []string{rootQuarantine}); err != nil {
+	if _, err = verifyDisposableAuthAuthority(home, name, candidate, runID, paths, rootFD, parentFD, nil, []string{rootQuarantine}, receipt); err != nil {
 		return err
 	}
 	var rootMoved unix.Stat_t
@@ -653,15 +823,43 @@ func cleanupDisposableAuth(home, name string) error {
 		return errors.New("disposable auth directory changed during root quarantine transfer")
 	}
 	if err = neutralizeVerifiedAuth(rootFD, rootQuarantine, func() error {
-		_, verifyErr := verifyDisposableAuthAuthority(home, name, paths, rootFD, parentFD, nil, []string{rootQuarantine})
+		_, verifyErr := verifyDisposableAuthAuthority(home, name, candidate, runID, paths, rootFD, parentFD, nil, []string{rootQuarantine}, receipt)
 		return verifyErr
 	}); err != nil {
 		return err
 	}
-	return verifyCodexCleanupEntriesAt(parentFD, codexRoot, manifest)
+	return verifyCodexCleanupEntriesAt(parentFD, codexRoot, manifest, generatedExtras...)
 }
 
-func cleanupNamed(home string, names []string, leaves []exactLeaf) error {
+func cleanupNamed(home string, names []string, leaves []exactLeaf, receipts map[string]codexCleanupReceipt, authority ...string) error {
+	candidate, runID := "", ""
+	if len(authority) == 2 {
+		candidate, runID = authority[0], authority[1]
+	} else if len(authority) != 0 {
+		return errors.New("invalid generated Codex cleanup authority")
+	}
+	requested := make(map[string]bool, len(names))
+	for _, name := range names {
+		if requested[name] {
+			return errors.New("duplicate cleanup instance name")
+		}
+		requested[name] = true
+	}
+	if candidate != "" || runID != "" || len(receipts) != 0 {
+		if candidate == "" || runID == "" || len(receipts) != len(requested) {
+			return errors.New("cleanup names and generated Codex receipts differ")
+		}
+		for name := range requested {
+			if receipts[name].Name != name {
+				return errors.New("requested cleanup instance lacks exactly one receipt")
+			}
+		}
+		for name := range receipts {
+			if !requested[name] {
+				return errors.New("unused generated Codex cleanup authority")
+			}
+		}
+	}
 	for _, leaf := range leaves {
 		if filepath.Dir(leaf.Path) != filepath.Join(home, ".local", "bin") || !strings.HasPrefix(filepath.Base(leaf.Path), "mfac-") {
 			return errors.New("exact cleanup leaf escaped acceptance launcher scope")
@@ -680,7 +878,28 @@ func cleanupNamed(home string, names []string, leaves []exactLeaf) error {
 		if errors.Is(rootErr, os.ErrNotExist) && errors.Is(launcherErr, os.ErrNotExist) {
 			continue
 		}
-		if err := cleanupDisposableAuth(home, name); err != nil {
+		if rootErr == nil && errors.Is(launcherErr, os.ErrNotExist) {
+			if _, recoverErr := assistantinstance.Recover(home, name); recoverErr == nil {
+				continue
+			}
+			failures = append(failures, "manifest-proven interrupted-state cleanup refused for "+name)
+			continue
+		}
+		var receipt *codexCleanupReceipt
+		if value, ok := receipts[name]; ok {
+			receipt = &value
+		}
+		if err := cleanupDisposableAuth(home, name, candidate, runID, receipt); err != nil {
+			failures = append(failures, err.Error())
+			continue
+		}
+		// Re-run the complete authority check at the latest practical point. In
+		// the credential case this revalidates the neutralized root quarantine
+		// and every receipt-bound generated entry immediately before PlanRemove.
+		if cleanupMutationHook != nil {
+			cleanupMutationHook("auth-before-final-removal-validation")
+		}
+		if err := cleanupDisposableAuth(home, name, candidate, runID, receipt); err != nil {
 			failures = append(failures, err.Error())
 			continue
 		}
