@@ -57,6 +57,18 @@ type codexCleanupReceipt struct {
 	Entries     []codexCleanupEntry `json:"entries"`
 }
 
+func decodeCodexCleanupReceipts(encoded []string, candidate, runID string) (map[string]codexCleanupReceipt, error) {
+	receipts := make(map[string]codexCleanupReceipt, len(encoded))
+	for _, value := range encoded {
+		var receipt codexCleanupReceipt
+		if json.Unmarshal([]byte(value), &receipt) != nil || validateReceiptShape(receipt, candidate, runID) != nil || receipts[receipt.Name].Name != "" {
+			return nil, errors.New("invalid or duplicate generated Codex-state receipt")
+		}
+		receipts[receipt.Name] = receipt
+	}
+	return receipts, nil
+}
+
 func main() {
 	if len(os.Args) < 2 {
 		fatal("usage: acceptance-support <fixture|update|resolve-executable|render-profile|protected-content|secure-roots|cleanup-named>")
@@ -295,13 +307,9 @@ func main() {
 			}
 			leaves = append(leaves, leaf)
 		}
-		receipts := make(map[string]codexCleanupReceipt)
-		for _, encoded := range codexReceipts {
-			var receipt codexCleanupReceipt
-			if json.Unmarshal([]byte(encoded), &receipt) != nil || validateReceiptShape(receipt, *candidate, *runID) != nil || receipts[receipt.Name].Name != "" {
-				fatal("invalid generated Codex-state receipt")
-			}
-			receipts[receipt.Name] = receipt
+		receipts, receiptErr := decodeCodexCleanupReceipts(codexReceipts, *candidate, *runID)
+		if receiptErr != nil {
+			fatal(receiptErr.Error())
 		}
 		if err := cleanupNamed(*home, names, leaves, receipts, *candidate, *runID); err != nil {
 			fatal(err.Error())
@@ -534,7 +542,8 @@ func captureCodexCleanupReceipt(home, name, candidate, runID string) (codexClean
 		if st.Uid != uint32(os.Getuid()) || (!info.IsDir() && (!info.Mode().IsRegular() || st.Nlink != 1)) {
 			return fmt.Errorf("unsafe generated Codex metadata: %s", relative)
 		}
-		entries = append(entries, codexCleanupEntry{Path: relative, Device: uint64(st.Dev), Inode: st.Ino, Mode: uint32(st.Mode), UID: st.Uid, Nlink: uint64(st.Nlink), Size: st.Size, MtimeS: st.Mtimespec.Sec, MtimeN: st.Mtimespec.Nsec})
+		mtimeS, mtimeN := statMtime(st)
+		entries = append(entries, codexCleanupEntry{Path: relative, Device: uint64(st.Dev), Inode: st.Ino, Mode: uint32(st.Mode), UID: st.Uid, Nlink: uint64(st.Nlink), Size: st.Size, MtimeS: mtimeS, MtimeN: mtimeN})
 		return nil
 	})
 	if err != nil {
@@ -829,6 +838,28 @@ func cleanupNamed(home string, names []string, leaves []exactLeaf, receipts map[
 	} else if len(authority) != 0 {
 		return errors.New("invalid generated Codex cleanup authority")
 	}
+	requested := make(map[string]bool, len(names))
+	for _, name := range names {
+		if requested[name] {
+			return errors.New("duplicate cleanup instance name")
+		}
+		requested[name] = true
+	}
+	if candidate != "" || runID != "" || len(receipts) != 0 {
+		if candidate == "" || runID == "" || len(receipts) != len(requested) {
+			return errors.New("cleanup names and generated Codex receipts differ")
+		}
+		for name := range requested {
+			if receipts[name].Name != name {
+				return errors.New("requested cleanup instance lacks exactly one receipt")
+			}
+		}
+		for name := range receipts {
+			if !requested[name] {
+				return errors.New("unused generated Codex cleanup authority")
+			}
+		}
+	}
 	for _, leaf := range leaves {
 		if filepath.Dir(leaf.Path) != filepath.Join(home, ".local", "bin") || !strings.HasPrefix(filepath.Base(leaf.Path), "mfac-") {
 			return errors.New("exact cleanup leaf escaped acceptance launcher scope")
@@ -845,6 +876,13 @@ func cleanupNamed(home string, names []string, leaves []exactLeaf, receipts map[
 		_, rootErr := os.Lstat(root)
 		_, launcherErr := os.Lstat(launcher)
 		if errors.Is(rootErr, os.ErrNotExist) && errors.Is(launcherErr, os.ErrNotExist) {
+			continue
+		}
+		if rootErr == nil && errors.Is(launcherErr, os.ErrNotExist) {
+			if _, recoverErr := assistantinstance.Recover(home, name); recoverErr == nil {
+				continue
+			}
+			failures = append(failures, "manifest-proven interrupted-state cleanup refused for "+name)
 			continue
 		}
 		var receipt *codexCleanupReceipt

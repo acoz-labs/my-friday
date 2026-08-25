@@ -115,16 +115,21 @@ failure_class="refused"
 failure_scope="harness"
 named_phase="pre-create"
 primary_name=""; secondary_name=""; collision_receipt=""; sibling_receipt=""
+primary_codex_receipt=""; secondary_codex_receipt=""
 cleanup_named_state() {
   [[ -x "${run_root:-}/acceptance-support" ]] || return 0
   local args=(cleanup-named --home "$real_home" --candidate "$head_sha" --run-id "$run_id")
-  local cleanup_path="$(dirname "$codex_binary"):/usr/bin:/bin:/usr/sbin:/sbin" codex_receipt=""
-  if [[ -n "${primary_name:-}" && -d "${primary_root:-}/codex" ]]; then
-    codex_receipt="$("$run_root/acceptance-runner" --cwd "$real_home" --timeout 20s --env HOME="$volume/home" --env PATH="$cleanup_path" -- "$run_root/acceptance-support" codex-cleanup-receipt --home "$real_home" --name "$primary_name" --candidate "$head_sha" --run-id "$run_id")" || return 1
-    args+=(--codex-receipt "$codex_receipt")
-  fi
-  [[ -z "${primary_name:-}" ]] || args+=(--name "$primary_name")
-  [[ -z "${secondary_name:-}" ]] || args+=(--name "$secondary_name")
+  local cleanup_path="$(dirname "$codex_binary"):/usr/bin:/bin:/usr/sbin:/sbin" codex_receipt="" cleanup_name="" cleanup_root=""
+  for cleanup_name in "${primary_name:-}" "${secondary_name:-}"; do
+    [[ -n "$cleanup_name" ]] || continue
+    cleanup_root="$real_home/.my-friday/assistants/$cleanup_name"
+    [[ -d "$cleanup_root/codex" ]] || continue
+    if ! codex_receipt="$("$run_root/acceptance-runner" --cwd "$real_home" --timeout 20s --env HOME="$volume/home" --env PATH="$cleanup_path" -- "$run_root/acceptance-support" codex-cleanup-receipt --home "$real_home" --name "$cleanup_name" --candidate "$head_sha" --run-id "$run_id")"; then
+      if [[ "$cleanup_name" == "${primary_name:-}" ]]; then codex_receipt="${primary_codex_receipt:-}"; else codex_receipt="${secondary_codex_receipt:-}"; fi
+      [[ -n "$codex_receipt" ]] || return 1
+    fi
+    args+=(--name "$cleanup_name" --codex-receipt "$codex_receipt")
+  done
   [[ -z "${collision_receipt:-}" ]] || args+=(--leaf-receipt "$collision_receipt")
   [[ -z "${sibling_receipt:-}" ]] || args+=(--leaf-receipt "$sibling_receipt")
   "$run_root/acceptance-runner" --cwd "$real_home" --timeout 20s --env HOME="$volume/home" --env PATH="$cleanup_path" -- "$run_root/acceptance-support" "${args[@]}"
@@ -364,6 +369,8 @@ named_phase="primary-created"
 confirm_candidate Create assistant create "$secondary_name" --runtime "$volume/fixtures/runtime" --memory "$volume/fixtures/memory"
 named_phase="secondary-created"
 run_candidate assistant verify "$primary_name"; run_candidate assistant verify "$secondary_name"
+primary_codex_receipt="$(run_bounded "$run_root/acceptance-support" codex-cleanup-receipt --home "$real_home" --name "$primary_name" --candidate "$head_sha" --run-id "$run_id")"
+secondary_codex_receipt="$(run_bounded "$run_root/acceptance-support" codex-cleanup-receipt --home "$real_home" --name "$secondary_name" --candidate "$head_sha" --run-id "$run_id")"
 [[ "$primary_root" != "$secondary_root" && "$(jq -r .root "$primary_root/manifest.json")" == "$primary_root" && "$(jq -r .root "$secondary_root/manifest.json")" == "$secondary_root" ]] || fail "two-instance isolation proof failed"
 run_candidate assistant create "$collision_name" --runtime "$volume/fixtures/runtime" --memory "$volume/fixtures/memory" >/dev/null 2>&1 && fail "foreign launcher collision was accepted"
 [[ "$(shasum -a 256 "$collision_launcher" | awk '{print $1}')" == "$collision_before" ]] || fail "foreign collision changed"

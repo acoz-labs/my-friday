@@ -2,6 +2,7 @@ package main
 
 import (
 	"crypto/sha256"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -166,6 +167,38 @@ func TestGeneratedCodexReceiptRejectsMalformedAndDuplicateAuthority(t *testing.T
 				t.Fatal("malformed generated-state receipt was accepted")
 			}
 		})
+	}
+}
+
+func TestCleanupNamedRequiresExactNameReceiptAuthoritySet(t *testing.T) {
+	home, _ := managedNamedFixture(t)
+	receipt, err := captureCodexCleanupReceipt(home, "primary", testCleanupCandidate, testCleanupRunID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	valid := map[string]codexCleanupReceipt{"primary": receipt}
+	tests := map[string]struct {
+		names    []string
+		receipts map[string]codexCleanupReceipt
+	}{
+		"duplicate-name":     {[]string{"primary", "primary"}, valid},
+		"missing-receipt":    {[]string{"primary"}, nil},
+		"unused-receipt":     {nil, valid},
+		"wrong-receipt-name": {[]string{"secondary"}, valid},
+	}
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			if err := cleanupNamed(home, test.names, nil, test.receipts, testCleanupCandidate, testCleanupRunID); err == nil {
+				t.Fatal("non-exact name/receipt authority set was accepted")
+			}
+		})
+	}
+	body, err := json.Marshal(receipt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = decodeCodexCleanupReceipts([]string{string(body), string(body)}, testCleanupCandidate, testCleanupRunID); err == nil {
+		t.Fatal("duplicate receipt identity was accepted")
 	}
 }
 
@@ -766,6 +799,17 @@ func TestCleanupNamedCoversEveryPostCreatePhase(t *testing.T) {
 			if phase != "primary-created" {
 				create("secondary")
 			}
+			preReceipts := make(map[string]codexCleanupReceipt)
+			for _, receiptName := range []string{"primary", "secondary"} {
+				if _, statErr := os.Lstat(filepath.Join(home, ".my-friday", "assistants", receiptName)); statErr != nil {
+					continue
+				}
+				receipt, receiptErr := captureCodexCleanupReceipt(home, receiptName, testCleanupCandidate, testCleanupRunID)
+				if receiptErr != nil {
+					t.Fatal(receiptErr)
+				}
+				preReceipts[receiptName] = receipt
+			}
 			var leaves []exactLeaf
 			if phase == "collision-created" || phase == "recovery-complete" || phase == "auth-copied" || phase == "smoke-complete" {
 				for _, name := range []string{"mfac-collision", "mfac-sibling"} {
@@ -791,16 +835,26 @@ func TestCleanupNamedCoversEveryPostCreatePhase(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			receipts := map[string]codexCleanupReceipt(nil)
 			if phase == "smoke-complete" {
 				mustWrite(t, filepath.Join(home, ".my-friday", "assistants", "primary", "codex", "state.sqlite"), 0o600)
-				receipt, err := captureCodexCleanupReceipt(home, "primary", testCleanupCandidate, testCleanupRunID)
+			}
+			var cleanupNames []string
+			receipts := make(map[string]codexCleanupReceipt)
+			for _, cleanupName := range []string{"primary", "secondary"} {
+				if _, statErr := os.Lstat(filepath.Join(home, ".my-friday", "assistants", cleanupName)); statErr != nil {
+					continue
+				}
+				receipt, err := captureCodexCleanupReceipt(home, cleanupName, testCleanupCandidate, testCleanupRunID)
 				if err != nil {
+					receipt = preReceipts[cleanupName]
+				}
+				if receipt.Name == "" {
 					t.Fatal(err)
 				}
-				receipts = map[string]codexCleanupReceipt{"primary": receipt}
+				cleanupNames = append(cleanupNames, cleanupName)
+				receipts[cleanupName] = receipt
 			}
-			if err := cleanupNamed(home, []string{"primary", "secondary"}, leaves, receipts, testCleanupCandidate, testCleanupRunID); err != nil {
+			if err := cleanupNamed(home, cleanupNames, leaves, receipts, testCleanupCandidate, testCleanupRunID); err != nil {
 				t.Fatal(err)
 			}
 			for _, path := range []string{filepath.Join(home, ".my-friday", "assistants", "primary"), filepath.Join(home, ".my-friday", "assistants", "secondary"), filepath.Join(home, ".local", "bin", "primary"), filepath.Join(home, ".local", "bin", "secondary"), filepath.Join(home, ".local", "bin", "mfac-collision"), filepath.Join(home, ".local", "bin", "mfac-sibling")} {
