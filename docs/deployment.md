@@ -153,9 +153,13 @@ The live TUI may create instance-private caches, sessions, logs, and databases.
 Only after bounded Codex exit, descendant reaping, and absence of cooperating
 writers, the supervisor binds the exact candidate, run, instance-root and
 Codex-directory identities and records generated paths plus
-device/inode/type/UID/mode/link-count/size/mtime metadata without reading contents. Every
-pre-mutation check requires that complete no-follow tree unchanged; foreign or
-changed generated state is preserved. The receipt authorizes only eventual
+device/inode/type/UID/mode/link-count/size/mtime metadata without reading file
+contents. For Codex-generated argument-zero helper symlinks under the exact
+`tmp/arg0/codex-<alphanumeric>/` namespace, it additionally records the link
+target and accepts only the three supported helper names targeting the exact
+manifest-bound instance Codex executable. Every pre-mutation check requires that complete no-follow
+tree and each symlink target unchanged; foreign or changed generated state is
+preserved. The receipt authorizes only eventual
 removal with the already manifest-gated instance root, not independent leaf
 deletion. Cleanup supplies the reviewed Git-capable PATH used by candidate
 lifecycle commands so manifest verification is independent of ambient shell
