@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 root="$(cd "$(dirname "$0")/.." && pwd)"; supervisor="$root/bin/accept-installed-codex-baseline"
+workshop="$root/bin/accept-capability-workshop"
 grep -Fq 'umask 077' "$supervisor"
 [[ "$(grep -n '^umask 077$' "$supervisor" | cut -d: -f1)" -lt "$(grep -n '^root=' "$supervisor" | cut -d: -f1)" ]]
 grep -Fq 'mount_nlink="$(stat -f %l "$mountpoint")"' "$supervisor"
@@ -76,7 +77,16 @@ grep -Fq 'setsid descendant control' "$supervisor"
 grep -Fq 'protected-metadata' "$supervisor"
 grep -Fq 'published evidence did not survive exact re-fetch verification' "$supervisor"
 grep -Fq 'fetch_stable' "$root/bin/verify-acceptance-evidence"
-grep -Fq '(?:evidence-v1|failure-v1)' "$root/bin/record-product-acceptance"
+grep -Fq '(?:evidence-v1|failure-v1|capability-workshop-acceptance-v1|capability-workshop-failure-v1)' "$root/bin/record-product-acceptance"
+grep -Fq 'this supervisor is scoped to issue 51' "$workshop"
+grep -Fq 'capability-workshop-acceptance-evidence-v1' "$workshop"
+grep -Fq 'MY_FRIDAY_CODEX_AUTH_FILE' "$workshop"
+grep -Fq 'builder_has_no_mutation_token:true' "$workshop"
+grep -Fq 'stale capability plan' "$root/config/acceptance/capability-stale.exp"
+for scenario in builder install upgrade denials interruption migration cleanup; do grep -Fq "phase=$scenario" "$workshop"; done
+for command in verify-capability-workshop-evidence verify-capability-workshop-receipt verify-capability-workshop-acceptance record-capability-workshop-receipt; do [[ -x "$root/bin/$command" ]]; done
+grep -Fq 'elif [[ "$issue_number" == 51 ]]' "$root/bin/record-product-acceptance"
+grep -Fq 'elif [[ "$issue_number" == 51 ]]' "$root/bin/finalize-release"
 grep -Fq '(subpath @@VOLUME@@)' "$root/config/acceptance/lifecycle.sb.in"
 if grep -Eq 'rm -rf.*(run_root|evidence_root|run_parent|evidence_parent)' "$supervisor"; then exit 1; fi
 echo "acceptance contract tests passed."

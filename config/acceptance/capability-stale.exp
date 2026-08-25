@@ -1,0 +1,25 @@
+#!/usr/bin/expect -f
+set timeout 60
+if {$argc < 4} { exit 64 }
+set source [lindex $argv 0]
+set executable [lindex $argv 1]
+set args [lrange $argv 2 end]
+set stty_init "rows 30 columns 120"
+spawn -noecho $executable {*}$args
+expect {
+  -exact "Type Upgrade to continue: " {
+    exec perl -0pi -e {s/"version"\s*:\s*"1\.0\.0"/"version":"1.0.1"/} $source
+    send -- "Upgrade\r"
+  }
+  timeout { exit 1 }
+  eof { exit 1 }
+}
+expect {
+  -re {stale capability plan} {}
+  timeout { exit 1 }
+  eof { exit 1 }
+}
+expect eof
+set status [wait]
+if {[lindex $status 3] == 0} { exit 1 }
+exit 0

@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+set -euo pipefail
+bundle="${1:-}" issue="${2:-}" sha="${3:-}" artifact="${4:-}" acceptor="${5:-}"
+[[ "$issue" == 51 && "$bundle" == capability-workshop-acceptance-v1:* ]] || exit 64
+payload="${bundle#capability-workshop-acceptance-v1:}"
+IFS='|' read -r evidence owner partner_one partner_two extra <<<"$payload"
+[[ -n "$evidence" && -n "$owner" && -n "$partner_one" && -n "$partner_two" && -z "$extra" ]] || exit 64
+bin/verify-capability-workshop-evidence "$evidence" "$issue" "$sha" "$artifact" "$acceptor" >/dev/null
+owner_actor="$(bin/verify-capability-workshop-receipt "$owner" "$issue" "$sha" "$artifact" product-owner)"
+partner_one_actor="$(bin/verify-capability-workshop-receipt "$partner_one" "$issue" "$sha" "$artifact" design-partner)"
+partner_two_actor="$(bin/verify-capability-workshop-receipt "$partner_two" "$issue" "$sha" "$artifact" design-partner)"
+[[ "$owner_actor" != "$partner_one_actor" && "$owner_actor" != "$partner_two_actor" && "$partner_one_actor" != "$partner_two_actor" ]] || {
+  echo "Workshop receipt actors must be three distinct people." >&2; exit 1;
+}
+printf '%s\n' "$acceptor"

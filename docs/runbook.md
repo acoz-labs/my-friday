@@ -189,3 +189,26 @@ contract-v1 fixtures. The barrier requires three identical stopped receipts,
 then kills and reaps the exact group and compares the post-kill projection,
 manifest, canonical, previous, journal, and staging state to the captured
 receipt before ordinary recovery.
+
+## Recover an interrupted capability-workshop run
+
+Capability-workshop state uses one random child beneath
+`~/.my-friday-capability-acceptance/` and one randomized assistant/launcher
+pair. Failure attempts public, confirmation-gated assistant removal and
+ordinary APFS detach, then publishes non-approving
+`capability-workshop-failure-v1` authority. Unproven cleanup preserves the run.
+
+Identify the exact run from failure evidence and inspect `marker.json`. It must
+bind schema `capability-workshop-run-v1`, issue 51, candidate SHA, artifact,
+run ID, nonce, and current UID. Never recursively remove the parent or an
+ambiguous assistant. Recover a proven interrupted capability with:
+
+```sh
+my-friday capability recover <random-instance> daily-brief
+```
+
+Then remove that exact instance through `assistant remove` and ordinarily
+detach the marker-bound image without `-force`. If marker, manifest, inode,
+foreign collision, credential-copy, or mount facts are ambiguous, retain them
+for maintainer diagnosis and retry with a new run. Failure and provisional
+comments cannot authorize product acceptance or release.

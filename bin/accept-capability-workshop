@@ -1,0 +1,169 @@
+#!/usr/bin/env bash
+set -euo pipefail
+umask 077
+
+authority="${1:-}" issue="${2:-}" repo="${GITHUB_REPOSITORY:-}"
+root="$(cd "$(dirname "$0")/.." && pwd)"
+auth_file="${MY_FRIDAY_CODEX_AUTH_FILE:-}"
+runtime_projection="${MY_FRIDAY_RUNTIME_PROJECTION:-}"
+authority_pattern='^artifact-v1:run=([0-9]+):id=([0-9]+):name=([A-Za-z0-9._-]+):sha256=([0-9a-f]{64})$'
+die() { echo "$*" >&2; exit 1; }
+[[ "$issue" == 51 ]] || die "this supervisor is scoped to issue 51"
+[[ "$authority" =~ $authority_pattern ]] || die "invalid artifact-v1 authority"
+artifact_digest="${BASH_REMATCH[4]}"
+[[ -n "$repo" && -n "$auth_file" && "$auth_file" == /* && -n "$runtime_projection" && "$runtime_projection" == /* ]] || die "repository, auth path, and contract-v1 runtime projection are required"
+[[ "$(uname -s)" == Darwin && "$(uname -m)" == arm64 ]] || die "Apple silicon macOS is required"
+[[ -t 0 && -t 1 ]] || die "interactive terminal required"
+[[ "${auth_file##*/}" == auth.json && -f "$auth_file" && ! -L "$auth_file" && "$(stat -f %u:%p:%l "$auth_file")" == "$(id -u):100600:1" ]] || die "auth file metadata is unsafe"
+[[ -d "$runtime_projection" && ! -L "$runtime_projection" ]] || die "runtime projection is unsafe"
+for command in gh git go jq hdiutil diskutil shasum sha256sum expect codex openssl plutil perl tar; do command -v "$command" >/dev/null || die "$command is required"; done
+
+head_sha="$(git rev-parse HEAD)"; [[ "$head_sha" =~ ^[0-9a-f]{40}$ ]] || die "invalid candidate SHA"
+[[ -z "$(git status --porcelain)" ]] || die "checkout must be clean"
+[[ "$(git rev-parse --show-toplevel)" == "$root" ]] || die "run from the candidate checkout"
+run_id="$(openssl rand -hex 16)"; nonce="$(openssl rand -hex 16)"
+real_home="$(dscl . -read "/Users/$(id -un)" NFSHomeDirectory | awk '{print $2}')"
+run_parent="$real_home/.my-friday-capability-acceptance"; run_root="$run_parent/$run_id"
+image="$run_root/workshop.sparseimage"; mountpoint="$run_root/mount"; instance="mfcw-${run_id:0:8}"; sibling="mfcw-${run_id:8:8}"
+instance_root="$real_home/.my-friday/assistants/$instance"; launcher="$real_home/.local/bin/$instance"
+source="$instance_root/runtime/skills/daily-brief"; projection="$instance_root/workspace/.agents/skills/daily-brief"
+phase=preflight mounted=0 preserve=1
+mkdir -p "$run_root" "$mountpoint"
+run_identity="$(stat -f %d:%i:%u:%p "$run_root")"
+marker="$run_root/marker.json"; jq -nc --arg run "$run_id" --arg nonce "$nonce" --arg sha "$head_sha" --arg artifact "$authority" --argjson uid "$(id -u)" \
+  '{schema:"capability-workshop-run-v1",issue:51,run:$run,nonce:$nonce,candidate:$sha,artifact:$artifact,uid:$uid}' >"$marker"
+marker_digest="$(shasum -a 256 "$marker" | awk '{print $1}')"
+auth_identity="$(stat -f %d:%i:%u:%p:%l:%z:%m "$auth_file")"
+auth_digest="$(shasum -a 256 "$auth_file" | awk '{print $1}')"
+ambient_before="$(find "$real_home/.codex" -xdev -mindepth 1 ! -path '*/sessions*' ! -path '*/sessions/*' ! -name 'state_*.sqlite*' ! -name 'logs_*.sqlite*' -exec stat -f '%N:%d:%i:%p:%z:%m' {} + 2>/dev/null | LC_ALL=C sort | shasum -a 256 | awk '{print $1}')"
+ambient_home_before="$(for leaf in .zshrc .zprofile .profile .bashrc; do [[ ! -e "$real_home/$leaf" ]] || stat -f '%N:%d:%i:%p:%z:%m' "$real_home/$leaf"; done | shasum -a 256 | awk '{print $1}')"
+runtime_before="$(find "$runtime_projection" -xdev -exec stat -f '%N:%d:%i:%p:%z:%m' {} + | LC_ALL=C sort | shasum -a 256 | awk '{print $1}')"
+cleanup() {
+  status=$?
+  set +e
+  [[ ! -e "$instance_root" && ! -L "$launcher" ]] || [[ -z "${candidate:-}" ]] || /usr/bin/expect "$root/config/acceptance/capability-confirm.exp" Remove "$candidate" assistant remove "$instance" >/dev/null 2>&1
+  [[ "$mounted" == 0 || -z "${device:-}" ]] || hdiutil detach "$device" >/dev/null 2>&1
+  if [[ "$preserve" == 0 ]]; then rm -f "$image"; rmdir "$mountpoint" "$run_root" "$run_parent" 2>/dev/null; fi
+  if [[ "$status" != 0 ]]; then
+    failure="$(jq -nc --arg sha "$head_sha" --arg artifact "$authority" --arg run "$run_id" --arg phase "$phase" '{schema:"capability-workshop-acceptance-evidence-v1",authority:"failure",issue:51,candidate:$sha,artifact:$artifact,run_id:$run,failure_scope:"candidate",failure_class:"candidate",failure_phase:$phase,cleanup:{ambient_unchanged:false,credential_copy_deleted:false,detached:false,owned_state_removed:false},redacted:true}')"
+    body="<!-- capability-workshop-acceptance-evidence-v1 authority=failure -->
+$failure"; url="$(gh api -X POST "repos/$repo/issues/51/comments" -f body="$body" --jq .url 2>/dev/null)"; id="${url##*/}"; digest="$(printf %s "$body" | shasum -a 256 | awk '{print $1}')"
+    echo "capability-workshop-failure-v1:comment=$id:$digest" >&2
+  fi
+  exit "$status"
+}
+trap cleanup EXIT INT TERM
+
+phase=artifact
+artifact_dir="$run_root/artifact"; mkdir "$artifact_dir"
+GITHUB_REPOSITORY="$repo" "$root/bin/prepare-release-artifact" "$authority" "$artifact_dir"
+tar -xzf "$artifact_dir/my-friday-darwin-arm64.tar.gz" -C "$artifact_dir"
+candidate="$artifact_dir/my-friday"; [[ "$(shasum -a 256 "$candidate" | awk '{print $1}')" == "$artifact_digest" ]] || die "candidate digest mismatch"
+helper_closure="$(printf '%s\n' bin/accept-capability-workshop bin/prepare-release-artifact bin/verify-capability-workshop-evidence config/acceptance/capability-confirm.exp config/acceptance/capability-stale.exp tools/acceptance-support/main.go | while read -r f; do git hash-object "$f"; done | shasum -a 256 | awk '{print $1}')"
+supervisor_blob="$(git rev-parse HEAD:bin/accept-capability-workshop)"; tree="$(git rev-parse 'HEAD^{tree}')"
+archive_digest="$(awk '$2=="my-friday-darwin-arm64.tar.gz"{print $1}' "$artifact_dir/SHA256SUMS")"
+
+phase=isolation
+hdiutil create -quiet -size 2g -type SPARSE -fs APFS -volname "MFCW-$run_id" "$image"
+image_identity="$(stat -f %d:%i:%u:%p:%l "$image")"
+attach="$(hdiutil attach -plist -nobrowse -mountpoint "$mountpoint" "$image")"; mounted=1
+device="$(plutil -extract system-entities xml1 -o - - <<<"$attach" | plutil -p - | awk '/dev-entry/ && /disk[0-9]+s[0-9]+/{gsub(/[\";,]/,""); print $NF; exit}')"
+[[ -n "$device" && "$(diskutil info -plist "$device" | plutil -extract FilesystemType raw -o - -)" == apfs ]] || die "APFS attach failed"
+mkdir -p "$mountpoint/home"
+CGO_ENABLED=0 go build -trimpath -buildvcs=true -o "$run_root/acceptance-support" ./tools/acceptance-support
+"$run_root/acceptance-support" fixture --runtime "$mountpoint/runtime" --memory "$mountpoint/memory" --token "MFCW_$run_id"
+
+phase=migration
+/usr/bin/expect "$root/config/acceptance/capability-confirm.exp" Rollback "$candidate" capability rollback --runtime "$mountpoint/runtime"
+/usr/bin/expect "$root/config/acceptance/capability-confirm.exp" Initialize "$candidate" capability initialize --runtime "$mountpoint/runtime"
+
+phase=instance
+/usr/bin/expect "$root/config/acceptance/capability-confirm.exp" Create "$candidate" assistant create "$instance" --runtime "$mountpoint/runtime" --memory "$mountpoint/memory"
+cp -p "$auth_file" "$instance_root/codex/auth.json"; cmp "$auth_file" "$instance_root/codex/auth.json" >/dev/null
+[[ ! -e "$real_home/.my-friday/assistants/$sibling" ]] || die "random sibling collision"
+
+phase=builder
+builder_prompt="Create the instruction-only daily-brief capability in runtime/skills/daily-brief. Use contract_version 1, version 1.0.0, trigger 'prepare my daily brief', no scripts, dependencies, network, credentials, background, durable data, or publishing. Include deterministic cases and instructions that output the exact token DAILY_BRIEF_READY when explicitly invoked. Run only capability inspect, validate, and test; do not install it."
+"$launcher" exec --skip-git-repo-check "$builder_prompt" >/dev/null
+[[ ! -e "$projection" ]] || die "builder activated capability"
+"$candidate" capability validate "$instance" daily-brief >/dev/null
+"$candidate" capability test "$instance" daily-brief >/dev/null
+{ git diff --no-index --binary /dev/null "$source" 2>/dev/null || [[ "$?" == 1 ]]; } | sed -E 's#(/[^[:space:]]*/daily-brief)#<CAPABILITY>#g' >"$run_root/source.diff.private"
+diff_digest="$(shasum -a 256 "$run_root/source.diff.private" | awk '{print $1}')"
+[[ "$diff_digest" =~ ^[0-9a-f]{64}$ ]] || die "redacted source diff failed"
+
+phase=install
+/usr/bin/expect "$root/config/acceptance/capability-confirm.exp" Install "$candidate" capability install "$instance" daily-brief
+"$candidate" capability verify "$instance" daily-brief >/dev/null
+invocation="$("$launcher" exec --skip-git-repo-check 'Explicitly invoke daily-brief for topic acceptance. Return its declared exact token.' 2>/dev/null)"
+grep -Fq DAILY_BRIEF_READY <<<"$invocation" || die "fresh-task explicit invocation failed"
+
+phase=upgrade
+/usr/bin/expect "$root/config/acceptance/capability-stale.exp" "$source/capability.json" "$candidate" capability upgrade "$instance" daily-brief
+grep -Fq 'State: source-changed' <("$candidate" capability inspect "$instance" daily-brief --plain)
+"$candidate" capability test "$instance" daily-brief >/dev/null
+/usr/bin/expect "$root/config/acceptance/capability-confirm.exp" Upgrade "$candidate" capability upgrade "$instance" daily-brief
+
+phase=denials
+owned="$projection/SKILL.md"; cp "$owned" "$run_root/owned"; printf '\nowned drift\n' >>"$owned"; drift_digest="$(shasum -a 256 "$owned" | awk '{print $1}')"
+"$candidate" capability disable "$instance" daily-brief >/dev/null 2>&1 && die "owned drift accepted"
+[[ "$(shasum -a 256 "$owned" | awk '{print $1}')" == "$drift_digest" ]] || die "owned drift was changed"
+mv "$run_root/owned" "$owned"
+/usr/bin/expect "$root/config/acceptance/capability-confirm.exp" Disable "$candidate" capability disable "$instance" daily-brief
+mkdir "$projection"; printf 'foreign\n' >"$projection/foreign"
+"$candidate" capability enable "$instance" daily-brief >/dev/null 2>&1 && die "foreign collision accepted"
+[[ "$(cat "$projection/foreign")" == foreign ]] || die "foreign collision changed"
+rm "$projection/foreign"; rmdir "$projection"
+/usr/bin/expect "$root/config/acceptance/capability-confirm.exp" Enable "$candidate" capability enable "$instance" daily-brief
+
+phase=interruption
+receipt="$instance_root/capabilities/daily-brief/receipt.json"
+source_digest="$(jq -r .source_digest "$receipt")"; projection_digest="$(jq -r .projection_digest "$receipt")"
+prior_receipt_digest="$(jq -c . "$receipt" | shasum -a 256 | awk '{print $1}')"
+mv "$projection" "$projection.owned-${projection_digest:0:16}.quarantine"
+jq -n --arg source "$source_digest" --arg projection "$projection_digest" --arg prior "$prior_receipt_digest" \
+  '{contract_version:1,action:"upgrade",slug:"daily-brief",source_digest:$source,projection_digest:$projection,prior_receipt_digest:$prior,created_control:false}' >"$instance_root/capabilities/daily-brief/transaction.json"
+chmod 0600 "$instance_root/capabilities/daily-brief/transaction.json"
+grep -Fq 'State: interrupted' <("$candidate" capability inspect "$instance" daily-brief --plain)
+/usr/bin/expect "$root/config/acceptance/capability-confirm.exp" Recover "$candidate" capability recover "$instance" daily-brief
+"$candidate" capability verify "$instance" daily-brief >/dev/null
+/usr/bin/expect "$root/config/acceptance/capability-confirm.exp" Remove "$candidate" capability remove "$instance" daily-brief
+[[ -d "$source" && ! -e "$projection" && ! -e "$instance_root/capabilities/daily-brief" ]] || die "complete reversal failed"
+
+phase=migration
+/usr/bin/expect "$root/config/acceptance/capability-confirm.exp" Rollback "$candidate" assistant rollback "$instance"
+/usr/bin/expect "$root/config/acceptance/capability-confirm.exp" Upgrade "$candidate" assistant upgrade "$instance"
+[[ -d "$source" ]] || die "private-copy migration lost source"
+
+phase=cleanup
+/usr/bin/expect "$root/config/acceptance/capability-confirm.exp" Remove "$candidate" assistant remove "$instance"
+[[ ! -e "$instance_root" && ! -L "$launcher" ]] || die "instance cleanup incomplete"
+[[ "$(stat -f %d:%i:%u:%p:%l:%z:%m "$auth_file")" == "$auth_identity" ]] || die "credential source changed"
+[[ "$(shasum -a 256 "$auth_file" | awk '{print $1}')" == "$auth_digest" ]] || die "credential source content changed"
+[[ "$(find "$runtime_projection" -xdev -exec stat -f '%N:%d:%i:%p:%z:%m' {} + | LC_ALL=C sort | shasum -a 256 | awk '{print $1}')" == "$runtime_before" ]] || die "source runtime changed"
+[[ "$(find "$real_home/.codex" -xdev -mindepth 1 ! -path '*/sessions*' ! -path '*/sessions/*' ! -name 'state_*.sqlite*' ! -name 'logs_*.sqlite*' -exec stat -f '%N:%d:%i:%p:%z:%m' {} + 2>/dev/null | LC_ALL=C sort | shasum -a 256 | awk '{print $1}')" == "$ambient_before" ]] || die "ambient Codex stable subset changed"
+[[ "$(for leaf in .zshrc .zprofile .profile .bashrc; do [[ ! -e "$real_home/$leaf" ]] || stat -f '%N:%d:%i:%p:%z:%m' "$real_home/$leaf"; done | shasum -a 256 | awk '{print $1}')" == "$ambient_home_before" ]] || die "ambient HOME canaries changed"
+[[ ! -e "$real_home/.my-friday/assistants/$sibling" ]] || die "sibling instance changed"
+hdiutil detach "$device" >/dev/null; mounted=0
+
+provisional="$(jq -nc --arg sha "$head_sha" --arg artifact "$authority" --arg run "$run_id" --arg tree "$tree" --arg supervisor "$supervisor_blob" --arg closure "$helper_closure" --arg executable "$artifact_digest" --arg archive "$archive_digest" --arg source_diff "$diff_digest" '
+ def p($s;$e):{passed:true,expected_state:$s,exit_class:$e};
+ {schema:"capability-workshop-acceptance-evidence-v1",authority:"provisional",issue:51,candidate:$sha,artifact:$artifact,run_id:$run,
+ checkout:{tree:$tree,supervisor_blob:$supervisor,helper_closure_sha256:$closure,executable_sha256:$executable,archive_sha256:$archive,source_diff_sha256:$source_diff},platform:{architecture:"arm64",filesystem:"apfs",runtime_contract:2},
+ controls:{builder_has_no_mutation_token:true,credential_by_path:true,deterministic_tests:true,fresh_tasks:true,private_builder:true,redacted_complete_diff:true},
+ scenarios:{author_without_activation:p("ready-no-projection";"success"),validate_and_test:p("ready";"success"),install:p("installed-healthy";"success"),explicit_invocation:p("declared-behavior-observed";"success"),source_change_and_upgrade:p("source-changed-stale-refused-upgraded";"success"),collision_and_drift:p("foreign-and-owned-bytes-preserved";"refused"),disable_enable_remove:p("source-preserved-control-reversed";"success"),interruption_recovery:p("recovered";"success"),migration_and_rollback:p("private-copy-bounded";"success"),ambient_preservation:p("all-protected-equal";"success")},
+ preservation:{ambient_home_equal:true,credential_source_equal:true,global_codex_equal:true,protected_canaries_equal:true,sibling_instance_equal:true,source_preserved:true},cleanup_expected:["credential-copy","instance","launcher","mount","run-root","volume-image"],redacted:true}')"
+pbody="<!-- capability-workshop-acceptance-evidence-v1 authority=provisional -->
+$provisional"; purl="$(gh api -X POST "repos/$repo/issues/51/comments" -f body="$pbody" --jq .url)"; pid="${purl##*/}"; pdigest="$(printf %s "$pbody" | shasum -a 256 | awk '{print $1}')"
+[[ "$(stat -f %d:%i:%u:%p "$run_root")" == "$run_identity" ]] || die "run root identity changed before cleanup"
+[[ "$(stat -f %d:%i:%u:%p:%l "$image")" == "$image_identity" ]] || die "volume image identity changed before cleanup"
+[[ "$(shasum -a 256 "$marker" | awk '{print $1}')" == "$marker_digest" ]] || die "run marker changed before cleanup"
+rm "$artifact_dir/my-friday" "$artifact_dir/my-friday-darwin-arm64.tar.gz" "$artifact_dir/SHA256SUMS" "$run_root/acceptance-support" "$run_root/source.diff.private" "$marker" "$image"
+rmdir "$artifact_dir" "$mountpoint" "$run_root" "$run_parent" 2>/dev/null || die "run cleanup incomplete"
+final="$(jq -nc --arg sha "$head_sha" --arg artifact "$authority" --argjson id "$pid" --arg digest "$pdigest" --arg closure "$helper_closure" '{schema:"capability-workshop-acceptance-evidence-v1",authority:"final",issue:51,candidate:$sha,artifact:$artifact,provisional:{id:$id,digest:$digest},helper_closure_sha256:$closure,cleanup:{ambient_unchanged:true,credential_copy_deleted:true,instance_removed:true,launcher_removed:true,mount_absent:true,non_forced_detach:true,run_root_deleted:true,source_preserved:true,volume_image_deleted:true}}')"
+fbody="<!-- capability-workshop-acceptance-evidence-v1 authority=final -->
+$final"; furl="$(gh api -X POST "repos/$repo/issues/51/comments" -f body="$fbody" --jq .url)"; fid="${furl##*/}"; fdigest="$(printf %s "$fbody" | shasum -a 256 | awk '{print $1}')"
+token="capability-workshop-evidence-v1:provisional=$pid:$pdigest:final=$fid:$fdigest"
+actor="$(gh api user --jq .login)"; GITHUB_REPOSITORY="$repo" "$root/bin/verify-capability-workshop-evidence" "$token" 51 "$head_sha" "$authority" "$actor" >/dev/null
+preserve=0; trap - EXIT INT TERM
+printf '%s\n' "$token"

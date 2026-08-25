@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+set -euo pipefail
+token="${1:-}" issue="${2:-}" sha="${3:-}" artifact="${4:-}" role="${5:-}" expected_actor="${6:-}" repo="${GITHUB_REPOSITORY:-}"
+die() { echo "$*" >&2; exit 1; }
+[[ -n "$repo" && "$issue" == 51 && "$sha" =~ ^[0-9a-f]{40}$ && "$artifact" =~ ^artifact-v1:run=[0-9]+:id=[0-9]+:name=[A-Za-z0-9._-]+:sha256=[0-9a-f]{64}$ && "$role" =~ ^(product-owner|design-partner)$ && "$token" =~ ^capability-workshop-partner-v1:comment=([0-9]+):([0-9a-f]{64})$ ]] || exit 64
+id="${BASH_REMATCH[1]}" digest="${BASH_REMATCH[2]}"
+first="$(gh api "repos/$repo/issues/comments/$id")"; second="$(gh api "repos/$repo/issues/comments/$id")"
+[[ "$(jq -c '{id,body,issue_url,user:.user.login,created_at}' <<<"$first")" == "$(jq -c '{id,body,issue_url,user:.user.login,created_at}' <<<"$second")" ]] || die "Workshop receipt changed during verification."
+body="$(jq -r .body <<<"$second")"; [[ "$(printf %s "$body" | shasum -a 256 | awk '{print $1}')" == "$digest" ]] || die "Workshop receipt digest mismatch."
+marker='<!-- capability-workshop-partner-receipt-v1 -->'; [[ "$body" == "$marker"$'\n'* && "${body#"$marker"$'\n'}" != *$'\n'* ]] || die "Workshop receipt format mismatch."
+json="${body#"$marker"$'\n'}"; actor="$(jq -r '.user.login|ascii_downcase' <<<"$second")"
+[[ -z "$expected_actor" || "$actor" == "$(printf %s "$expected_actor" | tr '[:upper:]' '[:lower:]')" ]] || die "Workshop receipt author mismatch."
+[[ "$(jq -r .issue_url <<<"$second")" == "https://api.github.com/repos/$repo/issues/$issue" ]] || die "Workshop receipt belongs to another issue."
+jq -e --argjson issue "$issue" --arg sha "$sha" --arg artifact "$artifact" --arg role "$role" '
+  keys==["artifact","candidate","completion","issue","recovery_needed","redacted","retention_decision","role","schema","source_comprehension"] and
+  .schema=="capability-workshop-partner-receipt-v1" and .issue==$issue and .candidate==$sha and .artifact==$artifact and .role==$role and
+  .completion==true and .source_comprehension==true and .recovery_needed==false and (.retention_decision|IN("retain","remove")) and .redacted==true' <<<"$json" >/dev/null || die "Workshop partner receipt is incomplete."
+printf '%s\n' "$actor"

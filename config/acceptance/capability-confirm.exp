@@ -1,0 +1,16 @@
+#!/usr/bin/expect -f
+set timeout 60
+if {$argc < 3} { exit 64 }
+set token [lindex $argv 0]
+set executable [lindex $argv 1]
+set args [lrange $argv 2 end]
+set stty_init "rows 30 columns 120"
+spawn -noecho $executable {*}$args
+expect {
+  -exact "Type $token to continue: " { send -- "$token\r" }
+  timeout { exit 1 }
+  eof { exit 1 }
+}
+expect eof
+set status [wait]
+exit [lindex $status 3]

@@ -38,3 +38,18 @@ post-root-unlink completion accepts only an absent target.
 Same-UID
 interference is detected at each ownership boundary; foreign raced bytes are
 preserved rather than overwritten or deleted.
+
+Capability-workshop acceptance receives an existing Codex `auth.json` only by
+absolute path after no-follow current-owner, mode-0600, single-link checks. The
+copy exists only in a randomized disposable instance; neither its bytes nor
+private path enters argv, GitHub evidence, diffs, prompts, or transcripts.
+Evidence publishes redacted digests and typed results. Final authority requires
+credential-source equality and complete copy, instance, launcher, APFS image,
+mount, and run-root reversal. Ambiguity produces non-approving failure evidence
+and preserves state for diagnosis.
+
+Issue-51 evidence and partner receipts use schemas distinct from issue 4.
+Product acceptance and release re-fetch comments twice, bind issue/candidate/
+artifact and actors, require one product owner plus two distinct design
+partners, and reject provisional, edited, cross-schema, or duplicate-person
+authority.
