@@ -28,6 +28,8 @@ Projection lifecycle operations use descriptor-relative no-follow writes,
 exclusive no-replace promotion, and identity/digest-bound quarantine before
 recursive cleanup. Cleanup unlinks through the opened, identity-bound directory
 descriptor; recovery proves quarantine content and retains a deterministic
-receipt-derived restoration handle before active-path restoration. Same-UID
+receipt-derived restoration handle before active-path restoration. A strict
+external cleanup manifest binds the root inode and expected per-path content so
+partial deletion is resumable while foreign additions fail closed. Same-UID
 interference is detected at each ownership boundary; foreign raced bytes are
 preserved rather than overwritten or deleted.

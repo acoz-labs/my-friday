@@ -52,8 +52,13 @@ and refuse cleanup if any raced entry changes the tree. Final cleanup recursivel
 unlinks entries through the opened, reverified directory descriptor and removes
 the root only while its inode remains bound. Recovery proves deterministic
 quarantine bytes, uses a receipt-derived `.restoring` handle, and can resume
-cleanup or restoration without an unjournaled random path. A raced foreign
-target or quarantine is preserved for diagnosis.
+cleanup or restoration without an unjournaled random path. Before the first
+unlink, a strict sidecar cleanup manifest outside the payload binds the root
+inode, exact directory set, and per-file digests. Missing expected entries are
+completed work; every surviving entry must still match, so foreign additions
+cannot gain deletion authority. Control cleanup retains this external authority
+even if its journal-bearing payload is partly removed. A raced foreign target or
+quarantine is preserved for diagnosis.
 
 `capability test` is a bounded structural contract check, not a model run. It
 requires nonempty unique declarations, an exact normalized match between

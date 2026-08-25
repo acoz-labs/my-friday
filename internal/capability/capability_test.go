@@ -306,60 +306,74 @@ func TestRemoveQuarantineFaultIsRecoverable(t *testing.T) {
 }
 
 func TestDescriptorCleanupFaultsRecoverIdempotently(t *testing.T) {
-	for _, action := range []Action{ActionUpgrade, ActionDisable, ActionRemove} {
-		t.Run(string(action), func(t *testing.T) {
-			root := t.TempDir()
-			p := writePackage(t, root, "daily-brief", "1.0.0")
-			instance := filepath.Join(root, "instance")
-			if err := InitializeInstance(instance); err != nil {
-				t.Fatal(err)
-			}
-			pl, err := Plan(instance, p, ActionInstall)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if err = Execute(pl); err != nil {
-				t.Fatal(err)
-			}
-			if action == ActionUpgrade {
-				body := strings.ReplaceAll(string(mustRead(t, filepath.Join(p, "capability.json"))), `"version":"1.0.0"`, `"version":"1.0.1"`)
-				if err = os.WriteFile(filepath.Join(p, "capability.json"), []byte(body), 0o600); err != nil {
+	for _, faultPhase := range []string{"descriptor-nested-entry-unlinked", "descriptor-root-entry-unlinked"} {
+		for _, action := range []Action{ActionUpgrade, ActionDisable, ActionRemove} {
+			t.Run(faultPhase+"/"+string(action), func(t *testing.T) {
+				root := t.TempDir()
+				p := writePackage(t, root, "daily-brief", "1.0.0")
+				instance := filepath.Join(root, "instance")
+				if err := InitializeInstance(instance); err != nil {
 					t.Fatal(err)
 				}
-				skill := append(mustRead(t, filepath.Join(p, "skill", "SKILL.md")), []byte("\nUse the updated brief format.\n")...)
-				if err = os.WriteFile(filepath.Join(p, "skill", "SKILL.md"), skill, 0o600); err != nil {
+				pl, err := Plan(instance, p, ActionInstall)
+				if err != nil {
 					t.Fatal(err)
 				}
-			}
-			pl, err = Plan(instance, p, action)
-			if err != nil {
-				t.Fatal(err)
-			}
-			mutationHook = func(phase string) error {
-				if phase == "descriptor-cleanup-started" {
-					return errors.New("stop")
+				if err = Execute(pl); err != nil {
+					t.Fatal(err)
 				}
-				return nil
-			}
-			if err = Execute(pl); err == nil {
-				t.Fatal("cleanup fault not injected")
-			}
-			mutationHook = nil
-			if err = Recover(instance, "daily-brief"); err != nil {
-				t.Fatal(err)
-			}
-			if err = Recover(instance, "daily-brief"); err != nil {
-				t.Fatalf("idempotent recovery failed: %v", err)
-			}
-			matches, _ := filepath.Glob(filepath.Join(instance, "workspace", ".agents", "skills", ".my-friday-delete-*"))
-			if len(matches) != 0 {
-				t.Fatalf("neutral residue: %v", matches)
-			}
-			matches, _ = filepath.Glob(filepath.Join(instance, "workspace", ".agents", "skills", "*.restoring"))
-			if len(matches) != 0 {
-				t.Fatalf("restoring residue: %v", matches)
-			}
-		})
+				if action == ActionUpgrade {
+					body := strings.ReplaceAll(string(mustRead(t, filepath.Join(p, "capability.json"))), `"version":"1.0.0"`, `"version":"1.0.1"`)
+					if err = os.WriteFile(filepath.Join(p, "capability.json"), []byte(body), 0o600); err != nil {
+						t.Fatal(err)
+					}
+					skill := append(mustRead(t, filepath.Join(p, "skill", "SKILL.md")), []byte("\nUse the updated brief format.\n")...)
+					if err = os.WriteFile(filepath.Join(p, "skill", "SKILL.md"), skill, 0o600); err != nil {
+						t.Fatal(err)
+					}
+				}
+				pl, err = Plan(instance, p, action)
+				if err != nil {
+					t.Fatal(err)
+				}
+				mutationHook = func(phase string) error {
+					if phase == faultPhase {
+						return errors.New("stop")
+					}
+					return nil
+				}
+				if err = Execute(pl); err == nil {
+					t.Fatal("cleanup fault not injected")
+				}
+				mutationHook = nil
+				if err = Recover(instance, "daily-brief"); err != nil {
+					t.Fatal(err)
+				}
+				if err = Recover(instance, "daily-brief"); err != nil {
+					t.Fatalf("idempotent recovery failed: %v", err)
+				}
+				for _, pattern := range []string{filepath.Join(instance, "workspace", ".agents", "skills", "daily-brief.*"), filepath.Join(instance, "capabilities", "daily-brief.*")} {
+					matches, _ := filepath.Glob(pattern)
+					if len(matches) != 0 {
+						t.Fatalf("cleanup residue: %v", matches)
+					}
+				}
+				status, inspectErr := Inspect(instance, p)
+				want := StateInstalledHealthy
+				if action == ActionUpgrade {
+					want = StateSourceChanged
+				}
+				if action == ActionDisable {
+					want = StateDisabled
+				}
+				if action == ActionRemove {
+					want = StateInstalledHealthy
+				}
+				if inspectErr != nil || status.State != want {
+					t.Fatalf("stable state=%s want=%s err=%v", status.State, want, inspectErr)
+				}
+			})
+		}
 	}
 }
 
@@ -374,23 +388,21 @@ func TestRecoveryCleanupFaultAndRestoreCollisionRetainHandle(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if err = Execute(pl); err != nil {
+		t.Fatal(err)
+	}
+	pl, err = Plan(instance, p, ActionDisable)
+	if err != nil {
+		t.Fatal(err)
+	}
 	mutationHook = func(phase string) error {
-		if phase == "projection-written" {
+		if phase == "disable-projection-quarantined" {
 			return errors.New("stop")
 		}
 		return nil
 	}
 	if err = Execute(pl); err == nil {
-		t.Fatal("install fault not injected")
-	}
-	mutationHook = func(phase string) error {
-		if phase == "descriptor-cleanup-started" {
-			return errors.New("stop")
-		}
-		return nil
-	}
-	if err = Recover(instance, "daily-brief"); err == nil {
-		t.Fatal("recovery cleanup fault not injected")
+		t.Fatal("quarantine transfer fault not injected")
 	}
 	mutationHook = func(phase string) error {
 		if phase == "restore-handle-transferred" {
@@ -429,6 +441,58 @@ func TestRecoveryCleanupFaultAndRestoreCollisionRetainHandle(t *testing.T) {
 	}
 	if _, err = os.Lstat(restoring); !errors.Is(err, os.ErrNotExist) {
 		t.Fatal("restoring residue remains")
+	}
+}
+
+func TestRecoveryPartialCleanupFaultsResume(t *testing.T) {
+	for _, faultPhase := range []string{"descriptor-nested-entry-unlinked", "descriptor-root-entry-unlinked"} {
+		t.Run(faultPhase, func(t *testing.T) {
+			root := t.TempDir()
+			p := writePackage(t, root, "daily-brief", "1.0.0")
+			instance := filepath.Join(root, "instance")
+			if err := InitializeInstance(instance); err != nil {
+				t.Fatal(err)
+			}
+			pl, err := Plan(instance, p, ActionInstall)
+			if err != nil {
+				t.Fatal(err)
+			}
+			mutationHook = func(phase string) error {
+				if phase == "projection-written" {
+					return errors.New("stop")
+				}
+				return nil
+			}
+			if err = Execute(pl); err == nil {
+				t.Fatal("install fault not injected")
+			}
+			mutationHook = func(phase string) error {
+				if phase == faultPhase {
+					return errors.New("stop")
+				}
+				return nil
+			}
+			if err = Recover(instance, "daily-brief"); err == nil {
+				t.Fatal("partial recovery cleanup fault not injected")
+			}
+			mutationHook = nil
+			if err = Recover(instance, "daily-brief"); err != nil {
+				t.Fatal(err)
+			}
+			if err = Recover(instance, "daily-brief"); err != nil {
+				t.Fatal(err)
+			}
+			status, inspectErr := Inspect(instance, p)
+			if inspectErr != nil || status.State != StateReady {
+				t.Fatalf("state=%s err=%v", status.State, inspectErr)
+			}
+			for _, pattern := range []string{filepath.Join(instance, "workspace", ".agents", "skills", "daily-brief.*"), filepath.Join(instance, "capabilities", "daily-brief.*")} {
+				matches, _ := filepath.Glob(pattern)
+				if len(matches) != 0 {
+					t.Fatalf("cleanup residue: %v", matches)
+				}
+			}
+		})
 	}
 }
 

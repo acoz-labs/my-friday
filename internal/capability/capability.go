@@ -869,6 +869,144 @@ type projectionProof struct {
 	digest   string
 }
 
+type cleanupManifest struct {
+	ContractVersion int               `json:"contract_version"`
+	RootDev         uint64            `json:"root_dev"`
+	RootIno         uint64            `json:"root_ino"`
+	ExpectedDigest  string            `json:"expected_digest"`
+	Directories     []string          `json:"directories"`
+	Files           map[string]string `json:"files"`
+}
+
+func cleanupManifestPath(path string) string { return path + ".cleanup.json" }
+
+func snapshotCleanupTree(path, expected string) (cleanupManifest, error) {
+	parent, err := openDirNoFollow(filepath.Dir(path))
+	if err != nil {
+		return cleanupManifest{}, err
+	}
+	defer unix.Close(parent)
+	proof, err := proveProjection(parent, filepath.Base(path), path, expected)
+	if err != nil {
+		return cleanupManifest{}, err
+	}
+	m := cleanupManifest{ContractVersion: 1, RootDev: proof.dev, RootIno: proof.ino, ExpectedDigest: expected, Files: map[string]string{}}
+	err = filepath.WalkDir(path, func(p string, e fs.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		rel, _ := filepath.Rel(path, p)
+		rel = filepath.ToSlash(rel)
+		if rel == "." {
+			return nil
+		}
+		info, statErr := os.Lstat(p)
+		if statErr != nil {
+			return statErr
+		}
+		if info.Mode()&os.ModeSymlink != 0 {
+			return errors.New("unsafe cleanup snapshot link")
+		}
+		if info.IsDir() {
+			m.Directories = append(m.Directories, rel)
+			return nil
+		}
+		if !info.Mode().IsRegular() {
+			return errors.New("unsafe cleanup snapshot entry")
+		}
+		body, readErr := os.ReadFile(p)
+		if readErr != nil {
+			return readErr
+		}
+		m.Files[rel] = hash(body)
+		return nil
+	})
+	sort.Strings(m.Directories)
+	return m, err
+}
+
+func writeCleanupManifest(path string, m cleanupManifest) error {
+	body, _ := json.MarshalIndent(m, "", "  ")
+	body = append(body, '\n')
+	f, err := os.OpenFile(cleanupManifestPath(path), os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+	if err != nil {
+		return err
+	}
+	_, writeErr := f.Write(body)
+	closeErr := f.Close()
+	if writeErr != nil {
+		return writeErr
+	}
+	return closeErr
+}
+
+func readCleanupManifest(path string) (cleanupManifest, error) {
+	body, info, err := regularFile(cleanupManifestPath(path))
+	if err != nil {
+		return cleanupManifest{}, err
+	}
+	if info.Mode().Perm() != 0o600 {
+		return cleanupManifest{}, errors.New("unsafe cleanup manifest mode")
+	}
+	var m cleanupManifest
+	if err = strictJSON(body, &m); err != nil {
+		return m, err
+	}
+	canonical, _ := json.MarshalIndent(m, "", "  ")
+	canonical = append(canonical, '\n')
+	if !bytes.Equal(body, canonical) || m.ContractVersion != 1 || !validDigest(m.ExpectedDigest) || !sortedUniqueStrings(m.Directories) || len(m.Files) == 0 {
+		return m, errors.New("invalid cleanup manifest")
+	}
+	for rel, digest := range m.Files {
+		if rel == "" || !validDigest(digest) {
+			return m, errors.New("invalid cleanup manifest entry")
+		}
+	}
+	return m, nil
+}
+
+func validateCleanupSubset(path string, m cleanupManifest) error {
+	allowedDirs := map[string]bool{}
+	for _, rel := range m.Directories {
+		allowedDirs[rel] = true
+	}
+	return filepath.WalkDir(path, func(p string, e fs.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		rel, _ := filepath.Rel(path, p)
+		rel = filepath.ToSlash(rel)
+		if rel == "." {
+			return nil
+		}
+		info, err := os.Lstat(p)
+		if err != nil {
+			return err
+		}
+		if info.Mode()&os.ModeSymlink != 0 {
+			return errors.New("cleanup subset link refused")
+		}
+		if info.IsDir() {
+			if !allowedDirs[rel] {
+				return fmt.Errorf("foreign cleanup directory %s", rel)
+			}
+			return nil
+		}
+		expected, ok := m.Files[rel]
+		if !ok || !info.Mode().IsRegular() {
+			return fmt.Errorf("foreign cleanup file %s", rel)
+		}
+		body, err := os.ReadFile(p)
+		if err != nil {
+			return err
+		}
+		if hash(body) != expected {
+			return fmt.Errorf("cleanup file drift %s", rel)
+		}
+		return nil
+	})
+}
+
 func proveProjection(parent int, name, path, expected string) (projectionProof, error) {
 	fd, err := unix.Openat(parent, name, unix.O_RDONLY|unix.O_DIRECTORY|unix.O_CLOEXEC|unix.O_NOFOLLOW, 0)
 	if err != nil {
@@ -933,13 +1071,35 @@ func quarantineOwnedProjectionAs(path, expected, phase, quarantineName string) (
 }
 
 func removeProvenQuarantine(path, expected string) error {
+	manifest, manifestErr := readCleanupManifest(path)
+	if errors.Is(manifestErr, os.ErrNotExist) {
+		manifest, manifestErr = snapshotCleanupTree(path, expected)
+		if manifestErr != nil {
+			return manifestErr
+		}
+		if manifestErr = writeCleanupManifest(path, manifest); manifestErr != nil {
+			return manifestErr
+		}
+	} else if manifestErr != nil {
+		return manifestErr
+	}
+	if manifest.ExpectedDigest != expected {
+		return errors.New("cleanup manifest digest mismatch")
+	}
 	parent, err := openDirNoFollow(filepath.Dir(path))
 	if err != nil {
 		return err
 	}
 	defer unix.Close(parent)
-	proof, err := proveProjection(parent, filepath.Base(path), path, expected)
-	if err != nil {
+	var entry unix.Stat_t
+	if err = unix.Fstatat(parent, filepath.Base(path), &entry, unix.AT_SYMLINK_NOFOLLOW); err != nil {
+		return err
+	}
+	proof := projectionProof{dev: uint64(entry.Dev), ino: uint64(entry.Ino), digest: expected}
+	if proof.dev != manifest.RootDev || proof.ino != manifest.RootIno {
+		return errors.New("cleanup manifest root identity mismatch")
+	}
+	if err = validateCleanupSubset(path, manifest); err != nil {
 		return err
 	}
 	if mutationHook != nil {
@@ -947,8 +1107,7 @@ func removeProvenQuarantine(path, expected string) error {
 			return err
 		}
 	}
-	rechecked, err := proveProjection(parent, filepath.Base(path), path, expected)
-	if err != nil || rechecked.dev != proof.dev || rechecked.ino != proof.ino {
+	if err = unix.Fstatat(parent, filepath.Base(path), &entry, unix.AT_SYMLINK_NOFOLLOW); err != nil || uint64(entry.Dev) != proof.dev || uint64(entry.Ino) != proof.ino {
 		return errors.New("tree identity changed at final boundary")
 	}
 	fd, err := unix.Openat(parent, filepath.Base(path), unix.O_RDONLY|unix.O_DIRECTORY|unix.O_CLOEXEC|unix.O_NOFOLLOW, 0)
@@ -965,20 +1124,22 @@ func removeProvenQuarantine(path, expected string) error {
 			return err
 		}
 	}
-	if err = removeDirectoryContents(fd); err != nil {
+	if err = removeDirectoryContents(fd, 0); err != nil {
 		return err
 	}
-	var entry unix.Stat_t
 	if err = unix.Fstatat(parent, filepath.Base(path), &entry, unix.AT_SYMLINK_NOFOLLOW); err != nil {
 		return err
 	}
 	if uint64(entry.Dev) != proof.dev || uint64(entry.Ino) != proof.ino {
 		return errors.New("cleanup root identity changed")
 	}
-	return unix.Unlinkat(parent, filepath.Base(path), unix.AT_REMOVEDIR)
+	if err = unix.Unlinkat(parent, filepath.Base(path), unix.AT_REMOVEDIR); err != nil {
+		return err
+	}
+	return os.Remove(cleanupManifestPath(path))
 }
 
-func removeDirectoryContents(dirFD int) error {
+func removeDirectoryContents(dirFD, depth int) error {
 	dup, err := unix.Dup(dirFD)
 	if err != nil {
 		return err
@@ -1006,7 +1167,7 @@ func removeDirectoryContents(dirFD int) error {
 			if openErr != nil {
 				return openErr
 			}
-			if err = removeDirectoryContents(child); err != nil {
+			if err = removeDirectoryContents(child, depth+1); err != nil {
 				unix.Close(child)
 				return err
 			}
@@ -1048,6 +1209,15 @@ func removeDirectoryContents(dirFD int) error {
 				return errors.New("cleanup file identity changed")
 			}
 			if err = unix.Unlinkat(dirFD, name, 0); err != nil {
+				return err
+			}
+		}
+		if mutationHook != nil {
+			phase := "descriptor-root-entry-unlinked"
+			if depth > 0 {
+				phase = "descriptor-nested-entry-unlinked"
+			}
+			if err = mutationHook(phase); err != nil {
 				return err
 			}
 		}
@@ -1095,6 +1265,31 @@ func restoreProvenQuarantine(quarantine, target, expected string) error {
 	after, err := proveProjection(parent, filepath.Base(target), target, expected)
 	if err != nil || after.dev != proof.dev || after.ino != proof.ino {
 		return errors.New("restored projection identity changed")
+	}
+	return nil
+}
+
+func resumeCleanupManifests(instance, slug string) error {
+	patterns := []string{
+		filepath.Join(instance, "workspace", ".agents", "skills", slug+"*.cleanup.json"),
+		filepath.Join(instance, "capabilities", slug+"*.cleanup.json"),
+	}
+	for _, pattern := range patterns {
+		matches, err := filepath.Glob(pattern)
+		if err != nil {
+			return err
+		}
+		sort.Strings(matches)
+		for _, manifestPath := range matches {
+			tree := strings.TrimSuffix(manifestPath, ".cleanup.json")
+			manifest, readErr := readCleanupManifest(tree)
+			if readErr != nil {
+				return readErr
+			}
+			if err = removeProvenQuarantine(tree, manifest.ExpectedDigest); err != nil {
+				return err
+			}
+		}
 	}
 	return nil
 }
@@ -1306,6 +1501,9 @@ func Recover(instance, slug string) error {
 		return errors.New("capability transaction already active")
 	}
 	defer syscall.Flock(int(lockFile.Fd()), syscall.LOCK_UN)
+	if err = resumeCleanupManifests(instance, slug); err != nil {
+		return fmt.Errorf("recovery refused: cleanup resume: %w", err)
+	}
 	control := filepath.Join(instance, "capabilities", slug)
 	removingControl := control + ".removing"
 	if _, controlErr := os.Lstat(control); errors.Is(controlErr, os.ErrNotExist) {
