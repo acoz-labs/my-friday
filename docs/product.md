@@ -34,9 +34,11 @@ Users must be able to:
 5. Install a narrowly owned Codex baseline without disturbing unrelated
    configuration.
 6. Verify, repair, upgrade, uninstall, and roll back the managed installation.
-7. Record observations and chronology, deliberately promote durable claims,
-   and recall relevant context in later tasks.
-8. Extend the assistant through an inspectable, validated skill workflow.
+7. Collaborate with the assistant to define, scaffold, inspect, validate, test,
+   install, verify, enhance, disable, and remove a version-controlled capability.
+8. Use that capability workflow to record observations and chronology,
+   deliberately promote durable claims, and recall relevant context in later
+   tasks.
 9. Work locally and optionally attach an existing source-control remote.
 
 ## Product boundaries
@@ -49,10 +51,20 @@ Users must be able to:
   handling, verification, and reversal.
 - Personality is user-defined; trust boundaries and safety policy are not
   personality settings.
+- Capability source is version-controlled and profile-bound. An agent may help
+  author it, but deterministic My Friday tooling owns preview, validation,
+  testing, activation, verification, upgrade, and reversal, with human review
+  and explicit mutation confirmation at the authority boundary.
+- The first capability profile is instruction-only. It permits no executable
+  code, arbitrary dependency, network access, credential use, background
+  process, or durable user data.
+- Governed memory is the first data-bearing core capability and must use the
+  shared outer capability lifecycle while retaining stricter domain-specific
+  schemas, sensitivity, transaction, recovery, and review requirements.
 - Durable memory requires deliberate promotion with provenance and visible
   uncertainty. Ordinary activity must not silently become permanent belief.
-- Skills are inspectable and validated. The product does not promise autonomous
-  self-modification or arbitrary dependency installation.
+- My Friday does not promise autonomous self-modification, generated-code
+  activation, third-party capability installation, or a capability marketplace.
 - My Friday does not claim complete privacy. Models, remotes, plugins, and tools
   may transmit data and must disclose their own boundaries.
 - Employer policy, credentials, permissions, and third-party integrations
@@ -91,39 +103,50 @@ account surface, analytics application, or content-management system.
 
 1. Preview and create valid separate runtime and memory repositories.
 2. Install, verify, repair, uninstall, and roll back the managed Codex baseline.
-3. Complete the governed-memory loop across fresh tasks.
+3. Build and operate one inspectable instruction-only capability through the
+   source-first capability workshop.
+4. Build governed memory through the same outer lifecycle as the first
+   data-bearing core capability and complete its loop across fresh tasks.
 
 ### Deliberately deferred
 
-4. Scaffold, inspect, validate, and locally install one new skill.
 5. Attach either generated repository to an explicitly supplied generic git
    remote without provider-specific authentication.
 
 ### Parked
 
+- Local scripted capability profiles.
 - Provider-specific remote onboarding.
 - Multi-machine memory synchronization.
 - Broad operating-system support beyond the first verified environment.
 
 ### Not part of the current product direction
 
-Voice, web interfaces, messaging transports, connectors, scheduling, hosted
-services, and broad autonomous orchestration require a new product decision.
+Autonomous self-modification, generated or third-party executable capability
+activation, remote capability distribution, a marketplace, voice, web
+interfaces, messaging transports, connectors, scheduling, hosted services, and
+broad autonomous orchestration require a new product decision.
 
 ## Validation signals
 
 Continue when the product owner and at least two design partners independently
-complete the core lifecycle, understand the ownership and data boundaries, and
-choose to keep using the result.
+complete the core lifecycle, build and enhance one instruction-only capability,
+understand the ownership and data boundaries, and choose to keep using the
+result. Governed memory must reuse the outer capability lifecycle without
+concealing a second installer or weakening its data protections.
 
 Change direction when users repeatedly need facilitation, the two-repository or
-memory-promotion model creates more friction than trust, or first-use value
-requires provider-specific setup.
+capability-profile model creates more friction than trust, the builder merely
+renames bespoke development, memory cannot honestly reuse the shared lifecycle,
+or first-use value requires provider-specific setup.
 
-Pause when safe collision handling, rollback, interrupted-run recovery, naming
-clearance, workplace constraints, or a bounded Codex compatibility contract
-cannot be demonstrated.
+Pause when capability files, projections, dependencies, permissions, data
+effects, or reversal cannot be bounded before activation; when safe collision
+handling, rollback, interrupted-run recovery, naming clearance, workplace
+constraints, or a bounded Codex compatibility contract cannot be demonstrated;
+or when private data cannot remain separate from shareable capability source.
 
 Stop when target users do not retain the product, documentation and templates
-solve the problem adequately, or global installation creates unacceptable
-security or maintenance exposure.
+or Codex-native tooling solve the complete capability lifecycle adequately, the
+abstraction delays useful capabilities without reuse, or global installation
+creates unacceptable security or maintenance exposure.
