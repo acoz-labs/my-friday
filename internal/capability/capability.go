@@ -4,7 +4,6 @@ package capability
 
 import (
 	"bytes"
-	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -494,7 +493,9 @@ func readTransaction(path, slug string, r *Receipt) (transaction, error) {
 		return tx, err
 	}
 	validAction := tx.Action == ActionInstall || tx.Action == ActionUpgrade || tx.Action == ActionEnable || tx.Action == ActionDisable || tx.Action == ActionRemove
-	if tx.ContractVersion != 1 || tx.Slug != slug || !validAction || !validDigest(tx.SourceDigest) || !validDigest(tx.ProjectionDigest) || tx.PriorReceiptDigest != receiptDigest(r) {
+	receiptMatches := tx.PriorReceiptDigest == receiptDigest(r)
+	completedDisableReceipt := tx.Action == ActionDisable && r != nil && r.State == StateDisabled && r.SourceDigest == tx.SourceDigest && r.ProjectionDigest == tx.ProjectionDigest
+	if tx.ContractVersion != 1 || tx.Slug != slug || !validAction || !validDigest(tx.SourceDigest) || !validDigest(tx.ProjectionDigest) || (!receiptMatches && !completedDisableReceipt) {
 		return tx, errors.New("transaction journal ownership mismatch")
 	}
 	if tx.Action == ActionInstall && (!tx.CreatedControl || r != nil) {
@@ -932,59 +933,163 @@ func quarantineOwnedProjectionAs(path, expected, phase, quarantineName string) (
 }
 
 func removeProvenQuarantine(path, expected string) error {
-	neutral, _, err := neutralizeProvenTree(path, expected, "final-deletion-boundary")
-	if err != nil {
-		return err
-	}
-	return os.RemoveAll(neutral)
-}
-
-func neutralizeProvenTree(path, expected, hookPhase string) (string, projectionProof, error) {
 	parent, err := openDirNoFollow(filepath.Dir(path))
 	if err != nil {
-		return "", projectionProof{}, err
+		return err
 	}
 	defer unix.Close(parent)
 	proof, err := proveProjection(parent, filepath.Base(path), path, expected)
 	if err != nil {
-		return "", projectionProof{}, err
+		return err
 	}
-	if hookPhase != "" && mutationHook != nil {
-		if err = mutationHook(hookPhase); err != nil {
-			return "", projectionProof{}, err
+	if mutationHook != nil {
+		if err = mutationHook("final-deletion-boundary"); err != nil {
+			return err
 		}
 	}
 	rechecked, err := proveProjection(parent, filepath.Base(path), path, expected)
 	if err != nil || rechecked.dev != proof.dev || rechecked.ino != proof.ino {
-		return "", projectionProof{}, errors.New("tree identity changed at final boundary")
+		return errors.New("tree identity changed at final boundary")
 	}
-	var token [16]byte
-	if _, err = rand.Read(token[:]); err != nil {
-		return "", projectionProof{}, err
-	}
-	neutralName := ".my-friday-delete-" + hex.EncodeToString(token[:])
-	if err = renameExclusive(parent, filepath.Base(path), parent, neutralName); err != nil {
-		return "", projectionProof{}, err
-	}
-	neutral := filepath.Join(filepath.Dir(path), neutralName)
-	after, err := proveProjection(parent, neutralName, neutral, expected)
-	if err != nil || after.dev != proof.dev || after.ino != proof.ino {
-		return neutral, projectionProof{}, errors.New("neutralized tree identity changed")
-	}
-	return neutral, proof, nil
-}
-
-func restoreProvenQuarantine(quarantine, target, expected string) error {
-	neutral, proof, err := neutralizeProvenTree(quarantine, expected, "")
+	fd, err := unix.Openat(parent, filepath.Base(path), unix.O_RDONLY|unix.O_DIRECTORY|unix.O_CLOEXEC|unix.O_NOFOLLOW, 0)
 	if err != nil {
 		return err
 	}
+	defer unix.Close(fd)
+	var opened unix.Stat_t
+	if err = unix.Fstat(fd, &opened); err != nil || uint64(opened.Dev) != proof.dev || uint64(opened.Ino) != proof.ino {
+		return errors.New("cleanup descriptor identity changed")
+	}
+	if mutationHook != nil {
+		if err = mutationHook("descriptor-cleanup-started"); err != nil {
+			return err
+		}
+	}
+	if err = removeDirectoryContents(fd); err != nil {
+		return err
+	}
+	var entry unix.Stat_t
+	if err = unix.Fstatat(parent, filepath.Base(path), &entry, unix.AT_SYMLINK_NOFOLLOW); err != nil {
+		return err
+	}
+	if uint64(entry.Dev) != proof.dev || uint64(entry.Ino) != proof.ino {
+		return errors.New("cleanup root identity changed")
+	}
+	return unix.Unlinkat(parent, filepath.Base(path), unix.AT_REMOVEDIR)
+}
+
+func removeDirectoryContents(dirFD int) error {
+	dup, err := unix.Dup(dirFD)
+	if err != nil {
+		return err
+	}
+	f := os.NewFile(uintptr(dup), "cleanup")
+	names, err := f.Readdirnames(-1)
+	closeErr := f.Close()
+	if err != nil {
+		return err
+	}
+	if closeErr != nil {
+		return closeErr
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		var before unix.Stat_t
+		if err = unix.Fstatat(dirFD, name, &before, unix.AT_SYMLINK_NOFOLLOW); err != nil {
+			return err
+		}
+		if before.Uid != uint32(os.Getuid()) {
+			return errors.New("cleanup entry owner changed")
+		}
+		if before.Mode&unix.S_IFMT == unix.S_IFDIR {
+			child, openErr := unix.Openat(dirFD, name, unix.O_RDONLY|unix.O_DIRECTORY|unix.O_CLOEXEC|unix.O_NOFOLLOW, 0)
+			if openErr != nil {
+				return openErr
+			}
+			if err = removeDirectoryContents(child); err != nil {
+				unix.Close(child)
+				return err
+			}
+			var opened unix.Stat_t
+			if err = unix.Fstat(child, &opened); err != nil {
+				unix.Close(child)
+				return err
+			}
+			unix.Close(child)
+			var current unix.Stat_t
+			if err = unix.Fstatat(dirFD, name, &current, unix.AT_SYMLINK_NOFOLLOW); err != nil {
+				return err
+			}
+			if opened.Dev != current.Dev || opened.Ino != current.Ino {
+				return errors.New("cleanup directory identity changed")
+			}
+			if err = unix.Unlinkat(dirFD, name, unix.AT_REMOVEDIR); err != nil {
+				return err
+			}
+		} else {
+			if before.Mode&unix.S_IFMT != unix.S_IFREG || before.Nlink != 1 {
+				return errors.New("unsafe cleanup entry")
+			}
+			fd, openErr := unix.Openat(dirFD, name, unix.O_RDONLY|unix.O_CLOEXEC|unix.O_NOFOLLOW, 0)
+			if openErr != nil {
+				return openErr
+			}
+			var opened unix.Stat_t
+			if err = unix.Fstat(fd, &opened); err != nil {
+				unix.Close(fd)
+				return err
+			}
+			unix.Close(fd)
+			var current unix.Stat_t
+			if err = unix.Fstatat(dirFD, name, &current, unix.AT_SYMLINK_NOFOLLOW); err != nil {
+				return err
+			}
+			if opened.Dev != current.Dev || opened.Ino != current.Ino {
+				return errors.New("cleanup file identity changed")
+			}
+			if err = unix.Unlinkat(dirFD, name, 0); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func restoreProvenQuarantine(quarantine, target, expected string) error {
 	parent, err := openDirNoFollow(filepath.Dir(target))
 	if err != nil {
 		return err
 	}
 	defer unix.Close(parent)
-	if err = renameExclusive(parent, filepath.Base(neutral), parent, filepath.Base(target)); err != nil {
+	restoringName := filepath.Base(target) + ".owned-" + expected[:16] + ".restoring"
+	restoring := filepath.Join(filepath.Dir(target), restoringName)
+	var proof projectionProof
+	if _, restoringErr := os.Lstat(restoring); errors.Is(restoringErr, os.ErrNotExist) {
+		proof, err = proveProjection(parent, filepath.Base(quarantine), quarantine, expected)
+		if err != nil {
+			return err
+		}
+		if err = renameExclusive(parent, filepath.Base(quarantine), parent, restoringName); err != nil {
+			return err
+		}
+	} else if restoringErr != nil {
+		return restoringErr
+	} else {
+		proof, err = proveProjection(parent, restoringName, restoring, expected)
+		if err != nil {
+			return err
+		}
+	}
+	afterTransfer, err := proveProjection(parent, restoringName, restoring, expected)
+	if err != nil || afterTransfer.dev != proof.dev || afterTransfer.ino != proof.ino {
+		return errors.New("restoring handle identity changed")
+	}
+	if mutationHook != nil {
+		if err = mutationHook("restore-handle-transferred"); err != nil {
+			return err
+		}
+	}
+	if err = renameExclusive(parent, restoringName, parent, filepath.Base(target)); err != nil {
 		return err
 	}
 	after, err := proveProjection(parent, filepath.Base(target), target, expected)
@@ -1221,16 +1326,50 @@ func Recover(instance, slug string) error {
 	if err != nil {
 		return err
 	}
+	if _, journalErr := os.Lstat(journal); errors.Is(journalErr, os.ErrNotExist) {
+		projection := projectionPath(instance, slug)
+		if r == nil {
+			if _, controlErr := os.Lstat(control); errors.Is(controlErr, os.ErrNotExist) {
+				if _, projectionErr := os.Lstat(projection); errors.Is(projectionErr, os.ErrNotExist) {
+					return nil
+				}
+			}
+			return errors.New("recovery refused: no owned stable state")
+		}
+		if err = validateManagedControl(instance, slug, r, false); err != nil {
+			return err
+		}
+		if r.State == StateDisabled {
+			if _, projectionErr := os.Lstat(projection); errors.Is(projectionErr, os.ErrNotExist) {
+				return nil
+			}
+			return errors.New("recovery refused: disabled projection exists")
+		}
+		d, digestErr := projectionDigest(projection)
+		if digestErr == nil && d == r.ProjectionDigest {
+			return nil
+		}
+		return errors.New("recovery refused: stable projection drift")
+	} else if journalErr != nil {
+		return journalErr
+	}
 	tx, err := readTransaction(journal, slug, r)
 	if err != nil {
 		return fmt.Errorf("recovery refused: %w", err)
 	}
 	projection := projectionPath(instance, slug)
+	expectedProjection := tx.ProjectionDigest
 	if r != nil {
-		quarantine := projection + ".owned-" + r.ProjectionDigest[:16] + ".quarantine"
+		expectedProjection = r.ProjectionDigest
+	}
+	if expectedProjection != "" {
+		quarantine := projection + ".owned-" + expectedProjection[:16] + ".quarantine"
+		restoring := projection + ".owned-" + expectedProjection[:16] + ".restoring"
 		if _, projectionErr := os.Lstat(projection); errors.Is(projectionErr, os.ErrNotExist) {
-			if _, quarantineErr := os.Lstat(quarantine); quarantineErr == nil {
-				if restoreErr := restoreProvenQuarantine(quarantine, projection, r.ProjectionDigest); restoreErr != nil {
+			_, quarantineErr := os.Lstat(quarantine)
+			_, restoringErr := os.Lstat(restoring)
+			if quarantineErr == nil || restoringErr == nil {
+				if restoreErr := restoreProvenQuarantine(quarantine, projection, expectedProjection); restoreErr != nil {
 					return fmt.Errorf("recovery refused: projection quarantine ownership mismatch: %w", restoreErr)
 				}
 			}
@@ -1316,7 +1455,7 @@ func Recover(instance, slug string) error {
 			return readErr
 		}
 		if err = writeProjection(projection, files); err != nil {
-			return err
+			return fmt.Errorf("restore receipt-bound projection: %w", err)
 		}
 	}
 	return os.Remove(journal)

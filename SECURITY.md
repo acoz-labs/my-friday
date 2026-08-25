@@ -26,8 +26,8 @@ entries fail closed and are never adopted for cleanup.
 
 Projection lifecycle operations use descriptor-relative no-follow writes,
 exclusive no-replace promotion, and identity/digest-bound quarantine before
-recursive cleanup. Cleanup performs another exclusive neutral-name transfer and
-identity/digest proof at the final boundary; recovery proves quarantine content
-before active-path restoration. Same-UID interference is detected at each
-ownership boundary; foreign raced bytes are preserved rather than overwritten
-or deleted.
+recursive cleanup. Cleanup unlinks through the opened, identity-bound directory
+descriptor; recovery proves quarantine content and retains a deterministic
+receipt-derived restoration handle before active-path restoration. Same-UID
+interference is detected at each ownership boundary; foreign raced bytes are
+preserved rather than overwritten or deleted.
