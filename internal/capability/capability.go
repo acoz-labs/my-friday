@@ -4,6 +4,7 @@ package capability
 
 import (
 	"bytes"
+	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -242,6 +243,15 @@ func TestCases(pkg Package) error {
 	for _, trigger := range pkg.Manifest.Triggers {
 		if !positive[normalize(trigger)] {
 			return fmt.Errorf("manifest trigger %q lacks a positive case", trigger)
+		}
+	}
+	manifestTriggers := map[string]bool{}
+	for _, trigger := range pkg.Manifest.Triggers {
+		manifestTriggers[normalize(trigger)] = true
+	}
+	for trigger := range positive {
+		if !manifestTriggers[trigger] {
+			return fmt.Errorf("positive trigger %q is not declared by the manifest", trigger)
 		}
 	}
 	if len(pkg.Cases.Examples) == 0 {
@@ -922,15 +932,66 @@ func quarantineOwnedProjectionAs(path, expected, phase, quarantineName string) (
 }
 
 func removeProvenQuarantine(path, expected string) error {
+	neutral, _, err := neutralizeProvenTree(path, expected, "final-deletion-boundary")
+	if err != nil {
+		return err
+	}
+	return os.RemoveAll(neutral)
+}
+
+func neutralizeProvenTree(path, expected, hookPhase string) (string, projectionProof, error) {
 	parent, err := openDirNoFollow(filepath.Dir(path))
+	if err != nil {
+		return "", projectionProof{}, err
+	}
+	defer unix.Close(parent)
+	proof, err := proveProjection(parent, filepath.Base(path), path, expected)
+	if err != nil {
+		return "", projectionProof{}, err
+	}
+	if hookPhase != "" && mutationHook != nil {
+		if err = mutationHook(hookPhase); err != nil {
+			return "", projectionProof{}, err
+		}
+	}
+	rechecked, err := proveProjection(parent, filepath.Base(path), path, expected)
+	if err != nil || rechecked.dev != proof.dev || rechecked.ino != proof.ino {
+		return "", projectionProof{}, errors.New("tree identity changed at final boundary")
+	}
+	var token [16]byte
+	if _, err = rand.Read(token[:]); err != nil {
+		return "", projectionProof{}, err
+	}
+	neutralName := ".my-friday-delete-" + hex.EncodeToString(token[:])
+	if err = renameExclusive(parent, filepath.Base(path), parent, neutralName); err != nil {
+		return "", projectionProof{}, err
+	}
+	neutral := filepath.Join(filepath.Dir(path), neutralName)
+	after, err := proveProjection(parent, neutralName, neutral, expected)
+	if err != nil || after.dev != proof.dev || after.ino != proof.ino {
+		return neutral, projectionProof{}, errors.New("neutralized tree identity changed")
+	}
+	return neutral, proof, nil
+}
+
+func restoreProvenQuarantine(quarantine, target, expected string) error {
+	neutral, proof, err := neutralizeProvenTree(quarantine, expected, "")
+	if err != nil {
+		return err
+	}
+	parent, err := openDirNoFollow(filepath.Dir(target))
 	if err != nil {
 		return err
 	}
 	defer unix.Close(parent)
-	if _, err = proveProjection(parent, filepath.Base(path), path, expected); err != nil {
+	if err = renameExclusive(parent, filepath.Base(neutral), parent, filepath.Base(target)); err != nil {
 		return err
 	}
-	return os.RemoveAll(path)
+	after, err := proveProjection(parent, filepath.Base(target), target, expected)
+	if err != nil || after.dev != proof.dev || after.ino != proof.ino {
+		return errors.New("restored projection identity changed")
+	}
+	return nil
 }
 
 func readProjection(root string) (map[string][]byte, error) {
@@ -1169,14 +1230,8 @@ func Recover(instance, slug string) error {
 		quarantine := projection + ".owned-" + r.ProjectionDigest[:16] + ".quarantine"
 		if _, projectionErr := os.Lstat(projection); errors.Is(projectionErr, os.ErrNotExist) {
 			if _, quarantineErr := os.Lstat(quarantine); quarantineErr == nil {
-				parent, openErr := openDirNoFollow(filepath.Dir(projection))
-				if openErr != nil {
-					return openErr
-				}
-				renameErr := renameExclusive(parent, filepath.Base(quarantine), parent, filepath.Base(projection))
-				unix.Close(parent)
-				if renameErr != nil {
-					return fmt.Errorf("recovery refused: projection quarantine collision: %w", renameErr)
+				if restoreErr := restoreProvenQuarantine(quarantine, projection, r.ProjectionDigest); restoreErr != nil {
+					return fmt.Errorf("recovery refused: projection quarantine ownership mismatch: %w", restoreErr)
 				}
 			}
 		}

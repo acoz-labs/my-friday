@@ -51,6 +51,7 @@ func TestDeterministicCasesRejectContradictionsAndEmptyDeclarations(t *testing.T
 		{"empty trigger", `{"contract_version":1,"positive_triggers":[""],"non_triggers":["hello"],"examples":[{"input":"prepare my daily brief","output_contains":["brief"]}],"required_facts":["explicit invocation only"],"forbidden_effects":["scripts","dependencies","network","credentials","background","durable-data","publishing"]}`},
 		{"contradictory trigger", `{"contract_version":1,"positive_triggers":["prepare my daily brief"],"non_triggers":["prepare my daily brief"],"examples":[{"input":"prepare my daily brief","output_contains":["brief"]}],"required_facts":["explicit invocation only"],"forbidden_effects":["scripts","dependencies","network","credentials","background","durable-data","publishing"]}`},
 		{"unaligned trigger", `{"contract_version":1,"positive_triggers":["unrelated"],"non_triggers":["hello"],"examples":[{"input":"unrelated","output_contains":["brief"]}],"required_facts":["explicit invocation only"],"forbidden_effects":["scripts","dependencies","network","credentials","background","durable-data","publishing"]}`},
+		{"extra positive trigger", `{"contract_version":1,"positive_triggers":["prepare my daily brief","unrelated"],"non_triggers":["hello"],"examples":[{"input":"prepare my daily brief","output_contains":["brief"]}],"required_facts":["explicit invocation only"],"forbidden_effects":["scripts","dependencies","network","credentials","background","durable-data","publishing"]}`},
 		{"uncovered example", `{"contract_version":1,"positive_triggers":["prepare my daily brief"],"non_triggers":["hello"],"examples":[{"input":"unrelated","output_contains":["brief"]}],"required_facts":["explicit invocation only"],"forbidden_effects":["scripts","dependencies","network","credentials","background","durable-data","publishing"]}`},
 		{"empty output", `{"contract_version":1,"positive_triggers":["prepare my daily brief"],"non_triggers":["hello"],"examples":[{"input":"prepare my daily brief","output_contains":[""]}],"required_facts":["explicit invocation only"],"forbidden_effects":["scripts","dependencies","network","credentials","background","durable-data","publishing"]}`},
 		{"missing fact", `{"contract_version":1,"positive_triggers":["prepare my daily brief"],"non_triggers":["hello"],"examples":[{"input":"prepare my daily brief","output_contains":["brief"]}],"required_facts":["not in instructions"],"forbidden_effects":["scripts","dependencies","network","credentials","background","durable-data","publishing"]}`},
@@ -174,6 +175,15 @@ func TestQuarantineAndRecoveryRacesPreserveForeignBytes(t *testing.T) {
 	if b, readErr := os.ReadFile(foreign); readErr != nil || string(b) != "keep" {
 		t.Fatalf("quarantine foreign bytes lost: %q %v", b, readErr)
 	}
+	if err = Recover(instance, "daily-brief"); err == nil {
+		t.Fatal("drifted quarantine recovery accepted")
+	}
+	if _, activeErr := os.Lstat(pl.Projection); !errors.Is(activeErr, os.ErrNotExist) {
+		t.Fatalf("foreign quarantine exposed at active projection: %v", activeErr)
+	}
+	if b, readErr := os.ReadFile(foreign); readErr != nil || string(b) != "keep" {
+		t.Fatalf("recovery lost drift evidence: %q %v", b, readErr)
+	}
 
 	// A separate interrupted install exercises the recovery post-check window.
 	root2 := t.TempDir()
@@ -214,6 +224,47 @@ func TestQuarantineAndRecoveryRacesPreserveForeignBytes(t *testing.T) {
 	}
 	if b, readErr := os.ReadFile(foreign); readErr != nil || string(b) != "keep" {
 		t.Fatalf("recovery foreign bytes lost: %q %v", b, readErr)
+	}
+}
+
+func TestFinalDeletionBoundaryPreservesRacedReplacement(t *testing.T) {
+	root := t.TempDir()
+	p := writePackage(t, root, "daily-brief", "1.0.0")
+	instance := filepath.Join(root, "instance")
+	if err := InitializeInstance(instance); err != nil {
+		t.Fatal(err)
+	}
+	pl, err := Plan(instance, p, ActionInstall)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = Execute(pl); err != nil {
+		t.Fatal(err)
+	}
+	pl, err = Plan(instance, p, ActionDisable)
+	if err != nil {
+		t.Fatal(err)
+	}
+	quarantine := pl.Projection + ".owned-" + pl.Receipt.ProjectionDigest[:16] + ".quarantine"
+	foreign := filepath.Join(quarantine, "foreign")
+	mutationHook = func(phase string) error {
+		if phase != "final-deletion-boundary" {
+			return nil
+		}
+		if err := os.RemoveAll(quarantine); err != nil {
+			return err
+		}
+		if err := os.Mkdir(quarantine, 0o700); err != nil {
+			return err
+		}
+		return os.WriteFile(foreign, []byte("keep"), 0o600)
+	}
+	defer func() { mutationHook = nil }()
+	if err = Execute(pl); err == nil {
+		t.Fatal("final deletion race accepted")
+	}
+	if b, readErr := os.ReadFile(foreign); readErr != nil || string(b) != "keep" {
+		t.Fatalf("raced replacement deleted: %q %v", b, readErr)
 	}
 }
 

@@ -48,11 +48,15 @@ control leaves.
 Projection writes use no-follow directory descriptors, exclusive file creation,
 and no-replace promotion. Replacement and removal first move the immediately
 identity- and digest-verified owned tree to an exclusive quarantine, reverify it,
-and refuse cleanup if any raced entry changes the tree. A raced foreign target
-or quarantine is preserved for diagnosis.
+and refuse cleanup if any raced entry changes the tree. Final cleanup transfers
+the reverified inode to a fresh neutral name and verifies it again before
+recursive removal. Recovery likewise proves deterministic quarantine bytes
+before they can return to the active skill path. A raced foreign target or
+quarantine is preserved for diagnosis.
 
 `capability test` is a bounded structural contract check, not a model run. It
-requires nonempty unique declarations, manifest-aligned positive triggers,
+requires nonempty unique declarations, an exact normalized match between
+manifest and positive triggers,
 disjoint non-triggers, positive-trigger examples with declared output
 expectations, instruction-backed required facts, and assertions for every
 prohibited effect. Structurally readable but contradictory cases are
