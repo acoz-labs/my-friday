@@ -504,6 +504,10 @@ func TestCleanupManifestCommitGapsRecover(t *testing.T) {
 		occurrence int
 		want       State
 	}{
+		{"projection short write", ActionDisable, "cleanup-manifest-short-write", 1, StateDisabled},
+		{"control short write", ActionRemove, "cleanup-manifest-short-write", 2, StateInstalledHealthy},
+		{"projection before sync", ActionDisable, "cleanup-manifest-before-sync", 1, StateDisabled},
+		{"control before sync", ActionRemove, "cleanup-manifest-before-sync", 2, StateInstalledHealthy},
 		{"projection temp", ActionDisable, "cleanup-manifest-temp-synced", 1, StateDisabled},
 		{"control temp", ActionRemove, "cleanup-manifest-temp-synced", 2, StateInstalledHealthy},
 		{"projection root unlinked", ActionDisable, "cleanup-root-unlinked", 1, StateDisabled},
@@ -556,6 +560,33 @@ func TestCleanupManifestCommitGapsRecover(t *testing.T) {
 				if len(matches) != 0 {
 					t.Fatalf("cleanup residue: %v", matches)
 				}
+			}
+		})
+	}
+}
+
+func TestUnsafeCleanupTempIsPreserved(t *testing.T) {
+	for _, kind := range []string{"symlink", "mode"} {
+		t.Run(kind, func(t *testing.T) {
+			instance := filepath.Join(t.TempDir(), "instance")
+			if err := InitializeInstance(instance); err != nil {
+				t.Fatal(err)
+			}
+			temp := filepath.Join(instance, "workspace", ".agents", "skills", "daily-brief.owned-deadbeef.cleanup.json.new")
+			var err error
+			if kind == "symlink" {
+				err = os.Symlink("foreign", temp)
+			} else {
+				err = os.WriteFile(temp, []byte("{}"), 0o644)
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err = resumeCleanupManifests(instance, "daily-brief"); err == nil {
+				t.Fatal("unsafe temp accepted")
+			}
+			if _, err = os.Lstat(temp); err != nil {
+				t.Fatal("unsafe temp was removed")
 			}
 		})
 	}

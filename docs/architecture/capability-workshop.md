@@ -67,6 +67,11 @@ uses it as authority. A valid final manifest whose bound root is absent records
 a committed unlink; recovery removes the manifest and continues, while any
 reappeared different inode is preserved and refused.
 
+Short-write and pre-sync temporary residue is reconstructed only from the live
+transaction/receipt plus an exact whole-target proof. Unsafe temp type, link,
+mode, owner, or target identity is preserved and refused. The containing
+directory is synced after authority promotion and after final authority removal.
+
 `capability test` is a bounded structural contract check, not a model run. It
 requires nonempty unique declarations, an exact normalized match between
 manifest and positive triggers,

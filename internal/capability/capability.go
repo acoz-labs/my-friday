@@ -437,7 +437,9 @@ func projectionPath(root, slug string) string {
 	return filepath.Join(root, "workspace", ".agents", "skills", slug)
 }
 func readReceipt(root, slug string) (*Receipt, error) {
-	path := receiptPath(root, slug)
+	return readReceiptPath(receiptPath(root, slug), slug)
+}
+func readReceiptPath(path, slug string) (*Receipt, error) {
 	b, info, err := regularFile(path)
 	if os.IsNotExist(err) {
 		return nil, nil
@@ -538,7 +540,9 @@ func sortedUniqueDigests(values []string) bool {
 	return true
 }
 func validateManagedControl(instance, slug string, r *Receipt, allowJournal bool) error {
-	control := filepath.Join(instance, "capabilities", slug)
+	return validateManagedControlPath(filepath.Join(instance, "capabilities", slug), r, allowJournal)
+}
+func validateManagedControlPath(control string, r *Receipt, allowJournal bool) error {
 	info, err := os.Lstat(control)
 	if err != nil {
 		return err
@@ -934,7 +938,20 @@ func writeCleanupManifest(path string, m cleanupManifest) error {
 	if err != nil {
 		return err
 	}
+	if mutationHook != nil {
+		if hookErr := mutationHook("cleanup-manifest-short-write"); hookErr != nil {
+			_, _ = f.Write(body[:len(body)/2])
+			_ = f.Close()
+			return hookErr
+		}
+	}
 	_, writeErr := f.Write(body)
+	if writeErr == nil && mutationHook != nil {
+		if hookErr := mutationHook("cleanup-manifest-before-sync"); hookErr != nil {
+			_ = f.Close()
+			return hookErr
+		}
+	}
 	syncErr := f.Sync()
 	closeErr := f.Close()
 	if writeErr != nil {
@@ -956,7 +973,10 @@ func writeCleanupManifest(path string, m cleanupManifest) error {
 		return err
 	}
 	defer unix.Close(parent)
-	return renameExclusive(parent, filepath.Base(temp), parent, filepath.Base(cleanupManifestPath(path)))
+	if err = renameExclusive(parent, filepath.Base(temp), parent, filepath.Base(cleanupManifestPath(path))); err != nil {
+		return err
+	}
+	return unix.Fsync(parent)
 }
 
 func readCleanupManifest(path string) (cleanupManifest, error) {
@@ -1109,7 +1129,15 @@ func removeProvenQuarantine(path, expected string) error {
 		return errors.New("cleanup manifest digest mismatch")
 	}
 	if _, targetErr := os.Lstat(path); errors.Is(targetErr, os.ErrNotExist) {
-		return os.Remove(cleanupManifestPath(path))
+		if err := os.Remove(cleanupManifestPath(path)); err != nil {
+			return err
+		}
+		parent, openErr := openDirNoFollow(filepath.Dir(path))
+		if openErr != nil {
+			return openErr
+		}
+		defer unix.Close(parent)
+		return unix.Fsync(parent)
 	} else if targetErr != nil {
 		return targetErr
 	}
@@ -1168,7 +1196,10 @@ func removeProvenQuarantine(path, expected string) error {
 			return err
 		}
 	}
-	return os.Remove(cleanupManifestPath(path))
+	if err = os.Remove(cleanupManifestPath(path)); err != nil {
+		return err
+	}
+	return unix.Fsync(parent)
 }
 
 func removeDirectoryContents(dirFD, depth int) error {
@@ -1315,7 +1346,14 @@ func resumeCleanupManifests(instance, slug string) error {
 			tree := strings.TrimSuffix(temp, ".cleanup.json.new")
 			candidate, readErr := readCleanupManifestFile(temp)
 			if readErr != nil {
-				return fmt.Errorf("unproven cleanup temp: %w", readErr)
+				if _, info, regularErr := regularFile(temp); regularErr != nil || info.Mode().Perm() != 0o600 {
+					return fmt.Errorf("unsafe cleanup temp: %w", regularErr)
+				}
+				proof, expected, proofErr := proveWholePreAuthorityTarget(instance, slug, tree)
+				if proofErr != nil {
+					return fmt.Errorf("unproven cleanup temp: %w", proofErr)
+				}
+				candidate = cleanupManifest{RootDev: proof.dev, RootIno: proof.ino, ExpectedDigest: expected}
 			}
 			parent, openErr := openDirNoFollow(filepath.Dir(tree))
 			if openErr != nil {
@@ -1334,6 +1372,10 @@ func resumeCleanupManifests(instance, slug string) error {
 			if unlinkErr := unix.Unlinkat(parent, filepath.Base(temp), 0); unlinkErr != nil {
 				unix.Close(parent)
 				return unlinkErr
+			}
+			if syncErr := unix.Fsync(parent); syncErr != nil {
+				unix.Close(parent)
+				return syncErr
 			}
 			unix.Close(parent)
 		}
@@ -1356,6 +1398,51 @@ func resumeCleanupManifests(instance, slug string) error {
 		}
 	}
 	return nil
+}
+
+func proveWholePreAuthorityTarget(instance, slug, tree string) (projectionProof, string, error) {
+	if strings.HasPrefix(tree, filepath.Join(instance, "workspace", ".agents", "skills")+string(os.PathSeparator)) {
+		r, err := readReceipt(instance, slug)
+		if err != nil {
+			return projectionProof{}, "", err
+		}
+		tx, err := readTransaction(filepath.Join(instance, "capabilities", slug, "transaction.json"), slug, r)
+		if err != nil {
+			return projectionProof{}, "", err
+		}
+		d, err := projectionDigest(tree)
+		if err != nil || (d != tx.ProjectionDigest && (r == nil || d != r.ProjectionDigest)) {
+			return projectionProof{}, "", errors.New("pre-authority projection mismatch")
+		}
+		parent, err := openDirNoFollow(filepath.Dir(tree))
+		if err != nil {
+			return projectionProof{}, "", err
+		}
+		defer unix.Close(parent)
+		proof, err := proveProjection(parent, filepath.Base(tree), tree, d)
+		return proof, d, err
+	}
+	r, err := readReceiptPath(filepath.Join(tree, "receipt.json"), slug)
+	if err != nil {
+		return projectionProof{}, "", err
+	}
+	if _, err = readTransaction(filepath.Join(tree, "transaction.json"), slug, r); err != nil {
+		return projectionProof{}, "", err
+	}
+	if err = validateManagedControlPath(tree, r, true); err != nil {
+		return projectionProof{}, "", err
+	}
+	d, err := projectionDigest(tree)
+	if err != nil {
+		return projectionProof{}, "", err
+	}
+	parent, err := openDirNoFollow(filepath.Dir(tree))
+	if err != nil {
+		return projectionProof{}, "", err
+	}
+	defer unix.Close(parent)
+	proof, err := proveProjection(parent, filepath.Base(tree), tree, d)
+	return proof, d, err
 }
 
 func readProjection(root string) (map[string][]byte, error) {
