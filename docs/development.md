@@ -62,7 +62,8 @@ credential paths, and unrelated private Codex entries are preserved and
 reported.
 Immediately before each rename or descriptor-bound neutralization, cleanup
 re-verifies the manifest, every required owned root, managed Codex config and
-instructions, exact root/Codex entry sets, and held directory identities.
+instructions, exact root/Codex entry sets with every expected name observed
+once and no extras, and held directory identities.
 Acceptance requires the current user's disposable instance tree to remain
 quiescent after those checks return. Consistent with ADR 0002, this detects
 ordinary replacement but does not claim isolation from an actively malicious

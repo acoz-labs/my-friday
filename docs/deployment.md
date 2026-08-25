@@ -139,7 +139,8 @@ production `assistant remove` is unchanged.
 
 Before every credential mutation, the supervisor re-verifies the manifest,
 all required owned roots, managed config and instructions, exact root/Codex
-entry sets, and held directory identities. The current-user disposable tree
+entry sets with every expected name observed once and no extras, and held
+directory identities. The current-user disposable tree
 must remain quiescent after those checks return. This is ordinary concurrent-
 change detection inside the same-UID acceptance boundary, not protection from
 an actively malicious owner process that keeps replacing entries after checks;

@@ -354,7 +354,7 @@ func openedDirectoryMatchesPath(fd int, path string) bool {
 }
 
 func verifyCodexCleanupEntriesAt(fd int, codexRoot string, manifest assistantinstance.Manifest, allowedExtras ...string) error {
-	duplicate, err := unix.Dup(fd)
+	duplicate, err := unix.Openat(fd, ".", unix.O_RDONLY|unix.O_DIRECTORY|unix.O_CLOEXEC|unix.O_NOFOLLOW, 0)
 	if err != nil {
 		return err
 	}
@@ -371,9 +371,16 @@ func verifyCodexCleanupEntriesAt(fd int, codexRoot string, manifest assistantins
 	for _, extra := range allowedExtras {
 		allowed[extra] = true
 	}
+	seen := make(map[string]bool, len(entries))
 	for _, entry := range entries {
-		if !allowed[entry] {
+		if !allowed[entry] || seen[entry] {
 			return fmt.Errorf("unexpected disposable Codex entry preserved: %s", entry)
+		}
+		seen[entry] = true
+	}
+	for expected := range allowed {
+		if !seen[expected] {
+			return fmt.Errorf("required disposable Codex entry missing: %s", expected)
 		}
 	}
 	return nil
@@ -397,9 +404,16 @@ func verifyRootCleanupEntriesAt(fd int, root string, manifest assistantinstance.
 	for _, extra := range allowedExtras {
 		allowed[extra] = true
 	}
+	seen := make(map[string]bool, len(entries))
 	for _, entry := range entries {
-		if !allowed[entry] {
+		if !allowed[entry] || seen[entry] {
 			return fmt.Errorf("unexpected disposable instance-root entry preserved: %s", entry)
+		}
+		seen[entry] = true
+	}
+	for expected := range allowed {
+		if !seen[expected] {
+			return fmt.Errorf("required disposable instance-root entry missing: %s", expected)
 		}
 	}
 	return nil
@@ -478,6 +492,9 @@ func verifyDisposableAuthAuthority(home, name string, paths assistantinstance.Pa
 	manifest, err := assistantinstance.Verify(home, name)
 	if err != nil {
 		return manifest, fmt.Errorf("disposable auth cleanup lacks manifest authority: %w", err)
+	}
+	if cleanupMutationHook != nil {
+		cleanupMutationHook("authority-after-manifest-verify")
 	}
 	if !openedDirectoryMatchesPath(rootFD, paths.Root) || !openedDirectoryMatchesPath(codexFD, filepath.Join(paths.Root, "codex")) {
 		return manifest, errors.New("disposable auth cleanup directory identity changed")
