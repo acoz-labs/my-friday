@@ -16,6 +16,8 @@ fi
 
 go vet ./...
 go test -race ./...
-GOOS=darwin GOARCH=arm64 CGO_ENABLED=0 go build -o /tmp/my-friday-ci ./cmd/my-friday
+GOOS=darwin GOARCH=arm64 CGO_ENABLED=0 go build -o /dev/null ./cmd/my-friday
+GOOS=darwin GOARCH=arm64 CGO_ENABLED=0 go build -o /dev/null ./tools/acceptance-support
+GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o /dev/null ./tools/acceptance-support
 
 echo "bin/ci completed."
