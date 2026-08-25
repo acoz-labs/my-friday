@@ -508,6 +508,38 @@ func validGeneratedRegularMode(mode uint32) bool {
 	}
 }
 
+func volatileAmbientCodexMetadata(path string) bool {
+	if path == "codex/sessions" || strings.HasPrefix(path, "codex/sessions/") {
+		return true
+	}
+	if strings.Count(path, "/") != 1 || !strings.HasPrefix(path, "codex/") {
+		return false
+	}
+	name := strings.TrimPrefix(path, "codex/")
+	for _, prefix := range []string{"logs_", "state_"} {
+		if !strings.HasPrefix(name, prefix) {
+			continue
+		}
+		versioned := strings.TrimPrefix(name, prefix)
+		for _, suffix := range []string{".sqlite", ".sqlite-shm", ".sqlite-wal"} {
+			if !strings.HasSuffix(versioned, suffix) {
+				continue
+			}
+			version := strings.TrimSuffix(versioned, suffix)
+			if version == "" {
+				return false
+			}
+			for _, character := range version {
+				if character < '0' || character > '9' {
+					return false
+				}
+			}
+			return true
+		}
+	}
+	return false
+}
+
 func validateReceiptShape(receipt codexCleanupReceipt, candidate, runID string) error {
 	decodedCandidate, candidateErr := hex.DecodeString(candidate)
 	if receipt.Schema != "generated-codex-cleanup-receipt-v1" || receipt.Candidate != candidate || receipt.RunID != runID || receipt.Name == "" || candidateErr != nil || len(decodedCandidate) != 20 || candidate != strings.ToLower(candidate) || runID == "" || runID != filepath.Base(runID) || strings.ContainsAny(runID, "/\\") || receipt.RootDevice == 0 || receipt.RootInode == 0 || receipt.CodexDevice == 0 || receipt.CodexInode == 0 {
@@ -1171,6 +1203,9 @@ func walkMetadata(dirfd int, relative string, records *[]string) error {
 			return err
 		}
 		childRelative := filepath.Join(relative, name)
+		if volatileAmbientCodexMetadata(filepath.ToSlash(childRelative)) {
+			continue
+		}
 		*records = append(*records, fmt.Sprintf("%s|%d|%d|%d|%d|%d|%d|%o|%d|%d|%d", childRelative, st.Mode&unix.S_IFMT, st.Dev, st.Ino, st.Nlink, st.Uid, st.Gid, st.Mode&0o7777, st.Size, st.Mtim.Sec, st.Ctim.Sec))
 		if st.Mode&unix.S_IFMT == unix.S_IFDIR {
 			child, openErr := unix.Openat(dirfd, name, unix.O_RDONLY|unix.O_DIRECTORY|unix.O_CLOEXEC|unix.O_NOFOLLOW, 0)

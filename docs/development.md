@@ -90,6 +90,15 @@ helper receives the same reviewed Git-capable PATH as candidate lifecycle
 commands so complete manifest verification cannot depend on ambient shell PATH.
 The complete receipt and manifest authority are replayed once more immediately
 before unchanged production removal planning.
+Ambient preservation evidence compares the stable no-follow Codex tree and the
+protected runtime tree. It deliberately omits `sessions/` and the versioned
+`logs_<n>.sqlite*` and `state_<n>.sqlite*` operational databases from whole-tree
+metadata equality because the acceptor may itself be an active Codex session;
+those paths have a legitimate writer that is unrelated to the candidate.
+Ambient `auth.json` retains a separate exact metadata identity check, protected
+config/instructions/skills and unrelated state remain in the stable snapshot,
+and launcher/CODEX_HOME isolation tests prove the candidate never receives the
+ambient Codex home.
 They also prove a drifted collision/sibling receipt is reported and preserved
 without blocking manifest-proven instance and copied-credential cleanup, while
 an out-of-scope receipt remains a fail-closed pre-mutation error.
