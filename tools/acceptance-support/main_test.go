@@ -175,6 +175,52 @@ func TestGeneratedCodexReceiptPreservesChangedArg0Symlink(t *testing.T) {
 	}
 }
 
+func TestGeneratedCodexReceiptRefusesManagedCodexSymlinkOutsideArg0Namespace(t *testing.T) {
+	home, paths := managedNamedFixture(t)
+	generatedDir := filepath.Join(paths.Root, "codex", "sessions")
+	if err := os.Mkdir(generatedDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	manifest, err := assistantinstance.Verify(home, "primary")
+	if err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(generatedDir, "apply_patch")
+	if err = os.Symlink(manifest.CodexExecutable, link); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = captureCodexCleanupReceipt(home, "primary", testCleanupCandidate, testCleanupRunID); err == nil {
+		t.Fatal("managed Codex symlink outside tmp/arg0 was accepted")
+	}
+	if target, readErr := os.Readlink(link); readErr != nil || target != manifest.CodexExecutable {
+		t.Fatalf("out-of-namespace symlink was not preserved: %q %v", target, readErr)
+	}
+}
+
+func TestCodexArg0HelperSymlinkNamespaceIsExact(t *testing.T) {
+	for _, path := range []string{
+		"tmp/arg0/codex-a1/apply_patch",
+		"tmp/arg0/codex-Z9/applypatch",
+		"tmp/arg0/codex-fixture/codex-execve-wrapper",
+	} {
+		if !validCodexArg0HelperSymlink(path) {
+			t.Fatalf("supported helper path refused: %s", path)
+		}
+	}
+	for _, path := range []string{
+		"sessions/codex-a1/apply_patch",
+		"tmp/arg0/apply_patch",
+		"tmp/arg0/codex-/apply_patch",
+		"tmp/arg0/codex-a_b/apply_patch",
+		"tmp/arg0/codex-a1/foreign",
+		"tmp/arg0/codex-a1/nested/apply_patch",
+	} {
+		if validCodexArg0HelperSymlink(path) {
+			t.Fatalf("unsupported helper path accepted: %s", path)
+		}
+	}
+}
+
 func TestCleanupNamedPreservesChangedGeneratedCodexState(t *testing.T) {
 	home, paths := managedNamedFixture(t)
 	auth := filepath.Join(paths.Root, "codex", "auth.json")
