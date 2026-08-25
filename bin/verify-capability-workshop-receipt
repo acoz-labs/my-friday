@@ -12,7 +12,7 @@ json="${body#"$marker"$'\n'}"; actor="$(jq -r '.user.login|ascii_downcase' <<<"$
 [[ -z "$expected_actor" || "$actor" == "$(printf %s "$expected_actor" | tr '[:upper:]' '[:lower:]')" ]] || die "Workshop receipt author mismatch."
 [[ "$(jq -r .issue_url <<<"$second")" == "https://api.github.com/repos/$repo/issues/$issue" ]] || die "Workshop receipt belongs to another issue."
 jq -e --argjson issue "$issue" --arg sha "$sha" --arg artifact "$artifact" --arg role "$role" '
-  keys==["artifact","candidate","completion","issue","recovery_needed","redacted","retention_decision","role","schema","source_comprehension"] and
+  keys==["artifact","candidate","completion","issue","projection_comprehension","recovery_needed","redacted","retention_decision","role","schema","source_comprehension"] and
   .schema=="capability-workshop-partner-receipt-v1" and .issue==$issue and .candidate==$sha and .artifact==$artifact and .role==$role and
-  .completion==true and .source_comprehension==true and .recovery_needed==false and (.retention_decision|IN("retain","remove")) and .redacted==true' <<<"$json" >/dev/null || die "Workshop partner receipt is incomplete."
+  .completion==true and .source_comprehension==true and .projection_comprehension==true and .recovery_needed==false and (.retention_decision|IN("retain","remove")) and .redacted==true' <<<"$json" >/dev/null || die "Workshop partner receipt is incomplete."
 printf '%s\n' "$actor"
