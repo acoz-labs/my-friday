@@ -57,6 +57,49 @@ type Manifest struct {
 	CapabilityBuilderSHA256 string   `json:"capability_builder_sha256"`
 	CapabilityPolicySHA256  string   `json:"capability_policy_sha256"`
 }
+type capabilityMigration struct {
+	ContractVersion int    `json:"contract_version"`
+	Action          string `json:"action"`
+}
+
+func capabilityMigrationPath(root string) string {
+	return filepath.Join(root, "capability-migration.json")
+}
+func writeCapabilityMigration(root, action string) error {
+	body, _ := json.MarshalIndent(capabilityMigration{1, action}, "", "  ")
+	body = append(body, '\n')
+	f, err := os.OpenFile(capabilityMigrationPath(root), os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+	if err != nil {
+		return err
+	}
+	_, werr := f.Write(body)
+	cerr := f.Close()
+	if werr != nil {
+		return werr
+	}
+	return cerr
+}
+func readCapabilityMigration(root string) (capabilityMigration, error) {
+	body, info, err := regular(capabilityMigrationPath(root))
+	if err != nil {
+		return capabilityMigration{}, err
+	}
+	if info.Mode().Perm() != 0o600 {
+		return capabilityMigration{}, errors.New("unsafe assistant migration journal")
+	}
+	var m capabilityMigration
+	d := json.NewDecoder(bytes.NewReader(body))
+	d.DisallowUnknownFields()
+	if err = d.Decode(&m); err != nil {
+		return m, err
+	}
+	canonical, _ := json.MarshalIndent(m, "", "  ")
+	canonical = append(canonical, '\n')
+	if !bytes.Equal(body, canonical) || m.ContractVersion != 1 || (m.Action != "upgrade" && m.Action != "rollback") {
+		return m, errors.New("invalid assistant migration journal")
+	}
+	return m, nil
+}
 
 type Paths struct {
 	Home, Name, Root, Launcher string
@@ -397,6 +440,8 @@ func Create(plan Plan, executable, codex string) error {
 }
 
 var mutationHook func(string)
+var upgradeHook func(string) error
+var rollbackHook func(string) error
 
 func createLocked(plan Plan, executable, codex string, afterVerify func() error) (resultErr error) {
 	if plan.Action != "create" {
@@ -657,6 +702,11 @@ func PlanUpgrade(home, name string) (Plan, error) {
 	if m.ContractVersion == ContractVersion {
 		return Plan{}, errors.New("assistant already uses capability contract v2")
 	}
+	if _, err = os.Lstat(capabilityMigrationPath(p.Root)); err == nil {
+		return Plan{}, errors.New("assistant capability migration recovery required")
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return Plan{}, err
+	}
 	info, err := os.Lstat(p.Root)
 	if err != nil {
 		return Plan{}, err
@@ -735,18 +785,48 @@ func rollbackLocked(plan Plan) error {
 	if err != nil || len(entries) != 0 {
 		return errors.New("assistant rollback refused: capability control state exists")
 	}
-	if err = os.RemoveAll(m.CapabilityBuilder); err != nil {
-		return err
-	}
 	skills := filepath.Dir(m.CapabilityBuilder)
-	if err = os.Remove(skills); err != nil {
-		return fmt.Errorf("assistant rollback recovery required: skill root not empty: %w", err)
+	entries, err = os.ReadDir(skills)
+	if err != nil || len(entries) != 1 || entries[0].Name() != "capability-builder" {
+		return errors.New("assistant rollback refused: workspace skill entries changed")
 	}
-	if err = os.Remove(filepath.Dir(skills)); err != nil {
-		return fmt.Errorf("assistant rollback recovery required: agent root not empty: %w", err)
-	}
-	if err = os.Remove(filepath.Join(plan.Paths.Root, "capabilities")); err != nil {
+	if err = writeCapabilityMigration(plan.Paths.Root, "rollback"); err != nil {
 		return err
+	}
+	return completeRollback(plan.Paths, m)
+}
+func completeRollback(p Paths, m Manifest) error {
+	var err error
+	builder := m.CapabilityBuilder
+	if builder == "" {
+		builder = filepath.Join(p.Root, "workspace", ".agents", "skills", "capability-builder")
+	}
+	skills := filepath.Dir(builder)
+	builderQ := builder + ".rollback"
+	capabilities := filepath.Join(p.Root, "capabilities")
+	capabilitiesQ := capabilities + ".rollback"
+	if _, err := os.Lstat(builderQ); errors.Is(err, os.ErrNotExist) {
+		entries, readErr := os.ReadDir(skills)
+		if readErr != nil || len(entries) != 1 || entries[0].Name() != "capability-builder" {
+			return errors.New("assistant rollback recovery refused: workspace skills changed")
+		}
+		if err = os.Rename(builder, builderQ); err != nil {
+			return err
+		}
+	}
+	if _, err := os.Lstat(capabilitiesQ); errors.Is(err, os.ErrNotExist) {
+		entries, readErr := os.ReadDir(capabilities)
+		if readErr != nil || len(entries) != 0 {
+			return errors.New("assistant rollback recovery refused: capability control changed")
+		}
+		if err = os.Rename(capabilities, capabilitiesQ); err != nil {
+			return err
+		}
+	}
+	if rollbackHook != nil {
+		if err := rollbackHook("quarantined"); err != nil {
+			return err
+		}
 	}
 	m.ContractVersion = 1
 	m.Owned = []string{"codex", "dependencies", "memory", "runtime", "workspace"}
@@ -755,14 +835,25 @@ func rollbackLocked(plan Plan) error {
 	m.CapabilityPolicySHA256 = ""
 	body, _ := json.MarshalIndent(m, "", "  ")
 	body = append(body, '\n')
-	tmp := filepath.Join(plan.Paths.Root, "manifest.json.rollback")
+	tmp := filepath.Join(p.Root, "manifest.json.rollback")
 	if err = os.WriteFile(tmp, body, 0o600); err != nil {
 		return err
 	}
-	if err = os.Rename(tmp, filepath.Join(plan.Paths.Root, "manifest.json")); err != nil {
+	if err = os.Rename(tmp, filepath.Join(p.Root, "manifest.json")); err != nil {
 		return err
 	}
-	_, err = verify(plan.Paths.Home, plan.Paths.Name)
+	if err = os.RemoveAll(builderQ); err != nil {
+		return err
+	}
+	if err = os.Remove(capabilitiesQ); err != nil {
+		return err
+	}
+	_ = os.Remove(skills)
+	_ = os.Remove(filepath.Dir(skills))
+	if err = os.Remove(capabilityMigrationPath(p.Root)); err != nil {
+		return err
+	}
+	_, err = verify(p.Home, p.Name)
 	return err
 }
 
@@ -775,21 +866,65 @@ func upgradeLocked(plan Plan) error {
 		return errors.New("assistant upgrade requires contract v1")
 	}
 	capabilities := filepath.Join(plan.Paths.Root, "capabilities")
-	if err = os.Mkdir(capabilities, 0o700); err != nil {
-		return fmt.Errorf("capability control collision: %w", err)
-	}
 	builder := filepath.Join(plan.Paths.Root, "workspace", ".agents", "skills", "capability-builder")
-	if _, statErr := os.Lstat(builder); !errors.Is(statErr, os.ErrNotExist) {
-		_ = os.Remove(capabilities)
-		return errors.New("capability builder collision")
+	_, journalErr := os.Lstat(capabilityMigrationPath(plan.Paths.Root))
+	resuming := journalErr == nil
+	if resuming {
+		journal, readErr := readCapabilityMigration(plan.Paths.Root)
+		if readErr != nil || journal.Action != "upgrade" {
+			return errors.New("assistant upgrade journal invalid")
+		}
+	} else {
+		if !errors.Is(journalErr, os.ErrNotExist) {
+			return journalErr
+		}
+		if _, statErr := os.Lstat(capabilities); !errors.Is(statErr, os.ErrNotExist) {
+			return errors.New("capability control collision")
+		}
+		if _, statErr := os.Lstat(builder); !errors.Is(statErr, os.ErrNotExist) {
+			return errors.New("capability builder collision")
+		}
+		if err = writeCapabilityMigration(plan.Paths.Root, "upgrade"); err != nil {
+			return err
+		}
 	}
+	runtimeRoot := filepath.Join(plan.Paths.Root, "runtime")
+	if _, runtimeManifestErr := os.Lstat(filepath.Join(runtimeRoot, ".my-friday", "manifest.json")); runtimeManifestErr == nil {
+		if _, statErr := os.Lstat(filepath.Join(runtimeRoot, ".my-friday", "capability-migration.json")); statErr == nil {
+			if err = repository.RecoverCapabilities(runtimeRoot); err != nil {
+				return err
+			}
+		} else if _, statErr = os.Lstat(filepath.Join(runtimeRoot, ".my-friday", "capability-contract.json")); errors.Is(statErr, os.ErrNotExist) {
+			if err = repository.InitializeCapabilities(runtimeRoot); err != nil {
+				return err
+			}
+		}
+	}
+	if err = os.Mkdir(capabilities, 0o700); err != nil && !errors.Is(err, os.ErrExist) {
+		return err
+	}
+	agentsRoot := filepath.Join(plan.Paths.Root, "workspace", ".agents")
+	skillsRoot := filepath.Join(agentsRoot, "skills")
+	_, agentsErr := os.Lstat(agentsRoot)
+	_, skillsErr := os.Lstat(skillsRoot)
 	if err = os.MkdirAll(filepath.Join(builder, "agents"), 0o700); err != nil {
 		_ = os.Remove(capabilities)
 		return err
 	}
 	rollback := func() {
-		_ = os.RemoveAll(filepath.Join(plan.Paths.Root, "workspace", ".agents"))
-		_ = os.Remove(capabilities)
+		_ = os.RemoveAll(builder)
+		if errors.Is(skillsErr, os.ErrNotExist) {
+			_ = os.Remove(skillsRoot)
+		}
+		if errors.Is(agentsErr, os.ErrNotExist) {
+			_ = os.Remove(agentsRoot)
+		}
+	}
+	if upgradeHook != nil {
+		if err = upgradeHook("builder-created"); err != nil {
+			rollback()
+			return err
+		}
 	}
 	policy := []byte("policy:\n  allow_implicit_invocation: true\n")
 	if err = os.WriteFile(filepath.Join(builder, "SKILL.md"), []byte(builderSkill), 0o600); err != nil {
@@ -825,7 +960,7 @@ func upgradeLocked(plan Plan) error {
 	if _, err = verify(plan.Paths.Home, plan.Paths.Name); err != nil {
 		return fmt.Errorf("assistant upgrade recovery required: %w", err)
 	}
-	return nil
+	return os.Remove(capabilityMigrationPath(plan.Paths.Root))
 }
 
 func verify(home, name string) (Manifest, error) {
@@ -951,6 +1086,52 @@ func Recover(home, name string) (string, error) {
 	p, err := Derive(home, name)
 	if err != nil {
 		return "", err
+	}
+	if _, journalErr := os.Lstat(capabilityMigrationPath(p.Root)); journalErr == nil {
+		info, statErr := os.Lstat(p.Root)
+		if statErr != nil {
+			return "", statErr
+		}
+		st := info.Sys().(*syscall.Stat_t)
+		expected := rootProof{Device: uint64(st.Dev), Inode: uint64(st.Ino)}
+		lock, lockErr := acquireTransactionLock(p.Root, &expected)
+		if lockErr != nil {
+			return "", lockErr
+		}
+		journal, readErr := readCapabilityMigration(p.Root)
+		if readErr != nil {
+			return "", finishTransaction(lock, readErr)
+		}
+		if journal.Action == "upgrade" {
+			if m, verifyErr := verify(home, name); verifyErr == nil && m.ContractVersion == ContractVersion {
+				removeErr := os.Remove(capabilityMigrationPath(p.Root))
+				return "completed capability upgrade", finishTransaction(lock, removeErr)
+			}
+			upgradeErr := upgradeLocked(Plan{Action: "upgrade", Paths: p, rootDevice: uint64(st.Dev), rootInode: uint64(st.Ino)})
+			return "completed capability upgrade", finishTransaction(lock, upgradeErr)
+		}
+		if journal.Action == "rollback" {
+			m, manifestErr := readManifest(p)
+			if manifestErr != nil {
+				return "", finishTransaction(lock, manifestErr)
+			}
+			if m.ContractVersion == 1 {
+				builderQ := filepath.Join(p.Root, "workspace", ".agents", "skills", "capability-builder.rollback")
+				capabilitiesQ := filepath.Join(p.Root, "capabilities.rollback")
+				if err = os.RemoveAll(builderQ); err == nil {
+					err = os.Remove(capabilitiesQ)
+				}
+				if err == nil {
+					err = os.Remove(capabilityMigrationPath(p.Root))
+				}
+				return "completed capability rollback", finishTransaction(lock, err)
+			}
+			rollbackErr := completeRollback(p, m)
+			return "completed capability rollback", finishTransaction(lock, rollbackErr)
+		}
+		return "", finishTransaction(lock, errors.New("unsupported assistant migration journal"))
+	} else if !errors.Is(journalErr, os.ErrNotExist) {
+		return "", journalErr
 	}
 	if _, err = Verify(home, name); err == nil {
 		return "already healthy", nil

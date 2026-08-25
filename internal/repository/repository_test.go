@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"errors"
 	"github.com/acoz-labs/my-friday/internal/gitexec"
 	"github.com/acoz-labs/my-friday/internal/plan"
 	"github.com/acoz-labs/my-friday/internal/profile"
@@ -108,6 +109,50 @@ func TestCapabilitySourceRollbackRequiresEmptySource(t *testing.T) {
 	}
 	if err := RollbackCapabilities(pl.Targets.Runtime); err == nil || !strings.Contains(err.Error(), "source exists") {
 		t.Fatalf("non-empty rollback accepted: %v", err)
+	}
+}
+
+func TestCapabilityMigrationFaultsRequireAndCompleteRecovery(t *testing.T) {
+	root := t.TempDir()
+	p, _ := profile.New("Friday", "", "Help", "balanced", "")
+	pl, _ := plan.Build(p, filepath.Join(root, "runtime"), filepath.Join(root, "memory"))
+	if err := Create(pl, pl.Targets.Runtime, pl.Targets.Memory); err != nil {
+		t.Fatal(err)
+	}
+	capabilityMigrationHook = func(phase string) error {
+		if phase == "rollback-applied" {
+			return errors.New("injected stop")
+		}
+		return nil
+	}
+	if err := RollbackCapabilities(pl.Targets.Runtime); err == nil {
+		t.Fatal("fault missing")
+	}
+	capabilityMigrationHook = nil
+	if _, err := ValidateRuntime(pl.Targets.Runtime); err == nil {
+		t.Fatal("journal did not block validation")
+	}
+	if err := RecoverCapabilities(pl.Targets.Runtime); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(pl.Targets.Runtime, "skills", ".gitkeep")); err != nil {
+		t.Fatal(err)
+	}
+	capabilityMigrationHook = func(phase string) error {
+		if phase == "initialize-applied" {
+			return errors.New("injected stop")
+		}
+		return nil
+	}
+	if err := InitializeCapabilities(pl.Targets.Runtime); err == nil {
+		t.Fatal("fault missing")
+	}
+	capabilityMigrationHook = nil
+	if err := RecoverCapabilities(pl.Targets.Runtime); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ValidateRuntime(pl.Targets.Runtime); err != nil {
+		t.Fatal(err)
 	}
 }
 

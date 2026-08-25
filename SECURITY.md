@@ -18,3 +18,8 @@ publishing, links, devices, and unknown entries. Natural-language instructions
 can still be harmful, so users must inspect the complete Git diff and exact CLI
 plan. TTY plus exact-token confirmation prevents accidental piping; it does not
 authenticate a human or isolate against a malicious same-UID process.
+
+Capability receipts and journals are accepted as mutation authority only after
+no-follow regular-file, one-link, owner-mode, canonical-schema, slug, action,
+digest, and prior-state validation. Foreign projection, control, and workspace
+entries fail closed and are never adopted for cleanup.

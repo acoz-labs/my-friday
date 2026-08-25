@@ -13,6 +13,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"syscall"
@@ -91,7 +92,10 @@ func Validate(root string) (Package, error) {
 		return Package{}, err
 	}
 	info, err := os.Lstat(abs)
-	if err != nil || !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
+	if err != nil {
+		return Package{}, err
+	}
+	if !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
 		return Package{}, fmt.Errorf("invalid capability root")
 	}
 	var files []string
@@ -265,11 +269,17 @@ type State string
 const (
 	StateAbsent           State = "absent"
 	StateDraftInvalid     State = "draft-invalid"
+	StateDraftValid       State = "draft-valid"
+	StateTestFailed       State = "test-failed"
 	StateReady            State = "ready"
 	StateInstalledHealthy State = "installed-healthy"
 	StateSourceChanged    State = "source-changed"
 	StateInstalledDrift   State = "installed-drift"
 	StateDisabled         State = "disabled"
+	StateCollision        State = "collision"
+	StateInterrupted      State = "interrupted"
+	StateRecoveryRequired State = "recovery-required"
+	StateIncompatible     State = "incompatible"
 )
 
 type Receipt struct {
@@ -282,6 +292,7 @@ type Receipt struct {
 	State            State    `json:"state"`
 	Generation       int      `json:"generation"`
 	Files            []string `json:"files"`
+	Generations      []string `json:"generations"`
 }
 type Status struct {
 	State   State
@@ -299,11 +310,13 @@ type LifecyclePlan struct {
 }
 
 type transaction struct {
-	ContractVersion  int    `json:"contract_version"`
-	Action           Action `json:"action"`
-	Slug             string `json:"slug"`
-	SourceDigest     string `json:"source_digest"`
-	ProjectionDigest string `json:"projection_digest"`
+	ContractVersion    int    `json:"contract_version"`
+	Action             Action `json:"action"`
+	Slug               string `json:"slug"`
+	SourceDigest       string `json:"source_digest"`
+	ProjectionDigest   string `json:"projection_digest"`
+	PriorReceiptDigest string `json:"prior_receipt_digest"`
+	CreatedControl     bool   `json:"created_control"`
 }
 
 var mutationHook func(string) error
@@ -323,21 +336,150 @@ func projectionPath(root, slug string) string {
 	return filepath.Join(root, "workspace", ".agents", "skills", slug)
 }
 func readReceipt(root, slug string) (*Receipt, error) {
-	b, err := os.ReadFile(receiptPath(root, slug))
+	path := receiptPath(root, slug)
+	b, info, err := regularFile(path)
 	if os.IsNotExist(err) {
 		return nil, nil
 	}
 	if err != nil {
 		return nil, err
 	}
+	if info.Mode().Perm() != 0o600 {
+		return nil, errors.New("unsafe capability receipt mode")
+	}
 	var r Receipt
 	if err = strictJSON(b, &r); err != nil {
 		return nil, err
 	}
-	if r.ContractVersion != 1 || r.Slug != slug {
+	if r.ContractVersion != 1 || r.Slug != slug || !slugPattern.MatchString(r.Slug) ||
+		r.Version == "" || !filepath.IsAbs(r.SourcePath) || !validDigest(r.SourceDigest) ||
+		!validDigest(r.ProjectionDigest) || (r.State != StateInstalledHealthy && r.State != StateDisabled) ||
+		r.Generation < 1 || !sortedUniqueStrings(r.Files) || !sortedUniqueDigests(r.Generations) ||
+		!slices.Contains(r.Generations, r.ProjectionDigest) {
 		return nil, errors.New("invalid capability receipt")
 	}
 	return &r, nil
+}
+func regularFile(path string) ([]byte, fs.FileInfo, error) {
+	info, err := os.Lstat(path)
+	if err != nil {
+		return nil, nil, err
+	}
+	st, ok := info.Sys().(*syscall.Stat_t)
+	if !ok || !info.Mode().IsRegular() || info.Mode()&os.ModeSymlink != 0 || st.Nlink != 1 {
+		return nil, info, errors.New("unsafe owned regular file")
+	}
+	b, err := os.ReadFile(path)
+	return b, info, err
+}
+func receiptDigest(r *Receipt) string {
+	if r == nil {
+		return ""
+	}
+	b, _ := json.Marshal(r)
+	return hash(b)
+}
+func readTransaction(path, slug string, r *Receipt) (transaction, error) {
+	b, info, err := regularFile(path)
+	if err != nil {
+		return transaction{}, err
+	}
+	if info.Mode().Perm() != 0o600 {
+		return transaction{}, errors.New("unsafe transaction journal mode")
+	}
+	var tx transaction
+	if err = strictJSON(b, &tx); err != nil {
+		return tx, err
+	}
+	validAction := tx.Action == ActionInstall || tx.Action == ActionUpgrade || tx.Action == ActionEnable || tx.Action == ActionDisable || tx.Action == ActionRemove
+	if tx.ContractVersion != 1 || tx.Slug != slug || !validAction || !validDigest(tx.SourceDigest) || !validDigest(tx.ProjectionDigest) || tx.PriorReceiptDigest != receiptDigest(r) {
+		return tx, errors.New("transaction journal ownership mismatch")
+	}
+	if tx.Action == ActionInstall && (!tx.CreatedControl || r != nil) {
+		return tx, errors.New("invalid install journal authority")
+	}
+	if tx.Action != ActionInstall && (tx.CreatedControl || r == nil) {
+		return tx, errors.New("invalid existing-state journal authority")
+	}
+	canonical, _ := json.MarshalIndent(tx, "", "  ")
+	canonical = append(canonical, '\n')
+	if !bytes.Equal(b, canonical) {
+		return tx, errors.New("transaction journal is not canonical")
+	}
+	return tx, nil
+}
+func validDigest(value string) bool {
+	decoded, err := hex.DecodeString(value)
+	return err == nil && len(decoded) == sha256.Size && value == strings.ToLower(value)
+}
+func sortedUniqueStrings(values []string) bool {
+	if len(values) == 0 {
+		return false
+	}
+	for i, value := range values {
+		if value == "" || (i > 0 && values[i-1] >= value) {
+			return false
+		}
+	}
+	return true
+}
+func sortedUniqueDigests(values []string) bool {
+	if !sortedUniqueStrings(values) {
+		return false
+	}
+	for _, value := range values {
+		if !validDigest(value) {
+			return false
+		}
+	}
+	return true
+}
+func validateManagedControl(instance, slug string, r *Receipt, allowJournal bool) error {
+	control := filepath.Join(instance, "capabilities", slug)
+	info, err := os.Lstat(control)
+	if err != nil {
+		return err
+	}
+	if !info.IsDir() || info.Mode()&os.ModeSymlink != 0 || info.Mode().Perm() != 0o700 {
+		return errors.New("unsafe managed control directory")
+	}
+	allowed := map[string]bool{"receipt.json": true, "generations": true}
+	if allowJournal {
+		allowed["transaction.json"] = true
+	}
+	entries, err := os.ReadDir(control)
+	if err != nil {
+		return err
+	}
+	for _, e := range entries {
+		if !allowed[e.Name()] {
+			return fmt.Errorf("foreign capability control entry %s", e.Name())
+		}
+	}
+	generations := filepath.Join(control, "generations")
+	generationEntries, err := os.ReadDir(generations)
+	if err != nil {
+		return err
+	}
+	wantGenerations := make(map[string]bool, len(r.Generations))
+	for _, generation := range r.Generations {
+		wantGenerations[generation] = true
+	}
+	foundGenerations := make(map[string]bool, len(generationEntries))
+	for _, e := range generationEntries {
+		if !e.IsDir() || !wantGenerations[e.Name()] {
+			return errors.New("invalid retained generation entry")
+		}
+		d, digestErr := projectionDigest(filepath.Join(generations, e.Name(), "projection"))
+		if digestErr != nil || d != e.Name() {
+			return errors.New("retained generation drift")
+		}
+		foundGenerations[e.Name()] = true
+	}
+	if len(foundGenerations) != len(wantGenerations) {
+		return errors.New("receipt-declared retained generation missing")
+	}
+	return nil
 }
 func projectionDigest(path string) (string, error) {
 	bodies := map[string][]byte{}
@@ -380,18 +522,55 @@ func projectionDigest(path string) (string, error) {
 }
 
 func Inspect(instance, source string) (Status, error) {
+	slug := filepath.Base(filepath.Clean(source))
+	control := filepath.Join(instance, "capabilities", slug)
+	proj := projectionPath(instance, slug)
+	_, controlErr := os.Lstat(control)
+	controlExists := controlErr == nil
+	_, projectionErr := os.Lstat(proj)
+	projectionExists := projectionErr == nil
+	r, receiptErr := readReceipt(instance, slug)
+	if receiptErr != nil {
+		return Status{State: StateIncompatible}, receiptErr
+	}
+	journal := filepath.Join(control, "transaction.json")
+	journalExists := false
+	if _, journalErr := os.Lstat(journal); journalErr == nil {
+		journalExists = true
+	}
+	if r != nil {
+		if controlValidationErr := validateManagedControl(instance, slug, r, journalExists); controlValidationErr != nil {
+			return Status{State: StateCollision, Receipt: r}, controlValidationErr
+		}
+	}
+	if _, journalErr := os.Lstat(journal); journalErr == nil {
+		if _, err := readTransaction(journal, slug, r); err != nil {
+			return Status{State: StateRecoveryRequired, Receipt: r}, err
+		}
+		return Status{State: StateInterrupted, Receipt: r}, nil
+	} else if !errors.Is(journalErr, os.ErrNotExist) {
+		return Status{State: StateRecoveryRequired, Receipt: r}, journalErr
+	}
+	if r == nil && (controlExists || projectionExists) {
+		return Status{State: StateCollision}, errors.New("foreign capability projection or control collision")
+	}
 	pkg, err := Validate(source)
 	if err != nil {
-		return Status{State: StateDraftInvalid}, err
-	}
-	r, err := readReceipt(instance, pkg.Manifest.Slug)
-	if err != nil {
-		return Status{}, err
+		if errors.Is(err, os.ErrNotExist) && r == nil {
+			return Status{State: StateAbsent}, nil
+		}
+		state := StateDraftInvalid
+		if strings.Contains(err.Error(), "missing required file tests/cases.json") {
+			state = StateDraftValid
+		}
+		if strings.Contains(err.Error(), "capability cases") || strings.Contains(err.Error(), "deterministic cases") {
+			state = StateTestFailed
+		}
+		return Status{State: state, Receipt: r}, err
 	}
 	if r == nil {
 		return Status{State: StateReady, Package: &pkg}, nil
 	}
-	proj := projectionPath(instance, pkg.Manifest.Slug)
 	_, statErr := os.Lstat(proj)
 	if r.State == StateDisabled {
 		if statErr == nil {
@@ -416,6 +595,12 @@ func Plan(instance, source string, action Action) (LifecyclePlan, error) {
 	status, err := Inspect(instance, source)
 	if err != nil {
 		return LifecyclePlan{}, err
+	}
+	if status.State == StateInterrupted || status.State == StateRecoveryRequired {
+		return LifecyclePlan{}, errors.New("capability recovery required")
+	}
+	if status.Package == nil {
+		return LifecyclePlan{}, fmt.Errorf("capability state %s is not actionable", status.State)
 	}
 	p := *status.Package
 	journal := filepath.Join(instance, "capabilities", p.Manifest.Slug, "transaction.json")
@@ -542,16 +727,30 @@ func Execute(p LifecyclePlan) (resultErr error) {
 	if fresh.Package.SourceDigest != p.Package.SourceDigest || fresh.Package.ProjectionDigest != p.Package.ProjectionDigest {
 		return errors.New("stale capability plan: source changed")
 	}
-	if err = os.MkdirAll(filepath.Dir(p.Control), 0o700); err != nil {
-		return err
-	}
-	if err = os.MkdirAll(p.Control, 0o700); err != nil {
-		return err
+	createdControl := false
+	if p.Action == ActionInstall {
+		if err = os.Mkdir(p.Control, 0o700); err != nil {
+			return fmt.Errorf("capability control collision: %w", err)
+		}
+		createdControl = true
+	} else {
+		if _, err = os.Lstat(p.Control); err != nil {
+			return errors.New("managed capability control missing")
+		}
 	}
 	journalPath := filepath.Join(p.Control, "transaction.json")
-	journalBody, _ := json.MarshalIndent(transaction{1, p.Action, p.Package.Manifest.Slug, p.Package.SourceDigest, p.Package.ProjectionDigest}, "", "  ")
+	journalBody, _ := json.MarshalIndent(transaction{1, p.Action, p.Package.Manifest.Slug, p.Package.SourceDigest, p.Package.ProjectionDigest, receiptDigest(p.Receipt), createdControl}, "", "  ")
 	journalBody = append(journalBody, '\n')
-	if err = os.WriteFile(journalPath, journalBody, 0o600); err != nil {
+	jf, openErr := os.OpenFile(journalPath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+	if openErr != nil {
+		return openErr
+	}
+	_, err = jf.Write(journalBody)
+	closeErr := jf.Close()
+	if err == nil {
+		err = closeErr
+	}
+	if err != nil {
 		return err
 	}
 	if mutationHook != nil {
@@ -604,7 +803,13 @@ func Execute(p LifecyclePlan) (resultErr error) {
 		if err = os.MkdirAll(filepath.Dir(generationRoot), 0o700); err != nil {
 			return err
 		}
-		r := Receipt{1, p.Package.Manifest.Slug, p.Package.Manifest.Version, p.Package.Root, p.Package.SourceDigest, p.Package.ProjectionDigest, StateInstalledHealthy, generation, sortedKeys(p.Package.Projection)}
+		generations := []string{p.Package.ProjectionDigest}
+		if p.Receipt != nil {
+			generations = append(generations, p.Receipt.Generations...)
+			sort.Strings(generations)
+			generations = slices.Compact(generations)
+		}
+		r := Receipt{ContractVersion: 1, Slug: p.Package.Manifest.Slug, Version: p.Package.Manifest.Version, SourcePath: p.Package.Root, SourceDigest: p.Package.SourceDigest, ProjectionDigest: p.Package.ProjectionDigest, State: StateInstalledHealthy, Generation: generation, Files: sortedKeys(p.Package.Projection), Generations: generations}
 		return writeReceipt(receiptPath(p.Instance, p.Package.Manifest.Slug), r)
 	case ActionDisable:
 		if err = os.RemoveAll(p.Projection); err != nil {
@@ -641,27 +846,63 @@ func Recover(instance, slug string) error {
 	defer syscall.Flock(int(lockFile.Fd()), syscall.LOCK_UN)
 	control := filepath.Join(instance, "capabilities", slug)
 	journal := filepath.Join(control, "transaction.json")
-	if _, err = os.Lstat(journal); err != nil {
-		return fmt.Errorf("capability recovery not required: %w", err)
-	}
 	r, err := readReceipt(instance, slug)
 	if err != nil {
 		return err
 	}
+	tx, err := readTransaction(journal, slug, r)
+	if err != nil {
+		return fmt.Errorf("recovery refused: %w", err)
+	}
+	info, err := os.Lstat(control)
+	if err != nil || !info.IsDir() || info.Mode()&os.ModeSymlink != 0 || info.Mode().Perm() != 0o700 {
+		return errors.New("recovery refused: unsafe control directory")
+	}
+	entries, err := os.ReadDir(control)
+	if err != nil {
+		return err
+	}
+	allowed := map[string]bool{"transaction.json": true}
+	if r != nil {
+		allowed["receipt.json"] = true
+		allowed["generations"] = true
+	}
+	for _, entry := range entries {
+		if !allowed[entry.Name()] {
+			return fmt.Errorf("recovery refused: foreign control entry %s", entry.Name())
+		}
+	}
 	projection := projectionPath(instance, slug)
-	if r == nil {
-		if err = os.RemoveAll(projection); err != nil {
+	if _, statErr := os.Lstat(projection); statErr == nil {
+		d, digestErr := projectionDigest(projection)
+		if digestErr != nil || (d != tx.ProjectionDigest && (r == nil || d != r.ProjectionDigest)) {
+			return errors.New("recovery refused: projection ownership mismatch")
+		}
+	} else if !errors.Is(statErr, os.ErrNotExist) {
+		return statErr
+	}
+	if tx.CreatedControl {
+		if _, statErr := os.Lstat(projection); statErr == nil {
+			if err = os.RemoveAll(projection); err != nil {
+				return err
+			}
+		}
+		if err = os.Remove(journal); err != nil {
 			return err
 		}
-		return os.RemoveAll(control)
+		return os.Remove(control)
 	}
 	if r.State == StateDisabled {
-		if err = os.RemoveAll(projection); err != nil {
-			return err
+		if _, statErr := os.Lstat(projection); statErr == nil {
+			if err = os.RemoveAll(projection); err != nil {
+				return err
+			}
 		}
 	} else {
-		if err = os.RemoveAll(projection); err != nil {
-			return err
+		if _, statErr := os.Lstat(projection); statErr == nil {
+			if err = os.RemoveAll(projection); err != nil {
+				return err
+			}
 		}
 		files, readErr := readProjection(filepath.Join(control, "generations", r.ProjectionDigest, "projection"))
 		if readErr != nil {

@@ -147,9 +147,9 @@ func runCapability() error {
 	if len(os.Args) < 3 {
 		return fmt.Errorf("usage: my-friday capability <inspect|validate|test|verify|install|upgrade|enable|disable|remove> NAME SLUG")
 	}
-	if os.Args[2] == "initialize" || os.Args[2] == "rollback" {
+	if os.Args[2] == "initialize" || os.Args[2] == "rollback" || (os.Args[2] == "recover" && len(os.Args) >= 4 && os.Args[3] == "--runtime") {
 		if len(os.Args) != 5 || os.Args[3] != "--runtime" {
-			return fmt.Errorf("usage: my-friday capability <initialize|rollback> --runtime PATH")
+			return fmt.Errorf("usage: my-friday capability <initialize|rollback|recover> --runtime PATH")
 		}
 		if _, err := repository.ValidateRuntime(os.Args[4]); err != nil {
 			return err
@@ -165,6 +165,8 @@ func runCapability() error {
 		token := "Rollback"
 		if initializing {
 			token = "Initialize"
+		} else if os.Args[2] == "recover" {
+			token = "Recover"
 		}
 		fmt.Fprintf(os.Stdout, "Action: %s\nRuntime: %s\n- change only the fixed instruction-only source contract and reserved placeholder\n- refuse rollback when capability source exists\n- do not mutate any installed assistant\nType %s to continue: ", os.Args[2], os.Args[4], token)
 		ok, err := readConfirmation(os.Stdin, token)
@@ -177,8 +179,10 @@ func runCapability() error {
 		}
 		if initializing {
 			err = repository.InitializeCapabilities(os.Args[4])
-		} else {
+		} else if os.Args[2] == "rollback" {
 			err = repository.RollbackCapabilities(os.Args[4])
+		} else {
+			err = repository.RecoverCapabilities(os.Args[4])
 		}
 		if err != nil {
 			return err
@@ -519,6 +523,22 @@ func runAssistant() error {
 	case "recover":
 		if len(os.Args) != 4 {
 			return fmt.Errorf("usage: my-friday assistant recover NAME")
+		}
+		info, err := os.Stdin.Stat()
+		if err != nil {
+			return err
+		}
+		if info.Mode()&os.ModeCharDevice == 0 {
+			return errors.New("assistant recovery requires an interactive TTY")
+		}
+		fmt.Fprintf(os.Stdout, "Action: recover\nAssistant: %s\n- complete only the manifest/journal-proven interrupted operation\n- preserve unrelated workspace and runtime state\nType Recover to continue: ", name)
+		ok, err := readConfirmation(os.Stdin, "Recover")
+		if err != nil {
+			return err
+		}
+		if !ok {
+			fmt.Fprintln(os.Stdout, "No changes made")
+			return nil
 		}
 		result, err := assistantinstance.Recover(home, name)
 		if err != nil {

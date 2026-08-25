@@ -1,7 +1,9 @@
 package capability
 
 import (
+	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -72,6 +74,30 @@ func TestValidateRejectsProhibitedAndUnsafeEntries(t *testing.T) {
 		}
 		if _, err := Validate(p); err == nil {
 			t.Fatal("symlink accepted")
+		}
+	})
+	t.Run("hardlink", func(t *testing.T) {
+		root := t.TempDir()
+		instance := filepath.Join(root, "instance")
+		if err := os.MkdirAll(filepath.Join(instance, "workspace"), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if err := InitializeInstance(instance); err != nil {
+			t.Fatal(err)
+		}
+		control := filepath.Join(instance, "capabilities", "daily-brief")
+		if err := os.Mkdir(control, 0o700); err != nil {
+			t.Fatal(err)
+		}
+		foreign := filepath.Join(root, "foreign")
+		if err := os.WriteFile(foreign, []byte("foreign"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Link(foreign, filepath.Join(control, "transaction.json")); err != nil {
+			t.Fatal(err)
+		}
+		if err := Recover(instance, "daily-brief"); err == nil {
+			t.Fatal("hardlinked journal accepted")
 		}
 	})
 }
@@ -175,7 +201,13 @@ func TestRecoverRestoresReceiptBoundProjection(t *testing.T) {
 		t.Fatal(err)
 	}
 	journal := filepath.Join(instance, "capabilities", "daily-brief", "transaction.json")
-	if err = os.WriteFile(journal, []byte(`{"contract_version":1,"action":"upgrade","slug":"daily-brief","source_digest":"x","projection_digest":"y"}`), 0o600); err != nil {
+	r, err := readReceipt(instance, "daily-brief")
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, _ := json.MarshalIndent(transaction{1, ActionUpgrade, "daily-brief", r.SourceDigest, r.ProjectionDigest, receiptDigest(r), false}, "", "  ")
+	body = append(body, '\n')
+	if err = os.WriteFile(journal, body, 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if err = Recover(instance, "daily-brief"); err != nil {
@@ -276,5 +308,235 @@ func TestFaultAfterMutationLeavesJournalAndRecoveryRestoresStableState(t *testin
 	}
 	if _, err = os.Stat(filepath.Join(instance, "capabilities", "daily-brief")); !os.IsNotExist(err) {
 		t.Fatal("pre-receipt control remains")
+	}
+}
+
+func TestInstallRefusesForeignProjectionAndControl(t *testing.T) {
+	for _, target := range []string{"projection", "control"} {
+		for _, populated := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s-populated-%v", target, populated), func(t *testing.T) {
+				root := t.TempDir()
+				p := writePackage(t, root, "daily-brief", "1.0.0")
+				instance := filepath.Join(root, "instance")
+				if err := os.MkdirAll(filepath.Join(instance, "workspace"), 0o700); err != nil {
+					t.Fatal(err)
+				}
+				if err := InitializeInstance(instance); err != nil {
+					t.Fatal(err)
+				}
+				foreign := projectionPath(instance, "daily-brief")
+				if target == "control" {
+					foreign = filepath.Join(instance, "capabilities", "daily-brief")
+				}
+				if err := os.MkdirAll(foreign, 0o700); err != nil {
+					t.Fatal(err)
+				}
+				if populated {
+					if err := os.WriteFile(filepath.Join(foreign, "keep"), []byte("foreign"), 0o600); err != nil {
+						t.Fatal(err)
+					}
+				}
+				status, _ := Inspect(instance, p)
+				if status.State != StateCollision {
+					t.Fatalf("state=%s", status.State)
+				}
+				if _, err := Plan(instance, p, ActionInstall); err == nil {
+					t.Fatal("foreign state accepted")
+				}
+				if _, err := os.Stat(foreign); err != nil {
+					t.Fatal("foreign state removed")
+				}
+			})
+		}
+	}
+}
+
+func TestExecuteRefusesCollisionCreatedAfterPreview(t *testing.T) {
+	root := t.TempDir()
+	p := writePackage(t, root, "daily-brief", "1.0.0")
+	instance := filepath.Join(root, "instance")
+	if err := os.MkdirAll(filepath.Join(instance, "workspace"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := InitializeInstance(instance); err != nil {
+		t.Fatal(err)
+	}
+	pl, err := Plan(instance, p, ActionInstall)
+	if err != nil {
+		t.Fatal(err)
+	}
+	foreign := projectionPath(instance, "daily-brief")
+	if err = os.Mkdir(foreign, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err = Execute(pl); err == nil {
+		t.Fatal("post-preview collision replaced")
+	}
+	if _, err = os.Stat(foreign); err != nil {
+		t.Fatal("collision not preserved")
+	}
+}
+
+func TestManagedMutationPreservesForeignControlSibling(t *testing.T) {
+	root := t.TempDir()
+	p := writePackage(t, root, "daily-brief", "1.0.0")
+	instance := filepath.Join(root, "instance")
+	if err := os.MkdirAll(filepath.Join(instance, "workspace"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := InitializeInstance(instance); err != nil {
+		t.Fatal(err)
+	}
+	pl, err := Plan(instance, p, ActionInstall)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = Execute(pl); err != nil {
+		t.Fatal(err)
+	}
+	foreign := filepath.Join(instance, "capabilities", "daily-brief", "keep")
+	if err = os.WriteFile(foreign, []byte("foreign"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	status, _ := Inspect(instance, p)
+	if status.State != StateCollision {
+		t.Fatalf("state=%s", status.State)
+	}
+	if _, err = Plan(instance, p, ActionRemove); err == nil {
+		t.Fatal("foreign control sibling accepted")
+	}
+	if b, err := os.ReadFile(foreign); err != nil || string(b) != "foreign" {
+		t.Fatal("foreign control changed")
+	}
+}
+
+func TestRecoverRejectsUnownedJournal(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		mutate func(string) error
+	}{
+		{"malformed", func(p string) error { return os.WriteFile(p, []byte("{"), 0o600) }},
+		{"mismatched", func(p string) error {
+			return os.WriteFile(p, []byte(`{"contract_version":1,"action":"install","slug":"other","source_digest":"x","projection_digest":"y","prior_receipt_digest":"","created_control":true}`+"\n"), 0o600)
+		}},
+		{"wrong-mode", func(p string) error { return os.WriteFile(p, []byte(`{}`), 0o644) }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			root := t.TempDir()
+			instance := filepath.Join(root, "instance")
+			if err := os.MkdirAll(filepath.Join(instance, "workspace"), 0o700); err != nil {
+				t.Fatal(err)
+			}
+			if err := InitializeInstance(instance); err != nil {
+				t.Fatal(err)
+			}
+			control := filepath.Join(instance, "capabilities", "daily-brief")
+			if err := os.Mkdir(control, 0o700); err != nil {
+				t.Fatal(err)
+			}
+			journal := filepath.Join(control, "transaction.json")
+			if err := tc.mutate(journal); err != nil {
+				t.Fatal(err)
+			}
+			if err := Recover(instance, "daily-brief"); err == nil {
+				t.Fatal("foreign journal authorized recovery")
+			}
+			if _, err := os.Stat(control); err != nil {
+				t.Fatal("foreign control removed")
+			}
+		})
+	}
+	t.Run("symlink", func(t *testing.T) {
+		root := t.TempDir()
+		instance := filepath.Join(root, "instance")
+		if err := os.MkdirAll(filepath.Join(instance, "workspace"), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if err := InitializeInstance(instance); err != nil {
+			t.Fatal(err)
+		}
+		control := filepath.Join(instance, "capabilities", "daily-brief")
+		if err := os.Mkdir(control, 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Symlink("foreign", filepath.Join(control, "transaction.json")); err != nil {
+			t.Fatal(err)
+		}
+		if err := Recover(instance, "daily-brief"); err == nil {
+			t.Fatal("linked journal accepted")
+		}
+	})
+}
+
+func TestObservableStatePrecedence(t *testing.T) {
+	root := t.TempDir()
+	instance := filepath.Join(root, "instance")
+	if err := os.MkdirAll(filepath.Join(instance, "workspace"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := InitializeInstance(instance); err != nil {
+		t.Fatal(err)
+	}
+	missing := filepath.Join(root, "skills", "missing")
+	status, err := Inspect(instance, missing)
+	if err != nil || status.State != StateAbsent {
+		t.Fatalf("absent=%s %v", status.State, err)
+	}
+	p := writePackage(t, root, "daily-brief", "1.0.0")
+	if err = os.Remove(filepath.Join(p, "tests", "cases.json")); err != nil {
+		t.Fatal(err)
+	}
+	status, _ = Inspect(instance, p)
+	if status.State != StateDraftValid {
+		t.Fatalf("draft-valid=%s", status.State)
+	}
+	p = writePackage(t, root, "daily-brief", "1.0.0")
+	if err = os.WriteFile(filepath.Join(p, "tests", "cases.json"), []byte("{"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	status, _ = Inspect(instance, p)
+	if status.State != StateTestFailed {
+		t.Fatalf("test-failed=%s", status.State)
+	}
+	p = writePackage(t, root, "daily-brief", "1.0.0")
+	status, err = Inspect(instance, p)
+	if err != nil || status.State != StateReady {
+		t.Fatalf("ready=%s %v", status.State, err)
+	}
+	pl, err := Plan(instance, p, ActionInstall)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mutationHook = func(phase string) error {
+		if phase == "journal-written" {
+			return errors.New("stop")
+		}
+		return nil
+	}
+	if err = Execute(pl); err == nil {
+		t.Fatal("fault missing")
+	}
+	mutationHook = nil
+	status, err = Inspect(instance, p)
+	if err != nil || status.State != StateInterrupted {
+		t.Fatalf("interrupted=%s %v", status.State, err)
+	}
+	journal := filepath.Join(instance, "capabilities", "daily-brief", "transaction.json")
+	if err = os.WriteFile(journal, []byte("foreign"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	status, _ = Inspect(instance, p)
+	if status.State != StateRecoveryRequired {
+		t.Fatalf("recovery-required=%s", status.State)
+	}
+	if err = os.Remove(journal); err != nil {
+		t.Fatal(err)
+	}
+	if err = os.WriteFile(filepath.Join(instance, "capabilities", "daily-brief", "receipt.json"), []byte("foreign"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	status, _ = Inspect(instance, p)
+	if status.State != StateIncompatible {
+		t.Fatalf("incompatible=%s", status.State)
 	}
 }

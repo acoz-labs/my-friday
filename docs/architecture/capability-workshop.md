@@ -31,6 +31,20 @@ blocks later lifecycle plans. `capability recover NAME SLUG` uses only the
 receipt and retained generation to restore installed, disabled, or absent state;
 it does not read, rewrite, or remove source.
 
+Observable state precedence is: incompatible ownership or an invalid journal;
+valid interrupted transaction; foreign collision; source draft/test state;
+then receipt/projection state. The stable vocabulary is `absent`,
+`draft-invalid`, `draft-valid`, `test-failed`, `ready`, `installed-healthy`,
+`source-changed`, `installed-drift`, `disabled`, `collision`, `interrupted`,
+`recovery-required`, and `incompatible`.
+
+Control and journal paths are authority, not mere markers. A journal must be a
+canonical, one-link, mode-0600 regular file whose action, slug, source and
+projection digests, prior-receipt digest, and control-creation fact match the
+observed state. Recovery refuses malformed, linked, drifted, ambiguous, or
+foreign entries and removes only digest-proven projections and exact owned
+control leaves.
+
 The bootstrap-owned `capability-builder` is private to each named instance and
 is not an ordinary removable package. Its instructions permit source editing
 and read-only checks while prohibiting lifecycle mutations and confirmation
@@ -41,3 +55,10 @@ contains no package. Named instances can roll back to v1 only while capability
 control is empty and the builder is exact and alone in the managed skill root.
 Both paths use an exact `Rollback` preview and preserve source, credentials,
 launchers, global skills, and sibling instances.
+
+Runtime initialize/rollback and named-instance upgrade/rollback are serialized
+one-root migrations with canonical durable journals and explicit recovery. An
+instance upgrade initializes its private copied runtime; it never follows or
+mutates the external runtime originally used to create the instance. Rollback
+rechecks capability control and workspace-skill observations under the held
+instance lock before quarantining exact owned leaves.
