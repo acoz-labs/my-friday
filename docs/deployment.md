@@ -22,10 +22,12 @@ GITHUB_REPOSITORY=acoz-labs/my-friday \
   'artifact-v1:run=…:id=…:name=my-friday-darwin-arm64:sha256=…' 51
 ```
 
-The command downloads nominated bytes, creates disposable APFS and named-
-assistant state, and exercises authoring without activation, deterministic
-checks, fresh-task install/use/upgrade, collision and drift refusal, complete
-lifecycle reversal, interruption recovery, and v1 migrations. It compares
+The command downloads nominated bytes, creates no-follow receipt-bound APFS and
+named-assistant state, and exercises explicit private-builder authoring without
+activation, deterministic checks, fresh-task install/use/disabled absence,
+upgrade, collision and drift refusal, complete lifecycle reversal, a real
+stopped-and-reaped candidate interruption, and v1 migrations. A valid sibling
+assistant is a protected content/identity canary. It compares
 protected ambient state and removes manifest-owned disposable state before
 publishing final authority. Public evidence contains only digests, state names,
 and boolean results—not instruction bodies, full diffs, prompts, model

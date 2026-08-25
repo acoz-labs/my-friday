@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$root"
+
+go test ./tools/acceptance-support -run 'Test(SecureRootsRefusesCollision|SecureRootsRejectsSymlinkedAncestor|CleanupRootsPreservesUnexpectedEntry|CleanupRootsPrevalidatesBothRootsBeforeMutation|CopyAuthNoFollowAndSourceSwapRefusal|CopyAuthRefusesLinkedAncestryAndDestinationCollision)$'
+go test ./tools/acceptance-runner -run 'TestRunner(TimesOutProcessGroup|KillsEscapedSetsidDescendant)$'
+go test ./tools/capability-stop-barrier -run 'TestStablePostMutationRequiresOwnedCanonicalJournalAndAbsentProjection$'
+
+grep -Fq "trap 'exit 130' INT" bin/accept-capability-workshop
+grep -Fq "trap 'exit 143' TERM" bin/accept-capability-workshop
+grep -Fq 'verify_mount&&hdiutil detach' bin/accept-capability-workshop
+grep -Fq 'target_owned=1' bin/accept-capability-workshop
+grep -Fq 'sibling_owned=1' bin/accept-capability-workshop
+
+echo "Capability workshop supervisor adversarial tests passed."

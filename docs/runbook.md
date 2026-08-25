@@ -192,10 +192,13 @@ receipt before ordinary recovery.
 
 ## Recover an interrupted capability-workshop run
 
-Capability-workshop state uses one random child beneath
-`~/.my-friday-capability-acceptance/` and one randomized assistant/launcher
-pair. Failure attempts public, confirmation-gated assistant removal and
-ordinary APFS detach, then publishes non-approving
+Capability-workshop state uses the same reviewed secure-root pair as native
+acceptance: one random child beneath `~/.my-friday-acceptance/` and
+`~/.my-friday-acceptance-evidence/`, plus randomized target and valid sibling
+assistant/launcher pairs. Failure cleanup disarms signal traps, stops and reaps
+bounded child groups, revalidates no-follow markers, manifests, auth receipts,
+and APFS authority, then attempts manifest-owned named cleanup and ordinary
+detach. It publishes non-approving
 `capability-workshop-failure-v1` authority. Unproven cleanup preserves the run.
 
 Identify the exact run from failure evidence and inspect `marker.json`. It must

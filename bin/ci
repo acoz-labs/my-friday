@@ -7,6 +7,7 @@ bin/test-acceptance-evidence
 bin/test-capability-workshop-evidence
 bin/test-acceptance-contract
 bin/test-acceptance-primitives
+bin/test-capability-workshop-supervisor
 
 unformatted="$(gofmt -l cmd internal tools)"
 if [[ -n "$unformatted" ]]; then
@@ -20,5 +21,7 @@ go test -race ./...
 GOOS=darwin GOARCH=arm64 CGO_ENABLED=0 go build -o /dev/null ./cmd/my-friday
 GOOS=darwin GOARCH=arm64 CGO_ENABLED=0 go build -o /dev/null ./tools/acceptance-support
 GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o /dev/null ./tools/acceptance-support
+GOOS=darwin GOARCH=arm64 CGO_ENABLED=0 go build -o /dev/null ./tools/capability-stop-barrier
+GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o /dev/null ./tools/capability-stop-barrier
 
 echo "bin/ci completed."

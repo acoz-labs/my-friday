@@ -58,8 +58,8 @@ jq -e '
   (.scenarios|keys)==["ambient_preservation","author_without_activation","collision_and_drift","disable_enable_remove","explicit_invocation","install","interruption_recovery","migration_and_rollback","source_change_and_upgrade","validate_and_test"] and
   (.scenarios.author_without_activation|pass("ready-no-projection";"success")) and (.scenarios.validate_and_test|pass("ready";"success")) and (.scenarios.install|pass("installed-healthy";"success")) and
   (.scenarios.explicit_invocation|pass("declared-behavior-observed";"success")) and (.scenarios.source_change_and_upgrade|pass("source-changed-stale-refused-upgraded";"success")) and
-  (.scenarios.collision_and_drift|pass("foreign-and-owned-bytes-preserved";"refused")) and (.scenarios.disable_enable_remove|pass("source-preserved-control-reversed";"success")) and
-  (.scenarios.interruption_recovery|pass("recovered";"success")) and (.scenarios.migration_and_rollback|pass("private-copy-bounded";"success")) and
+  (.scenarios.collision_and_drift|pass("foreign-and-owned-bytes-preserved";"refused")) and (.scenarios.disable_enable_remove|pass("fresh-task-absent-source-preserved-control-reversed";"success")) and
+  (.scenarios.interruption_recovery|pass("real-candidate-stopped-reaped-recovered";"success")) and (.scenarios.migration_and_rollback|pass("private-copy-bounded";"success")) and
   (.scenarios.ambient_preservation|pass("all-protected-equal";"success")) and
   .preservation=={ambient_home_equal:true,credential_source_equal:true,global_codex_equal:true,protected_canaries_equal:true,sibling_instance_equal:true,source_preserved:true} and
   .cleanup_expected==["credential-copy","instance","launcher","mount","run-root","volume-image"]' <<<"$pjson" >/dev/null || die "Workshop provisional evidence schema or semantics are incomplete."

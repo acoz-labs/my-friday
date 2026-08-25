@@ -85,6 +85,15 @@ grep -Fq 'builder_has_no_mutation_token:true' "$workshop"
 grep -Fq 'stale capability plan' "$root/config/acceptance/capability-stale.exp"
 grep -Fq 'No changes made' "$root/config/acceptance/capability-exit.exp"
 grep -Fq 'acceptance-runner" --cwd' "$workshop"
+grep -Fq 'secure-roots --home' "$workshop"
+grep -Fq 'copy-auth --source' "$workshop"
+grep -Fq 'cleanup-roots --home' "$workshop"
+grep -Fq 'capability-stop-barrier' "$workshop"
+grep -Fq 'DAILY_BRIEF_ABSENT' "$workshop"
+grep -Fq 'sibling_before' "$workshop"
+grep -Fq 'before_builder' "$workshop"
+grep -Fq "trap - EXIT INT TERM" "$workshop"
+if grep -Eq 'cp -p .*auth|rm -rf.*(run_root|instance_root|sibling_root)' "$workshop"; then exit 1; fi
 for scenario in builder install upgrade denials interruption migration cleanup; do grep -Fq "phase=$scenario" "$workshop"; done
 for command in verify-capability-workshop-evidence verify-capability-workshop-receipt verify-capability-workshop-acceptance record-capability-workshop-receipt; do [[ -x "$root/bin/$command" ]]; done
 grep -Fq 'elif [[ "$issue_number" == 51 ]]' "$root/bin/record-product-acceptance"
