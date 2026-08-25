@@ -3,7 +3,7 @@
 - **Status:** Final
 - **Discovery issue:** #49
 - **Discovery PR:** #50
-- **Repository basis:** `ae5c10317cfd8d2a6f866fd7ec39cbf1da82da13`
+- **Repository basis:** ae5c10317cfd8d2a6f866fd7ec39cbf1da82da13
 - **Recommended decision:** approve
 - **Gate 1:** awaiting-authority
 - **Confidence:** Medium
