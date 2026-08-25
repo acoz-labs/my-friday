@@ -180,6 +180,31 @@ func TestUpgradeV1InstanceProjectsManifestBoundBuilder(t *testing.T) {
 	}
 }
 
+func TestCapabilityEmptyInstanceCanRollbackToV1(t *testing.T) {
+	home, exe, codex := fixture(t)
+	p, err := PlanCreate(home, "alfred", exe, codex)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = Create(p, exe, codex); err != nil {
+		t.Fatal(err)
+	}
+	rollback, err := PlanRollback(home, "alfred")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = Rollback(rollback); err != nil {
+		t.Fatal(err)
+	}
+	m, err := Verify(home, "alfred")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if m.ContractVersion != 1 || m.CapabilityBuilder != "" {
+		t.Fatalf("rollback failed: %#v", m)
+	}
+}
+
 func TestForeignLauncherAndDriftFailClosed(t *testing.T) {
 	home, exe, codex := fixture(t)
 	foreign := filepath.Join(home, ".local", "bin", "alfred")

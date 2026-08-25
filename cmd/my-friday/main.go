@@ -147,9 +147,9 @@ func runCapability() error {
 	if len(os.Args) < 3 {
 		return fmt.Errorf("usage: my-friday capability <inspect|validate|test|verify|install|upgrade|enable|disable|remove> NAME SLUG")
 	}
-	if os.Args[2] == "initialize" {
+	if os.Args[2] == "initialize" || os.Args[2] == "rollback" {
 		if len(os.Args) != 5 || os.Args[3] != "--runtime" {
-			return fmt.Errorf("usage: my-friday capability initialize --runtime PATH")
+			return fmt.Errorf("usage: my-friday capability <initialize|rollback> --runtime PATH")
 		}
 		if _, err := repository.ValidateRuntime(os.Args[4]); err != nil {
 			return err
@@ -161,8 +161,13 @@ func runCapability() error {
 		if info.Mode()&os.ModeCharDevice == 0 {
 			return errors.New("runtime capability initialization requires an interactive TTY")
 		}
-		fmt.Fprintf(os.Stdout, "Action: initialize\nRuntime: %s\n- add the fixed instruction-only capability source contract\n- remove only the reserved skills/.gitkeep placeholder\n- do not mutate any installed assistant\nType Initialize to continue: ", os.Args[4])
-		ok, err := readConfirmation(os.Stdin, "Initialize")
+		initializing := os.Args[2] == "initialize"
+		token := "Rollback"
+		if initializing {
+			token = "Initialize"
+		}
+		fmt.Fprintf(os.Stdout, "Action: %s\nRuntime: %s\n- change only the fixed instruction-only source contract and reserved placeholder\n- refuse rollback when capability source exists\n- do not mutate any installed assistant\nType %s to continue: ", os.Args[2], os.Args[4], token)
+		ok, err := readConfirmation(os.Stdin, token)
 		if err != nil {
 			return err
 		}
@@ -170,10 +175,15 @@ func runCapability() error {
 			fmt.Fprintln(os.Stdout, "No changes made")
 			return nil
 		}
-		if err = repository.InitializeCapabilities(os.Args[4]); err != nil {
+		if initializing {
+			err = repository.InitializeCapabilities(os.Args[4])
+		} else {
+			err = repository.RollbackCapabilities(os.Args[4])
+		}
+		if err != nil {
 			return err
 		}
-		fmt.Fprintln(os.Stdout, "Runtime capability source initialized")
+		fmt.Fprintf(os.Stdout, "Runtime capability source %sd\n", os.Args[2])
 		return nil
 	}
 	if len(os.Args) < 5 || len(os.Args) > 6 {
@@ -342,6 +352,36 @@ func runAssistant() error {
 			return err
 		}
 		fmt.Fprintf(os.Stdout, "Assistant %s upgraded to capability contract v2\n", name)
+		return nil
+	case "rollback":
+		if len(os.Args) != 4 {
+			return fmt.Errorf("usage: my-friday assistant rollback NAME")
+		}
+		p, err := assistantinstance.PlanRollback(home, name)
+		if err != nil {
+			return err
+		}
+		info, err := os.Stdin.Stat()
+		if err != nil {
+			return err
+		}
+		if info.Mode()&os.ModeCharDevice == 0 {
+			return errors.New("assistant rollback requires an interactive TTY")
+		}
+		fmt.Fprint(os.Stdout, p.String())
+		fmt.Fprint(os.Stdout, "Type Rollback to continue: ")
+		ok, err := readConfirmation(os.Stdin, "Rollback")
+		if err != nil {
+			return err
+		}
+		if !ok {
+			fmt.Fprintln(os.Stdout, "No changes made")
+			return nil
+		}
+		if err = assistantinstance.Rollback(p); err != nil {
+			return err
+		}
+		fmt.Fprintf(os.Stdout, "Assistant %s rolled back to contract v1\n", name)
 		return nil
 	case "create":
 		if len(os.Args) != 8 || os.Args[4] != "--runtime" || os.Args[6] != "--memory" {

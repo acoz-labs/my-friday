@@ -16,6 +16,12 @@ after exact confirmation it serializes on the instance lock and restores the
 receipt-declared projection from retained bytes. If no receipt exists, recovery
 restores absence. Do not delete the journal or generation manually.
 
+Use `my-friday capability rollback --runtime PATH` or `my-friday assistant
+rollback NAME` only for an unused v2 boundary. Runtime rollback refuses any
+package source; assistant rollback refuses any receipt, generation,
+transaction, or additional workspace skill. Preserve the compatible v2 binary
+if either refusal occurs.
+
 ## Recover a named assistant instance
 
 Run `my-friday assistant verify <name>` first. If removal stopped after the

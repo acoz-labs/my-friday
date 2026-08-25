@@ -677,6 +677,95 @@ func Upgrade(plan Plan) error {
 	return finishTransaction(lock, upgradeLocked(plan))
 }
 
+func PlanRollback(home, name string) (Plan, error) {
+	p, err := Derive(home, name)
+	if err != nil {
+		return Plan{}, err
+	}
+	m, err := Verify(home, name)
+	if err != nil {
+		return Plan{}, fmt.Errorf("rollback refused: %w", err)
+	}
+	if m.ContractVersion != ContractVersion {
+		return Plan{}, errors.New("assistant rollback requires capability contract v2")
+	}
+	entries, err := os.ReadDir(filepath.Join(p.Root, "capabilities"))
+	if err != nil {
+		return Plan{}, err
+	}
+	if len(entries) != 0 {
+		return Plan{}, errors.New("assistant rollback refused: capability control state exists")
+	}
+	skills := filepath.Join(p.Root, "workspace", ".agents", "skills")
+	entries, err = os.ReadDir(skills)
+	if err != nil {
+		return Plan{}, err
+	}
+	if len(entries) != 1 || entries[0].Name() != "capability-builder" {
+		return Plan{}, errors.New("assistant rollback refused: workspace skill entries differ")
+	}
+	info, err := os.Lstat(p.Root)
+	if err != nil {
+		return Plan{}, err
+	}
+	st := info.Sys().(*syscall.Stat_t)
+	return Plan{Action: "rollback", Paths: p, Items: []string{"remove the exact manifest-owned capability builder and empty control root", "restore the v1 instance manifest", "leave runtime source, Codex credentials, launcher, and other instances unchanged"}, rootDevice: uint64(st.Dev), rootInode: uint64(st.Ino)}, nil
+}
+
+func Rollback(plan Plan) error {
+	if plan.Action != "rollback" {
+		return errors.New("invalid assistant rollback plan")
+	}
+	expected := rootProof{Device: plan.rootDevice, Inode: plan.rootInode}
+	lock, err := acquireTransactionLock(plan.Paths.Root, &expected)
+	if err != nil {
+		return err
+	}
+	return finishTransaction(lock, rollbackLocked(plan))
+}
+func rollbackLocked(plan Plan) error {
+	m, err := verify(plan.Paths.Home, plan.Paths.Name)
+	if err != nil {
+		return err
+	}
+	if m.ContractVersion != ContractVersion {
+		return errors.New("assistant rollback requires contract v2")
+	}
+	entries, err := os.ReadDir(filepath.Join(plan.Paths.Root, "capabilities"))
+	if err != nil || len(entries) != 0 {
+		return errors.New("assistant rollback refused: capability control state exists")
+	}
+	if err = os.RemoveAll(m.CapabilityBuilder); err != nil {
+		return err
+	}
+	skills := filepath.Dir(m.CapabilityBuilder)
+	if err = os.Remove(skills); err != nil {
+		return fmt.Errorf("assistant rollback recovery required: skill root not empty: %w", err)
+	}
+	if err = os.Remove(filepath.Dir(skills)); err != nil {
+		return fmt.Errorf("assistant rollback recovery required: agent root not empty: %w", err)
+	}
+	if err = os.Remove(filepath.Join(plan.Paths.Root, "capabilities")); err != nil {
+		return err
+	}
+	m.ContractVersion = 1
+	m.Owned = []string{"codex", "dependencies", "memory", "runtime", "workspace"}
+	m.CapabilityBuilder = ""
+	m.CapabilityBuilderSHA256 = ""
+	m.CapabilityPolicySHA256 = ""
+	body, _ := json.MarshalIndent(m, "", "  ")
+	body = append(body, '\n')
+	tmp := filepath.Join(plan.Paths.Root, "manifest.json.rollback")
+	if err = os.WriteFile(tmp, body, 0o600); err != nil {
+		return err
+	}
+	if err = os.Rename(tmp, filepath.Join(plan.Paths.Root, "manifest.json")); err != nil {
+		return err
+	}
+	_, err = verify(plan.Paths.Home, plan.Paths.Name)
+	return err
+}
+
 func upgradeLocked(plan Plan) error {
 	m, err := verify(plan.Paths.Home, plan.Paths.Name)
 	if err != nil {

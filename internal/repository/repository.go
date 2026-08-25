@@ -40,6 +40,11 @@ func CreateWithCheckpoint(pl plan.CreationPlan, runtime, memory string, checkpoi
 				return err
 			}
 		}
+		if target.role == "runtime" {
+			if err := os.MkdirAll(filepath.Join(target.path, "skills"), 0700); err != nil {
+				return err
+			}
+		}
 		if checkpoint != nil {
 			if err := checkpoint(target.role + "-files"); err != nil {
 				return err
@@ -147,6 +152,38 @@ func InitializeCapabilities(runtime string) error {
 		return fmt.Errorf("runtime capability initialization recovery required: %w", err)
 	}
 	return nil
+}
+
+// RollbackCapabilities restores the v1 reserved source layout only when no
+// capability package exists.
+func RollbackCapabilities(runtime string) error {
+	if _, err := ValidateRuntime(runtime); err != nil {
+		return err
+	}
+	entries, err := os.ReadDir(filepath.Join(runtime, "skills"))
+	if err != nil {
+		return err
+	}
+	if len(entries) != 0 {
+		return errors.New("runtime capability rollback refused: capability source exists")
+	}
+	contractPath := filepath.Join(runtime, ".my-friday", "capability-contract.json")
+	schemaPath := filepath.Join(runtime, ".my-friday", "schemas", "capability-contract.v1.schema.json")
+	if _, err = os.Lstat(contractPath); err != nil {
+		return errors.New("runtime does not use the capability source contract")
+	}
+	if err = os.WriteFile(filepath.Join(runtime, "skills", ".gitkeep"), nil, 0o600); err != nil {
+		return err
+	}
+	if err = os.Remove(contractPath); err != nil {
+		_ = os.Remove(filepath.Join(runtime, "skills", ".gitkeep"))
+		return err
+	}
+	if err = os.Remove(schemaPath); err != nil {
+		return fmt.Errorf("runtime capability rollback recovery required: %w", err)
+	}
+	_, err = ValidateRuntime(runtime)
+	return err
 }
 
 func ValidateFreshPair(runtime, memory string) error {
@@ -383,6 +420,9 @@ func exactFreshGitMetadata(root string) bool {
 }
 func noUnexpected(root string, pl plan.CreationPlan, role string, allowMarker bool) bool {
 	allowed := map[string]bool{".": true, ".git": true}
+	if role == "runtime" {
+		allowed["skills"] = true
+	}
 	if allowMarker {
 		allowed[".my-friday/creation-state.json"] = true
 	}

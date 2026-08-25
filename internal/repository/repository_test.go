@@ -87,6 +87,30 @@ func TestCreateAndValidatePairWithoutCommitOrRemote(t *testing.T) {
 	}
 }
 
+func TestCapabilitySourceRollbackRequiresEmptySource(t *testing.T) {
+	root := t.TempDir()
+	p, _ := profile.New("Friday", "", "Help", "balanced", "")
+	pl, _ := plan.Build(p, filepath.Join(root, "runtime"), filepath.Join(root, "memory"))
+	if err := Create(pl, pl.Targets.Runtime, pl.Targets.Memory); err != nil {
+		t.Fatal(err)
+	}
+	if err := RollbackCapabilities(pl.Targets.Runtime); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(pl.Targets.Runtime, "skills", ".gitkeep")); err != nil {
+		t.Fatal(err)
+	}
+	if err := InitializeCapabilities(pl.Targets.Runtime); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(filepath.Join(pl.Targets.Runtime, "skills", "daily-brief"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := RollbackCapabilities(pl.Targets.Runtime); err == nil || !strings.Contains(err.Error(), "source exists") {
+		t.Fatalf("non-empty rollback accepted: %v", err)
+	}
+}
+
 func TestValidationAuthenticatesSchemaBeforeCompilationAndChecksGit(t *testing.T) {
 	root := t.TempDir()
 	p, _ := profile.New("Friday", "", "Help", "balanced", "")

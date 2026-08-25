@@ -35,3 +35,9 @@ The bootstrap-owned `capability-builder` is private to each named instance and
 is not an ordinary removable package. Its instructions permit source editing
 and read-only checks while prohibiting lifecycle mutations and confirmation
 tokens. This is an instruction boundary, not an OS boundary.
+
+Standalone runtimes can roll back to the v1 placeholder only while `skills/`
+contains no package. Named instances can roll back to v1 only while capability
+control is empty and the builder is exact and alone in the managed skill root.
+Both paths use an exact `Rollback` preview and preserve source, credentials,
+launchers, global skills, and sibling instances.
