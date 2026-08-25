@@ -30,6 +30,9 @@ recursive cleanup. Cleanup unlinks through the opened, identity-bound directory
 descriptor; recovery proves quarantine content and retains a deterministic
 receipt-derived restoration handle before active-path restoration. A strict
 external cleanup manifest binds the root inode and expected per-path content so
-partial deletion is resumable while foreign additions fail closed. Same-UID
+partial deletion is resumable while foreign additions fail closed. Manifest
+authority itself is sync/close/no-replace promoted; pre-promotion residue is
+never authority, and post-root-unlink completion accepts only an absent target.
+Same-UID
 interference is detected at each ownership boundary; foreign raced bytes are
 preserved rather than overwritten or deleted.

@@ -878,7 +878,8 @@ type cleanupManifest struct {
 	Files           map[string]string `json:"files"`
 }
 
-func cleanupManifestPath(path string) string { return path + ".cleanup.json" }
+func cleanupManifestPath(path string) string     { return path + ".cleanup.json" }
+func cleanupManifestTempPath(path string) string { return cleanupManifestPath(path) + ".new" }
 
 func snapshotCleanupTree(path, expected string) (cleanupManifest, error) {
 	parent, err := openDirNoFollow(filepath.Dir(path))
@@ -928,20 +929,41 @@ func snapshotCleanupTree(path, expected string) (cleanupManifest, error) {
 func writeCleanupManifest(path string, m cleanupManifest) error {
 	body, _ := json.MarshalIndent(m, "", "  ")
 	body = append(body, '\n')
-	f, err := os.OpenFile(cleanupManifestPath(path), os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+	temp := cleanupManifestTempPath(path)
+	f, err := os.OpenFile(temp, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
 	if err != nil {
 		return err
 	}
 	_, writeErr := f.Write(body)
+	syncErr := f.Sync()
 	closeErr := f.Close()
 	if writeErr != nil {
 		return writeErr
 	}
-	return closeErr
+	if syncErr != nil {
+		return syncErr
+	}
+	if closeErr != nil {
+		return closeErr
+	}
+	if mutationHook != nil {
+		if err = mutationHook("cleanup-manifest-temp-synced"); err != nil {
+			return err
+		}
+	}
+	parent, err := openDirNoFollow(filepath.Dir(path))
+	if err != nil {
+		return err
+	}
+	defer unix.Close(parent)
+	return renameExclusive(parent, filepath.Base(temp), parent, filepath.Base(cleanupManifestPath(path)))
 }
 
 func readCleanupManifest(path string) (cleanupManifest, error) {
-	body, info, err := regularFile(cleanupManifestPath(path))
+	return readCleanupManifestFile(cleanupManifestPath(path))
+}
+func readCleanupManifestFile(manifestPath string) (cleanupManifest, error) {
+	body, info, err := regularFile(manifestPath)
 	if err != nil {
 		return cleanupManifest{}, err
 	}
@@ -1086,6 +1108,11 @@ func removeProvenQuarantine(path, expected string) error {
 	if manifest.ExpectedDigest != expected {
 		return errors.New("cleanup manifest digest mismatch")
 	}
+	if _, targetErr := os.Lstat(path); errors.Is(targetErr, os.ErrNotExist) {
+		return os.Remove(cleanupManifestPath(path))
+	} else if targetErr != nil {
+		return targetErr
+	}
 	parent, err := openDirNoFollow(filepath.Dir(path))
 	if err != nil {
 		return err
@@ -1135,6 +1162,11 @@ func removeProvenQuarantine(path, expected string) error {
 	}
 	if err = unix.Unlinkat(parent, filepath.Base(path), unix.AT_REMOVEDIR); err != nil {
 		return err
+	}
+	if mutationHook != nil {
+		if err = mutationHook("cleanup-root-unlinked"); err != nil {
+			return err
+		}
 	}
 	return os.Remove(cleanupManifestPath(path))
 }
@@ -1273,6 +1305,38 @@ func resumeCleanupManifests(instance, slug string) error {
 	patterns := []string{
 		filepath.Join(instance, "workspace", ".agents", "skills", slug+"*.cleanup.json"),
 		filepath.Join(instance, "capabilities", slug+"*.cleanup.json"),
+	}
+	for _, pattern := range patterns {
+		tempMatches, err := filepath.Glob(pattern + ".new")
+		if err != nil {
+			return err
+		}
+		for _, temp := range tempMatches {
+			tree := strings.TrimSuffix(temp, ".cleanup.json.new")
+			candidate, readErr := readCleanupManifestFile(temp)
+			if readErr != nil {
+				return fmt.Errorf("unproven cleanup temp: %w", readErr)
+			}
+			parent, openErr := openDirNoFollow(filepath.Dir(tree))
+			if openErr != nil {
+				return openErr
+			}
+			proof, proofErr := proveProjection(parent, filepath.Base(tree), tree, candidate.ExpectedDigest)
+			if proofErr != nil || proof.dev != candidate.RootDev || proof.ino != candidate.RootIno {
+				unix.Close(parent)
+				return errors.New("cleanup temp root proof mismatch")
+			}
+			var tempInfo unix.Stat_t
+			if statErr := unix.Fstatat(parent, filepath.Base(temp), &tempInfo, unix.AT_SYMLINK_NOFOLLOW); statErr != nil {
+				unix.Close(parent)
+				return statErr
+			}
+			if unlinkErr := unix.Unlinkat(parent, filepath.Base(temp), 0); unlinkErr != nil {
+				unix.Close(parent)
+				return unlinkErr
+			}
+			unix.Close(parent)
+		}
 	}
 	for _, pattern := range patterns {
 		matches, err := filepath.Glob(pattern)

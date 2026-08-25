@@ -496,6 +496,71 @@ func TestRecoveryPartialCleanupFaultsResume(t *testing.T) {
 	}
 }
 
+func TestCleanupManifestCommitGapsRecover(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		action     Action
+		phase      string
+		occurrence int
+		want       State
+	}{
+		{"projection temp", ActionDisable, "cleanup-manifest-temp-synced", 1, StateDisabled},
+		{"control temp", ActionRemove, "cleanup-manifest-temp-synced", 2, StateInstalledHealthy},
+		{"projection root unlinked", ActionDisable, "cleanup-root-unlinked", 1, StateDisabled},
+		{"control root unlinked", ActionRemove, "cleanup-root-unlinked", 2, StateReady},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			root := t.TempDir()
+			p := writePackage(t, root, "daily-brief", "1.0.0")
+			instance := filepath.Join(root, "instance")
+			if err := InitializeInstance(instance); err != nil {
+				t.Fatal(err)
+			}
+			pl, err := Plan(instance, p, ActionInstall)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err = Execute(pl); err != nil {
+				t.Fatal(err)
+			}
+			pl, err = Plan(instance, p, tc.action)
+			if err != nil {
+				t.Fatal(err)
+			}
+			seen := 0
+			mutationHook = func(phase string) error {
+				if phase == tc.phase {
+					seen++
+					if seen == tc.occurrence {
+						return errors.New("stop")
+					}
+				}
+				return nil
+			}
+			if err = Execute(pl); err == nil {
+				t.Fatal("commit-gap fault not injected")
+			}
+			mutationHook = nil
+			if err = Recover(instance, "daily-brief"); err != nil {
+				t.Fatal(err)
+			}
+			if err = Recover(instance, "daily-brief"); err != nil {
+				t.Fatal(err)
+			}
+			status, inspectErr := Inspect(instance, p)
+			if inspectErr != nil || status.State != tc.want {
+				t.Fatalf("state=%s want=%s err=%v", status.State, tc.want, inspectErr)
+			}
+			for _, pattern := range []string{filepath.Join(instance, "workspace", ".agents", "skills", "daily-brief.*"), filepath.Join(instance, "capabilities", "daily-brief.*")} {
+				matches, _ := filepath.Glob(pattern)
+				if len(matches) != 0 {
+					t.Fatalf("cleanup residue: %v", matches)
+				}
+			}
+		})
+	}
+}
+
 func mustRead(t *testing.T, path string) []byte {
 	t.Helper()
 	b, err := os.ReadFile(path)

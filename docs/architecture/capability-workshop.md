@@ -60,6 +60,13 @@ cannot gain deletion authority. Control cleanup retains this external authority
 even if its journal-bearing payload is partly removed. A raced foreign target or
 quarantine is preserved for diagnosis.
 
+Cleanup authority is written as canonical bytes to an exclusive same-directory
+temporary file, synced and closed, then promoted with no replacement. Recovery
+removes a pre-promotion temp only after exact root inode/digest proof and never
+uses it as authority. A valid final manifest whose bound root is absent records
+a committed unlink; recovery removes the manifest and continues, while any
+reappeared different inode is preserved and refused.
+
 `capability test` is a bounded structural contract check, not a model run. It
 requires nonempty unique declarations, an exact normalized match between
 manifest and positive triggers,
