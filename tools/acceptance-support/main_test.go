@@ -11,13 +11,18 @@ import (
 	"strings"
 	"syscall"
 	"testing"
+	"time"
 
 	"github.com/acoz-labs/my-friday/internal/assistantinstance"
 	"github.com/acoz-labs/my-friday/internal/codexhome"
 	bootstrap "github.com/acoz-labs/my-friday/internal/plan"
 	"github.com/acoz-labs/my-friday/internal/profile"
 	"github.com/acoz-labs/my-friday/internal/repository"
+	"golang.org/x/sys/unix"
 )
+
+const testCleanupCandidate = "0123456789abcdef0123456789abcdef01234567"
+const testCleanupRunID = "receipt-test-run"
 
 func managedNamedFixture(t *testing.T) (string, assistantinstance.Paths) {
 	t.Helper()
@@ -88,11 +93,11 @@ func TestCleanupNamedRemovesReceiptBoundGeneratedCodexState(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(generatedDir, "turn.jsonl"), []byte("generated-state"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	receipt, err := captureCodexCleanupReceipt(home, "primary")
+	receipt, err := captureCodexCleanupReceipt(home, "primary", testCleanupCandidate, testCleanupRunID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err = cleanupNamed(home, []string{"primary"}, nil, map[string]codexCleanupReceipt{"primary": receipt}); err != nil {
+	if err = cleanupNamed(home, []string{"primary"}, nil, map[string]codexCleanupReceipt{"primary": receipt}, testCleanupCandidate, testCleanupRunID); err != nil {
 		t.Fatal(err)
 	}
 	if _, err = os.Lstat(paths.Root); !errors.Is(err, os.ErrNotExist) {
@@ -110,7 +115,7 @@ func TestCleanupNamedPreservesChangedGeneratedCodexState(t *testing.T) {
 	if err := os.WriteFile(generated, []byte("generated-state"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	receipt, err := captureCodexCleanupReceipt(home, "primary")
+	receipt, err := captureCodexCleanupReceipt(home, "primary", testCleanupCandidate, testCleanupRunID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -120,13 +125,172 @@ func TestCleanupNamedPreservesChangedGeneratedCodexState(t *testing.T) {
 	if err = os.WriteFile(generated, []byte("replacement"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if err = cleanupNamed(home, []string{"primary"}, nil, map[string]codexCleanupReceipt{"primary": receipt}); err == nil {
+	if err = cleanupNamed(home, []string{"primary"}, nil, map[string]codexCleanupReceipt{"primary": receipt}, testCleanupCandidate, testCleanupRunID); err == nil {
 		t.Fatal("changed generated Codex state was accepted")
 	}
 	for path, want := range map[string]string{auth: "opaque-fixture", generated: "replacement", generated + ".original": "generated-state"} {
 		if body, readErr := os.ReadFile(path); readErr != nil || string(body) != want {
 			t.Fatalf("changed generated state was not preserved at %s: %q %v", path, body, readErr)
 		}
+	}
+}
+
+func TestGeneratedCodexReceiptRejectsMalformedAndDuplicateAuthority(t *testing.T) {
+	home, paths := managedNamedFixture(t)
+	generated := filepath.Join(paths.Root, "codex", "state.sqlite")
+	if err := os.WriteFile(generated, []byte("generated-state"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	receipt, err := captureCodexCleanupReceipt(home, "primary", testCleanupCandidate, testCleanupRunID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tests := map[string]func(*codexCleanupReceipt){
+		"candidate": func(r *codexCleanupReceipt) { r.Candidate = strings.Repeat("f", 40) },
+		"run":       func(r *codexCleanupReceipt) { r.RunID = "../foreign" },
+		"root":      func(r *codexCleanupReceipt) { r.RootInode++ },
+		"duplicate": func(r *codexCleanupReceipt) { r.Entries = append(r.Entries, r.Entries[0]) },
+		"path":      func(r *codexCleanupReceipt) { r.Entries[0].Path = "../escape" },
+		"uid":       func(r *codexCleanupReceipt) { r.Entries[0].UID++ },
+		"nlink":     func(r *codexCleanupReceipt) { r.Entries[0].Nlink = 2 },
+		"type":      func(r *codexCleanupReceipt) { r.Entries[0].Mode = unix.S_IFLNK | 0o777 },
+		"mode":      func(r *codexCleanupReceipt) { r.Entries[0].Mode = unix.S_IFREG | 0o666 },
+		"size":      func(r *codexCleanupReceipt) { r.Entries[0].Size++ },
+	}
+	for name, mutate := range tests {
+		t.Run(name, func(t *testing.T) {
+			changed := receipt
+			changed.Entries = append([]codexCleanupEntry(nil), receipt.Entries...)
+			mutate(&changed)
+			if _, err := validateCodexCleanupReceipt(home, "primary", testCleanupCandidate, testCleanupRunID, &changed); err == nil {
+				t.Fatal("malformed generated-state receipt was accepted")
+			}
+		})
+	}
+}
+
+func TestGeneratedCodexReceiptRejectsFilesystemDrift(t *testing.T) {
+	tests := map[string]func(*testing.T, string){
+		"missing": func(t *testing.T, path string) { t.Helper(); mustRemove(t, path) },
+		"extra": func(t *testing.T, path string) {
+			t.Helper()
+			mustWrite(t, filepath.Join(filepath.Dir(path), "extra"), 0o600)
+		},
+		"inode": func(t *testing.T, path string) { t.Helper(); mustRemove(t, path); mustWrite(t, path, 0o600) },
+		"size": func(t *testing.T, path string) {
+			t.Helper()
+			if err := os.WriteFile(path, []byte("different-size"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+		},
+		"mtime": func(t *testing.T, path string) {
+			t.Helper()
+			if err := os.Chtimes(path, time.Unix(10, 0), time.Unix(10, 0)); err != nil {
+				t.Fatal(err)
+			}
+		},
+		"mode": func(t *testing.T, path string) {
+			t.Helper()
+			if err := os.Chmod(path, 0o640); err != nil {
+				t.Fatal(err)
+			}
+		},
+		"type": func(t *testing.T, path string) {
+			t.Helper()
+			mustRemove(t, path)
+			if err := os.Mkdir(path, 0o700); err != nil {
+				t.Fatal(err)
+			}
+		},
+		"symlink": func(t *testing.T, path string) {
+			t.Helper()
+			mustRemove(t, path)
+			if err := os.Symlink("target", path); err != nil {
+				t.Fatal(err)
+			}
+		},
+		"hardlink": func(t *testing.T, path string) {
+			t.Helper()
+			if err := os.Link(path, path+".link"); err != nil {
+				t.Fatal(err)
+			}
+		},
+		"nested-extra": func(t *testing.T, path string) {
+			t.Helper()
+			mustWrite(t, filepath.Join(filepath.Dir(path), "nested-extra"), 0o600)
+		},
+	}
+	for name, mutate := range tests {
+		t.Run(name, func(t *testing.T) {
+			home, paths := managedNamedFixture(t)
+			auth := filepath.Join(paths.Root, "codex", "auth.json")
+			nested := filepath.Join(paths.Root, "codex", "sessions", "2026")
+			if err := os.MkdirAll(nested, 0o700); err != nil {
+				t.Fatal(err)
+			}
+			generated := filepath.Join(nested, "turn.jsonl")
+			mustWrite(t, auth, 0o600)
+			mustWrite(t, generated, 0o600)
+			receipt, err := captureCodexCleanupReceipt(home, "primary", testCleanupCandidate, testCleanupRunID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			mutate(t, generated)
+			if err = cleanupNamed(home, []string{"primary"}, nil, map[string]codexCleanupReceipt{"primary": receipt}, testCleanupCandidate, testCleanupRunID); err == nil {
+				t.Fatal("generated Codex filesystem drift was accepted")
+			}
+			if _, err = os.Lstat(paths.Root); err != nil {
+				t.Fatalf("instance was not preserved: %v", err)
+			}
+			if body, readErr := os.ReadFile(auth); readErr != nil || string(body) != "fixture" {
+				t.Fatalf("credential changed: %q %v", body, readErr)
+			}
+		})
+	}
+}
+
+func TestGeneratedCodexReceiptRefusesDriftImmediatelyBeforeRemoval(t *testing.T) {
+	home, paths := managedNamedFixture(t)
+	auth := filepath.Join(paths.Root, "codex", "auth.json")
+	generated := filepath.Join(paths.Root, "codex", "state.sqlite")
+	mustWrite(t, auth, 0o600)
+	mustWrite(t, generated, 0o600)
+	receipt, err := captureCodexCleanupReceipt(home, "primary", testCleanupCandidate, testCleanupRunID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	late := filepath.Join(paths.Root, "codex", "late-state")
+	previousHook := cleanupMutationHook
+	cleanupMutationHook = func(phase string) {
+		if phase != "auth-before-final-removal-validation" {
+			return
+		}
+		cleanupMutationHook = nil
+		mustWrite(t, late, 0o600)
+	}
+	defer func() { cleanupMutationHook = previousHook }()
+	if err = cleanupNamed(home, []string{"primary"}, nil, map[string]codexCleanupReceipt{"primary": receipt}, testCleanupCandidate, testCleanupRunID); err == nil {
+		t.Fatal("late generated-state drift was accepted")
+	}
+	if body, readErr := os.ReadFile(late); readErr != nil || string(body) != "fixture" {
+		t.Fatalf("late state was not preserved: %q %v", body, readErr)
+	}
+	if _, err = os.Lstat(paths.Root); err != nil {
+		t.Fatalf("instance was not preserved: %v", err)
+	}
+}
+
+func mustWrite(t *testing.T, path string, mode os.FileMode) {
+	t.Helper()
+	if err := os.WriteFile(path, []byte("fixture"), mode); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func mustRemove(t *testing.T, path string) {
+	t.Helper()
+	if err := os.Remove(path); err != nil {
+		t.Fatal(err)
 	}
 }
 
@@ -627,7 +791,16 @@ func TestCleanupNamedCoversEveryPostCreatePhase(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			if err := cleanupNamed(home, []string{"primary", "secondary"}, leaves, nil); err != nil {
+			receipts := map[string]codexCleanupReceipt(nil)
+			if phase == "smoke-complete" {
+				mustWrite(t, filepath.Join(home, ".my-friday", "assistants", "primary", "codex", "state.sqlite"), 0o600)
+				receipt, err := captureCodexCleanupReceipt(home, "primary", testCleanupCandidate, testCleanupRunID)
+				if err != nil {
+					t.Fatal(err)
+				}
+				receipts = map[string]codexCleanupReceipt{"primary": receipt}
+			}
+			if err := cleanupNamed(home, []string{"primary", "secondary"}, leaves, receipts, testCleanupCandidate, testCleanupRunID); err != nil {
 				t.Fatal(err)
 			}
 			for _, path := range []string{filepath.Join(home, ".my-friday", "assistants", "primary"), filepath.Join(home, ".my-friday", "assistants", "secondary"), filepath.Join(home, ".local", "bin", "primary"), filepath.Join(home, ".local", "bin", "secondary"), filepath.Join(home, ".local", "bin", "mfac-collision"), filepath.Join(home, ".local", "bin", "mfac-sibling")} {

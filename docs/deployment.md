@@ -150,14 +150,19 @@ only to the already-open proven credential inode, never to a later pathname
 replacement.
 
 The live TUI may create instance-private caches, sessions, logs, and databases.
-After the bounded TUI exits, the supervisor records their paths and
-device/inode/type/UID/mode/link-count metadata without reading contents. Every
+Only after bounded Codex exit, descendant reaping, and absence of cooperating
+writers, the supervisor binds the exact candidate, run, instance-root and
+Codex-directory identities and records generated paths plus
+device/inode/type/UID/mode/link-count/size/mtime metadata without reading contents. Every
 pre-mutation check requires that complete no-follow tree unchanged; foreign or
 changed generated state is preserved. The receipt authorizes only eventual
 removal with the already manifest-gated instance root, not independent leaf
 deletion. Cleanup supplies the reviewed Git-capable PATH used by candidate
 lifecycle commands so manifest verification is independent of ambient shell
-state.
+state. The same complete authority is replayed at the latest practical point
+immediately before unchanged production removal planning. Under the accepted
+same-UID boundary, quiescence means Codex has exited and no cooperating writer
+remains; it does not claim resistance to an actively malicious owner process.
 
 The command requires
 ordinary-user Apple silicon macOS, APFS, GitHub comment authority, Codex, Go,

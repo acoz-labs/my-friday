@@ -117,10 +117,10 @@ named_phase="pre-create"
 primary_name=""; secondary_name=""; collision_receipt=""; sibling_receipt=""
 cleanup_named_state() {
   [[ -x "${run_root:-}/acceptance-support" ]] || return 0
-  local args=(cleanup-named --home "$real_home")
+  local args=(cleanup-named --home "$real_home" --candidate "$head_sha" --run-id "$run_id")
   local cleanup_path="$(dirname "$codex_binary"):/usr/bin:/bin:/usr/sbin:/sbin" codex_receipt=""
   if [[ -n "${primary_name:-}" && -d "${primary_root:-}/codex" ]]; then
-    codex_receipt="$("$run_root/acceptance-runner" --cwd "$real_home" --timeout 20s --env HOME="$volume/home" --env PATH="$cleanup_path" -- "$run_root/acceptance-support" codex-cleanup-receipt --home "$real_home" --name "$primary_name")" || return 1
+    codex_receipt="$("$run_root/acceptance-runner" --cwd "$real_home" --timeout 20s --env HOME="$volume/home" --env PATH="$cleanup_path" -- "$run_root/acceptance-support" codex-cleanup-receipt --home "$real_home" --name "$primary_name" --candidate "$head_sha" --run-id "$run_id")" || return 1
     args+=(--codex-receipt "$codex_receipt")
   fi
   [[ -z "${primary_name:-}" ]] || args+=(--name "$primary_name")
