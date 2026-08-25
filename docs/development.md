@@ -44,9 +44,13 @@ Before production removal, the acceptance-only named cleanup proves the
 manifest-owned instance, permits only the exact private `codex/auth.json`
 addition, and holds one no-follow Codex-directory descriptor through validation
 and mutation. It atomically moves `auth.json` to a no-replace same-directory
-quarantine name, proves that moved entry is the already-opened file, re-proves
-the directory pathname identity, and only then unlinks it. A replacement is
-atomically restored rather than deleted. The file must also be a
+quarantine name, proves that moved entry is the already-opened file, then
+atomically transfers that exact inode into a no-replace quarantine entry held
+by the manifest-verified instance-root descriptor. The Codex pathname is
+re-proved before the transfer is accepted; a replacement restores the file
+through the still-open original directory and is reported. Final unlink is
+descriptor-relative to the verified instance root, so later Codex-directory
+replacement cannot redirect deletion. The file must also be a
 current-user-owned, mode-`0600`, single-link regular file. Deterministic file-
 and directory-replacement races, symlinks, hardlinks, wrong metadata, alternate
 credential paths, and unrelated private Codex entries are preserved and

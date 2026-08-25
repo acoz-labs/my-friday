@@ -219,6 +219,53 @@ func TestCleanupNamedPreservesCodexDirectoryReplacementRace(t *testing.T) {
 	}
 }
 
+func TestCleanupNamedPreservesCodexDirectoryReplacementAfterQuarantine(t *testing.T) {
+	home, paths := managedNamedFixture(t)
+	codexRoot := filepath.Join(paths.Root, "codex")
+	auth := filepath.Join(codexRoot, "auth.json")
+	originalCodex := filepath.Join(paths.Root, "codex-original")
+	if err := os.WriteFile(auth, []byte("verified-original"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	previousHook := cleanupMutationHook
+	cleanupMutationHook = func(phase string) {
+		if phase != "auth-quarantine-verified" {
+			return
+		}
+		cleanupMutationHook = nil
+		if err := os.Rename(codexRoot, originalCodex); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Mkdir(codexRoot, 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(codexRoot, "auth.json"), []byte("foreign-directory-auth"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	defer func() { cleanupMutationHook = previousHook }()
+	if err := cleanupNamed(home, []string{"primary"}, nil); err == nil {
+		t.Fatal("post-quarantine directory replacement race was accepted")
+	}
+	for path, want := range map[string]string{
+		filepath.Join(codexRoot, "auth.json"):     "foreign-directory-auth",
+		filepath.Join(originalCodex, "auth.json"): "verified-original",
+	} {
+		if body, err := os.ReadFile(path); err != nil || string(body) != want {
+			t.Fatalf("post-quarantine directory race changed %s: %q %v", path, body, err)
+		}
+	}
+	entries, err := os.ReadDir(paths.Root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, entry := range entries {
+		if strings.HasPrefix(entry.Name(), ".auth.json.my-friday-cleanup-") {
+			t.Fatalf("credential stranded in root quarantine: %s", entry.Name())
+		}
+	}
+}
+
 func exactLeafForTest(t *testing.T, path string) exactLeaf {
 	t.Helper()
 	info, err := os.Lstat(path)

@@ -123,8 +123,12 @@ manifest-gated instance removal. This acceptance-only authority is limited to
 the exact verified instance root's `codex/auth.json`: one no-follow opened Codex
 directory is held through verification and mutation, and the credential is
 atomically moved with a no-replace rename before its moved identity is compared
-with the already-opened regular file. The directory pathname is re-proved before
-deletion; a replacement is restored and reported rather than deleted. Current-
+with the already-opened regular file. That inode is then atomically transferred
+to a no-replace quarantine entry held by the manifest-verified instance-root
+descriptor. The Codex pathname is re-proved before accepting the transfer; a
+replacement restores the credential through the open original directory and is
+reported. Final deletion is descriptor-relative to the verified instance root,
+so a later Codex-directory replacement cannot redirect it. Current-
 user ownership, mode `0600`, and one link are required. Any alternate or
 unexpected Codex-home entry is preserved and makes cleanup fail closed;
 production `assistant remove` is unchanged.

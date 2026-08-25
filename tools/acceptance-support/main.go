@@ -381,8 +381,8 @@ func verifyCodexCleanupEntriesAt(fd int, codexRoot string, manifest assistantins
 
 var cleanupMutationHook func(string)
 
-func restoreQuarantinedAuth(parentFD int, quarantine string) error {
-	return renameNoReplace(parentFD, quarantine, parentFD, "auth.json")
+func restoreQuarantinedAuth(fromFD int, quarantine string, codexFD int) error {
+	return renameNoReplace(fromFD, quarantine, codexFD, "auth.json")
 }
 
 func cleanupDisposableAuth(home, name string) error {
@@ -391,6 +391,11 @@ func cleanupDisposableAuth(home, name string) error {
 		return err
 	}
 	codexRoot := filepath.Join(paths.Root, "codex")
+	rootFD, openErr := openAbsoluteDirNoFollow(paths.Root)
+	if openErr != nil {
+		return openErr
+	}
+	defer unix.Close(rootFD)
 	parentFD, openErr := openAbsoluteDirNoFollow(codexRoot)
 	if openErr != nil {
 		return openErr
@@ -438,22 +443,39 @@ func cleanupDisposableAuth(home, name string) error {
 	}
 	var moved unix.Stat_t
 	if unix.Fstatat(parentFD, quarantine, &moved, unix.AT_SYMLINK_NOFOLLOW) != nil || moved.Dev != opened.Dev || moved.Ino != opened.Ino || !disposableAuthStatSafe(uint32(moved.Mode), moved.Uid, uint64(moved.Nlink)) {
-		if restoreErr := restoreQuarantinedAuth(parentFD, quarantine); restoreErr != nil {
+		if restoreErr := restoreQuarantinedAuth(parentFD, quarantine, parentFD); restoreErr != nil {
 			return fmt.Errorf("disposable auth replacement preserved at quarantine after restore refusal: %w", restoreErr)
 		}
 		return errors.New("disposable auth changed before atomic quarantine")
 	}
+	if cleanupMutationHook != nil {
+		cleanupMutationHook("auth-quarantine-verified")
+	}
 	if !openedDirectoryMatchesPath(parentFD, codexRoot) {
-		if restoreErr := restoreQuarantinedAuth(parentFD, quarantine); restoreErr != nil {
+		if restoreErr := restoreQuarantinedAuth(parentFD, quarantine, parentFD); restoreErr != nil {
 			return fmt.Errorf("verified disposable auth preserved at quarantine after directory replacement: %w", restoreErr)
 		}
 		return errors.New("disposable auth directory changed before deletion")
 	}
-	if err = unix.Unlinkat(parentFD, quarantine, 0); err != nil {
+	rootQuarantine := quarantine
+	if err = renameNoReplace(parentFD, quarantine, rootFD, rootQuarantine); err != nil {
 		return err
 	}
-	if !openedDirectoryMatchesPath(parentFD, codexRoot) {
-		return errors.New("disposable auth directory changed after deletion")
+	var rootMoved unix.Stat_t
+	if unix.Fstatat(rootFD, rootQuarantine, &rootMoved, unix.AT_SYMLINK_NOFOLLOW) != nil || rootMoved.Dev != opened.Dev || rootMoved.Ino != opened.Ino || !disposableAuthStatSafe(uint32(rootMoved.Mode), rootMoved.Uid, uint64(rootMoved.Nlink)) {
+		if restoreErr := restoreQuarantinedAuth(rootFD, rootQuarantine, parentFD); restoreErr != nil {
+			return fmt.Errorf("verified disposable auth preserved in root quarantine after identity refusal: %w", restoreErr)
+		}
+		return errors.New("disposable auth changed during root quarantine transfer")
+	}
+	if !openedDirectoryMatchesPath(rootFD, paths.Root) || !openedDirectoryMatchesPath(parentFD, codexRoot) {
+		if restoreErr := restoreQuarantinedAuth(rootFD, rootQuarantine, parentFD); restoreErr != nil {
+			return fmt.Errorf("verified disposable auth preserved in root quarantine after directory replacement: %w", restoreErr)
+		}
+		return errors.New("disposable auth directory changed during root quarantine transfer")
+	}
+	if err = unix.Unlinkat(rootFD, rootQuarantine, 0); err != nil {
+		return err
 	}
 	return verifyCodexCleanupEntriesAt(parentFD, codexRoot, manifest, false)
 }
