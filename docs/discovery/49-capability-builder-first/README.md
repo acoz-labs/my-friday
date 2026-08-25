@@ -292,76 +292,76 @@ Neither issue is closed or rewritten before exact-head Gate 1 approval.
 
 ### C1 — Build and operate one inspectable capability
 
-- **Disposition:** selected
-- **Outcome:** A user can collaborate naturally with their assistant to define,
+- Disposition: selected
+- Outcome: A user can collaborate naturally with their assistant to define,
   scaffold, inspect, validate, test, locally install, verify, enhance, disable,
   and remove one instruction-only capability through a source-first workflow.
-- **Acceptance:** The capability source and complete diff are inspectable and
+- Acceptance: The capability source and complete diff are inspectable and
   versioned; deterministic validation and tests pass; installation mutates only
   declared owned projections after exact preview and confirmation; enhancement
   re-enters the same source/review/test lifecycle; complete reversal is proven.
   No executable code, arbitrary dependency, network access, credentials,
   background process, durable user data, publishing, or marketplace is allowed.
-- **Dependencies:** Shipped O1 repository source and O2 installed-baseline
+- Dependencies: Shipped O1 repository source and O2 installed-baseline
   ownership/lifecycle patterns; a supported Codex skill contract; product-
   design and security review of the natural authoring and approval boundary.
-- **Sequence:** First and P1. This replaces the narrower deferred O4 contract
+- Sequence: First and P1. This replaces the narrower deferred O4 contract
   and establishes the product's extension substrate before another core
   capability is defined.
 
 ### C2 — Build governed memory as the first data-bearing core capability
 
-- **Disposition:** selected
-- **Outcome:** A user can use the capability workshop to create and operate My
+- Disposition: selected
+- Outcome: A user can use the capability workshop to create and operate My
   Friday's governed-memory capability, capture activity, deliberately promote a
   durable claim, and recall relevant attributed context in a fresh task.
-- **Acceptance:** The capability package passes the shared lifecycle and its
+- Acceptance: The capability package passes the shared lifecycle and its
   stricter data-bearing profile; observation, journal, proposal, deliberate
   promotion, validation, recovery, bounded recall, upgrade, verification, and
   reversal work without a parallel bespoke installation system. Automatic
   durable promotion, vectors, external services, and synchronization remain
   excluded.
-- **Dependencies:** Accepted C1, a separately approved data-bearing profile and
+- Dependencies: Accepted C1, a separately approved data-bearing profile and
   memory Solution Design, and the retained provenance/sensitivity/recovery
   evidence from issue #5 without assuming its current implementation shape.
-- **Sequence:** Second. This supersedes the current issue #5 delivery contract
+- Sequence: Second. This supersedes the current issue #5 delivery contract
   and is the first substantial dogfood proof.
 
 ### C3 — Evaluate local scripted capabilities
 
-- **Disposition:** parked
-- **Outcome:** Evidence may later determine whether locally executable tools can
+- Disposition: parked
+- Outcome: Evidence may later determine whether locally executable tools can
   fit a bounded capability profile without turning My Friday into a general
   plugin runtime.
-- **Acceptance:** No generated or third-party executable code is activated under
+- Acceptance: No generated or third-party executable code is activated under
   C1 or C2 authority.
-- **Dependencies:** Sustained use of C1 and C2, explicit executable/dependency
+- Dependencies: Sustained use of C1 and C2, explicit executable/dependency
   trust design, and separate product/security approval.
-- **Sequence:** Later, only if instruction-only and data-bearing core profiles
+- Sequence: Later, only if instruction-only and data-bearing core profiles
   demonstrate real demand for a third type.
 
 ### C4 — Distribute or install third-party capabilities
 
-- **Disposition:** rejected for the current direction
-- **Outcome:** My Friday remains local and source-first rather than becoming a
+- Disposition: rejected
+- Outcome: My Friday remains local and source-first rather than becoming a
   marketplace, remote registry, dependency resolver, or trust broker.
-- **Acceptance:** No publishing, discovery catalog, remote package retrieval,
+- Acceptance: No publishing, discovery catalog, remote package retrieval,
   signature authority, ratings, payments, or third-party automatic update
   mechanism is introduced.
-- **Dependencies:** A wholly new product decision and security/distribution
+- Dependencies: A wholly new product decision and security/distribution
   model.
-- **Sequence:** Not planned.
+- Sequence: Not planned.
 
 ### C5 — Allow autonomous self-modification
 
-- **Disposition:** rejected
-- **Outcome:** The assistant may help author capabilities but cannot silently
+- Disposition: rejected
+- Outcome: The assistant may help author capabilities but cannot silently
   expand its own instructions, tools, data access, permissions, or installed
   state.
-- **Acceptance:** Human-visible source, diff, validation, and explicit mutation
+- Acceptance: Human-visible source, diff, validation, and explicit mutation
   confirmation remain mandatory; generating work never grants approval.
-- **Dependencies:** None; this is a product trust boundary.
-- **Sequence:** Not planned.
+- Dependencies: None; this is a product trust boundary.
+- Sequence: Not planned.
 
 ## Success and stop signals
 
