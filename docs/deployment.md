@@ -154,7 +154,9 @@ Only after bounded Codex exit, descendant reaping, and absence of cooperating
 writers, the supervisor binds the exact candidate, run, instance-root and
 Codex-directory identities and records generated paths plus
 device/inode/type/UID/mode/link-count/size/mtime metadata without reading file
-contents. For Codex-generated argument-zero helper symlinks under the exact
+contents. Regular-file modes are limited to `0600`, `0644`, `0664`, and `0755`
+beneath the separately verified owner-only instance and Codex directories;
+special bits and other modes refuse. For Codex-generated argument-zero helper symlinks under the exact
 `tmp/arg0/codex-<alphanumeric>/` namespace, it additionally records the link
 target and accepts only the three supported helper names targeting the exact
 manifest-bound instance Codex executable. Every pre-mutation check requires that complete no-follow

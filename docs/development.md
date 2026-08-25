@@ -74,6 +74,11 @@ reaped, and no cooperating writer remains. The receipt binds the candidate,
 run, instance-root and Codex-directory identities plus every generated cache,
 session, log, database, and other non-managed entry. Cleanup requires that exact
 device/inode/type/owner/mode/link-count/size/mtime tree on every revalidation.
+Regular generated files are limited to the observed `0600`, `0644`, `0664`,
+and `0755` modes beneath the separately verified owner-only instance and Codex
+directories; special bits and every other mode refuse. The private ancestors
+make group-readable or group-writable plugin-cache metadata unreachable to
+other users while the exact captured mode remains drift-bound.
 Codex may create single-link argument-zero helper symlinks; the receipt accepts
 only `tmp/arg0/codex-<alphanumeric>/apply_patch`, `applypatch`, and
 `codex-execve-wrapper` links whose captured target is the manifest-bound
