@@ -192,6 +192,29 @@ func runCapability() error {
 	}
 	source := filepath.Join(paths.Root, "runtime", "skills", os.Args[4])
 	action := os.Args[2]
+	if action == "recover" {
+		info, err := os.Stdin.Stat()
+		if err != nil {
+			return err
+		}
+		if info.Mode()&os.ModeCharDevice == 0 {
+			return errors.New("capability recovery requires an interactive TTY")
+		}
+		fmt.Fprintf(os.Stdout, "Action: recover\nCapability: %s\nInstance: %s\n- restore only the receipt-declared projection state\n- leave capability source unchanged\nType Recover to continue: ", os.Args[4], os.Args[3])
+		ok, err := readConfirmation(os.Stdin, "Recover")
+		if err != nil {
+			return err
+		}
+		if !ok {
+			fmt.Fprintln(os.Stdout, "No changes made")
+			return nil
+		}
+		if err = capability.Recover(paths.Root, os.Args[4]); err != nil {
+			return err
+		}
+		fmt.Fprintf(os.Stdout, "Capability %s recovered\n", os.Args[4])
+		return nil
+	}
 	switch action {
 	case "inspect":
 		status, err := capability.Inspect(paths.Root, source)

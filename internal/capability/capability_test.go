@@ -151,3 +151,36 @@ func TestDisableEnableRemoveCompleteReversal(t *testing.T) {
 		t.Fatal("source removed")
 	}
 }
+
+func TestRecoverRestoresReceiptBoundProjection(t *testing.T) {
+	root := t.TempDir()
+	p := writePackage(t, root, "daily-brief", "1.0.0")
+	instance := filepath.Join(root, "instance")
+	if err := os.MkdirAll(filepath.Join(instance, "workspace"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := InitializeInstance(instance); err != nil {
+		t.Fatal(err)
+	}
+	pl, err := Plan(instance, p, ActionInstall)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = Execute(pl); err != nil {
+		t.Fatal(err)
+	}
+	if err = os.RemoveAll(projectionPath(instance, "daily-brief")); err != nil {
+		t.Fatal(err)
+	}
+	journal := filepath.Join(instance, "capabilities", "daily-brief", "transaction.json")
+	if err = os.WriteFile(journal, []byte(`{"contract_version":1,"action":"upgrade","slug":"daily-brief","source_digest":"x","projection_digest":"y"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err = Recover(instance, "daily-brief"); err != nil {
+		t.Fatal(err)
+	}
+	status, err := Inspect(instance, p)
+	if err != nil || status.State != StateInstalledHealthy {
+		t.Fatalf("status=%#v err=%v", status, err)
+	}
+}

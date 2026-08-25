@@ -298,6 +298,14 @@ type LifecyclePlan struct {
 	Summary    []string
 }
 
+type transaction struct {
+	ContractVersion  int    `json:"contract_version"`
+	Action           Action `json:"action"`
+	Slug             string `json:"slug"`
+	SourceDigest     string `json:"source_digest"`
+	ProjectionDigest string `json:"projection_digest"`
+}
+
 func InitializeInstance(root string) error {
 	for _, p := range []string{filepath.Join(root, "capabilities"), filepath.Join(root, "workspace", ".agents", "skills")} {
 		if err := os.MkdirAll(p, 0o700); err != nil {
@@ -408,6 +416,12 @@ func Plan(instance, source string, action Action) (LifecyclePlan, error) {
 		return LifecyclePlan{}, err
 	}
 	p := *status.Package
+	journal := filepath.Join(instance, "capabilities", p.Manifest.Slug, "transaction.json")
+	if _, statErr := os.Lstat(journal); statErr == nil {
+		return LifecyclePlan{}, errors.New("capability recovery required")
+	} else if !errors.Is(statErr, os.ErrNotExist) {
+		return LifecyclePlan{}, statErr
+	}
 	switch action {
 	case ActionInstall:
 		if status.Receipt != nil {
@@ -509,7 +523,16 @@ func writeReceipt(path string, r Receipt) error {
 	}
 	return os.Rename(tmp, path)
 }
-func Execute(p LifecyclePlan) error {
+func Execute(p LifecyclePlan) (resultErr error) {
+	lockFile, err := os.Open(filepath.Join(p.Instance, "capabilities"))
+	if err != nil {
+		return err
+	}
+	defer lockFile.Close()
+	if err = syscall.Flock(int(lockFile.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
+		return errors.New("capability transaction already active")
+	}
+	defer syscall.Flock(int(lockFile.Fd()), syscall.LOCK_UN)
 	fresh, err := Plan(p.Instance, p.Package.Root, p.Action)
 	if err != nil {
 		return fmt.Errorf("stale capability plan: %w", err)
@@ -520,6 +543,20 @@ func Execute(p LifecyclePlan) error {
 	if err = os.MkdirAll(filepath.Dir(p.Control), 0o700); err != nil {
 		return err
 	}
+	if err = os.MkdirAll(p.Control, 0o700); err != nil {
+		return err
+	}
+	journalPath := filepath.Join(p.Control, "transaction.json")
+	journalBody, _ := json.MarshalIndent(transaction{1, p.Action, p.Package.Manifest.Slug, p.Package.SourceDigest, p.Package.ProjectionDigest}, "", "  ")
+	journalBody = append(journalBody, '\n')
+	if err = os.WriteFile(journalPath, journalBody, 0o600); err != nil {
+		return err
+	}
+	defer func() {
+		if resultErr == nil {
+			_ = os.Remove(journalPath)
+		}
+	}()
 	switch p.Action {
 	case ActionInstall, ActionUpgrade, ActionEnable:
 		if p.Action == ActionUpgrade {
@@ -573,6 +610,56 @@ func Execute(p LifecyclePlan) error {
 		return os.RemoveAll(p.Control)
 	}
 	return nil
+}
+
+// Recover restores the receipt-declared stable state after an interrupted
+// lifecycle mutation. It never consults or deletes source.
+func Recover(instance, slug string) error {
+	if !slugPattern.MatchString(slug) {
+		return errors.New("invalid capability slug")
+	}
+	lockFile, err := os.Open(filepath.Join(instance, "capabilities"))
+	if err != nil {
+		return err
+	}
+	defer lockFile.Close()
+	if err = syscall.Flock(int(lockFile.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
+		return errors.New("capability transaction already active")
+	}
+	defer syscall.Flock(int(lockFile.Fd()), syscall.LOCK_UN)
+	control := filepath.Join(instance, "capabilities", slug)
+	journal := filepath.Join(control, "transaction.json")
+	if _, err = os.Lstat(journal); err != nil {
+		return fmt.Errorf("capability recovery not required: %w", err)
+	}
+	r, err := readReceipt(instance, slug)
+	if err != nil {
+		return err
+	}
+	projection := projectionPath(instance, slug)
+	if r == nil {
+		if err = os.RemoveAll(projection); err != nil {
+			return err
+		}
+		return os.RemoveAll(control)
+	}
+	if r.State == StateDisabled {
+		if err = os.RemoveAll(projection); err != nil {
+			return err
+		}
+	} else {
+		if err = os.RemoveAll(projection); err != nil {
+			return err
+		}
+		files, readErr := readProjection(filepath.Join(control, "generations", r.ProjectionDigest, "projection"))
+		if readErr != nil {
+			return readErr
+		}
+		if err = writeProjection(projection, files); err != nil {
+			return err
+		}
+	}
+	return os.Remove(journal)
 }
 func sortedKeys(m map[string][]byte) []string {
 	out := make([]string, 0, len(m))
