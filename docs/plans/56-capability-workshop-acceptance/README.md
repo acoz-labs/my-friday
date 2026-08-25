@@ -4,7 +4,7 @@
 - **Issue:** #56
 - **Planning PR:** #57
 - **Repository basis:** 8e2371b433f4f6e4f28fe5c3491cc40b697d680b
-- **Execution envelope:** `through-production`
+- **Execution envelope:** through-production
 
 ## Decision
 
