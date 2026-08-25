@@ -65,12 +65,67 @@ func TestCleanupNamedRemovesOnlySafeDisposableAuthBeforeInstance(t *testing.T) {
 	if err := os.WriteFile(auth, []byte("opaque-fixture"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if err := cleanupNamed(home, []string{"primary"}, nil); err != nil {
+	if err := cleanupNamed(home, []string{"primary"}, nil, nil); err != nil {
 		t.Fatal(err)
 	}
 	for _, path := range []string{auth, paths.Root, paths.Launcher} {
 		if _, err := os.Lstat(path); !errors.Is(err, os.ErrNotExist) {
 			t.Fatalf("cleanup retained %s", path)
+		}
+	}
+}
+
+func TestCleanupNamedRemovesReceiptBoundGeneratedCodexState(t *testing.T) {
+	home, paths := managedNamedFixture(t)
+	auth := filepath.Join(paths.Root, "codex", "auth.json")
+	if err := os.WriteFile(auth, []byte("opaque-fixture"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	generatedDir := filepath.Join(paths.Root, "codex", "sessions")
+	if err := os.Mkdir(generatedDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(generatedDir, "turn.jsonl"), []byte("generated-state"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	receipt, err := captureCodexCleanupReceipt(home, "primary")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = cleanupNamed(home, []string{"primary"}, nil, map[string]codexCleanupReceipt{"primary": receipt}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = os.Lstat(paths.Root); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("receipt-bound generated state survived reversal: %v", err)
+	}
+}
+
+func TestCleanupNamedPreservesChangedGeneratedCodexState(t *testing.T) {
+	home, paths := managedNamedFixture(t)
+	auth := filepath.Join(paths.Root, "codex", "auth.json")
+	generated := filepath.Join(paths.Root, "codex", "state.sqlite")
+	if err := os.WriteFile(auth, []byte("opaque-fixture"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(generated, []byte("generated-state"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	receipt, err := captureCodexCleanupReceipt(home, "primary")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = os.Rename(generated, generated+".original"); err != nil {
+		t.Fatal(err)
+	}
+	if err = os.WriteFile(generated, []byte("replacement"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err = cleanupNamed(home, []string{"primary"}, nil, map[string]codexCleanupReceipt{"primary": receipt}); err == nil {
+		t.Fatal("changed generated Codex state was accepted")
+	}
+	for path, want := range map[string]string{auth: "opaque-fixture", generated: "replacement", generated + ".original": "generated-state"} {
+		if body, readErr := os.ReadFile(path); readErr != nil || string(body) != want {
+			t.Fatalf("changed generated state was not preserved at %s: %q %v", path, body, readErr)
 		}
 	}
 }
@@ -138,7 +193,7 @@ func TestCleanupNamedRefusesUnsafeDisposableAuthAndUnexpectedEntries(t *testing.
 		t.Run(name, func(t *testing.T) {
 			home, paths := managedNamedFixture(t)
 			preserved := arrange(t, paths)
-			if err := cleanupNamed(home, []string{"primary"}, nil); err == nil {
+			if err := cleanupNamed(home, []string{"primary"}, nil, nil); err == nil {
 				t.Fatal("unsafe disposable credential state was removed")
 			}
 			if _, err := os.Lstat(paths.Root); err != nil {
@@ -178,7 +233,7 @@ func TestCleanupNamedPreservesAuthReplacementRace(t *testing.T) {
 		}
 	}
 	defer func() { cleanupMutationHook = previousHook }()
-	if err := cleanupNamed(home, []string{"primary"}, nil); err == nil {
+	if err := cleanupNamed(home, []string{"primary"}, nil, nil); err == nil {
 		t.Fatal("replacement race was accepted")
 	}
 	for path, want := range map[string]string{auth: "foreign-replacement", original: "verified-original"} {
@@ -216,7 +271,7 @@ func TestCleanupNamedPreservesCodexDirectoryReplacementRace(t *testing.T) {
 		}
 	}
 	defer func() { cleanupMutationHook = previousHook }()
-	if err := cleanupNamed(home, []string{"primary"}, nil); err == nil {
+	if err := cleanupNamed(home, []string{"primary"}, nil, nil); err == nil {
 		t.Fatal("directory replacement race was accepted")
 	}
 	for path, want := range map[string]string{
@@ -254,7 +309,7 @@ func TestCleanupNamedPreservesCodexDirectoryReplacementAfterQuarantine(t *testin
 		}
 	}
 	defer func() { cleanupMutationHook = previousHook }()
-	if err := cleanupNamed(home, []string{"primary"}, nil); err == nil {
+	if err := cleanupNamed(home, []string{"primary"}, nil, nil); err == nil {
 		t.Fatal("post-quarantine directory replacement race was accepted")
 	}
 	for path, want := range map[string]string{
@@ -308,7 +363,7 @@ func TestCleanupNamedPreservesFinalPathReplacementAfterNeutralization(t *testing
 		}
 	}
 	defer func() { cleanupMutationHook = previousHook }()
-	if err := cleanupNamed(home, []string{"primary"}, nil); err == nil {
+	if err := cleanupNamed(home, []string{"primary"}, nil, nil); err == nil {
 		t.Fatal("final path replacement was accepted")
 	}
 	if body, err := os.ReadFile(quarantine); err != nil || string(body) != "foreign-replacement" {
@@ -342,11 +397,11 @@ func TestCleanupNamedRecoversInterruptedAuthQuarantines(t *testing.T) {
 						t.Fatal("cleanup did not reach interruption hook")
 					}
 				}()
-				_ = cleanupNamed(home, []string{"primary"}, nil)
+				_ = cleanupNamed(home, []string{"primary"}, nil, nil)
 			}()
 			cleanupMutationHook = nil
 			defer func() { cleanupMutationHook = previousHook }()
-			if err := cleanupNamed(home, []string{"primary"}, nil); err != nil {
+			if err := cleanupNamed(home, []string{"primary"}, nil, nil); err != nil {
 				t.Fatalf("retry did not recover %s: %v", phase, err)
 			}
 			if _, err := os.Lstat(paths.Root); !errors.Is(err, os.ErrNotExist) {
@@ -374,7 +429,7 @@ func TestCleanupNamedPreservesRootDestinationCollisionAfterCodexQuarantine(t *te
 		}
 	}
 	defer func() { cleanupMutationHook = previousHook }()
-	if err := cleanupNamed(home, []string{"primary"}, nil); err == nil {
+	if err := cleanupNamed(home, []string{"primary"}, nil, nil); err == nil {
 		t.Fatal("root destination collision was accepted")
 	}
 	for path, want := range map[string]string{
@@ -419,7 +474,7 @@ func TestCleanupNamedRefusesRequiredProjectionDisappearanceBeforeMutation(t *tes
 				}
 			}
 			defer func() { cleanupMutationHook = previousHook }()
-			if err := cleanupNamed(home, []string{"primary"}, nil); err == nil {
+			if err := cleanupNamed(home, []string{"primary"}, nil, nil); err == nil {
 				t.Fatal("required projection disappearance was accepted")
 			}
 			preserved := false
@@ -465,7 +520,7 @@ func TestCleanupNamedRequiresExactEntrySetsAfterManifestVerification(t *testing.
 				}
 			}
 			defer func() { cleanupMutationHook = previousHook }()
-			if err := cleanupNamed(home, []string{"primary"}, nil); err == nil {
+			if err := cleanupNamed(home, []string{"primary"}, nil, nil); err == nil {
 				t.Fatal("incomplete descriptor entry set was accepted")
 			}
 			if body, err := os.ReadFile(auth); err != nil || string(body) != "verified-original" {
@@ -495,7 +550,7 @@ func TestCleanupNamedPreservesAmbiguousQuarantineCollisions(t *testing.T) {
 			if err := os.WriteFile(collision, []byte("foreign-collision"), 0o600); err != nil {
 				t.Fatal(err)
 			}
-			if err := cleanupNamed(home, []string{"primary"}, nil); err == nil {
+			if err := cleanupNamed(home, []string{"primary"}, nil, nil); err == nil {
 				t.Fatal("ambiguous quarantine collision was accepted")
 			}
 			for path, want := range map[string]string{auth: "verified-original", collision: "foreign-collision"} {
@@ -572,7 +627,7 @@ func TestCleanupNamedCoversEveryPostCreatePhase(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			if err := cleanupNamed(home, []string{"primary", "secondary"}, leaves); err != nil {
+			if err := cleanupNamed(home, []string{"primary", "secondary"}, leaves, nil); err != nil {
 				t.Fatal(err)
 			}
 			for _, path := range []string{filepath.Join(home, ".my-friday", "assistants", "primary"), filepath.Join(home, ".my-friday", "assistants", "secondary"), filepath.Join(home, ".local", "bin", "primary"), filepath.Join(home, ".local", "bin", "secondary"), filepath.Join(home, ".local", "bin", "mfac-collision"), filepath.Join(home, ".local", "bin", "mfac-sibling")} {
@@ -593,7 +648,7 @@ func TestCleanupNamedRefusesReceiptOutsideAcceptanceLauncherScope(t *testing.T) 
 	if err := os.WriteFile(foreign, []byte("preserve"), 0o700); err != nil {
 		t.Fatal(err)
 	}
-	if err := cleanupNamed(home, nil, []exactLeaf{exactLeafForTest(t, foreign)}); err == nil {
+	if err := cleanupNamed(home, nil, []exactLeaf{exactLeafForTest(t, foreign)}, nil); err == nil {
 		t.Fatal("out-of-scope receipt accepted")
 	}
 	if body, err := os.ReadFile(foreign); err != nil || string(body) != "preserve" {
@@ -636,7 +691,7 @@ func TestCleanupNamedPreservesDriftedLeafButRemovesInstanceAndCredential(t *test
 	if err = os.WriteFile(leaf, []byte("drifted-preserve"), 0o700); err != nil {
 		t.Fatal(err)
 	}
-	if err = cleanupNamed(home, []string{"primary"}, []exactLeaf{receipt, exactReceipt}); err == nil {
+	if err = cleanupNamed(home, []string{"primary"}, []exactLeaf{receipt, exactReceipt}, nil); err == nil {
 		t.Fatal("drifted leaf was not reported")
 	}
 	for _, path := range []string{filepath.Join(home, ".my-friday", "assistants", "primary"), filepath.Join(home, ".local", "bin", "primary"), auth} {
