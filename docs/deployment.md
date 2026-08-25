@@ -120,10 +120,14 @@ same file-backed OAuth credential is deliberately not routed through
 
 Failure cleanup removes the disposable credential before invoking ordinary
 manifest-gated instance removal. This acceptance-only authority is limited to
-the exact verified instance root's `codex/auth.json`: a no-follow opened regular
-file with matching entry identity, current-user ownership, mode `0600`, and one
-link. Any alternate or unexpected Codex-home entry is preserved and makes the
-cleanup result fail closed; production `assistant remove` is unchanged.
+the exact verified instance root's `codex/auth.json`: one no-follow opened Codex
+directory is held through verification and mutation, and the credential is
+atomically moved with a no-replace rename before its moved identity is compared
+with the already-opened regular file. The directory pathname is re-proved before
+deletion; a replacement is restored and reported rather than deleted. Current-
+user ownership, mode `0600`, and one link are required. Any alternate or
+unexpected Codex-home entry is preserved and makes cleanup fail closed;
+production `assistant remove` is unchanged.
 
 The command requires
 ordinary-user Apple silicon macOS, APFS, GitHub comment authority, Codex, Go,

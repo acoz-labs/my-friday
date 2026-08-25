@@ -147,6 +147,78 @@ func TestDisposableAuthOwnershipPredicateRejectsWrongOwner(t *testing.T) {
 	}
 }
 
+func TestCleanupNamedPreservesAuthReplacementRace(t *testing.T) {
+	home, paths := managedNamedFixture(t)
+	auth := filepath.Join(paths.Root, "codex", "auth.json")
+	original := filepath.Join(paths.Root, "original-auth")
+	if err := os.WriteFile(auth, []byte("verified-original"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	previousHook := cleanupMutationHook
+	cleanupMutationHook = func(phase string) {
+		if phase != "auth-before-quarantine" {
+			return
+		}
+		cleanupMutationHook = nil
+		if err := os.Rename(auth, original); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(auth, []byte("foreign-replacement"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	defer func() { cleanupMutationHook = previousHook }()
+	if err := cleanupNamed(home, []string{"primary"}, nil); err == nil {
+		t.Fatal("replacement race was accepted")
+	}
+	for path, want := range map[string]string{auth: "foreign-replacement", original: "verified-original"} {
+		if body, err := os.ReadFile(path); err != nil || string(body) != want {
+			t.Fatalf("race entry changed at %s: %q %v", path, body, err)
+		}
+	}
+	if _, err := os.Lstat(paths.Root); err != nil {
+		t.Fatalf("instance root changed: %v", err)
+	}
+}
+
+func TestCleanupNamedPreservesCodexDirectoryReplacementRace(t *testing.T) {
+	home, paths := managedNamedFixture(t)
+	codexRoot := filepath.Join(paths.Root, "codex")
+	auth := filepath.Join(codexRoot, "auth.json")
+	originalCodex := filepath.Join(paths.Root, "codex-original")
+	if err := os.WriteFile(auth, []byte("verified-original"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	previousHook := cleanupMutationHook
+	cleanupMutationHook = func(phase string) {
+		if phase != "auth-before-quarantine" {
+			return
+		}
+		cleanupMutationHook = nil
+		if err := os.Rename(codexRoot, originalCodex); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Mkdir(codexRoot, 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(codexRoot, "auth.json"), []byte("foreign-directory-auth"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	defer func() { cleanupMutationHook = previousHook }()
+	if err := cleanupNamed(home, []string{"primary"}, nil); err == nil {
+		t.Fatal("directory replacement race was accepted")
+	}
+	for path, want := range map[string]string{
+		filepath.Join(codexRoot, "auth.json"):     "foreign-directory-auth",
+		filepath.Join(originalCodex, "auth.json"): "verified-original",
+	} {
+		if body, err := os.ReadFile(path); err != nil || string(body) != want {
+			t.Fatalf("directory race entry changed at %s: %q %v", path, body, err)
+		}
+	}
+}
+
 func exactLeafForTest(t *testing.T, path string) exactLeaf {
 	t.Helper()
 	info, err := os.Lstat(path)

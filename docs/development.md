@@ -42,10 +42,15 @@ including copied credentials and launcher-absent recovery, while proving the
 ambient auth source remains unchanged.
 Before production removal, the acceptance-only named cleanup proves the
 manifest-owned instance, permits only the exact private `codex/auth.json`
-addition, and no-follow unlinks it only when its opened and directory-entry
-identity agree and it is a current-user-owned, mode-`0600`, single-link regular
-file. Symlinks, hardlinks, wrong metadata, alternate credential paths, and
-unrelated private Codex entries are preserved and reported.
+addition, and holds one no-follow Codex-directory descriptor through validation
+and mutation. It atomically moves `auth.json` to a no-replace same-directory
+quarantine name, proves that moved entry is the already-opened file, re-proves
+the directory pathname identity, and only then unlinks it. A replacement is
+atomically restored rather than deleted. The file must also be a
+current-user-owned, mode-`0600`, single-link regular file. Deterministic file-
+and directory-replacement races, symlinks, hardlinks, wrong metadata, alternate
+credential paths, and unrelated private Codex entries are preserved and
+reported.
 They also prove a drifted collision/sibling receipt is reported and preserved
 without blocking manifest-proven instance and copied-credential cleanup, while
 an out-of-scope receipt remains a fail-closed pre-mutation error.
