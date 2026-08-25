@@ -22,7 +22,19 @@ import (
 	"github.com/acoz-labs/my-friday/internal/repository"
 )
 
-const ContractVersion = 1
+const ContractVersion = 2
+
+const builderSkill = `---
+name: capability-builder
+description: Help define, scaffold, inspect, validate, and test a My Friday instruction-only capability through its versioned source workflow.
+---
+
+# Capability builder
+
+Clarify purpose, explicit triggers, non-triggers, inputs, outputs, examples, and failure behavior. Edit only runtime source under skills/<slug>/ and its deterministic tests. Show the complete Git diff and unresolved judgments before suggesting activation.
+
+You may run capability inspect, validate, and test. Never run install, upgrade, enable, disable, remove, or recover, and never enter a confirmation token. The user must review the CLI plan and authorize mutation independently. Instruction-only validation is structural and does not certify that natural-language instructions are benign.
+`
 
 var namePattern = regexp.MustCompile(`^[a-z0-9](?:[a-z0-9-]{0,30}[a-z0-9])?$`)
 var reserved = map[string]bool{"codex": true, "my-friday": true, "default": true, "current": true, "new": true}
@@ -41,6 +53,9 @@ type Manifest struct {
 	CodexInstructions       string   `json:"codex_instructions,omitempty"`
 	CodexInstructionsSHA256 string   `json:"codex_instructions_sha256,omitempty"`
 	AssistantID             string   `json:"assistant_id,omitempty"`
+	CapabilityBuilder       string   `json:"capability_builder"`
+	CapabilityBuilderSHA256 string   `json:"capability_builder_sha256"`
+	CapabilityPolicySHA256  string   `json:"capability_policy_sha256"`
 }
 
 type Paths struct {
@@ -433,13 +448,13 @@ func createLocked(plan Plan, executable, codex string, afterVerify func() error)
 	defer func() {
 		resultErr = finishTransaction(lock, resultErr)
 	}()
-	for _, child := range []string{"codex", "runtime", "memory", "workspace", "dependencies"} {
+	for _, child := range []string{"capabilities", "codex", "runtime", "memory", "workspace", "dependencies"} {
 		if err = os.Mkdir(filepath.Join(stage, child), 0700); err != nil {
 			clean()
 			return err
 		}
 	}
-	owned := []string{"codex", "dependencies", "memory", "runtime", "workspace"}
+	owned := []string{"capabilities", "codex", "dependencies", "memory", "runtime", "workspace"}
 	sort.Strings(owned)
 	managedCodex := filepath.Join(p.Root, "dependencies", "codex")
 	managedConfig := filepath.Join(p.Root, "codex", "config.toml")
@@ -475,7 +490,21 @@ func createLocked(plan Plan, executable, codex string, afterVerify func() error)
 			return err
 		}
 	}
-	m := Manifest{ContractVersion: ContractVersion, Name: p.Name, Root: p.Root, Owned: owned, Launcher: p.Launcher, LauncherSHA256: digest(launcher), CodexExecutable: managedCodex, CodexSHA256: digest(codexBytes), CodexConfig: managedConfig, CodexConfigSHA256: digest(configBytes), CodexInstructions: managedInstructions, AssistantID: plan.AssistantID}
+	builder := filepath.Join(stage, "workspace", ".agents", "skills", "capability-builder")
+	if err = os.MkdirAll(filepath.Join(builder, "agents"), 0700); err != nil {
+		clean()
+		return err
+	}
+	if err = os.WriteFile(filepath.Join(builder, "SKILL.md"), []byte(builderSkill), 0600); err != nil {
+		clean()
+		return err
+	}
+	builderPolicy := []byte("policy:\n  allow_implicit_invocation: true\n")
+	if err = os.WriteFile(filepath.Join(builder, "agents", "openai.yaml"), builderPolicy, 0600); err != nil {
+		clean()
+		return err
+	}
+	m := Manifest{ContractVersion: ContractVersion, Name: p.Name, Root: p.Root, Owned: owned, Launcher: p.Launcher, LauncherSHA256: digest(launcher), CodexExecutable: managedCodex, CodexSHA256: digest(codexBytes), CodexConfig: managedConfig, CodexConfigSHA256: digest(configBytes), CodexInstructions: managedInstructions, AssistantID: plan.AssistantID, CapabilityBuilder: filepath.Join(p.Root, "workspace", ".agents", "skills", "capability-builder"), CapabilityBuilderSHA256: digest([]byte(builderSkill)), CapabilityPolicySHA256: digest(builderPolicy)}
 	if managedInstructions != "" {
 		m.CodexInstructionsSHA256 = digest(instructionsBytes)
 	}
@@ -543,7 +572,10 @@ func readManifest(p Paths) (Manifest, error) {
 	if err = json.Unmarshal(b, &m); err != nil {
 		return m, err
 	}
-	want := []string{"codex", "dependencies", "memory", "runtime", "workspace"}
+	want := []string{"capabilities", "codex", "dependencies", "memory", "runtime", "workspace"}
+	if m.ContractVersion == 1 {
+		want = []string{"codex", "dependencies", "memory", "runtime", "workspace"}
+	}
 	wantCodex := filepath.Join(p.Root, "dependencies", "codex")
 	wantConfig := filepath.Join(p.Root, "codex", "config.toml")
 	wantInstructions := ""
@@ -555,7 +587,12 @@ func readManifest(p Paths) (Manifest, error) {
 	if wantInstructions != "" {
 		validInstructionsDigest = validDigest(m.CodexInstructionsSHA256)
 	}
-	if configErr != nil || m.ContractVersion != ContractVersion || m.Name != p.Name || m.Root != p.Root || m.Launcher != p.Launcher || m.CodexExecutable != wantCodex || !validDigest(m.CodexSHA256) || m.CodexConfig != wantConfig || m.CodexConfigSHA256 != digest(configBytes) || m.CodexInstructions != wantInstructions || !validInstructionsDigest || strings.Join(m.Owned, "\x00") != strings.Join(want, "\x00") {
+	wantBuilder := filepath.Join(p.Root, "workspace", ".agents", "skills", "capability-builder")
+	validBuilder := m.ContractVersion == 1 && m.CapabilityBuilder == "" && m.CapabilityBuilderSHA256 == "" && m.CapabilityPolicySHA256 == ""
+	if m.ContractVersion == ContractVersion {
+		validBuilder = m.CapabilityBuilder == wantBuilder && m.CapabilityBuilderSHA256 == digest([]byte(builderSkill)) && m.CapabilityPolicySHA256 == digest([]byte("policy:\n  allow_implicit_invocation: true\n"))
+	}
+	if configErr != nil || (m.ContractVersion != 1 && m.ContractVersion != ContractVersion) || m.Name != p.Name || m.Root != p.Root || m.Launcher != p.Launcher || m.CodexExecutable != wantCodex || !validDigest(m.CodexSHA256) || m.CodexConfig != wantConfig || m.CodexConfigSHA256 != digest(configBytes) || m.CodexInstructions != wantInstructions || !validInstructionsDigest || !validBuilder || strings.Join(m.Owned, "\x00") != strings.Join(want, "\x00") {
 		return m, errors.New("manifest ownership contract mismatch")
 	}
 	return m, nil
@@ -594,7 +631,113 @@ func verifyManagedInstructions(p Paths, m Manifest) error {
 	return nil
 }
 
+func verifyCapabilityBuilder(m Manifest) error {
+	skill, info, err := regular(filepath.Join(m.CapabilityBuilder, "SKILL.md"))
+	if err != nil || info.Mode().Perm() != 0600 || digest(skill) != m.CapabilityBuilderSHA256 || !bytes.Equal(skill, []byte(builderSkill)) {
+		return errors.New("capability builder drift")
+	}
+	policy, info, err := regular(filepath.Join(m.CapabilityBuilder, "agents", "openai.yaml"))
+	if err != nil || info.Mode().Perm() != 0600 || digest(policy) != m.CapabilityPolicySHA256 || !bytes.Equal(policy, []byte("policy:\n  allow_implicit_invocation: true\n")) {
+		return errors.New("capability builder policy drift")
+	}
+	return nil
+}
+
 func Verify(home, name string) (Manifest, error) { return verify(home, name) }
+
+func PlanUpgrade(home, name string) (Plan, error) {
+	p, err := Derive(home, name)
+	if err != nil {
+		return Plan{}, err
+	}
+	m, err := Verify(home, name)
+	if err != nil {
+		return Plan{}, fmt.Errorf("upgrade refused: %w", err)
+	}
+	if m.ContractVersion == ContractVersion {
+		return Plan{}, errors.New("assistant already uses capability contract v2")
+	}
+	info, err := os.Lstat(p.Root)
+	if err != nil {
+		return Plan{}, err
+	}
+	st := info.Sys().(*syscall.Stat_t)
+	return Plan{Action: "upgrade", Paths: p, Items: []string{"add manifest-owned capability control root", "project the embedded capability builder into this instance workspace", "leave external runtime source, global skills, Codex credentials, and other instances unchanged"}, rootDevice: uint64(st.Dev), rootInode: uint64(st.Ino)}, nil
+}
+
+func Upgrade(plan Plan) error {
+	if plan.Action != "upgrade" {
+		return errors.New("invalid assistant upgrade plan")
+	}
+	expected := rootProof{Device: plan.rootDevice, Inode: plan.rootInode}
+	lock, err := acquireTransactionLock(plan.Paths.Root, &expected)
+	if err != nil {
+		return err
+	}
+	return finishTransaction(lock, upgradeLocked(plan))
+}
+
+func upgradeLocked(plan Plan) error {
+	m, err := verify(plan.Paths.Home, plan.Paths.Name)
+	if err != nil {
+		return fmt.Errorf("upgrade refused: %w", err)
+	}
+	if m.ContractVersion != 1 {
+		return errors.New("assistant upgrade requires contract v1")
+	}
+	capabilities := filepath.Join(plan.Paths.Root, "capabilities")
+	if err = os.Mkdir(capabilities, 0o700); err != nil {
+		return fmt.Errorf("capability control collision: %w", err)
+	}
+	builder := filepath.Join(plan.Paths.Root, "workspace", ".agents", "skills", "capability-builder")
+	if _, statErr := os.Lstat(builder); !errors.Is(statErr, os.ErrNotExist) {
+		_ = os.Remove(capabilities)
+		return errors.New("capability builder collision")
+	}
+	if err = os.MkdirAll(filepath.Join(builder, "agents"), 0o700); err != nil {
+		_ = os.Remove(capabilities)
+		return err
+	}
+	rollback := func() {
+		_ = os.RemoveAll(filepath.Join(plan.Paths.Root, "workspace", ".agents"))
+		_ = os.Remove(capabilities)
+	}
+	policy := []byte("policy:\n  allow_implicit_invocation: true\n")
+	if err = os.WriteFile(filepath.Join(builder, "SKILL.md"), []byte(builderSkill), 0o600); err != nil {
+		rollback()
+		return err
+	}
+	if err = os.WriteFile(filepath.Join(builder, "agents", "openai.yaml"), policy, 0o600); err != nil {
+		rollback()
+		return err
+	}
+	m.ContractVersion = ContractVersion
+	m.Owned = append(m.Owned, "capabilities")
+	sort.Strings(m.Owned)
+	m.CapabilityBuilder = builder
+	m.CapabilityBuilderSHA256 = digest([]byte(builderSkill))
+	m.CapabilityPolicySHA256 = digest(policy)
+	body, err := json.MarshalIndent(m, "", "  ")
+	if err != nil {
+		rollback()
+		return err
+	}
+	body = append(body, '\n')
+	tmp := filepath.Join(plan.Paths.Root, "manifest.json.upgrade")
+	if err = os.WriteFile(tmp, body, 0o600); err != nil {
+		rollback()
+		return err
+	}
+	if err = os.Rename(tmp, filepath.Join(plan.Paths.Root, "manifest.json")); err != nil {
+		_ = os.Remove(tmp)
+		rollback()
+		return err
+	}
+	if _, err = verify(plan.Paths.Home, plan.Paths.Name); err != nil {
+		return fmt.Errorf("assistant upgrade recovery required: %w", err)
+	}
+	return nil
+}
 
 func verify(home, name string) (Manifest, error) {
 	p, err := Derive(home, name)
@@ -632,6 +775,11 @@ func verify(home, name string) (Manifest, error) {
 	}
 	if err = verifyManagedInstructions(p, m); err != nil {
 		return m, err
+	}
+	if m.ContractVersion == ContractVersion {
+		if err = verifyCapabilityBuilder(m); err != nil {
+			return m, err
+		}
 	}
 	return m, nil
 }
@@ -776,6 +924,11 @@ func recoverableManifest(p Paths) (Manifest, error) {
 	}
 	if err = verifyManagedInstructions(p, m); err != nil {
 		return m, fmt.Errorf("recovery refused: %w", err)
+	}
+	if m.ContractVersion == ContractVersion {
+		if err = verifyCapabilityBuilder(m); err != nil {
+			return m, fmt.Errorf("recovery refused: %w", err)
+		}
 	}
 	if _, launcherErr := os.Lstat(p.Launcher); launcherErr == nil {
 		return m, errors.New("recovery refused: launcher exists but the instance is not healthy")

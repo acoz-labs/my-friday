@@ -3,6 +3,7 @@ package repository
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/fs"
 	"os"
@@ -100,6 +101,54 @@ func ValidateRuntime(runtime string) (string, error) {
 	return validate(runtime, "runtime", false)
 }
 
+// InitializeCapabilities migrates a validated v1 runtime source to the strict
+// instruction-only source contract. It never touches installed instances.
+func InitializeCapabilities(runtime string) error {
+	if _, err := ValidateRuntime(runtime); err != nil {
+		return err
+	}
+	contractPath := filepath.Join(runtime, ".my-friday", "capability-contract.json")
+	schemaPath := filepath.Join(runtime, ".my-friday", "schemas", "capability-contract.v1.schema.json")
+	if _, err := os.Lstat(contractPath); err == nil {
+		return errors.New("runtime capability source already initialized")
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	if _, err := os.Lstat(schemaPath); err == nil {
+		return errors.New("runtime capability schema collision")
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	contractTmp := contractPath + ".new"
+	schemaTmp := schemaPath + ".new"
+	cleanup := func() { _ = os.Remove(contractTmp); _ = os.Remove(schemaTmp) }
+	if err := os.WriteFile(schemaTmp, []byte(plan.CapabilityContractSchema()), 0o600); err != nil {
+		return err
+	}
+	if err := os.WriteFile(contractTmp, []byte(plan.CapabilityContract()), 0o600); err != nil {
+		cleanup()
+		return err
+	}
+	if err := os.Rename(schemaTmp, schemaPath); err != nil {
+		cleanup()
+		return err
+	}
+	if err := os.Rename(contractTmp, contractPath); err != nil {
+		_ = os.Remove(schemaPath)
+		cleanup()
+		return err
+	}
+	if err := os.Remove(filepath.Join(runtime, "skills", ".gitkeep")); err != nil && !errors.Is(err, os.ErrNotExist) {
+		_ = os.Remove(contractPath)
+		_ = os.Remove(schemaPath)
+		return err
+	}
+	if _, err := ValidateRuntime(runtime); err != nil {
+		return fmt.Errorf("runtime capability initialization recovery required: %w", err)
+	}
+	return nil
+}
+
 func ValidateFreshPair(runtime, memory string) error {
 	_, _, err := validatePair(runtime, memory, true, true)
 	return err
@@ -182,6 +231,17 @@ func validate(root, role string, allowMarker bool) (string, error) {
 	}
 	if role == "runtime" {
 		allowed["schemas/assistant-profile.v1.schema.json"] = true
+		contractPath := filepath.Join(root, ".my-friday/capability-contract.json")
+		schemaPath := filepath.Join(root, ".my-friday/schemas/capability-contract.v1.schema.json")
+		contract, contractErr := os.ReadFile(contractPath)
+		schema, schemaErr := os.ReadFile(schemaPath)
+		if contractErr == nil || schemaErr == nil {
+			if contractErr != nil || schemaErr != nil || !bytes.Equal(contract, []byte(plan.CapabilityContract())) || !bytes.Equal(schema, []byte(plan.CapabilityContractSchema())) {
+				return "", errors.New("runtime capability contract differs from embedded contract")
+			}
+			allowed["capability-contract.json"] = true
+			allowed["schemas/capability-contract.v1.schema.json"] = true
+		}
 	}
 	if err = filepath.WalkDir(filepath.Join(root, ".my-friday"), func(path string, entry fs.DirEntry, walkErr error) error {
 		if walkErr != nil {

@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/acoz-labs/my-friday/internal/assistantinstance"
+	"github.com/acoz-labs/my-friday/internal/capability"
 	"github.com/acoz-labs/my-friday/internal/codexhome"
 	"github.com/acoz-labs/my-friday/internal/repository"
 	"github.com/acoz-labs/my-friday/internal/terminal"
@@ -129,6 +130,8 @@ func run() error {
 		return runCodex()
 	case "assistant":
 		return runAssistant()
+	case "capability":
+		return runCapability()
 	case "version":
 		if len(os.Args) != 2 {
 			return fmt.Errorf("usage: my-friday version")
@@ -138,6 +141,122 @@ func run() error {
 	default:
 		return fmt.Errorf("unknown command %q", os.Args[1])
 	}
+}
+
+func runCapability() error {
+	if len(os.Args) < 3 {
+		return fmt.Errorf("usage: my-friday capability <inspect|validate|test|verify|install|upgrade|enable|disable|remove> NAME SLUG")
+	}
+	if os.Args[2] == "initialize" {
+		if len(os.Args) != 5 || os.Args[3] != "--runtime" {
+			return fmt.Errorf("usage: my-friday capability initialize --runtime PATH")
+		}
+		if _, err := repository.ValidateRuntime(os.Args[4]); err != nil {
+			return err
+		}
+		info, err := os.Stdin.Stat()
+		if err != nil {
+			return err
+		}
+		if info.Mode()&os.ModeCharDevice == 0 {
+			return errors.New("runtime capability initialization requires an interactive TTY")
+		}
+		fmt.Fprintf(os.Stdout, "Action: initialize\nRuntime: %s\n- add the fixed instruction-only capability source contract\n- remove only the reserved skills/.gitkeep placeholder\n- do not mutate any installed assistant\nType Initialize to continue: ", os.Args[4])
+		ok, err := readConfirmation(os.Stdin, "Initialize")
+		if err != nil {
+			return err
+		}
+		if !ok {
+			fmt.Fprintln(os.Stdout, "No changes made")
+			return nil
+		}
+		if err = repository.InitializeCapabilities(os.Args[4]); err != nil {
+			return err
+		}
+		fmt.Fprintln(os.Stdout, "Runtime capability source initialized")
+		return nil
+	}
+	if len(os.Args) < 5 || len(os.Args) > 6 {
+		return fmt.Errorf("usage: my-friday capability <inspect|validate|test|verify|install|upgrade|enable|disable|remove> NAME SLUG [--plain]")
+	}
+	home, err := realHome()
+	if err != nil {
+		return err
+	}
+	paths, err := assistantinstance.Derive(home, os.Args[3])
+	if err != nil {
+		return err
+	}
+	if _, err = assistantinstance.Verify(home, os.Args[3]); err != nil {
+		return err
+	}
+	source := filepath.Join(paths.Root, "runtime", "skills", os.Args[4])
+	action := os.Args[2]
+	switch action {
+	case "inspect":
+		status, err := capability.Inspect(paths.Root, source)
+		if err != nil && status.State != capability.StateDraftInvalid {
+			return err
+		}
+		fmt.Fprintf(os.Stdout, "Capability: %s\nState: %s\nSource: %s\nProjection: %s\n", os.Args[4], status.State, source, filepath.Join(paths.Root, "workspace", ".agents", "skills", os.Args[4]))
+		if status.Package != nil {
+			fmt.Fprintf(os.Stdout, "Version: %s\nSource digest: %s\nProjection digest: %s\nProfile: instruction-only\nImplicit invocation: disabled\n", status.Package.Manifest.Version, status.Package.SourceDigest, status.Package.ProjectionDigest)
+		}
+		return err
+	case "validate", "test":
+		pkg, err := capability.Validate(source)
+		if err != nil {
+			return err
+		}
+		if action == "test" {
+			fmt.Fprintf(os.Stdout, "Capability %s deterministic tests passed (%d positive, %d non-trigger, %d examples); no model or network was run\n", pkg.Manifest.Slug, len(pkg.Cases.PositiveTriggers), len(pkg.Cases.NonTriggers), len(pkg.Cases.Examples))
+		} else {
+			fmt.Fprintf(os.Stdout, "Capability %s valid at source digest %s\n", pkg.Manifest.Slug, pkg.SourceDigest)
+		}
+		return nil
+	case "verify":
+		status, err := capability.Inspect(paths.Root, source)
+		if err != nil {
+			return err
+		}
+		if status.State != capability.StateInstalledHealthy && status.State != capability.StateDisabled {
+			return fmt.Errorf("capability unhealthy: %s", status.State)
+		}
+		fmt.Fprintf(os.Stdout, "Capability %s: %s; lifecycle changes apply to a fresh Codex task\n", os.Args[4], status.State)
+		return nil
+	}
+	actions := map[string]capability.Action{"install": capability.ActionInstall, "upgrade": capability.ActionUpgrade, "enable": capability.ActionEnable, "disable": capability.ActionDisable, "remove": capability.ActionRemove}
+	requested, ok := actions[action]
+	if !ok {
+		return fmt.Errorf("unsupported capability action %q", action)
+	}
+	pl, err := capability.Plan(paths.Root, source, requested)
+	if err != nil {
+		return err
+	}
+	info, err := os.Stdin.Stat()
+	if err != nil {
+		return err
+	}
+	if info.Mode()&os.ModeCharDevice == 0 {
+		return errors.New("capability mutation requires an interactive TTY")
+	}
+	fmt.Fprint(os.Stdout, pl.String())
+	token := strings.ToUpper(action[:1]) + action[1:]
+	fmt.Fprintf(os.Stdout, "Type %s to continue: ", token)
+	confirmed, err := readConfirmation(os.Stdin, token)
+	if err != nil {
+		return err
+	}
+	if !confirmed {
+		fmt.Fprintln(os.Stdout, "No changes made")
+		return nil
+	}
+	if err = capability.Execute(pl); err != nil {
+		return err
+	}
+	fmt.Fprintf(os.Stdout, "Capability %s %sd; start a fresh Codex task for lifecycle changes\n", os.Args[4], action)
+	return nil
 }
 
 func realHome() (string, error) {
@@ -170,6 +289,36 @@ func runAssistant() error {
 			return err
 		}
 		fmt.Fprintf(os.Stdout, "Assistant %s healthy\nRoot: %s\nLauncher: %s\n", name, m.Root, m.Launcher)
+		return nil
+	case "upgrade":
+		if len(os.Args) != 4 {
+			return fmt.Errorf("usage: my-friday assistant upgrade NAME")
+		}
+		p, err := assistantinstance.PlanUpgrade(home, name)
+		if err != nil {
+			return err
+		}
+		info, err := os.Stdin.Stat()
+		if err != nil {
+			return err
+		}
+		if info.Mode()&os.ModeCharDevice == 0 {
+			return errors.New("assistant upgrade requires an interactive TTY")
+		}
+		fmt.Fprint(os.Stdout, p.String())
+		fmt.Fprint(os.Stdout, "Type Upgrade to continue: ")
+		ok, err := readConfirmation(os.Stdin, "Upgrade")
+		if err != nil {
+			return err
+		}
+		if !ok {
+			fmt.Fprintln(os.Stdout, "No changes made")
+			return nil
+		}
+		if err = assistantinstance.Upgrade(p); err != nil {
+			return err
+		}
+		fmt.Fprintf(os.Stdout, "Assistant %s upgraded to capability contract v2\n", name)
 		return nil
 	case "create":
 		if len(os.Args) != 8 || os.Args[4] != "--runtime" || os.Args[6] != "--memory" {

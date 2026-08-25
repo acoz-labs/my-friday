@@ -73,6 +73,28 @@ Return; surrounding whitespace and unterminated input are refused. My Friday own
 configuration, authentication, sessions, logs, skills, packages, or project
 configuration. See [the installed-baseline contract](docs/architecture/installed-codex-baseline.md).
 
+## Instruction-only capabilities
+
+Each named assistant includes a private capability builder. It may edit and
+review versioned source under `runtime/skills/<slug>/`, but activation remains
+an independent CLI action:
+
+```sh
+my-friday capability inspect alfred daily-brief --plain
+my-friday capability validate alfred daily-brief
+my-friday capability test alfred daily-brief
+my-friday capability install alfred daily-brief
+my-friday capability verify alfred daily-brief
+my-friday capability disable alfred daily-brief
+my-friday capability enable alfred daily-brief
+my-friday capability remove alfred daily-brief
+```
+
+Mutations preview exact digests and paths, require an interactive terminal and
+case-sensitive action word, and affect only the selected instance. Source
+survives disable and remove. Lifecycle changes apply to a fresh Codex task.
+See [the capability workshop contract](docs/architecture/capability-workshop.md).
+
 The broader product direction and deferred outcomes remain in
 [docs/product.md](docs/product.md).
 

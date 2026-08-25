@@ -1,5 +1,15 @@
 # Runbook
 
+## Capability lifecycle diagnosis
+
+Start with `my-friday capability inspect NAME SLUG --plain`, then run
+`validate`, `test`, and `verify`. `source-changed` requires a fresh tested
+upgrade plan. Drift or collision is preserved; restore the receipt-bound
+projection or resolve a foreign collision only after identifying its owner.
+Disable retains a generation for enable. Remove clears only the selected
+instance projection and control state and leaves runtime source intact.
+Lifecycle changes require a fresh Codex task.
+
 ## Recover a named assistant instance
 
 Run `my-friday assistant verify <name>` first. If removal stopped after the

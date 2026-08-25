@@ -121,6 +121,65 @@ func TestCreateVerifyRemovePreservesSiblings(t *testing.T) {
 	}
 }
 
+func TestUpgradeV1InstanceProjectsManifestBoundBuilder(t *testing.T) {
+	home, exe, codex := fixture(t)
+	p, err := PlanCreate(home, "alfred", exe, codex)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = Create(p, exe, codex); err != nil {
+		t.Fatal(err)
+	}
+	manifestPath := filepath.Join(p.Paths.Root, "manifest.json")
+	body, err := os.ReadFile(manifestPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var m Manifest
+	if err = json.Unmarshal(body, &m); err != nil {
+		t.Fatal(err)
+	}
+	m.ContractVersion = 1
+	m.Owned = []string{"codex", "dependencies", "memory", "runtime", "workspace"}
+	m.CapabilityBuilder = ""
+	m.CapabilityBuilderSHA256 = ""
+	m.CapabilityPolicySHA256 = ""
+	body, _ = json.MarshalIndent(m, "", "  ")
+	body = append(body, '\n')
+	if err = os.WriteFile(manifestPath, body, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err = os.RemoveAll(filepath.Join(p.Paths.Root, "capabilities")); err != nil {
+		t.Fatal(err)
+	}
+	if err = os.RemoveAll(filepath.Join(p.Paths.Root, "workspace", ".agents")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = Verify(home, "alfred"); err != nil {
+		t.Fatalf("v1 compatibility: %v", err)
+	}
+	upgrade, err := PlanUpgrade(home, "alfred")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = Upgrade(upgrade); err != nil {
+		t.Fatal(err)
+	}
+	upgraded, err := Verify(home, "alfred")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if upgraded.ContractVersion != 2 || upgraded.CapabilityBuilderSHA256 == "" {
+		t.Fatalf("not upgraded: %#v", upgraded)
+	}
+	if err = os.WriteFile(filepath.Join(upgraded.CapabilityBuilder, "SKILL.md"), []byte("drift"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = Verify(home, "alfred"); err == nil || !strings.Contains(err.Error(), "builder drift") {
+		t.Fatalf("builder drift accepted: %v", err)
+	}
+}
+
 func TestForeignLauncherAndDriftFailClosed(t *testing.T) {
 	home, exe, codex := fixture(t)
 	foreign := filepath.Join(home, ".local", "bin", "alfred")
