@@ -21,7 +21,7 @@ func writePackage(t *testing.T, root, slug, version string) string {
 	}
 	manifest := `{"contract_version":1,"slug":"` + slug + `","version":"` + version + `","display_name":"Daily brief","summary":"Prepare a concise daily brief","profile":"instruction-only","codex_compatibility":"skills-v1","triggers":["prepare my daily brief"],"inputs":["topics"],"outputs":["brief"],"success_behavior":"Return a concise brief","failure_behavior":"Explain missing input","scripts":"none","dependencies":"none","network":"none","credentials":"none","background":"none","durable_data":"none","publishing":"none"}` + "\n"
 	skill := "---\nname: " + slug + "\ndescription: Prepare a concise daily brief when explicitly requested.\n---\n\n# Daily brief\n\nAsk for missing topics, then return a concise brief.\n"
-	cases := `{"contract_version":1,"positive_triggers":["prepare my daily brief"],"non_triggers":["hello"],"examples":[{"input":"prepare my daily brief","output_contains":["brief"]}],"required_facts":["explicit invocation only"],"forbidden_effects":["network","credentials","durable-data"]}` + "\n"
+	cases := `{"contract_version":1,"positive_triggers":["prepare my daily brief"],"non_triggers":["hello"],"examples":[{"input":"prepare my daily brief","output_contains":["brief"]}],"required_facts":["explicit invocation only"],"forbidden_effects":["scripts","dependencies","network","credentials","background","durable-data","publishing"]}` + "\n"
 	for name, body := range map[string]string{"capability.json": manifest, "skill/SKILL.md": skill, "tests/cases.json": cases} {
 		if err := os.WriteFile(filepath.Join(p, name), []byte(body), 0o600); err != nil {
 			t.Fatal(err)
@@ -42,6 +42,225 @@ func TestValidateStrictInstructionOnlyPackage(t *testing.T) {
 	if pkg.Projection["agents/openai.yaml"] == nil || !strings.Contains(string(pkg.Projection["agents/openai.yaml"]), "allow_implicit_invocation: false") {
 		t.Fatal("fixed explicit-invocation policy missing")
 	}
+}
+
+func TestDeterministicCasesRejectContradictionsAndEmptyDeclarations(t *testing.T) {
+	for _, tc := range []struct {
+		name, cases string
+	}{
+		{"empty trigger", `{"contract_version":1,"positive_triggers":[""],"non_triggers":["hello"],"examples":[{"input":"prepare my daily brief","output_contains":["brief"]}],"required_facts":["explicit invocation only"],"forbidden_effects":["scripts","dependencies","network","credentials","background","durable-data","publishing"]}`},
+		{"contradictory trigger", `{"contract_version":1,"positive_triggers":["prepare my daily brief"],"non_triggers":["prepare my daily brief"],"examples":[{"input":"prepare my daily brief","output_contains":["brief"]}],"required_facts":["explicit invocation only"],"forbidden_effects":["scripts","dependencies","network","credentials","background","durable-data","publishing"]}`},
+		{"unaligned trigger", `{"contract_version":1,"positive_triggers":["unrelated"],"non_triggers":["hello"],"examples":[{"input":"unrelated","output_contains":["brief"]}],"required_facts":["explicit invocation only"],"forbidden_effects":["scripts","dependencies","network","credentials","background","durable-data","publishing"]}`},
+		{"uncovered example", `{"contract_version":1,"positive_triggers":["prepare my daily brief"],"non_triggers":["hello"],"examples":[{"input":"unrelated","output_contains":["brief"]}],"required_facts":["explicit invocation only"],"forbidden_effects":["scripts","dependencies","network","credentials","background","durable-data","publishing"]}`},
+		{"empty output", `{"contract_version":1,"positive_triggers":["prepare my daily brief"],"non_triggers":["hello"],"examples":[{"input":"prepare my daily brief","output_contains":[""]}],"required_facts":["explicit invocation only"],"forbidden_effects":["scripts","dependencies","network","credentials","background","durable-data","publishing"]}`},
+		{"missing fact", `{"contract_version":1,"positive_triggers":["prepare my daily brief"],"non_triggers":["hello"],"examples":[{"input":"prepare my daily brief","output_contains":["brief"]}],"required_facts":["not in instructions"],"forbidden_effects":["scripts","dependencies","network","credentials","background","durable-data","publishing"]}`},
+		{"missing forbidden effect", `{"contract_version":1,"positive_triggers":["prepare my daily brief"],"non_triggers":["hello"],"examples":[{"input":"prepare my daily brief","output_contains":["brief"]}],"required_facts":["explicit invocation only"],"forbidden_effects":["network"]}`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			root := t.TempDir()
+			p := writePackage(t, root, "daily-brief", "1.0.0")
+			if err := os.WriteFile(filepath.Join(p, "tests", "cases.json"), []byte(tc.cases+"\n"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			pkg, err := Validate(p)
+			if err != nil {
+				t.Fatalf("suite should be structurally valid: %v", err)
+			}
+			if err = TestCases(pkg); err == nil {
+				t.Fatal("contradictory deterministic suite passed")
+			}
+			instance := filepath.Join(root, "instance")
+			if err = InitializeInstance(instance); err != nil {
+				t.Fatal(err)
+			}
+			status, _ := Inspect(instance, p)
+			if status.State != StateTestFailed {
+				t.Fatalf("state=%s", status.State)
+			}
+			if _, err = Plan(instance, p, ActionInstall); err == nil {
+				t.Fatal("test-failed suite became installable")
+			}
+		})
+	}
+}
+
+func TestProjectionMutationRacesPreserveForeignBytes(t *testing.T) {
+	for _, action := range []Action{ActionInstall, ActionUpgrade, ActionDisable, ActionRemove} {
+		t.Run(string(action), func(t *testing.T) {
+			root := t.TempDir()
+			p := writePackage(t, root, "daily-brief", "1.0.0")
+			instance := filepath.Join(root, "instance")
+			if err := InitializeInstance(instance); err != nil {
+				t.Fatal(err)
+			}
+			if action != ActionInstall {
+				pl, err := Plan(instance, p, ActionInstall)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if err = Execute(pl); err != nil {
+					t.Fatal(err)
+				}
+				if action == ActionUpgrade {
+					if err = os.WriteFile(filepath.Join(p, "capability.json"), []byte(strings.ReplaceAll(string(mustRead(t, filepath.Join(p, "capability.json"))), `"version":"1.0.0"`, `"version":"1.0.1"`)), 0o600); err != nil {
+						t.Fatal(err)
+					}
+				}
+			}
+			pl, err := Plan(instance, p, action)
+			if err != nil {
+				t.Fatal(err)
+			}
+			foreign := filepath.Join(root, "foreign")
+			mutationHook = func(phase string) error {
+				if phase != "journal-written" {
+					return nil
+				}
+				if action != ActionInstall {
+					if err := os.RemoveAll(pl.Projection); err != nil {
+						return err
+					}
+				}
+				if err := os.MkdirAll(pl.Projection, 0o700); err != nil {
+					return err
+				}
+				if err := os.WriteFile(filepath.Join(pl.Projection, "foreign"), []byte("keep"), 0o600); err != nil {
+					return err
+				}
+				foreign = filepath.Join(pl.Projection, "foreign")
+				return nil
+			}
+			defer func() { mutationHook = nil }()
+			if err = Execute(pl); err == nil {
+				t.Fatal("raced foreign projection accepted")
+			}
+			if b, readErr := os.ReadFile(foreign); readErr != nil || string(b) != "keep" {
+				t.Fatalf("foreign bytes lost: %q %v", b, readErr)
+			}
+		})
+	}
+}
+
+func TestQuarantineAndRecoveryRacesPreserveForeignBytes(t *testing.T) {
+	root := t.TempDir()
+	p := writePackage(t, root, "daily-brief", "1.0.0")
+	instance := filepath.Join(root, "instance")
+	if err := InitializeInstance(instance); err != nil {
+		t.Fatal(err)
+	}
+	pl, err := Plan(instance, p, ActionInstall)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = Execute(pl); err != nil {
+		t.Fatal(err)
+	}
+	pl, err = Plan(instance, p, ActionDisable)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var foreign string
+	mutationHook = func(phase string) error {
+		if phase == "disable-projection-quarantined" {
+			foreign = pl.Projection + ".owned-" + pl.Receipt.ProjectionDigest[:16] + ".quarantine/foreign"
+			return os.WriteFile(foreign, []byte("keep"), 0o600)
+		}
+		return nil
+	}
+	if err = Execute(pl); err == nil {
+		t.Fatal("quarantine drift accepted")
+	}
+	mutationHook = nil
+	if b, readErr := os.ReadFile(foreign); readErr != nil || string(b) != "keep" {
+		t.Fatalf("quarantine foreign bytes lost: %q %v", b, readErr)
+	}
+
+	// A separate interrupted install exercises the recovery post-check window.
+	root2 := t.TempDir()
+	p2 := writePackage(t, root2, "daily-brief", "1.0.0")
+	instance2 := filepath.Join(root2, "instance")
+	if err = InitializeInstance(instance2); err != nil {
+		t.Fatal(err)
+	}
+	pl2, err := Plan(instance2, p2, ActionInstall)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mutationHook = func(phase string) error {
+		if phase == "projection-written" {
+			return errors.New("stop")
+		}
+		return nil
+	}
+	if err = Execute(pl2); err == nil {
+		t.Fatal("fault not injected")
+	}
+	foreign = filepath.Join(pl2.Projection, "foreign")
+	mutationHook = func(phase string) error {
+		if phase != "recovery-ownership-checked" {
+			return nil
+		}
+		if err := os.RemoveAll(pl2.Projection); err != nil {
+			return err
+		}
+		if err := os.Mkdir(pl2.Projection, 0o700); err != nil {
+			return err
+		}
+		return os.WriteFile(foreign, []byte("keep"), 0o600)
+	}
+	defer func() { mutationHook = nil }()
+	if err = Recover(instance2, "daily-brief"); err == nil {
+		t.Fatal("recovery race accepted")
+	}
+	if b, readErr := os.ReadFile(foreign); readErr != nil || string(b) != "keep" {
+		t.Fatalf("recovery foreign bytes lost: %q %v", b, readErr)
+	}
+}
+
+func TestRemoveQuarantineFaultIsRecoverable(t *testing.T) {
+	root := t.TempDir()
+	p := writePackage(t, root, "daily-brief", "1.0.0")
+	instance := filepath.Join(root, "instance")
+	if err := InitializeInstance(instance); err != nil {
+		t.Fatal(err)
+	}
+	pl, err := Plan(instance, p, ActionInstall)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = Execute(pl); err != nil {
+		t.Fatal(err)
+	}
+	pl, err = Plan(instance, p, ActionRemove)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mutationHook = func(phase string) error {
+		if phase == "remove-control-quarantined" {
+			return errors.New("stop")
+		}
+		return nil
+	}
+	if err = Execute(pl); err == nil {
+		t.Fatal("fault not injected")
+	}
+	mutationHook = nil
+	if err = Recover(instance, "daily-brief"); err != nil {
+		t.Fatal(err)
+	}
+	status, err := Inspect(instance, p)
+	if err != nil || status.State != StateInstalledHealthy {
+		t.Fatalf("status=%s err=%v", status.State, err)
+	}
+}
+
+func mustRead(t *testing.T, path string) []byte {
+	t.Helper()
+	b, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return b
 }
 
 func TestValidateRejectsProhibitedAndUnsafeEntries(t *testing.T) {

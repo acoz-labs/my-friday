@@ -246,7 +246,7 @@ func runCapability() error {
 			return err
 		}
 		if action == "test" {
-			fmt.Fprintf(os.Stdout, "Capability %s deterministic tests passed (%d positive, %d non-trigger, %d examples); no model or network was run\n", pkg.Manifest.Slug, len(pkg.Cases.PositiveTriggers), len(pkg.Cases.NonTriggers), len(pkg.Cases.Examples))
+			return reportCapabilityTest(os.Stdout, pkg)
 		} else {
 			fmt.Fprintf(os.Stdout, "Capability %s valid at source digest %s\n", pkg.Manifest.Slug, pkg.SourceDigest)
 		}
@@ -293,6 +293,14 @@ func runCapability() error {
 		return err
 	}
 	fmt.Fprintf(os.Stdout, "Capability %s %sd; start a fresh Codex task for lifecycle changes\n", os.Args[4], action)
+	return nil
+}
+
+func reportCapabilityTest(out io.Writer, pkg capability.Package) error {
+	if err := capability.TestCases(pkg); err != nil {
+		return err
+	}
+	fmt.Fprintf(out, "Capability %s deterministic tests passed (%d positive, %d non-trigger, %d examples); no model or network was run\n", pkg.Manifest.Slug, len(pkg.Cases.PositiveTriggers), len(pkg.Cases.NonTriggers), len(pkg.Cases.Examples))
 	return nil
 }
 

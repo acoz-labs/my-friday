@@ -23,3 +23,8 @@ Capability receipts and journals are accepted as mutation authority only after
 no-follow regular-file, one-link, owner-mode, canonical-schema, slug, action,
 digest, and prior-state validation. Foreign projection, control, and workspace
 entries fail closed and are never adopted for cleanup.
+
+Projection lifecycle operations use descriptor-relative no-follow writes,
+exclusive no-replace promotion, and identity/digest-bound quarantine before
+recursive cleanup. Same-UID interference is detected at each ownership
+boundary; foreign raced bytes are preserved rather than overwritten or deleted.

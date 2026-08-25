@@ -45,6 +45,19 @@ observed state. Recovery refuses malformed, linked, drifted, ambiguous, or
 foreign entries and removes only digest-proven projections and exact owned
 control leaves.
 
+Projection writes use no-follow directory descriptors, exclusive file creation,
+and no-replace promotion. Replacement and removal first move the immediately
+identity- and digest-verified owned tree to an exclusive quarantine, reverify it,
+and refuse cleanup if any raced entry changes the tree. A raced foreign target
+or quarantine is preserved for diagnosis.
+
+`capability test` is a bounded structural contract check, not a model run. It
+requires nonempty unique declarations, manifest-aligned positive triggers,
+disjoint non-triggers, positive-trigger examples with declared output
+expectations, instruction-backed required facts, and assertions for every
+prohibited effect. Structurally readable but contradictory cases are
+`test-failed`, never `ready`.
+
 The bootstrap-owned `capability-builder` is private to each named instance and
 is not an ordinary removable package. Its instructions permit source editing
 and read-only checks while prohibiting lifecycle mutations and confirmation

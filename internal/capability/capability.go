@@ -18,6 +18,8 @@ import (
 	"strings"
 	"syscall"
 	"unicode/utf8"
+
+	"golang.org/x/sys/unix"
 )
 
 const (
@@ -185,8 +187,8 @@ func Validate(root string) (Package, error) {
 	if err = strictJSON(bodies["tests/cases.json"], &cases); err != nil {
 		return Package{}, fmt.Errorf("capability cases: %w", err)
 	}
-	if cases.ContractVersion != 1 || len(cases.PositiveTriggers) == 0 || len(cases.NonTriggers) == 0 || len(cases.Examples) == 0 {
-		return Package{}, errors.New("deterministic cases are incomplete")
+	if cases.ContractVersion != 1 {
+		return Package{}, errors.New("unsupported deterministic cases contract")
 	}
 	sort.Strings(files)
 	sourceDigest := treeDigest(files, bodies)
@@ -204,6 +206,96 @@ func Validate(root string) (Package, error) {
 	}
 	projection["agents/openai.yaml"] = []byte("policy:\n  allow_implicit_invocation: false\n")
 	return Package{Root: abs, Manifest: m, Cases: cases, Files: files, SourceDigest: sourceDigest, ProjectionDigest: mapDigest(projection), Projection: projection}, nil
+}
+
+// TestCases executes the bounded deterministic assertions declared by a
+// structurally valid instruction-only package. It does not run a model.
+func TestCases(pkg Package) error {
+	normalize := func(value string) string { return strings.ToLower(strings.TrimSpace(value)) }
+	unique := func(label string, values []string) (map[string]bool, error) {
+		if len(values) == 0 {
+			return nil, fmt.Errorf("%s are required", label)
+		}
+		seen := map[string]bool{}
+		for _, value := range values {
+			value = normalize(value)
+			if value == "" || seen[value] {
+				return nil, fmt.Errorf("%s contain an empty or duplicate value", label)
+			}
+			seen[value] = true
+		}
+		return seen, nil
+	}
+	positive, err := unique("positive triggers", pkg.Cases.PositiveTriggers)
+	if err != nil {
+		return err
+	}
+	negative, err := unique("non-triggers", pkg.Cases.NonTriggers)
+	if err != nil {
+		return err
+	}
+	for value := range positive {
+		if negative[value] {
+			return fmt.Errorf("trigger %q is both positive and negative", value)
+		}
+	}
+	for _, trigger := range pkg.Manifest.Triggers {
+		if !positive[normalize(trigger)] {
+			return fmt.Errorf("manifest trigger %q lacks a positive case", trigger)
+		}
+	}
+	if len(pkg.Cases.Examples) == 0 {
+		return errors.New("examples are required")
+	}
+	searchable := normalize(pkg.Manifest.SuccessBehavior + "\n" + string(pkg.Projection["SKILL.md"]))
+	for i, example := range pkg.Cases.Examples {
+		input := normalize(example.Input)
+		if input == "" {
+			return fmt.Errorf("example %d input is empty", i+1)
+		}
+		covered := false
+		for trigger := range positive {
+			if strings.Contains(input, trigger) {
+				covered = true
+				break
+			}
+		}
+		if !covered {
+			return fmt.Errorf("example %d does not exercise a positive trigger", i+1)
+		}
+		outputs, outputErr := unique(fmt.Sprintf("example %d output expectations", i+1), example.OutputContains)
+		if outputErr != nil {
+			return outputErr
+		}
+		for expected := range outputs {
+			if !strings.Contains(searchable, expected) {
+				return fmt.Errorf("example %d output expectation %q is not declared by success behavior or instructions", i+1, expected)
+			}
+		}
+	}
+	facts, err := unique("required facts", pkg.Cases.RequiredFacts)
+	if err != nil {
+		return err
+	}
+	factText := normalize(pkg.Manifest.Summary + "\n" + pkg.Manifest.SuccessBehavior + "\n" + pkg.Manifest.FailureBehavior + "\n" + string(pkg.Projection["SKILL.md"]))
+	for fact := range facts {
+		if fact == "explicit invocation only" {
+			continue
+		}
+		if !strings.Contains(factText, fact) {
+			return fmt.Errorf("required fact %q is not declared by the capability", fact)
+		}
+	}
+	forbidden, err := unique("forbidden effects", pkg.Cases.ForbiddenEffects)
+	if err != nil {
+		return err
+	}
+	for _, effect := range []string{"scripts", "dependencies", "network", "credentials", "background", "durable-data", "publishing"} {
+		if !forbidden[effect] {
+			return fmt.Errorf("forbidden effect %q is not asserted", effect)
+		}
+	}
+	return nil
 }
 
 func allowedDir(rel string) bool {
@@ -497,13 +589,17 @@ func projectionDigest(path string) (string, error) {
 		if err != nil {
 			return err
 		}
-		if i.Mode()&os.ModeSymlink != 0 {
+		st, ok := i.Sys().(*syscall.Stat_t)
+		if !ok || i.Mode()&os.ModeSymlink != 0 || st.Uid != uint32(os.Getuid()) {
 			return errors.New("projection link refused")
 		}
 		if i.IsDir() {
+			if i.Mode().Perm() != 0o700 {
+				return errors.New("unsafe projection directory mode")
+			}
 			return nil
 		}
-		if !i.Mode().IsRegular() {
+		if !i.Mode().IsRegular() || i.Mode().Perm() != 0o600 || st.Nlink != 1 {
 			return errors.New("projection special file refused")
 		}
 		b, err := os.ReadFile(p)
@@ -567,6 +663,9 @@ func Inspect(instance, source string) (Status, error) {
 			state = StateTestFailed
 		}
 		return Status{State: state, Receipt: r}, err
+	}
+	if err = TestCases(pkg); err != nil {
+		return Status{State: StateTestFailed, Package: &pkg, Receipt: r}, err
 	}
 	if r == nil {
 		return Status{State: StateReady, Package: &pkg}, nil
@@ -645,27 +744,193 @@ func (p LifecyclePlan) String() string {
 	return b.String()
 }
 func writeProjection(root string, files map[string][]byte) error {
-	stage := root + ".new"
-	if err := os.Mkdir(stage, 0o700); err != nil {
+	parent, err := openDirNoFollow(filepath.Dir(root))
+	if err != nil {
 		return err
 	}
-	clean := func() { _ = os.RemoveAll(stage) }
-	for rel, b := range files {
-		dst := filepath.Join(stage, filepath.FromSlash(rel))
-		if err := os.MkdirAll(filepath.Dir(dst), 0o700); err != nil {
-			clean()
-			return err
+	defer unix.Close(parent)
+	name := filepath.Base(root)
+	stageName := name + ".new"
+	stage := filepath.Join(filepath.Dir(root), stageName)
+	if err = unix.Mkdirat(parent, stageName, 0o700); err != nil {
+		return err
+	}
+	clean := func() {
+		if d, e := projectionDigest(stage); e == nil && d == mapDigest(files) {
+			if quarantine, moveErr := quarantineOwnedProjection(stage, d, "stage-cleanup-quarantined"); moveErr == nil {
+				_ = removeProvenQuarantine(quarantine, d)
+			}
 		}
-		if err := os.WriteFile(dst, b, 0o600); err != nil {
+	}
+	stageFD, err := unix.Openat(parent, stageName, unix.O_RDONLY|unix.O_DIRECTORY|unix.O_CLOEXEC|unix.O_NOFOLLOW, 0)
+	if err != nil {
+		return err
+	}
+	defer unix.Close(stageFD)
+	for rel, b := range files {
+		if err := writeProjectionFileAt(stageFD, rel, b); err != nil {
 			clean()
 			return err
 		}
 	}
-	if err := os.Rename(stage, root); err != nil {
+	if d, digestErr := projectionDigest(stage); digestErr != nil || d != mapDigest(files) {
+		return errors.New("staged projection identity changed")
+	}
+	if err := renameExclusive(parent, stageName, parent, name); err != nil {
 		clean()
 		return err
 	}
+	if d, digestErr := projectionDigest(root); digestErr != nil || d != mapDigest(files) {
+		return errors.New("promoted projection identity changed")
+	}
 	return nil
+}
+
+func writeProjectionFileAt(rootFD int, rel string, body []byte) error {
+	parts := strings.Split(filepath.ToSlash(rel), "/")
+	if len(parts) == 0 || len(parts) > MaxDepth {
+		return errors.New("invalid projection path")
+	}
+	fd, err := unix.Dup(rootFD)
+	if err != nil {
+		return err
+	}
+	defer unix.Close(fd)
+	for _, part := range parts[:len(parts)-1] {
+		if part == "" || part == "." || part == ".." {
+			return errors.New("invalid projection path")
+		}
+		if err = unix.Mkdirat(fd, part, 0o700); err != nil && !errors.Is(err, unix.EEXIST) {
+			return err
+		}
+		next, openErr := unix.Openat(fd, part, unix.O_RDONLY|unix.O_DIRECTORY|unix.O_CLOEXEC|unix.O_NOFOLLOW, 0)
+		if openErr != nil {
+			return openErr
+		}
+		unix.Close(fd)
+		fd = next
+	}
+	name := parts[len(parts)-1]
+	if name == "" || name == "." || name == ".." {
+		return errors.New("invalid projection path")
+	}
+	fileFD, err := unix.Openat(fd, name, unix.O_WRONLY|unix.O_CREAT|unix.O_EXCL|unix.O_CLOEXEC|unix.O_NOFOLLOW, 0o600)
+	if err != nil {
+		return err
+	}
+	f := os.NewFile(uintptr(fileFD), name)
+	_, writeErr := f.Write(body)
+	closeErr := f.Close()
+	if writeErr != nil {
+		return writeErr
+	}
+	return closeErr
+}
+
+func openDirNoFollow(path string) (int, error) {
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		return -1, err
+	}
+	if abs == "/var" || strings.HasPrefix(abs, "/var/") {
+		abs = filepath.Join("/private/var", strings.TrimPrefix(abs, "/var/"))
+	}
+	fd, err := unix.Open("/", unix.O_RDONLY|unix.O_DIRECTORY|unix.O_CLOEXEC|unix.O_NOFOLLOW, 0)
+	if err != nil {
+		return -1, err
+	}
+	for _, part := range strings.Split(strings.TrimPrefix(filepath.Clean(abs), "/"), "/") {
+		if part == "" {
+			continue
+		}
+		next, openErr := unix.Openat(fd, part, unix.O_RDONLY|unix.O_DIRECTORY|unix.O_CLOEXEC|unix.O_NOFOLLOW, 0)
+		unix.Close(fd)
+		if openErr != nil {
+			return -1, openErr
+		}
+		fd = next
+	}
+	return fd, nil
+}
+
+type projectionProof struct {
+	dev, ino uint64
+	digest   string
+}
+
+func proveProjection(parent int, name, path, expected string) (projectionProof, error) {
+	fd, err := unix.Openat(parent, name, unix.O_RDONLY|unix.O_DIRECTORY|unix.O_CLOEXEC|unix.O_NOFOLLOW, 0)
+	if err != nil {
+		return projectionProof{}, err
+	}
+	defer unix.Close(fd)
+	var opened, entry unix.Stat_t
+	if err = unix.Fstat(fd, &opened); err != nil {
+		return projectionProof{}, err
+	}
+	if opened.Uid != uint32(os.Getuid()) || opened.Mode&unix.S_IFMT != unix.S_IFDIR || opened.Mode&0o777 != 0o700 {
+		return projectionProof{}, errors.New("unsafe projection owner or mode")
+	}
+	if err = unix.Fstatat(parent, name, &entry, unix.AT_SYMLINK_NOFOLLOW); err != nil {
+		return projectionProof{}, err
+	}
+	if opened.Dev != entry.Dev || opened.Ino != entry.Ino {
+		return projectionProof{}, errors.New("projection identity changed")
+	}
+	d, err := projectionDigest(path)
+	if err != nil || d != expected {
+		return projectionProof{}, errors.New("projection ownership mismatch")
+	}
+	if err = unix.Fstatat(parent, name, &entry, unix.AT_SYMLINK_NOFOLLOW); err != nil {
+		return projectionProof{}, err
+	}
+	if opened.Dev != entry.Dev || opened.Ino != entry.Ino {
+		return projectionProof{}, errors.New("projection identity changed during digest")
+	}
+	return projectionProof{uint64(opened.Dev), uint64(opened.Ino), d}, nil
+}
+
+func quarantineOwnedProjection(path, expected, phase string) (string, error) {
+	return quarantineOwnedProjectionAs(path, expected, phase, filepath.Base(path)+".owned-"+expected[:16]+".quarantine")
+}
+
+func quarantineOwnedProjectionAs(path, expected, phase, quarantineName string) (string, error) {
+	parent, err := openDirNoFollow(filepath.Dir(path))
+	if err != nil {
+		return "", err
+	}
+	defer unix.Close(parent)
+	name := filepath.Base(path)
+	proof, err := proveProjection(parent, name, path, expected)
+	if err != nil {
+		return "", err
+	}
+	if err = renameExclusive(parent, name, parent, quarantineName); err != nil {
+		return "", err
+	}
+	if mutationHook != nil {
+		if err = mutationHook(phase); err != nil {
+			return filepath.Join(filepath.Dir(path), quarantineName), err
+		}
+	}
+	quarantinePath := filepath.Join(filepath.Dir(path), quarantineName)
+	after, err := proveProjection(parent, quarantineName, quarantinePath, expected)
+	if err != nil || after.dev != proof.dev || after.ino != proof.ino {
+		return filepath.Join(filepath.Dir(path), quarantineName), errors.New("quarantined projection identity changed")
+	}
+	return quarantinePath, nil
+}
+
+func removeProvenQuarantine(path, expected string) error {
+	parent, err := openDirNoFollow(filepath.Dir(path))
+	if err != nil {
+		return err
+	}
+	defer unix.Close(parent)
+	if _, err = proveProjection(parent, filepath.Base(path), path, expected); err != nil {
+		return err
+	}
+	return os.RemoveAll(path)
 }
 
 func readProjection(root string) (map[string][]byte, error) {
@@ -758,6 +1023,11 @@ func Execute(p LifecyclePlan) (resultErr error) {
 			return err
 		}
 	}
+	if p.Action != ActionInstall {
+		if err = validateManagedControl(p.Instance, p.Package.Manifest.Slug, p.Receipt, true); err != nil {
+			return err
+		}
+	}
 	defer func() {
 		if resultErr == nil {
 			_ = os.Remove(journalPath)
@@ -765,8 +1035,10 @@ func Execute(p LifecyclePlan) (resultErr error) {
 	}()
 	switch p.Action {
 	case ActionInstall, ActionUpgrade, ActionEnable:
+		var oldQuarantine string
 		if p.Action == ActionUpgrade {
-			if err = os.RemoveAll(p.Projection); err != nil {
+			oldQuarantine, err = quarantineOwnedProjection(p.Projection, p.Receipt.ProjectionDigest, "upgrade-projection-quarantined")
+			if err != nil {
 				return err
 			}
 		}
@@ -779,6 +1051,11 @@ func Execute(p LifecyclePlan) (resultErr error) {
 		}
 		if err = writeProjection(p.Projection, projection); err != nil {
 			return err
+		}
+		if oldQuarantine != "" {
+			if err = removeProvenQuarantine(oldQuarantine, p.Receipt.ProjectionDigest); err != nil {
+				return err
+			}
 		}
 		if mutationHook != nil {
 			if err = mutationHook("projection-written"); err != nil {
@@ -812,19 +1089,38 @@ func Execute(p LifecyclePlan) (resultErr error) {
 		r := Receipt{ContractVersion: 1, Slug: p.Package.Manifest.Slug, Version: p.Package.Manifest.Version, SourcePath: p.Package.Root, SourceDigest: p.Package.SourceDigest, ProjectionDigest: p.Package.ProjectionDigest, State: StateInstalledHealthy, Generation: generation, Files: sortedKeys(p.Package.Projection), Generations: generations}
 		return writeReceipt(receiptPath(p.Instance, p.Package.Manifest.Slug), r)
 	case ActionDisable:
-		if err = os.RemoveAll(p.Projection); err != nil {
-			return err
+		quarantine, moveErr := quarantineOwnedProjection(p.Projection, p.Receipt.ProjectionDigest, "disable-projection-quarantined")
+		if moveErr != nil {
+			return moveErr
 		}
 		r := *p.Receipt
 		r.State = StateDisabled
-		return writeReceipt(receiptPath(p.Instance, p.Package.Manifest.Slug), r)
+		if err = writeReceipt(receiptPath(p.Instance, p.Package.Manifest.Slug), r); err != nil {
+			return err
+		}
+		return removeProvenQuarantine(quarantine, p.Receipt.ProjectionDigest)
 	case ActionRemove:
+		var projectionQuarantine string
 		if p.Receipt.State == StateInstalledHealthy {
-			if err = os.RemoveAll(p.Projection); err != nil {
+			projectionQuarantine, err = quarantineOwnedProjection(p.Projection, p.Receipt.ProjectionDigest, "remove-projection-quarantined")
+			if err != nil {
 				return err
 			}
 		}
-		return os.RemoveAll(p.Control)
+		controlDigest, digestErr := projectionDigest(p.Control)
+		if digestErr != nil {
+			return digestErr
+		}
+		controlQuarantine, moveErr := quarantineOwnedProjectionAs(p.Control, controlDigest, "remove-control-quarantined", filepath.Base(p.Control)+".removing")
+		if moveErr != nil {
+			return moveErr
+		}
+		if projectionQuarantine != "" {
+			if err = removeProvenQuarantine(projectionQuarantine, p.Receipt.ProjectionDigest); err != nil {
+				return err
+			}
+		}
+		return removeProvenQuarantine(controlQuarantine, controlDigest)
 	}
 	return nil
 }
@@ -845,6 +1141,20 @@ func Recover(instance, slug string) error {
 	}
 	defer syscall.Flock(int(lockFile.Fd()), syscall.LOCK_UN)
 	control := filepath.Join(instance, "capabilities", slug)
+	removingControl := control + ".removing"
+	if _, controlErr := os.Lstat(control); errors.Is(controlErr, os.ErrNotExist) {
+		if _, removingErr := os.Lstat(removingControl); removingErr == nil {
+			parent, openErr := openDirNoFollow(filepath.Dir(control))
+			if openErr != nil {
+				return openErr
+			}
+			renameErr := renameExclusive(parent, filepath.Base(removingControl), parent, filepath.Base(control))
+			unix.Close(parent)
+			if renameErr != nil {
+				return fmt.Errorf("recovery refused: removing control collision: %w", renameErr)
+			}
+		}
+	}
 	journal := filepath.Join(control, "transaction.json")
 	r, err := readReceipt(instance, slug)
 	if err != nil {
@@ -853,6 +1163,23 @@ func Recover(instance, slug string) error {
 	tx, err := readTransaction(journal, slug, r)
 	if err != nil {
 		return fmt.Errorf("recovery refused: %w", err)
+	}
+	projection := projectionPath(instance, slug)
+	if r != nil {
+		quarantine := projection + ".owned-" + r.ProjectionDigest[:16] + ".quarantine"
+		if _, projectionErr := os.Lstat(projection); errors.Is(projectionErr, os.ErrNotExist) {
+			if _, quarantineErr := os.Lstat(quarantine); quarantineErr == nil {
+				parent, openErr := openDirNoFollow(filepath.Dir(projection))
+				if openErr != nil {
+					return openErr
+				}
+				renameErr := renameExclusive(parent, filepath.Base(quarantine), parent, filepath.Base(projection))
+				unix.Close(parent)
+				if renameErr != nil {
+					return fmt.Errorf("recovery refused: projection quarantine collision: %w", renameErr)
+				}
+			}
+		}
 	}
 	info, err := os.Lstat(control)
 	if err != nil || !info.IsDir() || info.Mode()&os.ModeSymlink != 0 || info.Mode().Perm() != 0o700 {
@@ -872,7 +1199,6 @@ func Recover(instance, slug string) error {
 			return fmt.Errorf("recovery refused: foreign control entry %s", entry.Name())
 		}
 	}
-	projection := projectionPath(instance, slug)
 	if _, statErr := os.Lstat(projection); statErr == nil {
 		d, digestErr := projectionDigest(projection)
 		if digestErr != nil || (d != tx.ProjectionDigest && (r == nil || d != r.ProjectionDigest)) {
@@ -881,26 +1207,52 @@ func Recover(instance, slug string) error {
 	} else if !errors.Is(statErr, os.ErrNotExist) {
 		return statErr
 	}
+	if mutationHook != nil {
+		if err = mutationHook("recovery-ownership-checked"); err != nil {
+			return err
+		}
+	}
 	if tx.CreatedControl {
 		if _, statErr := os.Lstat(projection); statErr == nil {
-			if err = os.RemoveAll(projection); err != nil {
+			quarantine, moveErr := quarantineOwnedProjection(projection, tx.ProjectionDigest, "recovery-install-projection-quarantined")
+			if moveErr != nil {
+				return moveErr
+			}
+			if err = removeProvenQuarantine(quarantine, tx.ProjectionDigest); err != nil {
 				return err
 			}
 		}
-		if err = os.Remove(journal); err != nil {
-			return err
+		controlDigest, digestErr := projectionDigest(control)
+		if digestErr != nil {
+			return digestErr
 		}
-		return os.Remove(control)
+		controlQuarantine, moveErr := quarantineOwnedProjection(control, controlDigest, "recovery-install-control-quarantined")
+		if moveErr != nil {
+			return moveErr
+		}
+		return removeProvenQuarantine(controlQuarantine, controlDigest)
 	}
 	if r.State == StateDisabled {
 		if _, statErr := os.Lstat(projection); statErr == nil {
-			if err = os.RemoveAll(projection); err != nil {
+			quarantine, moveErr := quarantineOwnedProjection(projection, tx.ProjectionDigest, "recovery-disabled-projection-quarantined")
+			if moveErr != nil {
+				return moveErr
+			}
+			if err = removeProvenQuarantine(quarantine, tx.ProjectionDigest); err != nil {
 				return err
 			}
 		}
 	} else {
 		if _, statErr := os.Lstat(projection); statErr == nil {
-			if err = os.RemoveAll(projection); err != nil {
+			d, digestErr := projectionDigest(projection)
+			if digestErr != nil {
+				return digestErr
+			}
+			quarantine, moveErr := quarantineOwnedProjection(projection, d, "recovery-existing-projection-quarantined")
+			if moveErr != nil {
+				return moveErr
+			}
+			if err = removeProvenQuarantine(quarantine, d); err != nil {
 				return err
 			}
 		}

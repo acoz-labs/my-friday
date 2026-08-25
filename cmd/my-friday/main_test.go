@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/acoz-labs/my-friday/internal/capability"
 	"github.com/acoz-labs/my-friday/internal/codexhome"
 )
 
@@ -26,6 +27,17 @@ func TestRealHomeIgnoresCallerHOME(t *testing.T) {
 	}
 	if os.Getenv("HOME") == want {
 		t.Fatal("test did not override child HOME environment")
+	}
+}
+
+func TestCapabilityTestCLIRefusesContradictorySuite(t *testing.T) {
+	pkg := capability.Package{Manifest: capability.Manifest{Slug: "daily-brief", Triggers: []string{"prepare my daily brief"}}, Cases: capability.Cases{ContractVersion: 1, PositiveTriggers: []string{"prepare my daily brief"}, NonTriggers: []string{"prepare my daily brief"}}}
+	var out strings.Builder
+	if err := reportCapabilityTest(&out, pkg); err == nil {
+		t.Fatal("CLI reported contradictory suite passed")
+	}
+	if out.Len() != 0 {
+		t.Fatalf("CLI emitted success output: %q", out.String())
 	}
 }
 
