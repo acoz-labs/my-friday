@@ -106,6 +106,37 @@ func TestCleanupNamedRemovesReceiptBoundGeneratedCodexState(t *testing.T) {
 	}
 }
 
+func TestCleanupNamedRemovesReceiptBoundPrivatePluginCacheModes(t *testing.T) {
+	home, paths := managedNamedFixture(t)
+	auth := filepath.Join(paths.Root, "codex", "auth.json")
+	generatedDir := filepath.Join(paths.Root, "codex", "plugins", "cache", "fixture")
+	if err := os.MkdirAll(generatedDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(auth, []byte("opaque-fixture"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for name, mode := range map[string]os.FileMode{"plugin.json": 0o664, "check.sh": 0o755} {
+		path := filepath.Join(generatedDir, name)
+		if err := os.WriteFile(path, []byte("generated-state"), mode); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Chmod(path, mode); err != nil {
+			t.Fatal(err)
+		}
+	}
+	receipt, err := captureCodexCleanupReceipt(home, "primary", testCleanupCandidate, testCleanupRunID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = cleanupNamed(home, []string{"primary"}, nil, map[string]codexCleanupReceipt{"primary": receipt}, testCleanupCandidate, testCleanupRunID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = os.Lstat(paths.Root); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("receipt-bound private plugin cache survived reversal: %v", err)
+	}
+}
+
 func TestCleanupNamedRemovesReceiptBoundCodexArg0Symlink(t *testing.T) {
 	home, paths := managedNamedFixture(t)
 	auth := filepath.Join(paths.Root, "codex", "auth.json")

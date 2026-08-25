@@ -499,6 +499,15 @@ func validCodexArg0HelperSymlink(path string) bool {
 	}
 }
 
+func validGeneratedRegularMode(mode uint32) bool {
+	switch mode {
+	case 0o600, 0o644, 0o664, 0o755:
+		return true
+	default:
+		return false
+	}
+}
+
 func validateReceiptShape(receipt codexCleanupReceipt, candidate, runID string) error {
 	decodedCandidate, candidateErr := hex.DecodeString(candidate)
 	if receipt.Schema != "generated-codex-cleanup-receipt-v1" || receipt.Candidate != candidate || receipt.RunID != runID || receipt.Name == "" || candidateErr != nil || len(decodedCandidate) != 20 || candidate != strings.ToLower(candidate) || runID == "" || runID != filepath.Base(runID) || strings.ContainsAny(runID, "/\\") || receipt.RootDevice == 0 || receipt.RootInode == 0 || receipt.CodexDevice == 0 || receipt.CodexInode == 0 {
@@ -508,7 +517,7 @@ func validateReceiptShape(receipt codexCleanupReceipt, candidate, runID string) 
 	for _, entry := range receipt.Entries {
 		clean := filepath.ToSlash(filepath.Clean(entry.Path))
 		kind, permissions := entry.Mode&unix.S_IFMT, entry.Mode&0o777
-		unsafePermissions := (kind != unix.S_IFLNK && permissions&0o022 != 0) || (kind == unix.S_IFREG && permissions&0o600 != 0o600) || (kind == unix.S_IFDIR && permissions&0o700 != 0o700)
+		unsafePermissions := entry.Mode&0o7000 != 0 || (kind == unix.S_IFREG && !validGeneratedRegularMode(permissions)) || (kind == unix.S_IFDIR && (permissions&0o022 != 0 || permissions&0o700 != 0o700))
 		targetMismatch := (kind == unix.S_IFLNK) != (entry.Target != "")
 		if entry.Path == "" || clean != entry.Path || strings.HasPrefix(clean, "../") || strings.HasPrefix(clean, "/") || seen[entry.Path] || entry.Device == 0 || entry.Inode == 0 || entry.UID != uint32(os.Getuid()) || entry.Nlink == 0 || entry.Size < 0 || (kind != unix.S_IFREG && kind != unix.S_IFDIR && kind != unix.S_IFLNK) || ((kind == unix.S_IFREG || kind == unix.S_IFLNK) && entry.Nlink != 1) || unsafePermissions || targetMismatch || (kind == unix.S_IFLNK && (!filepath.IsAbs(entry.Target) || !validCodexArg0HelperSymlink(entry.Path))) {
 			return errors.New("generated Codex-state receipt entry is malformed")
