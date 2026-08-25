@@ -83,6 +83,8 @@ grep -Fq 'capability-workshop-acceptance-evidence-v1' "$workshop"
 grep -Fq 'MY_FRIDAY_CODEX_AUTH_FILE' "$workshop"
 grep -Fq 'builder_has_no_mutation_token:true' "$workshop"
 grep -Fq 'stale capability plan' "$root/config/acceptance/capability-stale.exp"
+grep -Fq 'No changes made' "$root/config/acceptance/capability-exit.exp"
+grep -Fq 'acceptance-runner" --cwd' "$workshop"
 for scenario in builder install upgrade denials interruption migration cleanup; do grep -Fq "phase=$scenario" "$workshop"; done
 for command in verify-capability-workshop-evidence verify-capability-workshop-receipt verify-capability-workshop-acceptance record-capability-workshop-receipt; do [[ -x "$root/bin/$command" ]]; done
 grep -Fq 'elif [[ "$issue_number" == 51 ]]' "$root/bin/record-product-acceptance"

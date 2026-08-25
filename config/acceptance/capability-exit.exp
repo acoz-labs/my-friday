@@ -1,0 +1,20 @@
+#!/usr/bin/expect -f
+set timeout 60
+if {$argc < 2} { exit 64 }
+set executable [lindex $argv 0]
+set args [lrange $argv 1 end]
+set stty_init "rows 30 columns 120"
+spawn -noecho $executable {*}$args
+expect {
+  -exact "Type Install to continue: " { send -- "\r" }
+  timeout { exit 1 }
+  eof { exit 1 }
+}
+expect {
+  -exact "No changes made" {}
+  timeout { exit 1 }
+  eof { exit 1 }
+}
+expect eof
+set status [wait]
+exit [lindex $status 3]
