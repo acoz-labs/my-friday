@@ -252,6 +252,37 @@ func TestCodexArg0HelperSymlinkNamespaceIsExact(t *testing.T) {
 	}
 }
 
+func TestAmbientProtectedMetadataExcludesOnlyObservedLiveCodexState(t *testing.T) {
+	for _, path := range []string{
+		"codex/sessions",
+		"codex/sessions/2026/rollout.jsonl",
+		"codex/logs_2.sqlite",
+		"codex/logs_2.sqlite-shm",
+		"codex/logs_2.sqlite-wal",
+		"codex/state_5.sqlite",
+		"codex/state_5.sqlite-shm",
+		"codex/state_5.sqlite-wal",
+	} {
+		if !volatileAmbientCodexMetadata(path) {
+			t.Fatalf("live Codex metadata path was not excluded: %s", path)
+		}
+	}
+	for _, path := range []string{
+		"codex/auth.json",
+		"codex/config.toml",
+		"codex/skills/example/SKILL.md",
+		"codex/logs.sqlite-wal",
+		"codex/logs_x.sqlite-wal",
+		"codex/logs_2.sqlite-journal",
+		"codex/state_5.sqlite.backup",
+		"runtime/assistant/profile.json",
+	} {
+		if volatileAmbientCodexMetadata(path) {
+			t.Fatalf("stable protected metadata path was excluded: %s", path)
+		}
+	}
+}
+
 func TestCleanupNamedPreservesChangedGeneratedCodexState(t *testing.T) {
 	home, paths := managedNamedFixture(t)
 	auth := filepath.Join(paths.Root, "codex", "auth.json")
