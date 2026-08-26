@@ -1447,3 +1447,26 @@ func TestCopyAuthRefusesLinkedAncestryAndDestinationCollision(t *testing.T) {
 		t.Fatal("destination collision changed")
 	}
 }
+
+func TestMountedDeviceSelectsRequestedMountpointAfterPhysicalStore(t *testing.T) {
+	fixture := `<?xml version="1.0" encoding="UTF-8"?>
+<plist version="1.0"><dict><key>system-entities</key><array>
+<dict><key>dev-entry</key><string>/dev/disk6s1</string><key>content-hint</key><string>Apple_APFS</string></dict>
+<dict><key>dev-entry</key><string>/dev/disk7s1</string><key>mount-point</key><string>/private/tmp/workshop/mount</string></dict>
+</array></dict></plist>`
+	device, err := mountedDeviceFromPlist(strings.NewReader(fixture), "/private/tmp/workshop/mount")
+	if err != nil || device != "/dev/disk7s1" {
+		t.Fatalf("device=%q err=%v", device, err)
+	}
+}
+
+func TestMountedDeviceRefusesMissingAndAmbiguousMountpoints(t *testing.T) {
+	missing := `<plist><dict><key>system-entities</key><array><dict><key>dev-entry</key><string>/dev/disk6s1</string></dict></array></dict></plist>`
+	if _, err := mountedDeviceFromPlist(strings.NewReader(missing), "/private/tmp/workshop/mount"); err == nil {
+		t.Fatal("missing mount point was accepted")
+	}
+	ambiguous := `<plist><dict><key>system-entities</key><array><dict><key>dev-entry</key><string>/dev/disk7s1</string><key>mount-point</key><string>/private/tmp/workshop/mount</string></dict><dict><key>dev-entry</key><string>/dev/disk8s1</string><key>mount-point</key><string>/private/tmp/workshop/mount</string></dict></array></dict></plist>`
+	if _, err := mountedDeviceFromPlist(strings.NewReader(ambiguous), "/private/tmp/workshop/mount"); err == nil {
+		t.Fatal("ambiguous mount point was accepted")
+	}
+}

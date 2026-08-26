@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"encoding/xml"
 	"errors"
 	"flag"
 	"fmt"
@@ -224,6 +225,15 @@ func main() {
 			fatal("unsafe directory identity")
 		}
 		fmt.Printf("%d:%d\n", st.Dev, st.Ino)
+	case "mounted-device":
+		fs := flag.NewFlagSet("mounted-device", flag.ExitOnError)
+		mountpoint := fs.String("mountpoint", "", "exact requested mount point")
+		_ = fs.Parse(os.Args[2:])
+		device, err := mountedDeviceFromPlist(os.Stdin, *mountpoint)
+		if err != nil {
+			fatal(err.Error())
+		}
+		fmt.Println(device)
 	case "validate-runtime":
 		if len(os.Args) != 3 {
 			fatal("usage: acceptance-support validate-runtime PATH")
@@ -357,6 +367,120 @@ func main() {
 		time.Sleep(30 * time.Second)
 	default:
 		fatal("unknown acceptance-support command")
+	}
+}
+
+func mountedDeviceFromPlist(input io.Reader, mountpoint string) (string, error) {
+	if !filepath.IsAbs(mountpoint) {
+		return "", errors.New("mount point must be absolute")
+	}
+	decoder := xml.NewDecoder(input)
+	for {
+		token, err := decoder.Token()
+		if err == io.EOF {
+			return "", errors.New("hdiutil plist has no system-entities array")
+		}
+		if err != nil {
+			return "", fmt.Errorf("decode hdiutil plist: %w", err)
+		}
+		start, ok := token.(xml.StartElement)
+		if !ok || start.Name.Local != "key" {
+			continue
+		}
+		var key string
+		if err = decoder.DecodeElement(&key, &start); err != nil {
+			return "", fmt.Errorf("decode hdiutil plist key: %w", err)
+		}
+		if key != "system-entities" {
+			continue
+		}
+		for {
+			token, err = decoder.Token()
+			if err != nil {
+				return "", errors.New("hdiutil system-entities value is missing")
+			}
+			if array, ok := token.(xml.StartElement); ok {
+				if array.Name.Local != "array" {
+					return "", errors.New("hdiutil system-entities is not an array")
+				}
+				return mountedDeviceFromEntities(decoder, array, mountpoint)
+			}
+		}
+	}
+}
+
+func mountedDeviceFromEntities(decoder *xml.Decoder, array xml.StartElement, mountpoint string) (string, error) {
+	match := ""
+	for {
+		token, err := decoder.Token()
+		if err != nil {
+			return "", errors.New("invalid hdiutil system-entities array")
+		}
+		switch value := token.(type) {
+		case xml.StartElement:
+			if value.Name.Local != "dict" {
+				if err = decoder.Skip(); err != nil {
+					return "", err
+				}
+				continue
+			}
+			entity, err := plistStringDict(decoder, value)
+			if err != nil {
+				return "", err
+			}
+			if entity["mount-point"] == mountpoint {
+				device := entity["dev-entry"]
+				if device == "" || match != "" {
+					return "", errors.New("mounted hdiutil entity is missing or ambiguous")
+				}
+				match = device
+			}
+		case xml.EndElement:
+			if value.Name == array.Name {
+				if match == "" {
+					return "", errors.New("requested mount point is absent from hdiutil entities")
+				}
+				return match, nil
+			}
+		}
+	}
+}
+
+func plistStringDict(decoder *xml.Decoder, dict xml.StartElement) (map[string]string, error) {
+	result := map[string]string{}
+	key := ""
+	for {
+		token, err := decoder.Token()
+		if err != nil {
+			return nil, errors.New("invalid hdiutil entity dictionary")
+		}
+		switch value := token.(type) {
+		case xml.StartElement:
+			switch value.Name.Local {
+			case "key":
+				if err = decoder.DecodeElement(&key, &value); err != nil {
+					return nil, err
+				}
+			case "string":
+				var text string
+				if err = decoder.DecodeElement(&text, &value); err != nil {
+					return nil, err
+				}
+				if key != "" {
+					result[key] = text
+					key = ""
+				}
+			default:
+				if err = decoder.Skip(); err != nil {
+					return nil, err
+				}
+				key = ""
+			}
+		case xml.EndElement:
+			if value.Name == dict.Name {
+				return result, nil
+			}
+		}
 	}
 }
 
