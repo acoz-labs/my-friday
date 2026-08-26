@@ -11,17 +11,35 @@ trap 'rm -rf "$tmp"' EXIT
 go build -o "$tmp/acceptance-runner" "$root/tools/acceptance-runner"
 runner=("$tmp/acceptance-runner" --cwd "$tmp" --timeout 5s --env PATH=/usr/bin:/bin --)
 
-output="$("${runner[@]}" /usr/bin/expect "$root/config/acceptance/launcher-capture.exp" "$tmp/tty.private" /bin/sh -c '[ -t 1 ] || exit 90; printf "PTY_CAPTURED\n"')"
+output="$("${runner[@]}" /usr/bin/expect "$root/config/acceptance/launcher-capture.exp" "$tmp/tty.private" PTY_CAPTURED /bin/sh -c '[ -t 1 ] || exit 90; printf "PTY_%s\n" CAPTURED')"
 [[ -z "$output" ]]
 [[ "$(stat -f %Lp "$tmp/tty.private" 2>/dev/null || stat -c %a "$tmp/tty.private")" == 600 ]]
 grep -Fq PTY_CAPTURED "$tmp/tty.private"
 
 set +e
-"${runner[@]}" /usr/bin/expect "$root/config/acceptance/launcher-capture.exp" "$tmp/status.private" /bin/sh -c 'printf "PRIVATE_FAILURE\n"; exit 37'
+"${runner[@]}" /usr/bin/expect "$root/config/acceptance/launcher-capture.exp" "$tmp/status.private" NEVER_SEEN /bin/sh -c 'printf "PRIVATE_FAILURE\n"; exit 37'
 status=$?
 set -e
 [[ "$status" == 37 ]]
 grep -Fq PRIVATE_FAILURE "$tmp/status.private"
+
+set +e
+"${runner[@]}" /usr/bin/expect "$root/config/acceptance/launcher-capture.exp" "$tmp/missing.private" NEVER_SEEN /bin/sh -c 'exit 0'
+missing_status=$?
+"${runner[@]}" /usr/bin/expect "$root/config/acceptance/launcher-capture.exp" "$tmp/self.private" SELF_MARKER /bin/sh -c 'printf SELF_MARKER'
+self_status=$?
+set -e
+[[ "$missing_status" == 1 ]]
+[[ "$self_status" == 65 ]]
+[[ ! -e "$tmp/self.private" ]]
+
+"${runner[@]}" /usr/bin/expect "$root/config/acceptance/launcher-capture.exp" "$tmp/tui.private" TUI_COMPLETE /bin/sh -c 'trap '\''kill "$child" 2>/dev/null; wait "$child" 2>/dev/null; exit 0'\'' HUP; sleep 30 & child=$!; printf "%s\n" "$child" > child.pid; printf "TUI_%s\n" COMPLETE; wait "$child"'
+child_pid="$(cat "$tmp/child.pid")"
+if kill -0 "$child_pid" 2>/dev/null; then
+  echo "marker-triggered PTY closure left a descendant" >&2
+  exit 1
+fi
+grep -Fq TUI_COMPLETE "$tmp/tui.private"
 
 go test ./tools/acceptance-runner -run 'TestRunner(PTYWrappedTimeoutReapsEscapedDescendant|PTYWrappedSignalsReapDescendants)$'
 

@@ -88,7 +88,7 @@ func TestRunnerPTYWrappedTimeoutReapsEscapedDescendant(t *testing.T) {
 	transcript := filepath.Join(dir, "timeout.private")
 	cmd := exec.Command(runner, "--cwd", dir, "--timeout", "500ms",
 		"--env", "SIGNAL_HELPER=escaped", "--env", "ROOT_PIDFILE="+rootPIDFile, "--env", "ESCAPED_PIDFILE="+escapedPIDFile,
-		"--", "/usr/bin/expect", launcherCaptureDriver(t), transcript, os.Args[0], "-test.run=TestSignalDescendantHelper")
+		"--", "/usr/bin/expect", launcherCaptureDriver(t), transcript, "NEVER_SEEN", os.Args[0], "-test.run=TestSignalDescendantHelper")
 	if err := cmd.Start(); err != nil {
 		t.Fatal(err)
 	}
@@ -113,7 +113,7 @@ func TestRunnerPTYWrappedSignalsReapDescendants(t *testing.T) {
 			transcript := filepath.Join(dir, "signal.private")
 			cmd := exec.Command(runner, "--cwd", dir, "--timeout", "30s",
 				"--env", "SIGNAL_HELPER=escaped", "--env", "ROOT_PIDFILE="+rootPIDFile, "--env", "ESCAPED_PIDFILE="+escapedPIDFile,
-				"--", "/usr/bin/expect", launcherCaptureDriver(t), transcript, os.Args[0], "-test.run=TestSignalDescendantHelper")
+				"--", "/usr/bin/expect", launcherCaptureDriver(t), transcript, "NEVER_SEEN", os.Args[0], "-test.run=TestSignalDescendantHelper")
 			if err := cmd.Start(); err != nil {
 				t.Fatal(err)
 			}

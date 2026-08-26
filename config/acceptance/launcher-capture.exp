@@ -1,17 +1,33 @@
 #!/usr/bin/expect -f
-if {$argc < 2} { exit 64 }
+if {$argc < 3} { exit 64 }
 set timeout -1
 set transcript [lindex $argv 0]
-set executable [lindex $argv 1]
-set args [lrange $argv 2 end]
+set marker [lindex $argv 1]
+set executable [lindex $argv 2]
+set args [lrange $argv 3 end]
 if {[file pathtype $transcript] ne "absolute"} { exit 64 }
+if {$marker eq ""} { exit 64 }
+foreach arg $args {
+  if {[string first $marker $arg] >= 0} { exit 65 }
+}
 if {[catch {set transcript_fd [open $transcript {WRONLY CREAT EXCL} 0600]}]} { exit 73 }
 fconfigure $transcript_fd -translation binary -encoding binary
 set stty_init "rows 30 columns 120"
 log_user 0
 log_file -a -open $transcript_fd
 spawn -noecho $executable {*}$args
-expect eof
-set status [wait]
-log_file
-exit [lindex $status 3]
+expect {
+  -exact $marker {
+    close
+    catch wait
+    log_file
+    exit 0
+  }
+  eof {
+    set status [wait]
+    log_file
+    set child_status [lindex $status 3]
+    if {$child_status != 0} { exit $child_status }
+    exit 1
+  }
+}

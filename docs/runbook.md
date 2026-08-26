@@ -201,7 +201,11 @@ reaps the root, verifies quiescence, and returns status 130 or 143 before
 failure cleanup proceeds. Builder, installed-invocation, and disabled-absence
 tasks run under an Expect-owned PTY inside that same bounded runner. Their
 owner-only transcripts remain private acceptance state, preserve the launcher
-exit status, and are never copied into public evidence. Failure cleanup disarms
+exit status, and are never copied into public evidence. Each task has a separate
+output-only completion marker that the prompt may describe but must not contain.
+After observing it, Expect closes and waits the PTY child so the bounded runner
+can prove full quiescence; EOF before observation is a failure even after a
+zero exit. Failure cleanup disarms
 signal traps, stops and reaps
 bounded child groups, revalidates no-follow markers, manifests, auth receipts,
 and APFS authority, then attempts manifest-owned named cleanup and ordinary
