@@ -207,21 +207,15 @@ assistant/launcher pairs. The bounded runner catches `INT` and `TERM`, freezes
 and kills its exact process group plus identity-tracked escaped descendants,
 reaps the root, verifies quiescence, and returns status 130 or 143 before
 failure cleanup proceeds. Builder, installed-invocation, and disabled-absence
-tasks run under an Expect-owned PTY inside that same bounded runner. Each starts
-the named launcher with no forwarded arguments, waits for the CSI-u, initial
-composer, zero or more optional MCP progress messages, the authoritative plain
-workspace-title transition, and final composer readiness sequence, then types
-its separate prompt and submits the terminal Enter
-sequence. For the literal `$capability-builder` prompt, it drains stale output,
-requires a fresh builder-name/description/insert-hint autocomplete event, then
-uses one Enter only to select the mention. Before sending the distinct submit
-Enter, it requires Codex 0.149's fresh selected-composer redraw with the extra
-separator before the existing task suffix; a marker, delayed completion, or
-missing selection state fails closed. Non-mention tasks retain one-key
-submission. Every drainage boundary scans bytes through a rolling marker window,
-so a marker coalesced with other output still fails before submission. A marker
-prefix persists across drain returns and must resolve before the next input key;
-a delayed suffix that completes it is refused. A marker seen before submission is refused. Their
+tasks run under an Expect-owned PTY inside that same bounded runner. Each passes
+its prompt as exactly one positional argument to the named launcher; the
+generated launcher places that argument after its owned Codex `--`. Prompt and
+marker overlap fails before transcript creation or spawn. An exact marker event
+after native launch completes the task, including when terminal framing or
+adjacent prose makes the raw screen line unsuitable for exact-line evidence.
+At that point raw logging stops and one flushed CR/LF-delimited marker receipt
+is appended to the same owner-only transcript. Missing or partial markers and
+nonzero child exits fail closed. Their
 builder task receives an instance-specific manifest-bound skill. Managed Codex
 trusts the disposable workspace, adds only that instance's private runtime to
 workspace-write, sets approvals to never, and disables network. The builder

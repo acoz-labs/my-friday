@@ -10,109 +10,25 @@ tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
 go build -o "$tmp/acceptance-runner" "$root/tools/acceptance-runner"
 
-prompt='$capability-builder Perform the private workshop task and construct the final marker.'
 cat >"$tmp/fake-tui" <<'EOF'
 #!/bin/bash
 set -euo pipefail
-[[ "$#" == 0 ]] || exit 91
+printf spawned >"$TUI_SPAWNED"
+[[ "$#" == 1 ]] || exit 91
 [[ -t 1 ]] || exit 90
-mark() { if [[ "${TUI_MARKER_PHASE:-}" == "$1" ]]; then printf '%s\n' "$TUI_MARKER"; fi; }
-mark before-cursor
-printf '\033[>7u'
-mark after-cursor
-if [[ "${TUI_MODE:-}" == reordered-title ]]; then
-  printf '\033]0;workspace\007Ask Codex to do anything\n'
-  exit 38
-fi
-printf 'Ask Codex to do anything\n'
-mark after-first-composer
-mcp_count=1
-case "${TUI_MODE:-}" in
-  zero-mcp) mcp_count=0 ;;
-  multiple-mcp) mcp_count=3 ;;
-esac
-for ((i=0; i<mcp_count; i++)); do
-  printf 'Starting MCP servers\n'
-  mark after-mcp
-done
-if [[ "${TUI_MODE:-}" == absent-title ]]; then exit 39; fi
-printf '\033]0;workspace\007'
-mark after-title
-printf 'Ask Codex to do anything\n'
-mark after-second-composer
-enter=$'\033[13;1u'
-mention='$capability-builder'
-marker_prefix="${TUI_MARKER:0:${#TUI_MARKER}/2}"
-marker_suffix="${TUI_MARKER:${#TUI_MARKER}/2}"
-if [[ "${TUI_MODE:-}" == fragment-pre-prompt ]]; then
-  printf '%s' "$marker_prefix"
-  sleep 0.2
-  printf '%s' "$marker_suffix"
-fi
-if [[ "${TUI_MODE:-}" == stale-description ]]; then
-  printf 'capability-builder Help define, scaffold, inspect, validate, and test Press Enter to insert\n'
-fi
-draft=""
-while ((${#draft} < ${#TUI_PROMPT})); do
-  IFS= read -r -n 1 byte || exit 92
-  draft+="$byte"
-done
-[[ "$draft" == "$TUI_PROMPT" ]] || exit 93
-if [[ "$draft" == "$mention "* && "${TUI_MODE:-}" != stale-description ]]; then
-  printf 'capability-builder Help define, scaffold, inspect, validate, and test Press Enter to insert\n'
-  if [[ "${TUI_MODE:-}" == fragment-post-autocomplete ]]; then
-    printf '%s' "$marker_prefix"
-    sleep 0.2
-    printf '%s' "$marker_suffix"
-  fi
-fi
-first=""
-while [[ "$first" != *"$enter" ]]; do
-  IFS= read -r -n 1 byte || exit 94
-  first+="$byte"
-done
-[[ "${first%"$enter"}" == "" ]] || exit 95
-submitted="$draft"
-enter_count=1
-if [[ "$submitted" == "$mention "* ]]; then
-  [[ "${TUI_MODE:-}" != marker-after-mention ]] || printf '%s\n' "$TUI_MARKER"
-  if [[ "${TUI_MODE:-}" == delayed-first-completion ]]; then
-    sleep 0.2
-    printf '%s\n' "$TUI_MARKER"
-  fi
-  if [[ "${TUI_MODE:-}" == missing-selection ]]; then
-    IFS= read -r -n 1 _ || exit 98
-    exit 99
-  fi
-  task="${submitted#"$mention "}"
-  if [[ "${TUI_MODE:-}" == selected-marker-burst ]]; then
-    printf '%s  %s\n%s\n' "$mention" "$task" "$TUI_MARKER"
-  else
-    printf '%s  %s\n' "$mention" "$task"
-    if [[ "${TUI_MODE:-}" == fragment-post-selection ]]; then
-      printf '%s' "$marker_prefix"
-      sleep 0.2
-      printf '%s' "$marker_suffix"
-    fi
-  fi
-  second=""
-  while [[ "$second" != *"$enter" ]]; do
-    IFS= read -r -n 1 byte || exit 96
-    second+="$byte"
-  done
-  [[ "${second%"$enter"}" == "" ]] || exit 97
-  enter_count=2
-fi
-printf '%s' "$submitted" >"$TUI_SUBMITTED"
-printf '%s' "$enter_count" >"$TUI_ENTER_COUNT"
+printf '%s' "$1" >"$TUI_SUBMITTED"
 case "${TUI_MODE:-success}" in
-  success|zero-mcp|multiple-mcp) printf '%s\n' "$TUI_MARKER" ;;
+  success) printf '%s\n' "$TUI_MARKER"; sleep 30 ;;
+  framed) printf '\033[31mextra prose %s trailing prose\033[0m\n' "$TUI_MARKER"; sleep 30 ;;
+  fragmented) printf '%s' "${TUI_MARKER:0:${#TUI_MARKER}/2}"; sleep 0.2; printf '%s\n' "${TUI_MARKER:${#TUI_MARKER}/2}"; sleep 30 ;;
+  fragment-only) printf '%s' "${TUI_MARKER:0:${#TUI_MARKER}/2}"; exit 0 ;;
   missing) exit 0 ;;
   nonzero) printf 'PRIVATE_FAILURE\n'; exit 37 ;;
   descendant)
     trap 'kill "$child" 2>/dev/null; wait "$child" 2>/dev/null; exit 0' HUP
     sleep 30 & child=$!
     printf '%s\n' "$child" >"$TUI_CHILD_PID"
+    sync "$TUI_CHILD_PID" 2>/dev/null || sync
     printf '%s\n' "$TUI_MARKER"
     wait "$child"
     ;;
@@ -121,87 +37,54 @@ EOF
 chmod 0700 "$tmp/fake-tui"
 
 run_tui() {
-  local mode="$1" transcript="$2" marker="$3" task_prompt="${4:-$prompt}"
+  local mode="$1" transcript="$2" marker="$3" prompt="$4"
   "$tmp/acceptance-runner" --cwd "$tmp" --timeout 5s \
     --env PATH=/usr/bin:/bin --env TUI_MODE="$mode" --env TUI_MARKER="$marker" \
-    --env TUI_MARKER_PHASE="${TUI_MARKER_PHASE:-}" \
-    --env TUI_PROMPT="$task_prompt" --env TUI_SUBMITTED="$tmp/submitted" \
-    --env TUI_ENTER_COUNT="$tmp/enter-count" \
+    --env TUI_SUBMITTED="$tmp/submitted" --env TUI_SPAWNED="$tmp/spawned" \
     --env TUI_CHILD_PID="$tmp/child.pid" -- \
-    /usr/bin/expect "$root/config/acceptance/launcher-capture.exp" "$transcript" "$marker" "$tmp/fake-tui" "$task_prompt"
+    /usr/bin/expect "$root/config/acceptance/launcher-capture.exp" "$transcript" "$marker" "$tmp/fake-tui" "$prompt"
 }
 
-for mode in zero-mcp success multiple-mcp; do
-  output="$(run_tui "$mode" "$tmp/$mode.private" TUI_COMPLETE)"
+for prompt in '--option-shaped' 'white space prompt' 'literal $dollar ; semicolon * glob [brackets]'; do
+  rm -f "$tmp/spawned" "$tmp/submitted"
+  output="$(run_tui success "$tmp/success.private" "DONE_${RANDOM}" "$prompt")"
   [[ -z "$output" ]]
-  [[ "$(stat -f %Lp "$tmp/$mode.private" 2>/dev/null || stat -c %a "$tmp/$mode.private")" == 600 ]]
   [[ "$(cat "$tmp/submitted")" == "$prompt" ]]
-  [[ "$(cat "$tmp/enter-count")" == 2 ]]
-  grep -Fq TUI_COMPLETE "$tmp/$mode.private"
+  [[ "$(stat -f %Lp "$tmp/success.private" 2>/dev/null || stat -c %a "$tmp/success.private")" == 600 ]]
+  rm "$tmp/success.private"
 done
 
-plain_prompt='Perform the private workshop task without a skill mention.'
-run_tui success "$tmp/plain.private" PLAIN_COMPLETE "$plain_prompt"
-[[ "$(cat "$tmp/submitted")" == "$plain_prompt" ]]
-[[ "$(cat "$tmp/enter-count")" == 1 ]]
+run_tui fragmented "$tmp/fragmented.private" FRAGMENTED_COMPLETE 'fragmented completion prompt'
+[[ "$(LC_ALL=C tr -d '\r' <"$tmp/fragmented.private" | LC_ALL=C grep -Fxc FRAGMENTED_COMPLETE)" == 1 ]]
+run_tui framed "$tmp/framed.private" FRAMED_COMPLETE 'framed completion prompt'
+[[ "$(LC_ALL=C tr -d '\r' <"$tmp/framed.private" | LC_ALL=C grep -Fxc FRAMED_COMPLETE)" == 1 ]]
 
 set +e
-for phase in before-cursor after-cursor after-first-composer after-mcp after-title after-second-composer; do
-  TUI_MARKER_PHASE="$phase" run_tui success "$tmp/marker-$phase.private" PRE_SUBMIT_MARKER
-  marker_status=$?
-  [[ "$marker_status" == 65 ]] || exit 1
-done
-run_tui reordered-title "$tmp/reordered.private" NEVER_SEEN
-reordered_status=$?
-run_tui absent-title "$tmp/absent-title.private" NEVER_SEEN
-absent_title_status=$?
-run_tui missing "$tmp/missing.private" NEVER_SEEN
+run_tui missing "$tmp/missing.private" NEVER_SEEN 'missing prompt'
 missing_status=$?
-run_tui nonzero "$tmp/status.private" NEVER_SEEN
-status=$?
-run_tui marker-after-mention "$tmp/marker-after-mention.private" FIRST_ENTER_MARKER
-marker_after_mention_status=$?
-run_tui delayed-first-completion "$tmp/delayed-first.private" DELAYED_FIRST_MARKER
-delayed_first_status=$?
-run_tui stale-description "$tmp/stale-description.private" NEVER_SEEN
-stale_description_status=$?
-run_tui missing-selection "$tmp/missing-selection.private" NEVER_SEEN
-missing_selection_status=$?
-run_tui selected-marker-burst "$tmp/selected-marker-burst.private" SELECTED_BURST_MARKER
-selected_marker_burst_status=$?
-run_tui fragment-pre-prompt "$tmp/fragment-pre-prompt.private" FRAGMENT_PRE_PROMPT
-fragment_pre_prompt_status=$?
-run_tui fragment-post-autocomplete "$tmp/fragment-post-autocomplete.private" FRAGMENT_POST_AUTOCOMPLETE
-fragment_post_autocomplete_status=$?
-run_tui fragment-post-selection "$tmp/fragment-post-selection.private" FRAGMENT_POST_SELECTION
-fragment_post_selection_status=$?
+run_tui fragment-only "$tmp/fragment-only.private" NEVER_COMPLETE 'fragment-only prompt'
+fragment_only_status=$?
+run_tui nonzero "$tmp/nonzero.private" NEVER_SEEN 'nonzero prompt'
+nonzero_status=$?
+rm -f "$tmp/spawned"
 /usr/bin/expect "$root/config/acceptance/launcher-capture.exp" "$tmp/self.private" SELF_MARKER "$tmp/fake-tui" 'prompt contains SELF_MARKER'
 self_status=$?
 set -e
-[[ "$reordered_status" == 38 ]]
-[[ "$absent_title_status" == 39 ]]
 [[ "$missing_status" == 1 ]]
-[[ "$status" == 37 ]]
-[[ "$marker_after_mention_status" == 65 ]]
-[[ "$delayed_first_status" == 65 ]]
-[[ "$stale_description_status" == 124 ]]
-[[ "$missing_selection_status" == 124 ]]
-[[ "$selected_marker_burst_status" == 65 ]]
-[[ "$fragment_pre_prompt_status" == 65 ]]
-[[ "$fragment_post_autocomplete_status" == 65 ]]
-[[ "$fragment_post_selection_status" == 65 ]]
-grep -Fq PRIVATE_FAILURE "$tmp/status.private"
+[[ "$fragment_only_status" == 1 ]]
+[[ "$nonzero_status" == 37 ]]
 [[ "$self_status" == 65 ]]
-[[ ! -e "$tmp/self.private" ]]
+[[ ! -e "$tmp/spawned" && ! -e "$tmp/self.private" ]]
+grep -Fq PRIVATE_FAILURE "$tmp/nonzero.private"
 
-run_tui descendant "$tmp/tui.private" TUI_COMPLETE
+run_tui descendant "$tmp/descendant.private" TUI_COMPLETE 'descendant prompt'
 child_pid="$(cat "$tmp/child.pid")"
 if kill -0 "$child_pid" 2>/dev/null; then
   echo "marker-triggered PTY closure left a descendant" >&2
   exit 1
 fi
-grep -Fq TUI_COMPLETE "$tmp/tui.private"
 
+grep -Fq 'spawn -noecho {*}[list $launcher $prompt]' "$root/config/acceptance/launcher-capture.exp"
 go test ./tools/acceptance-runner -run 'TestRunner(PTYWrappedTimeoutReapsEscapedDescendant|PTYWrappedSignalsReapDescendants)$'
 
 echo "Launcher PTY capture tests passed."
