@@ -34,8 +34,9 @@ Users must be able to:
 5. Install a narrowly owned Codex baseline without disturbing unrelated
    configuration.
 6. Verify, repair, upgrade, uninstall, and roll back the managed installation.
-7. Collaborate with the assistant to define, scaffold, inspect, validate, test,
-   install, verify, enhance, disable, and remove a version-controlled capability.
+7. Use a guided deterministic workshop to define, preview, create, inspect,
+   validate, test, install, verify, enhance, disable, and remove a
+   version-controlled capability without memorizing its file schema.
 8. Use that capability workflow to record observations and chronology,
    deliberately promote durable claims, and recall relevant context in later
    tasks.
@@ -51,10 +52,17 @@ Users must be able to:
   handling, verification, and reversal.
 - Personality is user-defined; trust boundaries and safety policy are not
   personality settings.
-- Capability source is version-controlled and profile-bound. An agent may help
-  author it, but deterministic My Friday tooling owns preview, validation,
-  testing, activation, verification, upgrade, and reversal, with human review
-  and explicit mutation confirmation at the authority boundary.
+- Capability source is version-controlled and profile-bound. The first shipped
+  builder is a deterministic terminal workshop: it gathers explicit behavior,
+  shows the complete canonical source diff, and requires exact `Create source`
+  or `Update source` confirmation without installing. Deterministic My Friday
+  tooling separately owns validation, testing, activation, verification,
+  upgrade, and reversal, with human review and an explicit confirmation at each
+  mutation boundary.
+- Conversational-agent input to the workshop is deferred until a supported
+  Codex surface reliably produces a terminal structured proposal or a
+  qualifying action and filesystem effect. Model prose, catalog discovery, or
+  exit zero alone never grants source or lifecycle authority.
 - The first capability profile is instruction-only. It permits no executable
   code, arbitrary dependency, network access, credential use, background
   process, or durable user data.
@@ -110,7 +118,10 @@ account surface, analytics application, or content-management system.
 
 ### Deliberately deferred
 
-5. Attach either generated repository to an explicitly supplied generic git
+5. Let a conversational agent propose or supply workshop answers while My
+   Friday and the user retain deterministic preview, source-write, and
+   lifecycle authority.
+6. Attach either generated repository to an explicitly supplied generic git
    remote without provider-specific authentication.
 
 ### Parked
