@@ -10,7 +10,7 @@ tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
 go build -o "$tmp/acceptance-runner" "$root/tools/acceptance-runner"
 
-prompt='Perform the private workshop task and construct the final marker.'
+prompt='$capability-builder Perform the private workshop task and construct the final marker.'
 cat >"$tmp/fake-tui" <<'EOF'
 #!/bin/bash
 set -euo pipefail
@@ -40,15 +40,71 @@ printf '\033]0;workspace\007'
 mark after-title
 printf 'Ask Codex to do anything\n'
 mark after-second-composer
-payload=""
 enter=$'\033[13;1u'
-while [[ "$payload" != *"$enter" ]]; do
+mention='$capability-builder'
+marker_prefix="${TUI_MARKER:0:${#TUI_MARKER}/2}"
+marker_suffix="${TUI_MARKER:${#TUI_MARKER}/2}"
+if [[ "${TUI_MODE:-}" == fragment-pre-prompt ]]; then
+  printf '%s' "$marker_prefix"
+  sleep 0.2
+  printf '%s' "$marker_suffix"
+fi
+if [[ "${TUI_MODE:-}" == stale-description ]]; then
+  printf 'capability-builder Help define, scaffold, inspect, validate, and test Press Enter to insert\n'
+fi
+draft=""
+while ((${#draft} < ${#TUI_PROMPT})); do
   IFS= read -r -n 1 byte || exit 92
-  payload+="$byte"
+  draft+="$byte"
 done
-submitted="${payload%"$enter"}"
+[[ "$draft" == "$TUI_PROMPT" ]] || exit 93
+if [[ "$draft" == "$mention "* && "${TUI_MODE:-}" != stale-description ]]; then
+  printf 'capability-builder Help define, scaffold, inspect, validate, and test Press Enter to insert\n'
+  if [[ "${TUI_MODE:-}" == fragment-post-autocomplete ]]; then
+    printf '%s' "$marker_prefix"
+    sleep 0.2
+    printf '%s' "$marker_suffix"
+  fi
+fi
+first=""
+while [[ "$first" != *"$enter" ]]; do
+  IFS= read -r -n 1 byte || exit 94
+  first+="$byte"
+done
+[[ "${first%"$enter"}" == "" ]] || exit 95
+submitted="$draft"
+enter_count=1
+if [[ "$submitted" == "$mention "* ]]; then
+  [[ "${TUI_MODE:-}" != marker-after-mention ]] || printf '%s\n' "$TUI_MARKER"
+  if [[ "${TUI_MODE:-}" == delayed-first-completion ]]; then
+    sleep 0.2
+    printf '%s\n' "$TUI_MARKER"
+  fi
+  if [[ "${TUI_MODE:-}" == missing-selection ]]; then
+    IFS= read -r -n 1 _ || exit 98
+    exit 99
+  fi
+  task="${submitted#"$mention "}"
+  if [[ "${TUI_MODE:-}" == selected-marker-burst ]]; then
+    printf '%s  %s\n%s\n' "$mention" "$task" "$TUI_MARKER"
+  else
+    printf '%s  %s\n' "$mention" "$task"
+    if [[ "${TUI_MODE:-}" == fragment-post-selection ]]; then
+      printf '%s' "$marker_prefix"
+      sleep 0.2
+      printf '%s' "$marker_suffix"
+    fi
+  fi
+  second=""
+  while [[ "$second" != *"$enter" ]]; do
+    IFS= read -r -n 1 byte || exit 96
+    second+="$byte"
+  done
+  [[ "${second%"$enter"}" == "" ]] || exit 97
+  enter_count=2
+fi
 printf '%s' "$submitted" >"$TUI_SUBMITTED"
-[[ "$submitted" == "$TUI_PROMPT" ]] || exit 93
+printf '%s' "$enter_count" >"$TUI_ENTER_COUNT"
 case "${TUI_MODE:-success}" in
   success|zero-mcp|multiple-mcp) printf '%s\n' "$TUI_MARKER" ;;
   missing) exit 0 ;;
@@ -65,13 +121,14 @@ EOF
 chmod 0700 "$tmp/fake-tui"
 
 run_tui() {
-  local mode="$1" transcript="$2" marker="$3"
+  local mode="$1" transcript="$2" marker="$3" task_prompt="${4:-$prompt}"
   "$tmp/acceptance-runner" --cwd "$tmp" --timeout 5s \
     --env PATH=/usr/bin:/bin --env TUI_MODE="$mode" --env TUI_MARKER="$marker" \
     --env TUI_MARKER_PHASE="${TUI_MARKER_PHASE:-}" \
-    --env TUI_PROMPT="$prompt" --env TUI_SUBMITTED="$tmp/submitted" \
+    --env TUI_PROMPT="$task_prompt" --env TUI_SUBMITTED="$tmp/submitted" \
+    --env TUI_ENTER_COUNT="$tmp/enter-count" \
     --env TUI_CHILD_PID="$tmp/child.pid" -- \
-    /usr/bin/expect "$root/config/acceptance/launcher-capture.exp" "$transcript" "$marker" "$tmp/fake-tui" "$prompt"
+    /usr/bin/expect "$root/config/acceptance/launcher-capture.exp" "$transcript" "$marker" "$tmp/fake-tui" "$task_prompt"
 }
 
 for mode in zero-mcp success multiple-mcp; do
@@ -79,8 +136,14 @@ for mode in zero-mcp success multiple-mcp; do
   [[ -z "$output" ]]
   [[ "$(stat -f %Lp "$tmp/$mode.private" 2>/dev/null || stat -c %a "$tmp/$mode.private")" == 600 ]]
   [[ "$(cat "$tmp/submitted")" == "$prompt" ]]
+  [[ "$(cat "$tmp/enter-count")" == 2 ]]
   grep -Fq TUI_COMPLETE "$tmp/$mode.private"
 done
+
+plain_prompt='Perform the private workshop task without a skill mention.'
+run_tui success "$tmp/plain.private" PLAIN_COMPLETE "$plain_prompt"
+[[ "$(cat "$tmp/submitted")" == "$plain_prompt" ]]
+[[ "$(cat "$tmp/enter-count")" == 1 ]]
 
 set +e
 for phase in before-cursor after-cursor after-first-composer after-mcp after-title after-second-composer; do
@@ -96,6 +159,22 @@ run_tui missing "$tmp/missing.private" NEVER_SEEN
 missing_status=$?
 run_tui nonzero "$tmp/status.private" NEVER_SEEN
 status=$?
+run_tui marker-after-mention "$tmp/marker-after-mention.private" FIRST_ENTER_MARKER
+marker_after_mention_status=$?
+run_tui delayed-first-completion "$tmp/delayed-first.private" DELAYED_FIRST_MARKER
+delayed_first_status=$?
+run_tui stale-description "$tmp/stale-description.private" NEVER_SEEN
+stale_description_status=$?
+run_tui missing-selection "$tmp/missing-selection.private" NEVER_SEEN
+missing_selection_status=$?
+run_tui selected-marker-burst "$tmp/selected-marker-burst.private" SELECTED_BURST_MARKER
+selected_marker_burst_status=$?
+run_tui fragment-pre-prompt "$tmp/fragment-pre-prompt.private" FRAGMENT_PRE_PROMPT
+fragment_pre_prompt_status=$?
+run_tui fragment-post-autocomplete "$tmp/fragment-post-autocomplete.private" FRAGMENT_POST_AUTOCOMPLETE
+fragment_post_autocomplete_status=$?
+run_tui fragment-post-selection "$tmp/fragment-post-selection.private" FRAGMENT_POST_SELECTION
+fragment_post_selection_status=$?
 /usr/bin/expect "$root/config/acceptance/launcher-capture.exp" "$tmp/self.private" SELF_MARKER "$tmp/fake-tui" 'prompt contains SELF_MARKER'
 self_status=$?
 set -e
@@ -103,6 +182,14 @@ set -e
 [[ "$absent_title_status" == 39 ]]
 [[ "$missing_status" == 1 ]]
 [[ "$status" == 37 ]]
+[[ "$marker_after_mention_status" == 65 ]]
+[[ "$delayed_first_status" == 65 ]]
+[[ "$stale_description_status" == 124 ]]
+[[ "$missing_selection_status" == 124 ]]
+[[ "$selected_marker_burst_status" == 65 ]]
+[[ "$fragment_pre_prompt_status" == 65 ]]
+[[ "$fragment_post_autocomplete_status" == 65 ]]
+[[ "$fragment_post_selection_status" == 65 ]]
 grep -Fq PRIVATE_FAILURE "$tmp/status.private"
 [[ "$self_status" == 65 ]]
 [[ ! -e "$tmp/self.private" ]]
