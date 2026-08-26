@@ -3,6 +3,7 @@ if {$argc != 4} { exit 64 }
 set timeout -1
 set transcript [lindex $argv 0]
 set marker [lindex $argv 1]
+set marker_window ""
 set launcher [lindex $argv 2]
 set prompt [lindex $argv 3]
 if {[file pathtype $transcript] ne "absolute"} { exit 64 }
@@ -29,24 +30,48 @@ proc pre_submit_marker {} {
   catch wait
   exit 65
 }
+proc scan_marker_byte {byte} {
+  global marker marker_window
+  append marker_window $byte
+  if {[string first $marker $marker_window] >= 0} { pre_submit_marker }
+  set keep 0
+  set limit [expr {min([string length $marker_window], [string length $marker] - 1)}]
+  for {set count 1} {$count <= $limit} {incr count} {
+    if {[string range $marker_window end-[expr {$count - 1}] end] eq [string range $marker 0 [expr {$count - 1}]]} {
+      set keep $count
+    }
+  }
+  if {$keep == 0} {
+    set marker_window ""
+  } else {
+    set marker_window [string range $marker_window end-[expr {$keep - 1}] end]
+  }
+}
 proc drain_pending_output {} {
-  global marker timeout expect_out
+  global timeout expect_out
   set prior_timeout $timeout
   set timeout 0
-  set marker_window ""
   expect {
     -re {(.|\n)} {
-      append marker_window $expect_out(0,string)
-      if {[string first $marker $marker_window] >= 0} { pre_submit_marker }
-      if {[string length $marker_window] > [string length $marker]} {
-        set marker_window [string range $marker_window end-[string length $marker] end]
-      }
+      scan_marker_byte $expect_out(0,string)
       exp_continue
     }
     eof { child_eof }
     timeout {}
   }
   set timeout $prior_timeout
+}
+proc resolve_pending_marker_prefix {} {
+  global marker_window timeout expect_out
+  while {$marker_window ne ""} {
+    set prior_timeout $timeout
+    set timeout -1
+    expect {
+      -re {(.|\n)} { scan_marker_byte $expect_out(0,string) }
+      eof { child_eof }
+    }
+    set timeout $prior_timeout
+  }
 }
 
 expect {
@@ -79,6 +104,7 @@ expect {
 }
 set timeout -1
 drain_pending_output
+resolve_pending_marker_prefix
 send -- $prompt
 if {[string match {$capability-builder *} $prompt]} {
   set mention {$capability-builder}
@@ -100,6 +126,7 @@ if {[string match {$capability-builder *} $prompt]} {
     eof { child_eof }
   }
   drain_pending_output
+  resolve_pending_marker_prefix
   send -- "\033\[13;1u"
   expect {
     -exact $marker { pre_submit_marker }
@@ -107,6 +134,7 @@ if {[string match {$capability-builder *} $prompt]} {
     eof { child_eof }
   }
   drain_pending_output
+  resolve_pending_marker_prefix
 }
 send -- "\033\[13;1u"
 expect {

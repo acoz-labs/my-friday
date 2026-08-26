@@ -220,7 +220,8 @@ separator before the existing task suffix; a marker, delayed completion, or
 missing selection state fails closed. Non-mention tasks retain one-key
 submission. Every drainage boundary scans bytes through a rolling marker window,
 so a marker coalesced with other output still fails before submission. A marker
-seen before submission is refused. Their
+prefix persists across drain returns and must resolve before the next input key;
+a delayed suffix that completes it is refused. A marker seen before submission is refused. Their
 builder task receives an instance-specific manifest-bound skill. Managed Codex
 trusts the disposable workspace, adds only that instance's private runtime to
 workspace-write, sets approvals to never, and disables network. The builder

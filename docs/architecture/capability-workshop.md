@@ -106,6 +106,9 @@ submit the composed task. Non-mention workshop prompts retain one-key submission
 Every output-drain boundary consumes incrementally with rolling marker detection;
 a marker split across bytes or coalesced with a selected-composer redraw fails
 before later output or a submit key can hide it.
+The rolling prefix state survives drain returns. Before each later input key, a
+pending prefix must resolve under the outer bounded runner; completing the marker
+fails, while only a mismatching byte clears the prefix.
 
 Standalone runtimes can roll back to the v1 placeholder only while `skills/`
 contains no package. Named instances use an explicit capability revision inside

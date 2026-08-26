@@ -42,6 +42,13 @@ printf 'Ask Codex to do anything\n'
 mark after-second-composer
 enter=$'\033[13;1u'
 mention='$capability-builder'
+marker_prefix="${TUI_MARKER:0:${#TUI_MARKER}/2}"
+marker_suffix="${TUI_MARKER:${#TUI_MARKER}/2}"
+if [[ "${TUI_MODE:-}" == fragment-pre-prompt ]]; then
+  printf '%s' "$marker_prefix"
+  sleep 0.2
+  printf '%s' "$marker_suffix"
+fi
 if [[ "${TUI_MODE:-}" == stale-description ]]; then
   printf 'capability-builder Help define, scaffold, inspect, validate, and test Press Enter to insert\n'
 fi
@@ -53,6 +60,11 @@ done
 [[ "$draft" == "$TUI_PROMPT" ]] || exit 93
 if [[ "$draft" == "$mention "* && "${TUI_MODE:-}" != stale-description ]]; then
   printf 'capability-builder Help define, scaffold, inspect, validate, and test Press Enter to insert\n'
+  if [[ "${TUI_MODE:-}" == fragment-post-autocomplete ]]; then
+    printf '%s' "$marker_prefix"
+    sleep 0.2
+    printf '%s' "$marker_suffix"
+  fi
 fi
 first=""
 while [[ "$first" != *"$enter" ]]; do
@@ -77,6 +89,11 @@ if [[ "$submitted" == "$mention "* ]]; then
     printf '%s  %s\n%s\n' "$mention" "$task" "$TUI_MARKER"
   else
     printf '%s  %s\n' "$mention" "$task"
+    if [[ "${TUI_MODE:-}" == fragment-post-selection ]]; then
+      printf '%s' "$marker_prefix"
+      sleep 0.2
+      printf '%s' "$marker_suffix"
+    fi
   fi
   second=""
   while [[ "$second" != *"$enter" ]]; do
@@ -152,6 +169,12 @@ run_tui missing-selection "$tmp/missing-selection.private" NEVER_SEEN
 missing_selection_status=$?
 run_tui selected-marker-burst "$tmp/selected-marker-burst.private" SELECTED_BURST_MARKER
 selected_marker_burst_status=$?
+run_tui fragment-pre-prompt "$tmp/fragment-pre-prompt.private" FRAGMENT_PRE_PROMPT
+fragment_pre_prompt_status=$?
+run_tui fragment-post-autocomplete "$tmp/fragment-post-autocomplete.private" FRAGMENT_POST_AUTOCOMPLETE
+fragment_post_autocomplete_status=$?
+run_tui fragment-post-selection "$tmp/fragment-post-selection.private" FRAGMENT_POST_SELECTION
+fragment_post_selection_status=$?
 /usr/bin/expect "$root/config/acceptance/launcher-capture.exp" "$tmp/self.private" SELF_MARKER "$tmp/fake-tui" 'prompt contains SELF_MARKER'
 self_status=$?
 set -e
@@ -164,6 +187,9 @@ set -e
 [[ "$stale_description_status" == 124 ]]
 [[ "$missing_selection_status" == 124 ]]
 [[ "$selected_marker_burst_status" == 65 ]]
+[[ "$fragment_pre_prompt_status" == 65 ]]
+[[ "$fragment_post_autocomplete_status" == 65 ]]
+[[ "$fragment_post_selection_status" == 65 ]]
 grep -Fq PRIVATE_FAILURE "$tmp/status.private"
 [[ "$self_status" == 65 ]]
 [[ ! -e "$tmp/self.private" ]]
