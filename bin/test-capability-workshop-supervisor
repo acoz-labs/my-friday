@@ -32,18 +32,9 @@ grep -Fq 'run_private(){ local transcript="$1" marker="$2";shift 2;run_with_time
 [[ "$(grep -o '600s' bin/accept-capability-workshop | wc -l | tr -d ' ')" == 1 ]]
 grep -Fq "private_line(){ LC_ALL=C tr -d '\\r' <\"\$1\"|LC_ALL=C grep -Fqx \"\$2\"; }" bin/accept-capability-workshop
 grep -Fq 'if {$argc != 4} { exit 64 }' config/acceptance/launcher-capture.exp
-grep -Fq 'spawn -noecho $launcher' config/acceptance/launcher-capture.exp
-if grep -Fq 'spawn -noecho $launcher {*}' config/acceptance/launcher-capture.exp; then
-  echo "Private launcher receives forwarded argv" >&2
-  exit 1
-fi
-grep -Fq -- '-exact "\033\[>7u"' config/acceptance/launcher-capture.exp
-grep -Fq -- '-exact "Ask Codex to do anything"' config/acceptance/launcher-capture.exp
-grep -Fq -- '-re {(Booting MCP server:|Starting MCP servers)}' config/acceptance/launcher-capture.exp
-grep -Fq -- '-re {(Booting MCP server:|Starting MCP servers)} { exp_continue }' config/acceptance/launcher-capture.exp
-grep -Fq -- '-exact "\033]0;workspace\007"' config/acceptance/launcher-capture.exp
-grep -Fq 'send -- $prompt' config/acceptance/launcher-capture.exp
-grep -Fq 'send -- "\033\[13;1u"' config/acceptance/launcher-capture.exp
+grep -Fq 'spawn -noecho {*}[list $launcher $prompt]' config/acceptance/launcher-capture.exp
+[[ "$(grep -Fc 'spawn -noecho' config/acceptance/launcher-capture.exp)" == 1 ]]
+grep -Fq 'argv := append([]string{"codex", "--cd", workspace, "--"}, args...)' internal/assistantinstance/instance.go
 grep -Fq 'if {[string first $marker $prompt] >= 0} { exit 65 }' config/acceptance/launcher-capture.exp
 
 bytewise_transcript="$tmp/invalid-utf8.private"

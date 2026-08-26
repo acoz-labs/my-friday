@@ -162,7 +162,7 @@ func launcherCaptureDriver(t *testing.T) string {
 func writeSignalTUILauncher(t *testing.T, dir string) string {
 	t.Helper()
 	path := filepath.Join(dir, "fake-tui-launcher")
-	body := fmt.Sprintf("#!/bin/sh\n[ \"$#\" -eq 0 ] || exit 91\nprintf '\\033[>7uAsk Codex to do anything\\nStarting MCP servers\\n\\033]0;workspace\\007Ask Codex to do anything\\n'\nexec %q -test.run=TestSignalDescendantHelper\n", os.Args[0])
+	body := fmt.Sprintf("#!/bin/sh\n[ \"$#\" -eq 1 ] || exit 91\nexec %q -test.run=TestSignalDescendantHelper\n", os.Args[0])
 	if err := os.WriteFile(path, []byte(body), 0o700); err != nil {
 		t.Fatal(err)
 	}
