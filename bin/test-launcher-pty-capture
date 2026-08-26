@@ -10,7 +10,7 @@ tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
 go build -o "$tmp/acceptance-runner" "$root/tools/acceptance-runner"
 
-prompt='Perform the private workshop task and construct the final marker.'
+prompt='$capability-builder Perform the private workshop task and construct the final marker.'
 cat >"$tmp/fake-tui" <<'EOF'
 #!/bin/bash
 set -euo pipefail
@@ -42,12 +42,27 @@ printf 'Ask Codex to do anything\n'
 mark after-second-composer
 payload=""
 enter=$'\033[13;1u'
+if [[ "$TUI_PROMPT" == '$capability-builder '* ]]; then
+  printf 'Help define, scaffold, inspect, validate, and test\n'
+fi
 while [[ "$payload" != *"$enter" ]]; do
   IFS= read -r -n 1 byte || exit 92
   payload+="$byte"
 done
 submitted="${payload%"$enter"}"
+enter_count=1
+if [[ "$submitted" == '$capability-builder '* ]]; then
+  [[ "${TUI_MODE:-}" != marker-after-mention ]] || printf '%s\n' "$TUI_MARKER"
+  second=""
+  while [[ "$second" != *"$enter" ]]; do
+    IFS= read -r -n 1 byte || exit 94
+    second+="$byte"
+  done
+  [[ "${second%"$enter"}" == "" ]] || exit 95
+  enter_count=2
+fi
 printf '%s' "$submitted" >"$TUI_SUBMITTED"
+printf '%s' "$enter_count" >"$TUI_ENTER_COUNT"
 [[ "$submitted" == "$TUI_PROMPT" ]] || exit 93
 case "${TUI_MODE:-success}" in
   success|zero-mcp|multiple-mcp) printf '%s\n' "$TUI_MARKER" ;;
@@ -65,13 +80,14 @@ EOF
 chmod 0700 "$tmp/fake-tui"
 
 run_tui() {
-  local mode="$1" transcript="$2" marker="$3"
+  local mode="$1" transcript="$2" marker="$3" task_prompt="${4:-$prompt}"
   "$tmp/acceptance-runner" --cwd "$tmp" --timeout 5s \
     --env PATH=/usr/bin:/bin --env TUI_MODE="$mode" --env TUI_MARKER="$marker" \
     --env TUI_MARKER_PHASE="${TUI_MARKER_PHASE:-}" \
-    --env TUI_PROMPT="$prompt" --env TUI_SUBMITTED="$tmp/submitted" \
+    --env TUI_PROMPT="$task_prompt" --env TUI_SUBMITTED="$tmp/submitted" \
+    --env TUI_ENTER_COUNT="$tmp/enter-count" \
     --env TUI_CHILD_PID="$tmp/child.pid" -- \
-    /usr/bin/expect "$root/config/acceptance/launcher-capture.exp" "$transcript" "$marker" "$tmp/fake-tui" "$prompt"
+    /usr/bin/expect "$root/config/acceptance/launcher-capture.exp" "$transcript" "$marker" "$tmp/fake-tui" "$task_prompt"
 }
 
 for mode in zero-mcp success multiple-mcp; do
@@ -79,8 +95,14 @@ for mode in zero-mcp success multiple-mcp; do
   [[ -z "$output" ]]
   [[ "$(stat -f %Lp "$tmp/$mode.private" 2>/dev/null || stat -c %a "$tmp/$mode.private")" == 600 ]]
   [[ "$(cat "$tmp/submitted")" == "$prompt" ]]
+  [[ "$(cat "$tmp/enter-count")" == 2 ]]
   grep -Fq TUI_COMPLETE "$tmp/$mode.private"
 done
+
+plain_prompt='Perform the private workshop task without a skill mention.'
+run_tui success "$tmp/plain.private" PLAIN_COMPLETE "$plain_prompt"
+[[ "$(cat "$tmp/submitted")" == "$plain_prompt" ]]
+[[ "$(cat "$tmp/enter-count")" == 1 ]]
 
 set +e
 for phase in before-cursor after-cursor after-first-composer after-mcp after-title after-second-composer; do
@@ -96,6 +118,8 @@ run_tui missing "$tmp/missing.private" NEVER_SEEN
 missing_status=$?
 run_tui nonzero "$tmp/status.private" NEVER_SEEN
 status=$?
+run_tui marker-after-mention "$tmp/marker-after-mention.private" FIRST_ENTER_MARKER
+marker_after_mention_status=$?
 /usr/bin/expect "$root/config/acceptance/launcher-capture.exp" "$tmp/self.private" SELF_MARKER "$tmp/fake-tui" 'prompt contains SELF_MARKER'
 self_status=$?
 set -e
@@ -103,6 +127,7 @@ set -e
 [[ "$absent_title_status" == 39 ]]
 [[ "$missing_status" == 1 ]]
 [[ "$status" == 37 ]]
+[[ "$marker_after_mention_status" == 65 ]]
 grep -Fq PRIVATE_FAILURE "$tmp/status.private"
 [[ "$self_status" == 65 ]]
 [[ ! -e "$tmp/self.private" ]]

@@ -207,6 +207,9 @@ It also locks empty-forwarded-argv launch, the CSI-u/initial-composer/optional-
 MCP/title/final-composer readiness sequence with zero, one, or multiple MCP
 messages, separate prompt typing and protocol-Enter submission, title ordering
 and absence refusal,
+literal builder-mention autocomplete readiness, distinct mention-selection and
+task-submission Enter events, first-key completion refusal, ordinary one-key
+non-mention submission,
 pre-submission marker refusal, output-only marker observation, prompt self-match
 refusal, missing-marker and nonzero failure, bytewise observation through
 invalid UTF-8/control bytes, marker-triggered TUI/descendant closure, and the

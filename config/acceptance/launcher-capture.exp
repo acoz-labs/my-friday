@@ -60,6 +60,21 @@ expect {
 }
 set timeout -1
 send -- $prompt
+if {[string match {$capability-builder *} $prompt]} {
+  expect {
+    -exact $marker { pre_submit_marker }
+    -exact "Help define, scaffold, inspect, validate, and test" {}
+    eof { child_eof }
+  }
+  send -- "\033\[13;1u"
+  set timeout 0
+  expect {
+    -exact $marker { pre_submit_marker }
+    eof { child_eof }
+    timeout {}
+  }
+  set timeout -1
+}
 send -- "\033\[13;1u"
 expect {
   -exact $marker {
