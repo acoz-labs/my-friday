@@ -2,7 +2,7 @@
 
 - **Status:** Draft
 - **Issue:** #56
-- **Planning PR:** Pending
+- **Planning PR:** #71
 - **Repository basis:** 7cc30e9ca934660bd3c00f62d7745e5adaded7cf
 - **Supersedes:** Builder transport and completion portions of #57 at `b48de378ca59e148dd4d4638eb3879d128f1ec2b`
 - **Execution envelope:** through-production
