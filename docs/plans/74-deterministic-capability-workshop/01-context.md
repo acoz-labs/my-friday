@@ -125,7 +125,8 @@ scripts, background work, durable data, publishing, and deletion of source.
 - Sequential plain-text questions plus complete final preview are sufficient
   for the first technical cohort.
 - A deterministic SKILL template assembled from explicit purpose, behavior,
-  inputs/outputs, examples, and facts is useful without free-form hidden prose.
+  inputs/outputs, examples, and facts is useful for creation, while existing
+  arbitrary valid instruction bodies must remain retainable without inference.
 - Existing value retention is understandable when every retained value is
   displayed and empty input explicitly means retain only in enhancement mode.
 

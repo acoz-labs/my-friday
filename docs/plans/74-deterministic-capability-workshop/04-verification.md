@@ -4,7 +4,9 @@
 
 - Add `internal/capabilityworkshop` unit tests for answer editing, enhancement
   loading, deterministic rendering, escaping, full diff, exact confirmation,
-  navigation, validation feedback, and state-specific summaries.
+  navigation, every numeric input bound, validation feedback, arbitrary valid
+  SKILL-body retention, explicit canonical-body regeneration, and
+  state-specific current/post summaries.
 - Add source-transaction tests with fault hooks at journal/stage/quarantine/
   promotion/sync/cleanup boundaries. Prove create/update success, no-replace,
   stale preview, shared-lock refusal, old-or-new recovery, unsafe-entry refusal,
@@ -62,6 +64,8 @@ One immutable nominated artifact must then prove:
    checks;
 2. separate Install and fresh-task explicit invocation;
 3. enhancement with complete diff and byte-identical optional files;
+   an arbitrary valid pre-workshop SKILL body is retained unless regeneration
+   is explicitly selected;
 4. `source-changed`, separate Upgrade, and fresh-task changed behavior;
 5. back/exit/default/EOF/signal no-write behavior and one fault-injected source
    recovery journey;

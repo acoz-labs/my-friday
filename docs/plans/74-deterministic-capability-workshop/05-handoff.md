@@ -14,7 +14,8 @@ the full independently accepted/released lifecycle.
 1. **Proposal and canonical renderer** — own new
    `internal/capabilityworkshop` model/render/diff tests and the narrowest helper
    exports from `internal/capability`; exit on byte-stable valid packages whose
-   existing deterministic cases pass.
+   existing deterministic cases pass, including arbitrary valid instruction
+   bodies retained without inference.
 2. **Source transaction** — own workshop plan/journal/stage/quarantine/recovery
    and fault tests; exit on create/update old-or-new atomicity, shared-lock
    serialization, stale refusal, and exact cleanup authority.
@@ -107,7 +108,8 @@ compatibility contracts.
 Return to Solution Design if safe source replacement requires deletion
 authority broader than exact journal/inode/digest proofs; source and lifecycle
 cannot share one lock without breaking existing recovery; valid enhancement
-cannot round-trip the canonical package without content loss; terminal
+cannot round-trip arbitrary valid instruction bodies without content loss;
+terminal
 acceptance shows users cannot distinguish source write from activation; a new
 credential/network/data boundary becomes necessary; the release would rebuild
 accepted bytes; or implementation requires any #75 agent-adapter behavior.

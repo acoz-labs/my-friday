@@ -59,6 +59,10 @@ and agent-action evidence from the authoring authority chain.
   and `disabled` source may be enhanced. Invalid, drifted, collided,
   interrupted, recovery-required, and incompatible states refuse before
   questions begin.
+- **Existing instructions round-trip safely:** an arbitrary valid SKILL body is
+  retained byte-for-byte by default. Replacing it with the canonical workshop
+  body is a separately explicit edit whose complete diff is shown; the workshop
+  never reverse-engineers prose into structured answers.
 - **Agent adapter remains genuinely deferred:** no Codex client, model prompt,
   dormant adapter protocol, or public spec surface ships in #74.
 

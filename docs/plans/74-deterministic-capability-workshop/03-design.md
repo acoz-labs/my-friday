@@ -34,9 +34,9 @@ current contract-v1 fields required to render:
 - `capability.json`: fixed contract/profile/compatibility/prohibited effects;
   explicit slug, semantic version, display name, summary, triggers, inputs,
   outputs, success behavior, and failure behavior;
-- `skill/SKILL.md`: fixed frontmatter from slug/summary and a canonical body
-  with explicit Purpose, Inputs, Outputs, Success, Failure, and Required facts
-  sections; and
+- `skill/SKILL.md`: fixed frontmatter from slug/summary and either a canonical
+  body with explicit Purpose, Inputs, Outputs, Success, Failure, and Required
+  facts sections for creation, or the exact existing body for enhancement; and
 - `tests/cases.json`: positive triggers equal to manifest triggers, explicit
   disjoint non-triggers, one or more examples with expected output fragments,
   explicit required facts, and the fixed seven forbidden effects.
@@ -48,21 +48,52 @@ conversation; contract tests compare normalized trigger membership.
 
 Create starts with version `0.1.0` and a display name derived from the slug,
 both shown as safe editable defaults. All behavioral fields require explicit
-answers. Enhancement starts from parsed existing values; empty input means
-retain only when the prompt displays that current value. List editing supports
-add, replace, remove, retain, `b` to the prior section, and final section
-restart. There is no invisible merge.
+answers. Enhancement starts from parsed manifest/case values; empty input means
+retain only when the prompt displays that current value. The existing SKILL
+body is treated as user-authored content, not parsed into invented sections.
+`Retain instruction body` is the enhancement default. `Regenerate instruction
+body` explicitly replaces it with the canonical body assembled from reviewed
+answers and is visible as a complete core-file diff. Frontmatter may be
+canonically updated while the body after the closing delimiter remains exact.
+List editing supports add, replace, remove, retain, `b` to the prior section,
+and final section restart. There is no invisible merge.
+
+Workshop input bounds are stricter than package storage bounds so full terminal
+review remains practical:
+
+- display name and summary: one trimmed line, 1–200 UTF-8 bytes, with control
+  characters refused;
+- purpose, success behavior, and failure behavior: one trimmed line each,
+  1–1,000 UTF-8 bytes;
+- triggers and non-triggers: 1–16 entries each, 1–256 UTF-8 bytes per entry;
+- inputs and outputs: an explicit `none` choice or 1–16 entries each, 1–256
+  UTF-8 bytes per entry;
+- examples: 1–16, each with a 1–512-byte input and 1–8 output fragments of
+  1–256 bytes each; and
+- required facts: 1–16 entries of 1–512 UTF-8 bytes each.
+
+All counts, rendered core-file sizes, and total package size must also satisfy
+the existing capability constants. The interface reports byte limits as UTF-8
+bytes and never truncates input. Exact `b` and `q` are reserved navigation
+commands only at value/list prompts and are named before input; a value that
+must literally equal one of them is outside the v1 workshop but remains
+representable by direct source ownership.
 
 `SourcePlan` binds action, instance root, source path, pre-state, existing
 source digest or absence, proposed core-file digest, preserved optional-file
 digests, complete proposed package digest, installed/control facts, and preview
 digest. It is not serialized as a public format.
 
-After confirmation, a canonical owner-only source journal is created beneath
-the instance capability authority root with action, slug, source path,
+After confirmation, a canonical owner-only source journal is created at
+`capabilities/.workshop-<slug>.json` beneath the instance authority root with
+action, slug, source path,
 old/new tree digests, fixed stage/rollback names, phase, and relevant inode
-facts. Staged and rollback trees are deterministic siblings beneath
-`runtime/skills/`; unexpected entries at any authority path are collisions.
+facts. Staged and rollback trees are the deterministic siblings
+`runtime/skills/.<slug>.workshop-new` and
+`runtime/skills/.<slug>.workshop-old`; unexpected entries at any authority path
+are collisions. Dot-prefixed workshop authority names cannot be valid
+capability slugs. A live journal makes assistant rollback and every workshop or
+lifecycle mutation refuse until source recovery completes.
 Create uses no-replace promotion. Update stages a complete new tree including
 byte-identical optional files, quarantines the exact old tree, promotes the new
 tree, verifies it, and then removes the exact digest/inode-proven quarantine.
@@ -110,6 +141,11 @@ Secret input is never requested. Color may decorate but never encode state.
 Output wraps naturally and never truncates canonical bytes, diff lines, action,
 installed effect, or confirmation token.
 
+In enhancement, the behavior section first identifies the instruction body as
+`retained user-authored content` and offers only retain or regenerate. It does
+not print the body twice during questions; the complete final source and diff
+remain the authoritative review surface.
+
 Final preview prints stable numbered file headings followed by complete
 canonical file bodies, then a full unified diff against `/dev/null` for create
 or existing core files for update. Optional files are listed by relative path,
@@ -117,7 +153,9 @@ size, and digest as unchanged; their contents are not repeated. It ends with:
 
 ```text
 Source action: create|update
-Installed: no|unchanged (state: <state>)
+Installed: no|unchanged
+Current state: <state>
+Post-write state: <state>
 Type Create source|Update source to continue; Return exits:
 ```
 

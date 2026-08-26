@@ -52,10 +52,12 @@ and lifecycle execution authoritative; extract only small exported validation
 or rendering helpers when duplication would otherwise create contract drift.
 
 The proposal remains ephemeral. The generated core files are the only durable
-answer record. Enhancement parses the existing validated package into proposal
-values, preserves optional files outside the proposal, and updates only the
-three core files. No future adapter interface ships until #75 is reshaped from
-new evidence.
+answer record. Enhancement parses manifest and case fields into proposal
+values, separates SKILL frontmatter from its arbitrary valid instruction body,
+retains that body byte-for-byte by default, preserves optional files outside
+the proposal, and updates only the three core files. Canonical body regeneration
+is an explicit edit, never an inference. No future adapter interface ships
+until #75 is reshaped from new evidence.
 
 The prior #56 mechanism is classified as follows:
 
@@ -78,6 +80,7 @@ The prior #56 mechanism is classified as follows:
 | Proposal is internal and in-memory | Avoid second durable/public schema and keep source canonical | Discovery #72 D1/D3 |
 | Render exactly three core files | Existing validator and projection contract remain authority | `capability.Validate` |
 | Optional references/assets are preserved but not edited | Meets enhancement ownership without adding a file editor | Issue #74 acceptance |
+| Existing SKILL body is retained by default | Any valid pre-workshop package must enhance without prose loss or reverse engineering | Existing open Markdown contract |
 | Source transaction shares the instance capability lock | Prevent source/lifecycle TOCTOU and keep non-blocking concurrency semantics | `capability.Execute`/`Recover` |
 | Source journal is separate from lifecycle receipt/journal | Lifecycle authority must never imply permission to rewrite source | ADR 0004 |
 | Exact confirmation occurs after full diff | Consent binds reviewed bytes and action | Product direction and existing confirmation pattern |
