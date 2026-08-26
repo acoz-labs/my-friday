@@ -151,6 +151,20 @@ func TestActualRevision2ManifestVerifiesPlansUpgradeAndRefusesDrift(t *testing.T
 	if _, err = Verify(home, "alfred"); err != nil {
 		t.Fatalf("revision 2 compatibility: %v", err)
 	}
+	managed := filepath.Join(p.Paths.Root, "dependencies", "my-friday")
+	original, err := os.ReadFile(managed)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = os.WriteFile(managed, []byte("revision 2 executable drift"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = Verify(home, "alfred"); err == nil || !strings.Contains(err.Error(), "My Friday executable drift") {
+		t.Fatalf("revision 2 executable drift accepted: %v", err)
+	}
+	if err = os.WriteFile(managed, original, 0700); err != nil {
+		t.Fatal(err)
+	}
 	candidate := candidateFixture(t, home, "revision 3 candidate")
 	if _, err = PlanUpgrade(home, "alfred", candidate); err != nil {
 		t.Fatalf("revision 2 plan: %v", err)
@@ -206,6 +220,60 @@ func TestActualRevision2UpgradeRecoveryAndRollback(t *testing.T) {
 	m, err = Verify(home, "alfred")
 	if err != nil || m.CapabilityRevision != 2 {
 		t.Fatalf("rollback=%#v err=%v", m, err)
+	}
+}
+
+func TestActualRevision2RollbackResumesExecutableAndManifestPhases(t *testing.T) {
+	for _, phase := range []string{"executable-restored", "manifest-promoted"} {
+		t.Run(phase, func(t *testing.T) {
+			home, exe, codex := fixture(t)
+			p, err := PlanCreate(home, "alfred", exe, codex)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err = Create(p, exe, codex); err != nil {
+				t.Fatal(err)
+			}
+			downgradeFixtureToRevision2(t, p.Paths)
+			rollbackBytes, err := os.ReadFile(filepath.Join(p.Paths.Root, "dependencies", "my-friday"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			candidate := candidateFixture(t, home, "revision 3 candidate for rollback interruption")
+			upgrade, err := PlanUpgrade(home, "alfred", candidate)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err = Upgrade(upgrade); err != nil {
+				t.Fatal(err)
+			}
+			plan, err := PlanRollback(home, "alfred")
+			if err != nil {
+				t.Fatal(err)
+			}
+			rollbackHook = func(got string) error {
+				if got == phase {
+					return errors.New("stop")
+				}
+				return nil
+			}
+			if err = Rollback(plan); err == nil {
+				t.Fatal("rollback fault missing")
+			}
+			rollbackHook = nil
+			t.Cleanup(func() { rollbackHook = nil })
+			if _, err = Recover(home, "alfred"); err != nil {
+				t.Fatal(err)
+			}
+			m, err := Verify(home, "alfred")
+			if err != nil || m.CapabilityRevision != 2 {
+				t.Fatalf("manifest=%#v err=%v", m, err)
+			}
+			got, err := os.ReadFile(m.MyFridayExecutable)
+			if err != nil || !bytes.Equal(got, rollbackBytes) {
+				t.Fatalf("restored executable mismatch err=%v", err)
+			}
+		})
 	}
 }
 

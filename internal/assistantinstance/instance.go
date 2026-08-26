@@ -110,6 +110,7 @@ type Manifest struct {
 type capabilityMigration struct {
 	ContractVersion              int    `json:"contract_version"`
 	Action                       string `json:"action"`
+	Phase                        string `json:"phase,omitempty"`
 	SourceContractVersion        int    `json:"source_contract_version,omitempty"`
 	SourceCapabilityRevision     int    `json:"source_capability_revision,omitempty"`
 	TargetContractVersion        int    `json:"target_contract_version,omitempty"`
@@ -175,7 +176,8 @@ func readCapabilityMigration(root string) (capabilityMigration, error) {
 	if m.BuilderQuarantineSHA256 != "" || m.CapabilitiesQuarantineSHA256 != "" || m.MyFridayQuarantineSHA256 != "" {
 		validQuarantines = validDigest(m.BuilderQuarantineSHA256) && validDigest(m.CapabilitiesQuarantineSHA256) && validDigest(m.MyFridayQuarantineSHA256)
 	}
-	if !bytes.Equal(body, canonical) || m.ContractVersion != 2 || (m.Action != "upgrade" && m.Action != "rollback") || !validDigest(m.SourceManifestSHA256) || !validTarget || !validQuarantines {
+	validPhase := m.Phase == "" || (m.Action == "rollback" && m.Phase == "executable-restored")
+	if !bytes.Equal(body, canonical) || m.ContractVersion != 2 || (m.Action != "upgrade" && m.Action != "rollback") || !validDigest(m.SourceManifestSHA256) || !validTarget || !validQuarantines || !validPhase {
 		return m, errors.New("invalid assistant migration journal")
 	}
 	return m, nil
@@ -1155,15 +1157,44 @@ func completeRollback(p Paths, m Manifest) error {
 			return err
 		}
 		if err = os.Mkdir(capabilities, 0o700); err != nil {
-			return err
+			if !errors.Is(err, os.ErrExist) {
+				return err
+			}
+			entries, readErr := os.ReadDir(capabilities)
+			if readErr != nil || len(entries) != 0 {
+				return errors.New("assistant rollback capability restoration drift")
+			}
 		}
 		m.CapabilityBuilder = builder
 		m.CapabilityBuilderSHA256 = digest(builderBytes)
 		m.CapabilityPolicySHA256 = digest([]byte(builderPolicy))
 		if targetRevision == 2 {
 			backup := filepath.Join(p.Root, "dependencies", "my-friday.rollback-source")
-			if err = os.Rename(backup, managedMyFriday); err != nil {
-				return err
+			if _, backupErr := os.Lstat(backup); backupErr == nil {
+				if _, managedErr := os.Lstat(managedMyFriday); !errors.Is(managedErr, os.ErrNotExist) {
+					return errors.New("assistant rollback executable restoration collision")
+				}
+				if err = os.Rename(backup, managedMyFriday); err != nil {
+					return err
+				}
+			} else if errors.Is(backupErr, os.ErrNotExist) {
+				restored, info, restoredErr := regular(managedMyFriday)
+				if restoredErr != nil || info.Mode().Perm() != 0700 || digest(restored) != rollbackExecutableDigest {
+					return errors.New("assistant rollback executable restoration drift")
+				}
+			} else {
+				return backupErr
+			}
+			if rollbackHook != nil {
+				if err = rollbackHook("executable-restored"); err != nil {
+					return err
+				}
+			}
+			if migration.Phase != "executable-restored" {
+				migration.Phase = "executable-restored"
+				if err = writeCapabilityMigration(p.Root, migration, true); err != nil {
+					return err
+				}
 			}
 			m.MyFridayExecutable = managedMyFriday
 			m.MyFridaySHA256 = rollbackExecutableDigest
@@ -1189,6 +1220,11 @@ func completeRollback(p Paths, m Manifest) error {
 	}
 	if err = os.Rename(tmp, filepath.Join(p.Root, "manifest.json")); err != nil {
 		return err
+	}
+	if rollbackHook != nil {
+		if err = rollbackHook("manifest-promoted"); err != nil {
+			return err
+		}
 	}
 	if err = finishRollbackQuarantines(p, migration); err != nil {
 		return err
@@ -1427,7 +1463,7 @@ func verify(home, name string) (Manifest, error) {
 	if cinfo.Mode().Perm() != 0700 || digest(cb) != m.CodexSHA256 {
 		return m, errors.New("managed Codex executable drift")
 	}
-	if m.ContractVersion == ContractVersion && m.CapabilityRevision == CapabilityRevision {
+	if m.ContractVersion == ContractVersion && (m.CapabilityRevision == 2 || m.CapabilityRevision == CapabilityRevision) {
 		mb, minfo, managedErr := regular(m.MyFridayExecutable)
 		if managedErr != nil {
 			return m, fmt.Errorf("managed My Friday executable unavailable: %w", managedErr)
@@ -1561,7 +1597,11 @@ func Recover(home, name string) (string, error) {
 			return "completed capability upgrade", finishTransaction(lock, upgradeErr)
 		}
 		if journal.Action == "rollback" {
-			m, manifestErr := readManifest(p)
+			manifestBody, _, manifestErr := regular(filepath.Join(p.Root, "manifest.json"))
+			var m Manifest
+			if manifestErr == nil {
+				manifestErr = json.Unmarshal(manifestBody, &m)
+			}
 			if manifestErr != nil {
 				return "", finishTransaction(lock, manifestErr)
 			}
@@ -1570,6 +1610,9 @@ func Recover(home, name string) (string, error) {
 					return "", finishTransaction(lock, verifyErr)
 				}
 				return "completed capability rollback", finishTransaction(lock, finishRollbackQuarantines(p, journal))
+			}
+			if digest(manifestBody) != journal.SourceManifestSHA256 {
+				return "", finishTransaction(lock, errors.New("assistant rollback source manifest changed"))
 			}
 			rollbackErr := completeRollback(p, m)
 			return "completed capability rollback", finishTransaction(lock, rollbackErr)

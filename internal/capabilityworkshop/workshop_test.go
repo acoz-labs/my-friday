@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -244,6 +245,49 @@ func TestCommitRefusesStalePreviewAndSharedLifecycleLock(t *testing.T) {
 	}
 }
 
+func TestCommitRefusesMetadataAndByteIdenticalPreviewReplacement(t *testing.T) {
+	for _, mutate := range []string{"chmod", "replace"} {
+		t.Run(mutate, func(t *testing.T) {
+			instance := filepath.Join(t.TempDir(), "alfred")
+			if err := capability.InitializeInstance(instance); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.MkdirAll(filepath.Join(instance, "runtime", "skills"), 0700); err != nil {
+				t.Fatal(err)
+			}
+			source := createPackage(t, instance, "daily-brief", validProposal("daily-brief"))
+			before, err := capability.Inspect(instance, source)
+			if err != nil {
+				t.Fatal(err)
+			}
+			authority, err := snapshotTree(source, "daily-brief")
+			if err != nil {
+				t.Fatal(err)
+			}
+			target := filepath.Join(source, "skill", "SKILL.md")
+			if mutate == "chmod" {
+				err = os.Chmod(target, 0640)
+			} else {
+				body, readErr := os.ReadFile(target)
+				if readErr != nil {
+					t.Fatal(readErr)
+				}
+				tmp := target + ".replacement"
+				if err = os.WriteFile(tmp, body, 0600); err == nil {
+					err = os.Rename(tmp, target)
+				}
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			files, _ := render(validProposal("daily-brief"))
+			if err = commit(instance, source, "daily-brief", before, files, "update", authority); err == nil || !strings.Contains(err.Error(), "stale") {
+				t.Fatalf("preview mutation accepted: %v", err)
+			}
+		})
+	}
+}
+
 func TestMalformedJournalPrecedesValidSourceAndWorkshopOnlyRecovery(t *testing.T) {
 	root := t.TempDir()
 	instance := filepath.Join(root, "alfred")
@@ -295,6 +339,60 @@ func TestLinkedWorkshopJournalIsRecoveryRequired(t *testing.T) {
 	}
 }
 
+func TestSemanticWorkshopJournalContradictionsAreRecoveryRequired(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		mutate func(*journal)
+	}{
+		{"stage-root", func(j *journal) { j.StageRoot = "../outside" }},
+		{"entry-mode", func(j *journal) { e := j.StageTree["skill/SKILL.md"]; e.Mode = 0777; j.StageTree["skill/SKILL.md"] = e }},
+		{"entry-links", func(j *journal) { e := j.StageTree["skill/SKILL.md"]; e.Links = 2; j.StageTree["skill/SKILL.md"] = e }},
+		{"create-old-authority", func(j *journal) { j.SourceInode = 42; j.OldTree = j.StageTree }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			instance := filepath.Join(t.TempDir(), "alfred")
+			if err := capability.InitializeInstance(instance); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.MkdirAll(filepath.Join(instance, "runtime", "skills"), 0700); err != nil {
+				t.Fatal(err)
+			}
+			source := filepath.Join(instance, "runtime", "skills", "daily-brief")
+			before, _ := capability.Inspect(instance, source)
+			files, _ := render(validProposal("daily-brief"))
+			mutationHook = func(phase string) error {
+				if phase == "journal-written" {
+					return errors.New("stop")
+				}
+				return nil
+			}
+			if err := commit(instance, source, "daily-brief", before, files, "create"); err == nil {
+				t.Fatal("fault missing")
+			}
+			mutationHook = nil
+			t.Cleanup(func() { mutationHook = nil })
+			jp := filepath.Join(instance, "capabilities", ".workshop-daily-brief.json")
+			j, err := readJournal(jp, "daily-brief")
+			if err != nil {
+				t.Fatal(err)
+			}
+			tc.mutate(&j)
+			body, _ := json.MarshalIndent(j, "", "  ")
+			body = append(body, '\n')
+			if err = os.WriteFile(jp, body, 0600); err != nil {
+				t.Fatal(err)
+			}
+			status, _ := capability.Inspect(instance, source)
+			if status.State != capability.StateRecoveryRequired {
+				t.Fatalf("status=%#v", status)
+			}
+			if err = Run(instance, source, "daily-brief", strings.NewReader(""), io.Discard); err == nil {
+				t.Fatal("malformed authority entered workshop")
+			}
+		})
+	}
+}
+
 func TestExactOldTreeCleanupPreservesRacedForeignEntry(t *testing.T) {
 	root := t.TempDir()
 	instance := filepath.Join(root, "alfred")
@@ -330,6 +428,91 @@ func TestExactOldTreeCleanupPreservesRacedForeignEntry(t *testing.T) {
 	}
 	if _, readErr = os.ReadFile(filepath.Join(old, "capability.json")); readErr != nil {
 		t.Fatalf("cleanup partially removed recoverable old tree: %v", readErr)
+	}
+}
+
+func TestInterruptedCleanupResumesAfterEveryUnlink(t *testing.T) {
+	for _, stopAt := range []string{"capability.json", "skill/SKILL.md", "skill", "tests/cases.json", "tests"} {
+		t.Run(stopAt, func(t *testing.T) {
+			instance := filepath.Join(t.TempDir(), "alfred")
+			if err := capability.InitializeInstance(instance); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.MkdirAll(filepath.Join(instance, "runtime", "skills"), 0700); err != nil {
+				t.Fatal(err)
+			}
+			source := createPackage(t, instance, "daily-brief", validProposal("daily-brief"))
+			before, _ := capability.Inspect(instance, source)
+			p := validProposal("daily-brief")
+			p.Version = "1.1.0"
+			files, _ := render(p)
+			mutationHook = func(phase string) error {
+				if phase == "cleanup-unlinked:"+stopAt {
+					return errors.New("stop after unlink")
+				}
+				return nil
+			}
+			if err := commit(instance, source, "daily-brief", before, files, "update"); err == nil {
+				t.Fatal("fault missing")
+			}
+			mutationHook = nil
+			t.Cleanup(func() { mutationHook = nil })
+			var out bytes.Buffer
+			if err := Run(instance, source, "daily-brief", strings.NewReader(""), &out); err != nil {
+				t.Fatal(err)
+			}
+			status, err := capability.Inspect(instance, source)
+			if err != nil || status.State != capability.StateReady {
+				t.Fatalf("state=%s err=%v", status.State, err)
+			}
+			if _, err = os.Lstat(filepath.Join(filepath.Dir(source), ".daily-brief.workshop-old")); !os.IsNotExist(err) {
+				t.Fatalf("old residue: %v", err)
+			}
+		})
+	}
+}
+
+func TestInterruptedCleanupRefusesAdditionAndSubstitution(t *testing.T) {
+	for _, kind := range []string{"addition", "substitution"} {
+		t.Run(kind, func(t *testing.T) {
+			instance := filepath.Join(t.TempDir(), "alfred")
+			if err := capability.InitializeInstance(instance); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.MkdirAll(filepath.Join(instance, "runtime", "skills"), 0700); err != nil {
+				t.Fatal(err)
+			}
+			source := createPackage(t, instance, "daily-brief", validProposal("daily-brief"))
+			before, _ := capability.Inspect(instance, source)
+			p := validProposal("daily-brief")
+			p.Version = "1.1.0"
+			files, _ := render(p)
+			old := filepath.Join(filepath.Dir(source), ".daily-brief.workshop-old")
+			mutationHook = func(phase string) error {
+				if phase != "cleanup-unlinked:capability.json" {
+					return nil
+				}
+				target := filepath.Join(old, "foreign")
+				if kind == "substitution" {
+					target = filepath.Join(old, "capability.json")
+				}
+				if err := os.WriteFile(target, []byte("untrusted"), 0600); err != nil {
+					return err
+				}
+				return errors.New("stop after foreign write")
+			}
+			if err := commit(instance, source, "daily-brief", before, files, "update"); err == nil {
+				t.Fatal("fault missing")
+			}
+			mutationHook = nil
+			t.Cleanup(func() { mutationHook = nil })
+			if err := Run(instance, source, "daily-brief", strings.NewReader(""), io.Discard); err == nil {
+				t.Fatal("foreign survivor recovered")
+			}
+			if body, err := os.ReadFile(filepath.Join(old, map[string]string{"addition": "foreign", "substitution": "capability.json"}[kind])); err != nil || string(body) != "untrusted" {
+				t.Fatalf("foreign survivor=%q err=%v", body, err)
+			}
+		})
 	}
 }
 
@@ -444,6 +627,15 @@ func TestPreJournalStageFaultsDoNotBlockRetry(t *testing.T) {
 			}
 			mutationHook = nil
 			defer func() { mutationHook = nil }()
+			entries, err := os.ReadDir(filepath.Join(instance, "runtime", "skills"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, entry := range entries {
+				if strings.HasPrefix(entry.Name(), ".daily-brief.workshop-new-") {
+					t.Fatalf("pre-journal residue: %s", entry.Name())
+				}
+			}
 			if err := commit(instance, source, "daily-brief", before, files, "create"); err != nil {
 				t.Fatalf("retry blocked: %v", err)
 			}
@@ -633,6 +825,136 @@ func TestBoundsRepromptAndNavigationExitWithoutWrite(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestNavigationCommandsExposeTheDeterministicNextPrompt(t *testing.T) {
+	base := []string{"Daily brief", "Prepare a concise daily brief", "0.1.0", "Prepare a daily brief", "Return a brief", "Explain failure", "prepare brief", "casual chat", "topics", "brief", "facts", "prepare brief now", "brief"}
+	for _, tc := range []struct {
+		name   string
+		input  []string
+		prompt string
+		count  int
+	}{
+		{"scalar-back-boundary", []string{"b", "q"}, "Display name", 2},
+		{"scalar-restart-boundary", []string{"r", "q"}, "Display name", 2},
+		{"list-back-boundary", append(append([]string{}, base[:6]...), "b", "q"), "Triggers", 2},
+		{"list-restart-boundary", append(append([]string{}, base[:6]...), "r", "q"), "Triggers", 2},
+		{"add-another-back", append(append([]string{}, base...), "b", "q"), "Example 1 input", 2},
+		{"add-another-restart", append(append([]string{}, base...), "r", "q"), "Example 1 input", 2},
+		{"new-example-back", append(append([]string{}, base...), "yes", "b", "q"), "Example 1 input", 2},
+		{"new-example-restart", append(append([]string{}, base...), "yes", "r", "q"), "Example 1 input", 2},
+		{"new-example-output-back", append(append([]string{}, base...), "yes", "another input", "b", "q"), "Example 1 input", 2},
+		{"new-example-output-restart", append(append([]string{}, base...), "yes", "another input", "r", "q"), "Example 1 input", 2},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			instance := filepath.Join(t.TempDir(), "alfred")
+			if err := capability.InitializeInstance(instance); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.MkdirAll(filepath.Join(instance, "runtime", "skills"), 0700); err != nil {
+				t.Fatal(err)
+			}
+			var out bytes.Buffer
+			input := strings.Join(tc.input, "\n") + "\n"
+			if err := Run(instance, filepath.Join(instance, "runtime", "skills", "daily-brief"), "daily-brief", strings.NewReader(input), &out); err != nil {
+				t.Fatal(err)
+			}
+			if got := strings.Count(out.String(), tc.prompt); got != tc.count {
+				t.Fatalf("%s count=%d want=%d\n%s", tc.prompt, got, tc.count, out.String())
+			}
+		})
+	}
+}
+
+func TestRecoveryCommandAndStateMatrix(t *testing.T) {
+	t.Run("source-workshop", func(t *testing.T) {
+		instance := filepath.Join(t.TempDir(), "alfred")
+		if err := capability.InitializeInstance(instance); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.MkdirAll(filepath.Join(instance, "runtime", "skills"), 0700); err != nil {
+			t.Fatal(err)
+		}
+		source := filepath.Join(instance, "runtime", "skills", "daily-brief")
+		before, _ := capability.Inspect(instance, source)
+		files, _ := render(validProposal("daily-brief"))
+		mutationHook = func(phase string) error {
+			if phase == "journal-written" {
+				return errors.New("stop")
+			}
+			return nil
+		}
+		if err := commit(instance, source, "daily-brief", before, files, "create"); err == nil {
+			t.Fatal("fault missing")
+		}
+		mutationHook = nil
+		t.Cleanup(func() { mutationHook = nil })
+		status, err := capability.Inspect(instance, source)
+		if err != nil || status.State != capability.StateInterrupted || status.Interruption != "source-workshop" {
+			t.Fatalf("status=%#v err=%v", status, err)
+		}
+		if err = capability.Recover(instance, "daily-brief"); err == nil || !strings.Contains(err.Error(), "source workshop") {
+			t.Fatalf("lifecycle command accepted source journal: %v", err)
+		}
+		var out bytes.Buffer
+		if err = Run(instance, source, "daily-brief", strings.NewReader(""), &out); err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(out.String(), "Source workshop recovered") {
+			t.Fatalf("output=%s", out.String())
+		}
+	})
+
+	t.Run("lifecycle", func(t *testing.T) {
+		instance := filepath.Join(t.TempDir(), "alfred")
+		if err := capability.InitializeInstance(instance); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.MkdirAll(filepath.Join(instance, "runtime", "skills"), 0700); err != nil {
+			t.Fatal(err)
+		}
+		source := createPackage(t, instance, "daily-brief", validProposal("daily-brief"))
+		plan, err := capability.Plan(instance, source, capability.ActionInstall)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err = os.Mkdir(plan.Control, 0700); err != nil {
+			t.Fatal(err)
+		}
+		tx := struct {
+			ContractVersion    int    `json:"contract_version"`
+			Action             string `json:"action"`
+			Slug               string `json:"slug"`
+			SourceDigest       string `json:"source_digest"`
+			ProjectionDigest   string `json:"projection_digest"`
+			PriorReceiptDigest string `json:"prior_receipt_digest"`
+			CreatedControl     bool   `json:"created_control"`
+		}{1, "install", "daily-brief", plan.Package.SourceDigest, plan.Package.ProjectionDigest, "", true}
+		body, _ := json.MarshalIndent(tx, "", "  ")
+		body = append(body, '\n')
+		if err = os.WriteFile(filepath.Join(plan.Control, "transaction.json"), body, 0600); err != nil {
+			t.Fatal(err)
+		}
+		status, err := capability.Inspect(instance, source)
+		if err != nil || status.State != capability.StateInterrupted || status.Interruption != "lifecycle" {
+			t.Fatalf("status=%#v err=%v", status, err)
+		}
+		var out bytes.Buffer
+		if err = Run(instance, source, "daily-brief", strings.NewReader(""), &out); err == nil || !strings.Contains(err.Error(), "capability recover") {
+			t.Fatalf("workshop accepted lifecycle journal: %v", err)
+		}
+		status, _ = capability.Inspect(instance, source)
+		if status.Interruption != "lifecycle" {
+			t.Fatalf("workshop changed lifecycle authority: %#v", status)
+		}
+		if err = capability.Recover(instance, "daily-brief"); err != nil {
+			t.Fatal(err)
+		}
+		status, err = capability.Inspect(instance, source)
+		if err != nil || status.State != capability.StateReady {
+			t.Fatalf("status=%#v err=%v", status, err)
+		}
+	})
 }
 
 func TestExplicitNoneRendersEmptyAnsweredInputsAndOutputs(t *testing.T) {

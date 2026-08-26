@@ -80,9 +80,12 @@ records that stage name and the complete staged and prior-tree device, inode,
 owner, mode, link-count, type, path, and content-digest authority. Recovery
 revalidates those facts before promotion or cleanup and refuses chmod or entry-
 set drift. Cleanup validates the complete old tree and package digest twice
-before its first unlink; a race before that boundary preserves the entire old
-tree. Pre-journal staging failures use unique roots and therefore cannot create
-a deterministic retry collision.
+before its first unlink, journals each file and directory unlink, and on
+re-entry treats a missing expected entry only as completed work while every
+survivor still matches its original inode and metadata. Additions and
+substitutions are preserved and refused. Pre-journal staging failures remove
+only the descriptor-bound random root after exact authority checks, so they
+cannot create a deterministic retry collision.
 
 Retained `SKILL.md` bodies preserve their suffix bytes, including whether the
 last byte is a newline. Generated frontmatter renders the summary as a JSON-
@@ -119,9 +122,12 @@ lifecycle mutation and uses a separate mode-0600
 `capabilities/.workshop-<slug>.json` journal. It re-inspects previewed facts
 while locked, stages and validates the complete package with byte-identical
 optional files, and promotes only the exact staged source. A retained canonical
-journal is `interrupted`; malformed or contradictory authority is
-`recovery-required`. Re-entering the workshop performs only digest-proven
-old/new source recovery and exits before collecting answers.
+journal is `interrupted` with interruption kind `source-workshop`; a valid
+lifecycle journal is separately `interrupted` with kind `lifecycle`. Malformed
+or contradictory authority is `recovery-required`. Re-entering the workshop
+performs only digest-proven source-workshop recovery and exits before collecting
+answers; lifecycle interruption directs the existing `capability recover`
+command and is not consumed by the workshop.
 
 Successful create reports `ready` and a separate Install command. Updating an
 active projection reports `source-changed` and a separate Upgrade command;
@@ -158,4 +164,7 @@ and revision and rechecks capability control and workspace-skill observations
 under the held instance lock before quarantining exact owned leaves. Foreign
 quarantine names are refused. Quarantine tree type, owner, mode, link count, and
 digest remain journal-bound and are revalidated immediately before deletion,
-including after interrupted rollback.
+including after interrupted rollback. Revision-2 verification also binds the
+managed executable bytes and mode. A rollback to revision 2 journals executable
+restoration before manifest promotion, so recovery can resume on either side of
+that promotion without requiring the already-restored rollback-source name.

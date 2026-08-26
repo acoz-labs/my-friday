@@ -136,7 +136,8 @@ currently executing My Friday candidate copy, refuse executable/config/builder
 drift, exercise v1 and legacy-v2 revision upgrades and bounded rollback
 reversal, and recover an interruption after execution-context mutation.
 Adversarial migration tests substitute candidate staging and each rollback
-quarantine, and prove foreign quarantine collisions remain untouched. Purpose
+quarantine, interrupt revision-2 executable restoration and manifest promotion,
+and prove foreign quarantine collisions remain untouched. Purpose
 instructions remain manifest-bound, and verify,
 remove, and recovery authority is denied after managed-state tampering. Reversal tests preserve ambient user Codex state. The
 acceptance contract forbids scripting an onboarding response.

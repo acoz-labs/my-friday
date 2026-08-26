@@ -52,6 +52,9 @@ func Run(instance, source, slug string, in io.Reader, out io.Writer) error {
 	}
 	status, inspectErr := capability.Inspect(instance, source)
 	if status.State == capability.StateInterrupted {
+		if status.Interruption != "source-workshop" {
+			return fmt.Errorf("capability lifecycle recovery required; run capability recover %s", slug)
+		}
 		if err := recoverSource(instance, source, slug); err != nil {
 			return err
 		}
@@ -72,6 +75,13 @@ func Run(instance, source, slug string, in io.Reader, out io.Writer) error {
 	p, err := initialProposal(slug, status.Package)
 	if err != nil {
 		return err
+	}
+	var previewSnapshot map[string]snapshotEntry
+	if status.Package != nil {
+		previewSnapshot, err = snapshotTree(source, slug)
+		if err != nil {
+			return err
+		}
 	}
 	r := bufio.NewReader(in)
 	fmt.Fprintf(out, "Capability workshop: %s\nMode: %s\nEnter q at any prompt to exit without changes. Enter b for the previous item or r to restart the current section. At a section boundary, b repeats that boundary.\n", slug, map[bool]string{true: "create", false: "enhance"}[creating])
@@ -131,9 +141,10 @@ func Run(instance, source, slug string, in io.Reader, out io.Writer) error {
 				return finishNoChange(out, nil)
 			}
 			if v == "b" {
-				if i > 0 {
-					i -= 2
+				if i == 0 {
+					continue
 				}
+				i -= 2
 				break
 			}
 			if v == "r" {
@@ -184,9 +195,10 @@ func Run(instance, source, slug string, in io.Reader, out io.Writer) error {
 				return finishNoChange(out, nil)
 			}
 			if v == "b" {
-				if i > 0 {
-					i -= 2
+				if i == 0 {
+					continue
 				}
+				i -= 2
 				break
 			}
 			if v == "r" {
@@ -229,6 +241,7 @@ func Run(instance, source, slug string, in io.Reader, out io.Writer) error {
 		fmt.Fprintf(out, "Current example %d: input=%q; output=%s\n", i+1, ex.Input, listSummary(ex.Output))
 	}
 	baseExamples := append([]example(nil), p.Examples...)
+examplesSection:
 	for {
 		currentInput := ""
 		currentOutput := []string(nil)
@@ -276,7 +289,7 @@ func Run(instance, source, slug string, in io.Reader, out io.Writer) error {
 				return finishNoChange(out, e)
 			}
 			if more == "b" || more == "r" {
-				break
+				continue examplesSection
 			}
 			if more == "" || more == "no" {
 				break
@@ -290,9 +303,15 @@ func Run(instance, source, slug string, in io.Reader, out io.Writer) error {
 			if e != nil || stop {
 				return finishNoChange(out, e)
 			}
+			if ei == "b" || ei == "r" {
+				continue examplesSection
+			}
 			eo, stop, e := prompt(r, out, fmt.Sprintf("Example %d expected output fragments (1-8; separate with |)", n), 2048, false)
 			if e != nil || stop {
 				return finishNoChange(out, e)
+			}
+			if eo == "b" || eo == "r" {
+				continue examplesSection
 			}
 			vals, e := list(eo, false, 256, 8)
 			if ei == "" || e != nil {
@@ -330,7 +349,7 @@ func Run(instance, source, slug string, in io.Reader, out io.Writer) error {
 	if line != token+"\n" {
 		return finishNoChange(out, nil)
 	}
-	if err = commit(instance, source, slug, status, files, action); err != nil {
+	if err = commit(instance, source, slug, status, files, action, previewSnapshot); err != nil {
 		return err
 	}
 	post, postErr := capability.Inspect(instance, source)
@@ -603,34 +622,13 @@ func writeDiffBytes(out io.Writer, prefix byte, body []byte) {
 	}
 }
 
-type journal struct {
-	ContractVersion int                     `json:"contract_version"`
-	Action          string                  `json:"action"`
-	Slug            string                  `json:"slug"`
-	OldDigest       string                  `json:"old_digest"`
-	NewDigest       string                  `json:"new_digest"`
-	Phase           string                  `json:"phase"`
-	SourceInode     uint64                  `json:"source_inode"`
-	StageInode      uint64                  `json:"stage_inode"`
-	StageRoot       string                  `json:"stage_root"`
-	StageTree       map[string]journalEntry `json:"stage_tree"`
-	OldTree         map[string]journalEntry `json:"old_tree,omitempty"`
-}
-
-type journalEntry struct {
-	Device    uint64 `json:"device"`
-	Inode     uint64 `json:"inode"`
-	Mode      uint32 `json:"mode"`
-	Owner     uint32 `json:"owner"`
-	Links     uint64 `json:"links"`
-	SHA256    string `json:"sha256,omitempty"`
-	Directory bool   `json:"directory"`
-}
+type journal = capability.WorkshopJournal
+type journalEntry = capability.WorkshopJournalEntry
 
 func journalTree(entries map[string]snapshotEntry) map[string]journalEntry {
 	out := make(map[string]journalEntry, len(entries))
 	for path, entry := range entries {
-		out[path] = journalEntry{entry.dev, entry.ino, uint32(entry.mode.Perm()), entry.uid, entry.nlink, entry.digest, entry.dir}
+		out[path] = journalEntry{Device: entry.dev, Inode: entry.ino, Mode: uint32(entry.mode.Perm()), Owner: entry.uid, Links: entry.nlink, SHA256: entry.digest, Directory: entry.dir}
 	}
 	return out
 }
@@ -644,33 +642,7 @@ func snapshotAuthority(entries map[string]journalEntry) map[string]snapshotEntry
 }
 
 func readJournal(path, slug string) (journal, error) {
-	var j journal
-	info, statErr := os.Lstat(path)
-	if statErr != nil || info.Mode().Perm() != 0600 || !info.Mode().IsRegular() {
-		return j, errors.New("source workshop recovery required")
-	}
-	b, err := readOwnedRegular(path)
-	if err != nil {
-		return j, err
-	}
-	if err = json.Unmarshal(b, &j); err != nil {
-		return j, errors.New("source workshop recovery required")
-	}
-	canonical, _ := json.MarshalIndent(j, "", "  ")
-	canonical = append(canonical, '\n')
-	if !bytes.Equal(b, canonical) || j.ContractVersion != 1 || j.Slug != slug || (j.Action != "create" && j.Action != "update") || j.Phase != "staged" || len(j.NewDigest) != 64 || j.StageInode == 0 || !validStageRoot(slug, j.StageRoot) || len(j.StageTree) == 0 || (j.Action == "update" && (len(j.OldDigest) != 64 || j.SourceInode == 0 || len(j.OldTree) == 0)) || (j.Action == "create" && (j.SourceInode != 0 || len(j.OldTree) != 0)) {
-		return j, errors.New("source workshop recovery required")
-	}
-	return j, nil
-}
-
-func validStageRoot(slug, name string) bool {
-	prefix := "." + slug + ".workshop-new-"
-	if !strings.HasPrefix(name, prefix) || len(name) != len(prefix)+32 {
-		return false
-	}
-	_, err := hex.DecodeString(strings.TrimPrefix(name, prefix))
-	return err == nil && filepath.Base(name) == name
+	return capability.ReadWorkshopJournal(path, slug)
 }
 
 func packageDigest(path, slug string) string {
@@ -713,8 +685,11 @@ func snapshotTree(root, slug string) (map[string]snapshotEntry, error) {
 	if e = capability.TestCases(pkg); e != nil {
 		return nil, e
 	}
+	return snapshotFilesystem(root)
+}
+func snapshotFilesystem(root string) (map[string]snapshotEntry, error) {
 	entries := map[string]snapshotEntry{}
-	e = filepath.WalkDir(root, func(path string, de os.DirEntry, we error) error {
+	e := filepath.WalkDir(root, func(path string, de os.DirEntry, we error) error {
 		if we != nil {
 			return we
 		}
@@ -829,6 +804,136 @@ func createStage(parentFD int, slug string) (string, int, error) {
 		return name, fd, nil
 	}
 	return "", -1, errors.New("source workshop could not allocate staging")
+}
+func openSkillsFromInstance(instance string) (int, error) {
+	root, err := unix.Open(instance, unix.O_RDONLY|unix.O_DIRECTORY|unix.O_NOFOLLOW, 0)
+	if err != nil {
+		return -1, err
+	}
+	var rootStat unix.Stat_t
+	if err = unix.Fstat(root, &rootStat); err != nil || rootStat.Uid != uint32(os.Getuid()) || os.FileMode(rootStat.Mode).Perm() != 0700 {
+		unix.Close(root)
+		return -1, errors.New("unsafe instance root authority")
+	}
+	fd := root
+	for _, name := range []string{"runtime", "skills"} {
+		next, x := unix.Openat(fd, name, unix.O_RDONLY|unix.O_DIRECTORY|unix.O_NOFOLLOW, 0)
+		if fd != root {
+			unix.Close(fd)
+		}
+		if x != nil {
+			unix.Close(root)
+			return -1, x
+		}
+		var st unix.Stat_t
+		if x = unix.Fstat(next, &st); x != nil || st.Dev != rootStat.Dev || st.Uid != rootStat.Uid || os.FileMode(st.Mode).Perm() != 0700 {
+			unix.Close(next)
+			unix.Close(root)
+			return -1, errors.New("unsafe skills ancestor authority")
+		}
+		fd = next
+	}
+	unix.Close(root)
+	return fd, nil
+}
+
+func stageAllowed(files map[string][]byte, prior map[string]snapshotEntry, slug string) map[string]bool {
+	allowed := map[string]bool{slug: true}
+	add := func(rel string) {
+		parts := strings.Split(filepath.ToSlash(rel), "/")
+		current := slug
+		for _, part := range parts {
+			current += "/" + part
+			allowed[current] = true
+		}
+	}
+	for name := range files {
+		add(name)
+	}
+	for name := range prior {
+		if name != "" {
+			add(name)
+		}
+	}
+	return allowed
+}
+func removeOwnedStage(parentFD, stageFD int, name string, rootInode uint64, allowed map[string]bool) error {
+	var rootStat unix.Stat_t
+	if err := unix.Fstat(stageFD, &rootStat); err != nil || rootStat.Ino != rootInode || rootStat.Uid != uint32(os.Getuid()) || rootStat.Mode&unix.S_IFMT != unix.S_IFDIR {
+		return errors.New("stage cleanup root authority changed")
+	}
+	var walk func(int, string) error
+	walk = func(fd int, rel string) error {
+		dup, err := unix.Dup(fd)
+		if err != nil {
+			return err
+		}
+		f := os.NewFile(uintptr(dup), "stage-cleanup")
+		entries, err := f.ReadDir(-1)
+		f.Close()
+		if err != nil {
+			return err
+		}
+		for _, entry := range entries {
+			child := entry.Name()
+			path := child
+			if rel != "" {
+				path = rel + "/" + child
+			}
+			if !allowed[path] {
+				return fmt.Errorf("foreign stage cleanup entry %s", path)
+			}
+			var st unix.Stat_t
+			if err = unix.Fstatat(fd, child, &st, unix.AT_SYMLINK_NOFOLLOW); err != nil {
+				return err
+			}
+			if st.Uid != uint32(os.Getuid()) {
+				return errors.New("stage cleanup owner changed")
+			}
+			if st.Mode&unix.S_IFMT == unix.S_IFDIR {
+				cfd, x := unix.Openat(fd, child, unix.O_RDONLY|unix.O_DIRECTORY|unix.O_NOFOLLOW, 0)
+				if x != nil {
+					return x
+				}
+				x = walk(cfd, path)
+				unix.Close(cfd)
+				if x != nil {
+					return x
+				}
+				if x = unix.Unlinkat(fd, child, unix.AT_REMOVEDIR); x != nil {
+					return x
+				}
+			} else {
+				if st.Mode&unix.S_IFMT != unix.S_IFREG || st.Nlink != 1 {
+					return errors.New("unsafe stage cleanup entry")
+				}
+				if err = unix.Unlinkat(fd, child, 0); err != nil {
+					return err
+				}
+			}
+		}
+		return nil
+	}
+	if err := walk(stageFD, ""); err != nil {
+		return err
+	}
+	return unix.Unlinkat(parentFD, name, unix.AT_REMOVEDIR)
+}
+func removeEmptyStageRoot(parentFD int, name string, wantInode uint64) error {
+	fd, err := unix.Openat(parentFD, name, unix.O_RDONLY|unix.O_DIRECTORY|unix.O_NOFOLLOW, 0)
+	if errors.Is(err, unix.ENOENT) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	var st unix.Stat_t
+	statErr := unix.Fstat(fd, &st)
+	unix.Close(fd)
+	if statErr != nil || st.Ino != wantInode || st.Uid != uint32(os.Getuid()) {
+		return errors.New("stage root authority changed")
+	}
+	return unix.Unlinkat(parentFD, name, unix.AT_REMOVEDIR)
 }
 
 func openOrCreateDirAt(rootFD int, rel string, mode os.FileMode) (int, error) {
@@ -951,16 +1056,23 @@ func renameNoReplace(from, to string) error {
 	return renameNoReplaceAt(ffd, filepath.Base(from), tfd, filepath.Base(to))
 }
 
-func removeExactTree(root, slug string, want map[string]snapshotEntry, wantDigest string) error {
-	if err := validateExactTree(root, slug, want, wantDigest); err != nil {
+func removeExactTree(parentFD int, root, slug string, want map[string]snapshotEntry, wantDigest string, after func(string) error) error {
+	if err := validateRemainingTree(root, want); err != nil {
 		return err
+	}
+	if observed, err := snapshotFilesystem(root); err != nil {
+		return err
+	} else if len(observed) == len(want) {
+		if err = validateExactTree(root, slug, want, wantDigest); err != nil {
+			return err
+		}
 	}
 	if mutationHook != nil {
 		if err := mutationHook("cleanup-validated"); err != nil {
 			return err
 		}
 	}
-	if err := validateExactTree(root, slug, want, wantDigest); err != nil {
+	if err := validateRemainingTree(root, want); err != nil {
 		return err
 	}
 	rfd, e := unix.Open(root, unix.O_RDONLY|unix.O_DIRECTORY|unix.O_NOFOLLOW, 0)
@@ -969,7 +1081,7 @@ func removeExactTree(root, slug string, want map[string]snapshotEntry, wantDiges
 	}
 	defer unix.Close(rfd)
 	var rs unix.Stat_t
-	if e = unix.Fstat(rfd, &rs); e != nil || !sameStat(&rs, want[""]) {
+	if e = unix.Fstat(rfd, &rs); e != nil || !sameDirAfter(&rs, want[""]) {
 		return errors.New("source cleanup root identity mismatch")
 	}
 	var walk func(int, string) error
@@ -1004,7 +1116,7 @@ func removeExactTree(root, slug string, want map[string]snapshotEntry, wantDiges
 				return e
 			}
 			var before unix.Stat_t
-			if e = unix.Fstat(cfd, &before); e != nil || !sameStat(&before, w) {
+			if e = unix.Fstat(cfd, &before); e != nil || (w.dir && !sameDirAfter(&before, w)) || (!w.dir && !sameStat(&before, w)) {
 				unix.Close(cfd)
 				return fmt.Errorf("source cleanup identity changed %s", cr)
 			}
@@ -1013,14 +1125,24 @@ func removeExactTree(root, slug string, want map[string]snapshotEntry, wantDiges
 					unix.Close(cfd)
 					return e
 				}
-				var after unix.Stat_t
-				if e = unix.Fstat(cfd, &after); e != nil || !sameDirAfter(&after, w) {
+				var finalStat unix.Stat_t
+				if e = unix.Fstat(cfd, &finalStat); e != nil || !sameDirAfter(&finalStat, w) {
 					unix.Close(cfd)
 					return fmt.Errorf("source cleanup directory changed %s", cr)
 				}
 				unix.Close(cfd)
 				if e = unix.Unlinkat(fd, child, unix.AT_REMOVEDIR); e != nil {
 					return e
+				}
+				if mutationHook != nil {
+					if e = mutationHook("cleanup-unlinked:" + cr); e != nil {
+						return e
+					}
+				}
+				if after != nil {
+					if e = after(cr); e != nil {
+						return e
+					}
 				}
 			} else {
 				file := os.NewFile(uintptr(cfd), child)
@@ -1029,14 +1151,24 @@ func removeExactTree(root, slug string, want map[string]snapshotEntry, wantDiges
 					file.Close()
 					return e
 				}
-				var after unix.Stat_t
-				if e = unix.Fstat(cfd, &after); e != nil || !sameStat(&after, w) || digest(body) != w.digest {
+				var finalStat unix.Stat_t
+				if e = unix.Fstat(cfd, &finalStat); e != nil || !sameStat(&finalStat, w) || digest(body) != w.digest {
 					file.Close()
 					return fmt.Errorf("source cleanup file changed %s", cr)
 				}
 				file.Close()
 				if e = unix.Unlinkat(fd, child, 0); e != nil {
 					return e
+				}
+				if mutationHook != nil {
+					if e = mutationHook("cleanup-unlinked:" + cr); e != nil {
+						return e
+					}
+				}
+				if after != nil {
+					if e = after(cr); e != nil {
+						return e
+					}
 				}
 			}
 		}
@@ -1049,7 +1181,65 @@ func removeExactTree(root, slug string, want map[string]snapshotEntry, wantDiges
 	if e = unix.Fstat(rfd, &final); e != nil || !sameDirAfter(&final, want[""]) {
 		return errors.New("source cleanup root changed")
 	}
-	return unix.Rmdir(root)
+	return unix.Unlinkat(parentFD, filepath.Base(root), unix.AT_REMOVEDIR)
+}
+
+func validateRemainingTree(root string, want map[string]snapshotEntry) error {
+	got, err := snapshotFilesystem(root)
+	if err != nil {
+		return err
+	}
+	if _, ok := got[""]; !ok {
+		return errors.New("source cleanup root missing")
+	}
+	for path, actual := range got {
+		expected, ok := want[path]
+		if !ok {
+			return fmt.Errorf("foreign source cleanup entry %s", path)
+		}
+		if expected.dir {
+			if !actual.dir || actual.dev != expected.dev || actual.ino != expected.ino || actual.mode != expected.mode || actual.uid != expected.uid {
+				return fmt.Errorf("source cleanup authority changed %s", path)
+			}
+		} else if actual != expected {
+			return fmt.Errorf("source cleanup authority changed %s", path)
+		}
+	}
+	return nil
+}
+
+func replaceJournal(path string, j journal) error {
+	body, _ := json.MarshalIndent(j, "", "  ")
+	body = append(body, '\n')
+	random := make([]byte, 16)
+	if _, err := cryptorand.Read(random); err != nil {
+		return err
+	}
+	tmp := path + ".next-" + hex.EncodeToString(random)
+	if err := writeExclusiveCanonical(tmp, body); err != nil {
+		return err
+	}
+	defer os.Remove(tmp)
+	if err := os.Rename(tmp, path); err != nil {
+		return err
+	}
+	return syncDir(filepath.Dir(path))
+}
+func cleanupProgress(path string, j *journal) func(string) error {
+	seen := map[string]bool{}
+	for _, p := range j.CleanupRemoved {
+		seen[p] = true
+	}
+	return func(rel string) error {
+		if seen[rel] {
+			return nil
+		}
+		seen[rel] = true
+		j.Phase = "cleanup"
+		j.CleanupRemoved = append(j.CleanupRemoved, rel)
+		sort.Strings(j.CleanupRemoved)
+		return replaceJournal(path, *j)
+	}
 }
 
 func validateExactTree(root, slug string, want map[string]snapshotEntry, wantDigest string) error {
@@ -1083,6 +1273,11 @@ func recoverSource(instance, source, slug string) error {
 		return errors.New("capability mutation already in progress")
 	}
 	defer unix.Flock(int(lock.Fd()), unix.LOCK_UN)
+	parentFD, e := openSkillsFromInstance(instance)
+	if e != nil {
+		return e
+	}
+	defer unix.Close(parentFD)
 	parent := filepath.Dir(source)
 	old := filepath.Join(parent, "."+slug+".workshop-old")
 	jp := filepath.Join(instance, "capabilities", ".workshop-"+slug+".json")
@@ -1092,8 +1287,19 @@ func recoverSource(instance, source, slug string) error {
 	}
 	stageRoot := filepath.Join(parent, j.StageRoot)
 	stage := filepath.Join(stageRoot, slug)
+	stageRootFD, openErr := unix.Openat(parentFD, j.StageRoot, unix.O_RDONLY|unix.O_DIRECTORY|unix.O_NOFOLLOW, 0)
+	if openErr != nil && !errors.Is(openErr, unix.ENOENT) {
+		return openErr
+	}
+	if stageRootFD >= 0 {
+		defer unix.Close(stageRootFD)
+		var stageRootStat unix.Stat_t
+		if e = unix.Fstat(stageRootFD, &stageRootStat); e != nil || stageRootStat.Ino != j.StageRootInode {
+			return errors.New("stage root authority changed")
+		}
+	}
 	sd, od, nd := packageDigest(source, slug), packageDigest(old, slug), packageDigest(stage, slug)
-	si, oi, ni := inode(source), inode(old), inode(stage)
+	si, ni := inode(source), inode(stage)
 	if nd != "" {
 		if e = validateExactTree(stage, slug, snapshotAuthority(j.StageTree), j.NewDigest); e != nil {
 			return e
@@ -1104,57 +1310,76 @@ func recoverSource(instance, source, slug string) error {
 			return e
 		}
 	}
+	oldSnap := snapshotAuthority(j.OldTree)
+	oldRemaining := false
+	if _, statErr := os.Lstat(old); statErr == nil && len(oldSnap) > 0 {
+		oldRemaining = validateRemainingTree(old, oldSnap) == nil
+	}
 	if j.Action == "create" {
 		switch {
 		case sd == j.NewDigest && si == j.StageInode:
-			if e = os.Remove(stageRoot); e != nil && !errors.Is(e, os.ErrNotExist) {
+			if e = removeEmptyStageRoot(parentFD, j.StageRoot, j.StageRootInode); e != nil {
 				return e
 			}
 		case sd == "" && nd == j.NewDigest && ni == j.StageInode:
-			if e = renameNoReplace(stage, source); e != nil {
+			if stageRootFD < 0 {
+				return errors.New("source workshop stage missing")
+			}
+			if e = renameNoReplaceAt(stageRootFD, slug, parentFD, slug); e != nil {
 				return e
 			}
-			_ = os.Remove(stageRoot)
+			if e = removeEmptyStageRoot(parentFD, j.StageRoot, j.StageRootInode); e != nil {
+				return e
+			}
 		default:
 			return errors.New("source workshop recovery required: create authority is ambiguous")
 		}
 	} else {
 		switch {
-		case sd == j.NewDigest && si == j.StageInode && od == j.OldDigest && oi == j.SourceInode:
-			oldSnap := snapshotAuthority(j.OldTree)
-			if e = removeExactTree(old, slug, oldSnap, j.OldDigest); e != nil {
+		case sd == j.NewDigest && si == j.StageInode && oldRemaining:
+			if e = removeExactTree(parentFD, old, slug, oldSnap, j.OldDigest, cleanupProgress(jp, &j)); e != nil {
 				return e
 			}
-			if e = os.Remove(stageRoot); e != nil && !errors.Is(e, os.ErrNotExist) {
+			if e = removeEmptyStageRoot(parentFD, j.StageRoot, j.StageRootInode); e != nil {
 				return e
 			}
 		case sd == j.OldDigest && si == j.SourceInode && nd == j.NewDigest && ni == j.StageInode && od == "":
-			if e = renameNoReplace(source, old); e != nil {
+			if e = renameNoReplaceAt(parentFD, slug, parentFD, filepath.Base(old)); e != nil {
 				return e
 			}
-			if e = renameNoReplace(stage, source); e != nil {
-				_ = renameNoReplace(old, source)
+			if stageRootFD < 0 {
+				return errors.New("source workshop stage missing")
+			}
+			if e = renameNoReplaceAt(stageRootFD, slug, parentFD, slug); e != nil {
+				_ = renameNoReplaceAt(parentFD, filepath.Base(old), parentFD, slug)
 				return e
 			}
-			_ = os.Remove(stageRoot)
-			oldSnap := snapshotAuthority(j.OldTree)
-			if e = removeExactTree(old, slug, oldSnap, j.OldDigest); e != nil {
+			if e = removeEmptyStageRoot(parentFD, j.StageRoot, j.StageRootInode); e != nil {
 				return e
 			}
-		case sd == "" && od == j.OldDigest && oi == j.SourceInode && nd == j.NewDigest && ni == j.StageInode:
-			if e = renameNoReplace(stage, source); e != nil {
+			if e = removeExactTree(parentFD, old, slug, oldSnap, j.OldDigest, cleanupProgress(jp, &j)); e != nil {
 				return e
 			}
-			_ = os.Remove(stageRoot)
-			oldSnap := snapshotAuthority(j.OldTree)
-			if e = removeExactTree(old, slug, oldSnap, j.OldDigest); e != nil {
+		case sd == "" && oldRemaining && nd == j.NewDigest && ni == j.StageInode:
+			if stageRootFD < 0 {
+				return errors.New("source workshop stage missing")
+			}
+			if e = renameNoReplaceAt(stageRootFD, slug, parentFD, slug); e != nil {
 				return e
 			}
+			if e = removeEmptyStageRoot(parentFD, j.StageRoot, j.StageRootInode); e != nil {
+				return e
+			}
+			if e = removeExactTree(parentFD, old, slug, oldSnap, j.OldDigest, cleanupProgress(jp, &j)); e != nil {
+				return e
+			}
+		case sd == j.NewDigest && si == j.StageInode && errors.Is(func() error { _, x := os.Lstat(old); return x }(), os.ErrNotExist):
+			// Cleanup completed before the final journal removal.
 		default:
 			return errors.New("source workshop recovery required: update authority is ambiguous")
 		}
 	}
-	if e = syncDir(parent); e != nil {
+	if e = unix.Fsync(parentFD); e != nil {
 		return e
 	}
 	if e = os.Remove(jp); e != nil {
@@ -1163,7 +1388,7 @@ func recoverSource(instance, source, slug string) error {
 	return syncDir(filepath.Dir(jp))
 }
 
-func commit(instance, source, slug string, before capability.Status, files map[string][]byte, action string) error {
+func commit(instance, source, slug string, before capability.Status, files map[string][]byte, action string, previewAuthority ...map[string]snapshotEntry) (resultErr error) {
 	lock, e := os.Open(filepath.Join(instance, "capabilities"))
 	if e != nil {
 		return e
@@ -1186,6 +1411,16 @@ func commit(instance, source, slug string, before capability.Status, files map[s
 		if priorSnapshot[""].ino == 0 {
 			return errors.New("source snapshot authority missing")
 		}
+		if len(previewAuthority) > 0 {
+			if len(previewAuthority[0]) != len(priorSnapshot) {
+				return errors.New("stale workshop preview: source authority changed")
+			}
+			for path, want := range previewAuthority[0] {
+				if got, ok := priorSnapshot[path]; !ok || got != want {
+					return errors.New("stale workshop preview: source authority changed")
+				}
+			}
+		}
 	}
 	parent := filepath.Dir(source)
 	old := filepath.Join(parent, "."+slug+".workshop-old")
@@ -1195,7 +1430,7 @@ func commit(instance, source, slug string, before capability.Status, files map[s
 			return errors.New("source workshop collision; recovery required")
 		}
 	}
-	parentFD, e := unix.Open(parent, unix.O_RDONLY|unix.O_DIRECTORY|unix.O_NOFOLLOW, 0)
+	parentFD, e := openSkillsFromInstance(instance)
 	if e != nil {
 		return e
 	}
@@ -1205,6 +1440,19 @@ func commit(instance, source, slug string, before capability.Status, files map[s
 		return e
 	}
 	defer unix.Close(stageRootFD)
+	var stageRootStat unix.Stat_t
+	if e = unix.Fstat(stageRootFD, &stageRootStat); e != nil {
+		return e
+	}
+	journalWritten := false
+	allowedStage := stageAllowed(files, priorSnapshot, slug)
+	defer func() {
+		if resultErr != nil && !journalWritten {
+			if cleanupErr := removeOwnedStage(parentFD, stageRootFD, stageName, stageRootStat.Ino, allowedStage); cleanupErr != nil {
+				resultErr = fmt.Errorf("%w; stage cleanup refused: %v", resultErr, cleanupErr)
+			}
+		}
+	}()
 	stageRoot := filepath.Join(parent, stageName)
 	stage := filepath.Join(stageRoot, slug)
 	stageFD, e := openOrCreateDirAt(stageRootFD, slug, 0700)
@@ -1284,7 +1532,7 @@ func commit(instance, source, slug string, before capability.Status, files map[s
 	if before.Package != nil {
 		oldDigest = before.Package.SourceDigest
 	}
-	j := journal{ContractVersion: 1, Action: action, Slug: slug, OldDigest: oldDigest, NewDigest: pkg.SourceDigest, Phase: "staged", StageInode: stageSnapshot[""].ino, StageRoot: stageName, StageTree: journalTree(stageSnapshot)}
+	j := journal{ContractVersion: 1, Action: action, Slug: slug, OldDigest: oldDigest, NewDigest: pkg.SourceDigest, Phase: "staged", StageInode: stageSnapshot[""].ino, StageRootInode: stageRootStat.Ino, StageRoot: stageName, StageTree: journalTree(stageSnapshot)}
 	if before.Package != nil {
 		j.SourceInode = priorSnapshot[""].ino
 		j.OldTree = journalTree(priorSnapshot)
@@ -1294,6 +1542,7 @@ func commit(instance, source, slug string, before capability.Status, files map[s
 	if e = writeExclusiveCanonical(jp, jb); e != nil {
 		return e
 	}
+	journalWritten = true
 	if e = syncDir(filepath.Dir(jp)); e != nil {
 		return e
 	}
@@ -1303,24 +1552,24 @@ func commit(instance, source, slug string, before capability.Status, files map[s
 		}
 	}
 	if action == "create" {
-		if e = renameNoReplace(stage, source); e != nil {
+		if e = renameNoReplaceAt(stageRootFD, slug, parentFD, slug); e != nil {
 			return e
 		}
-		if e = syncDir(parent); e != nil {
+		if e = unix.Fsync(parentFD); e != nil {
 			return e
 		}
 	} else {
-		if e = renameNoReplace(source, old); e != nil {
+		if e = renameNoReplaceAt(parentFD, slug, parentFD, filepath.Base(old)); e != nil {
 			return e
 		}
-		if e = syncDir(parent); e != nil {
+		if e = unix.Fsync(parentFD); e != nil {
 			return e
 		}
-		if e = renameNoReplace(stage, source); e != nil {
-			_ = renameNoReplace(old, source)
+		if e = renameNoReplaceAt(stageRootFD, slug, parentFD, slug); e != nil {
+			_ = renameNoReplaceAt(parentFD, filepath.Base(old), parentFD, slug)
 			return e
 		}
-		if e = syncDir(parent); e != nil {
+		if e = unix.Fsync(parentFD); e != nil {
 			return e
 		}
 		if mutationHook != nil {
@@ -1328,14 +1577,16 @@ func commit(instance, source, slug string, before capability.Status, files map[s
 				return e
 			}
 		}
-		if e = removeExactTree(old, slug, priorSnapshot, oldDigest); e != nil {
+		if e = removeExactTree(parentFD, old, slug, priorSnapshot, oldDigest, cleanupProgress(jp, &j)); e != nil {
 			return e
 		}
-		if e = syncDir(parent); e != nil {
+		if e = unix.Fsync(parentFD); e != nil {
 			return e
 		}
 	}
-	_ = os.Remove(stageRoot)
+	if e = removeEmptyStageRoot(parentFD, j.StageRoot, j.StageRootInode); e != nil {
+		return e
+	}
 	if e = os.Remove(jp); e != nil {
 		return e
 	}
