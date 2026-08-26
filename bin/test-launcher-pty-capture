@@ -40,30 +40,50 @@ printf '\033]0;workspace\007'
 mark after-title
 printf 'Ask Codex to do anything\n'
 mark after-second-composer
-payload=""
 enter=$'\033[13;1u'
-if [[ "$TUI_PROMPT" == '$capability-builder '* ]]; then
-  printf 'Help define, scaffold, inspect, validate, and test\n'
+mention='$capability-builder'
+if [[ "${TUI_MODE:-}" == stale-description ]]; then
+  printf 'capability-builder Help define, scaffold, inspect, validate, and test Press Enter to insert\n'
 fi
-while [[ "$payload" != *"$enter" ]]; do
+draft=""
+while ((${#draft} < ${#TUI_PROMPT})); do
   IFS= read -r -n 1 byte || exit 92
-  payload+="$byte"
+  draft+="$byte"
 done
-submitted="${payload%"$enter"}"
+[[ "$draft" == "$TUI_PROMPT" ]] || exit 93
+if [[ "$draft" == "$mention "* && "${TUI_MODE:-}" != stale-description ]]; then
+  printf 'capability-builder Help define, scaffold, inspect, validate, and test Press Enter to insert\n'
+fi
+first=""
+while [[ "$first" != *"$enter" ]]; do
+  IFS= read -r -n 1 byte || exit 94
+  first+="$byte"
+done
+[[ "${first%"$enter"}" == "" ]] || exit 95
+submitted="$draft"
 enter_count=1
-if [[ "$submitted" == '$capability-builder '* ]]; then
+if [[ "$submitted" == "$mention "* ]]; then
   [[ "${TUI_MODE:-}" != marker-after-mention ]] || printf '%s\n' "$TUI_MARKER"
+  if [[ "${TUI_MODE:-}" == delayed-first-completion ]]; then
+    sleep 0.2
+    printf '%s\n' "$TUI_MARKER"
+  fi
+  if [[ "${TUI_MODE:-}" == missing-selection ]]; then
+    IFS= read -r -n 1 _ || exit 98
+    exit 99
+  fi
+  task="${submitted#"$mention "}"
+  printf '%s  %s\n' "$mention" "$task"
   second=""
   while [[ "$second" != *"$enter" ]]; do
-    IFS= read -r -n 1 byte || exit 94
+    IFS= read -r -n 1 byte || exit 96
     second+="$byte"
   done
-  [[ "${second%"$enter"}" == "" ]] || exit 95
+  [[ "${second%"$enter"}" == "" ]] || exit 97
   enter_count=2
 fi
 printf '%s' "$submitted" >"$TUI_SUBMITTED"
 printf '%s' "$enter_count" >"$TUI_ENTER_COUNT"
-[[ "$submitted" == "$TUI_PROMPT" ]] || exit 93
 case "${TUI_MODE:-success}" in
   success|zero-mcp|multiple-mcp) printf '%s\n' "$TUI_MARKER" ;;
   missing) exit 0 ;;
@@ -120,6 +140,12 @@ run_tui nonzero "$tmp/status.private" NEVER_SEEN
 status=$?
 run_tui marker-after-mention "$tmp/marker-after-mention.private" FIRST_ENTER_MARKER
 marker_after_mention_status=$?
+run_tui delayed-first-completion "$tmp/delayed-first.private" DELAYED_FIRST_MARKER
+delayed_first_status=$?
+run_tui stale-description "$tmp/stale-description.private" NEVER_SEEN
+stale_description_status=$?
+run_tui missing-selection "$tmp/missing-selection.private" NEVER_SEEN
+missing_selection_status=$?
 /usr/bin/expect "$root/config/acceptance/launcher-capture.exp" "$tmp/self.private" SELF_MARKER "$tmp/fake-tui" 'prompt contains SELF_MARKER'
 self_status=$?
 set -e
@@ -128,6 +154,9 @@ set -e
 [[ "$missing_status" == 1 ]]
 [[ "$status" == 37 ]]
 [[ "$marker_after_mention_status" == 65 ]]
+[[ "$delayed_first_status" == 65 ]]
+[[ "$stale_description_status" == 124 ]]
+[[ "$missing_selection_status" == 124 ]]
 grep -Fq PRIVATE_FAILURE "$tmp/status.private"
 [[ "$self_status" == 65 ]]
 [[ ! -e "$tmp/self.private" ]]

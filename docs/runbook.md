@@ -212,10 +212,13 @@ the named launcher with no forwarded arguments, waits for the CSI-u, initial
 composer, zero or more optional MCP progress messages, the authoritative plain
 workspace-title transition, and final composer readiness sequence, then types
 its separate prompt and submits the terminal Enter
-sequence. For the literal `$capability-builder` prompt, it first waits for the
-autocomplete description, uses one Enter only to select the mention, refuses a
-marker after that key, then uses a separate Enter to submit; non-mention tasks
-retain one-key submission. A marker seen before submission is refused. Their
+sequence. For the literal `$capability-builder` prompt, it drains stale output,
+requires a fresh builder-name/description/insert-hint autocomplete event, then
+uses one Enter only to select the mention. Before sending the distinct submit
+Enter, it requires Codex 0.149's fresh selected-composer redraw with the extra
+separator before the existing task suffix; a marker, delayed completion, or
+missing selection state fails closed. Non-mention tasks retain one-key
+submission. A marker seen before submission is refused. Their
 builder task receives an instance-specific manifest-bound skill. Managed Codex
 trusts the disposable workspace, adds only that instance's private runtime to
 workspace-write, sets approvals to never, and disables network. The builder

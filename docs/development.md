@@ -209,7 +209,8 @@ messages, separate prompt typing and protocol-Enter submission, title ordering
 and absence refusal,
 literal builder-mention autocomplete readiness, distinct mention-selection and
 task-submission Enter events, first-key completion refusal, ordinary one-key
-non-mention submission,
+non-mention submission, stale autocomplete drainage, delayed first-key
+completion refusal, and missing selected-composer refusal,
 pre-submission marker refusal, output-only marker observation, prompt self-match
 refusal, missing-marker and nonzero failure, bytewise observation through
 invalid UTF-8/control bytes, marker-triggered TUI/descendant closure, and the

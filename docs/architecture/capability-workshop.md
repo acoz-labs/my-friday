@@ -96,10 +96,13 @@ builder description, and exact skill file path are model-visible in one unique
 builder catalog record and that its reported skill-root alias resolves uniquely
 to the instance's exact private workspace skill root.
 The preflight emits no transcript or prompt content into public evidence.
-Under the private PTY, the builder waits for the model-visible autocomplete
-description, sends one CSI-u Enter to select the literal skill mention, refuses
-completion at that boundary, and sends a separate CSI-u Enter to submit the
-composed task. Non-mention workshop prompts retain one-key submission.
+Under the private PTY, the builder drains pre-prompt output, waits for a fresh
+builder-name, description, and insert-hint autocomplete event, and drains that
+event before sending one CSI-u Enter to select the literal skill mention. It
+then requires the fresh selected-composer redraw with the extra separator that
+Codex 0.149 inserts before an existing suffix, refusing completion or a missing
+selection state at that boundary, before sending a separate CSI-u Enter to
+submit the composed task. Non-mention workshop prompts retain one-key submission.
 
 Standalone runtimes can roll back to the v1 placeholder only while `skills/`
 contains no package. Named instances use an explicit capability revision inside
