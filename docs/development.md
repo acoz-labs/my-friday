@@ -177,6 +177,19 @@ They use deterministic temporary fixtures and never invoke Codex or the
 network. Run `go test -race ./internal/capability` while iterating and the full
 `bin/container bin/ci` before review.
 
+Deterministic workshop rendering, exact confirmation, source-only transaction,
+opaque-file preservation, interruption recovery, and terminal-flow tests live
+under `internal/capabilityworkshop`. Run:
+
+```sh
+go test -race ./internal/capability ./internal/capabilityworkshop ./cmd/my-friday ./internal/assistantinstance
+```
+
+The workshop tests use injected readers/writers and temporary instance roots;
+they do not publish proposal answers or source diffs. Native exact-candidate
+acceptance additionally exercises the interactive TTY, Unicode and narrow
+terminal rendering, separate Install/Upgrade confirmations, and APFS recovery.
+
 Issue-51 release authority has a separate deterministic contract suite:
 
 ```sh
@@ -194,11 +207,9 @@ auth copy/source-swap refusal, secure-root collision and ambiguous cleanup
 preservation, timeout/escaped-child reaping, `INT`/`TERM` exit status and
 ordinary/escaped-descendant quiescence, and the capability stop barrier's
 canonical post-mutation journal boundary.
-They also exercise the managed Codex prompt-input boundary: the workshop
-builder prompt must begin with literal `$capability-builder`, match its expected
-digest, and expose the builder description and exact private workspace skill
-root in one unique catalog record, either directly or through one exact bound
-Codex skill-root alias. Duplicate, conflicting, or suffix-matched records fail.
+The managed `capability-builder` points users to the manifest-owned
+deterministic workshop and has no direct source-write or lifecycle authority.
+Model prompt-input and completion are not workshop acceptance authority.
 `bin/test-launcher-pty-capture` additionally proves that private launcher tasks
 receive a real stdout TTY, capture no public transcript, retain owner-only
 transcript permissions and child exit status, and remain inside the runner's

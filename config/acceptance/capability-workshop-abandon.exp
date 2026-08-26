@@ -1,0 +1,17 @@
+#!/usr/bin/expect -f
+if {$argc != 4} { exit 64 }
+lassign $argv mode candidate instance slug
+set timeout 30
+spawn -noecho {*}[list $candidate capability workshop $instance $slug]
+expect "Display name"
+switch -- $mode {
+  q { send -- "q\r" }
+  eof { close }
+  int { exec kill -INT [exp_pid] }
+  term { exec kill -TERM [exp_pid] }
+  default { exit 64 }
+}
+expect eof
+catch wait result
+set code [lindex $result 3]
+if {$code != 0} { exit $code }

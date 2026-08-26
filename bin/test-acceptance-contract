@@ -81,7 +81,9 @@ grep -Fq '(?:evidence-v1|failure-v1|capability-workshop-acceptance-v1|capability
 grep -Fq 'this supervisor is scoped to issue 51' "$workshop"
 grep -Fq 'capability-workshop-acceptance-evidence-v1' "$workshop"
 grep -Fq 'MY_FRIDAY_CODEX_AUTH_FILE' "$workshop"
-grep -Fq 'builder_has_no_mutation_token:true' "$workshop"
+grep -Fq 'deterministic_workshop:true' "$workshop"
+grep -Fq 'source_confirmation_separate:true' "$workshop"
+grep -Fq 'optional_bytes_preserved:true' "$workshop"
 grep -Fq 'stale capability plan' "$root/config/acceptance/capability-stale.exp"
 grep -Fq 'No changes made' "$root/config/acceptance/capability-exit.exp"
 grep -Fq 'acceptance-runner" --cwd' "$workshop"
@@ -91,10 +93,10 @@ grep -Fq 'cleanup-roots --home' "$workshop"
 grep -Fq 'capability-stop-barrier' "$workshop"
 grep -Fq 'DAILY_BRIEF_ABSENT' "$workshop"
 grep -Fq 'sibling_before' "$workshop"
-grep -Fq 'before_builder' "$workshop"
+grep -Fq 'before_workshop' "$workshop"
 grep -Fq "trap - EXIT INT TERM" "$workshop"
 if grep -Eq 'cp -p .*auth|rm -rf.*(run_root|instance_root|sibling_root)' "$workshop"; then exit 1; fi
-for scenario in builder install upgrade denials interruption migration cleanup; do grep -Fq "phase=$scenario" "$workshop"; done
+for scenario in workshop install upgrade denials interruption migration cleanup; do grep -Fq "phase=$scenario" "$workshop"; done
 for command in verify-capability-workshop-evidence verify-capability-workshop-receipt verify-capability-workshop-acceptance record-capability-workshop-receipt; do [[ -x "$root/bin/$command" ]]; done
 grep -Fq 'elif [[ "$issue_number" == 51 ]]' "$root/bin/record-product-acceptance"
 grep -Fq 'elif [[ "$issue_number" == 51 ]]' "$root/bin/finalize-release"

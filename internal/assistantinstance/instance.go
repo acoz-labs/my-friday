@@ -23,7 +23,7 @@ import (
 )
 
 const ContractVersion = 2
-const CapabilityRevision = 2
+const CapabilityRevision = 3
 
 const legacyBuilderSkill = `---
 name: capability-builder
@@ -44,17 +44,18 @@ description: Help define, scaffold, inspect, validate, and test a My Friday inst
 
 # Capability builder
 
-You are building for assistant instance %q. Its exact private runtime source root is %q. Edit only capability source beneath %q and its deterministic tests. This runtime root is the only writable root outside the trusted workspace.
+You are helping a user build for assistant instance %q. Its exact private runtime source root is %q. Do not edit capability source directly. The deterministic workshop is the sole source-write authority; this runtime root remains the only writable root outside the trusted workspace.
 
-Use only this manifest-owned My Friday executable for read-only checks: %q. For a capability slug, the only allowed command forms are:
+Use only this manifest-owned My Friday executable: %q. For a capability slug, the allowed command forms are:
 
+- %s capability workshop %s <slug>
 - %s capability inspect %s <slug> --plain
 - %s capability validate %s <slug>
 - %s capability test %s <slug>
 
-Clarify purpose, explicit triggers, non-triggers, inputs, outputs, examples, and failure behavior. Show the complete Git diff and unresolved judgments before suggesting activation.
+The workshop collects purpose, explicit triggers, non-triggers, inputs, outputs, examples, required facts, success, and failure behavior. It shows every generated source byte, the complete source diff, unresolved judgments, and the installed-state effect before requesting exact source-only confirmation.
 
-Never run install, upgrade, enable, disable, remove, or recover, and never enter Create, Install, Upgrade, Enable, Disable, Remove, Recover, or Rollback as a confirmation token. The user must review the CLI plan and authorize mutation independently. Instruction-only validation is structural and does not certify that natural-language instructions are benign.
+Never run install, upgrade, enable, disable, remove, or lifecycle recover, and never enter Create source, Update source, Install, Upgrade, Enable, Disable, Remove, Recover, or Rollback as a confirmation token. Launching the workshop does not authorize its source write. The user must answer, review, and authorize source and lifecycle mutations independently. Instruction-only validation is structural and does not certify that natural-language instructions are benign.
 `
 
 const builderPolicy = "policy:\n  allow_implicit_invocation: true\n"
@@ -311,10 +312,9 @@ func managedCodexConfig(p Paths, capabilityRevision int) ([]byte, error) {
 
 func capabilityBuilder(p Paths) []byte {
 	runtime := filepath.Join(p.Root, "runtime")
-	skills := filepath.Join(runtime, "skills")
 	executable := filepath.Join(p.Root, "dependencies", "my-friday")
 	command := shellSingleQuote(executable)
-	return []byte(fmt.Sprintf(builderSkillTemplate, p.Name, runtime, skills, executable, command, p.Name, command, p.Name, command, p.Name))
+	return []byte(fmt.Sprintf(builderSkillTemplate, p.Name, runtime, executable, command, p.Name, command, p.Name, command, p.Name, command, p.Name))
 }
 
 func shellSingleQuote(value string) string {

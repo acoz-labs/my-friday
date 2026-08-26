@@ -6,13 +6,16 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/signal"
 	"os/user"
 	"path/filepath"
 	"runtime"
 	"strings"
+	"syscall"
 
 	"github.com/acoz-labs/my-friday/internal/assistantinstance"
 	"github.com/acoz-labs/my-friday/internal/capability"
+	"github.com/acoz-labs/my-friday/internal/capabilityworkshop"
 	"github.com/acoz-labs/my-friday/internal/codexhome"
 	"github.com/acoz-labs/my-friday/internal/repository"
 	"github.com/acoz-labs/my-friday/internal/terminal"
@@ -145,7 +148,7 @@ func run() error {
 
 func runCapability() error {
 	if len(os.Args) < 3 {
-		return fmt.Errorf("usage: my-friday capability <inspect|validate|test|verify|install|upgrade|enable|disable|remove> NAME SLUG")
+		return fmt.Errorf("usage: my-friday capability <workshop|inspect|validate|test|verify|install|upgrade|enable|disable|remove> NAME SLUG")
 	}
 	if os.Args[2] == "initialize" || os.Args[2] == "rollback" || (os.Args[2] == "recover" && len(os.Args) >= 4 && os.Args[3] == "--runtime") {
 		if len(os.Args) != 5 || os.Args[3] != "--runtime" {
@@ -191,7 +194,7 @@ func runCapability() error {
 		return nil
 	}
 	if len(os.Args) < 5 || len(os.Args) > 6 {
-		return fmt.Errorf("usage: my-friday capability <inspect|validate|test|verify|install|upgrade|enable|disable|remove> NAME SLUG [--plain]")
+		return fmt.Errorf("usage: my-friday capability <workshop|inspect|validate|test|verify|install|upgrade|enable|disable|remove> NAME SLUG [--plain]")
 	}
 	home, err := realHome()
 	if err != nil {
@@ -206,6 +209,39 @@ func runCapability() error {
 	}
 	source := filepath.Join(paths.Root, "runtime", "skills", os.Args[4])
 	action := os.Args[2]
+	if action == "workshop" {
+		if len(os.Args) != 5 {
+			return fmt.Errorf("usage: my-friday capability workshop NAME SLUG")
+		}
+		info, err := os.Stdin.Stat()
+		if err != nil {
+			return err
+		}
+		if info.Mode()&os.ModeCharDevice == 0 {
+			return errors.New("capability workshop requires an interactive TTY")
+		}
+		signals := make(chan os.Signal, 1)
+		done := make(chan struct{})
+		interrupted := make(chan struct{}, 1)
+		signal.Notify(signals, os.Interrupt, syscall.SIGTERM)
+		defer signal.Stop(signals)
+		go func() {
+			select {
+			case <-signals:
+				interrupted <- struct{}{}
+				_ = os.Stdin.Close()
+			case <-done:
+			}
+		}()
+		err = capabilityworkshop.Run(paths.Root, source, os.Args[4], os.Stdin, os.Stdout)
+		close(done)
+		select {
+		case <-interrupted:
+			return nil
+		default:
+			return err
+		}
+	}
 	if action == "recover" {
 		info, err := os.Stdin.Stat()
 		if err != nil {

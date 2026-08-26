@@ -206,33 +206,23 @@ acceptance: one random child beneath `~/.my-friday-acceptance/` and
 assistant/launcher pairs. The bounded runner catches `INT` and `TERM`, freezes
 and kills its exact process group plus identity-tracked escaped descendants,
 reaps the root, verifies quiescence, and returns status 130 or 143 before
-failure cleanup proceeds. Builder, installed-invocation, and disabled-absence
-tasks run under an Expect-owned PTY inside that same bounded runner. Each passes
-its prompt as exactly one positional argument to the named launcher; the
-generated launcher places that argument after its owned Codex `--`. Prompt and
-marker overlap fails before transcript creation or spawn. An exact marker event
-after native launch completes the task, including when terminal framing or
-adjacent prose makes the raw screen line unsuitable for exact-line evidence.
-At that point raw logging stops and one flushed CR/LF-delimited marker receipt
-is appended to the same owner-only transcript. Missing or partial markers and
-nonzero child exits fail closed. Their
-builder task receives an instance-specific manifest-bound skill. Managed Codex
-trusts the disposable workspace, adds only that instance's private runtime to
-workspace-write, sets approvals to never, and disables network. The builder
-uses the instance-owned `dependencies/my-friday` copy only for inspect,
-validate, and test; executable, config, or builder drift refuses launch and
-cleanup authority.
-Before the builder PTY starts, a bounded managed-Codex prompt-input preflight
-requires a leading literal `$capability-builder` invocation and binds the exact
-prompt digest and one unique model-visible builder catalog record whose exact
-direct or aliased skill path binds to that instance's private workspace skill
-root. Duplicate, conflicting, and path-suffix records fail. A preflight mismatch
-fails before the model task and publishes no prompt-input content.
+failure cleanup proceeds. Workshop creation/enhancement and lifecycle
+confirmations run the manifest-owned candidate under an Expect-owned PTY inside
+that same bounded runner. Owner-only evidence retains complete source review,
+exact source-only confirmation, separate lifecycle confirmation, and terminal
+navigation facts. Model prompts, model completion, and builder catalog
+visibility are not authoring or acceptance authority.
+
+Installed-invocation and disabled-absence tasks still pass one prompt as one
+positional argument to the named launcher. The launcher places it after its
+owned Codex `--`; prompt/marker overlap fails before transcript creation or
+spawn. Exact marker observation closes and waits the task. Missing or partial
+markers and nonzero child exits fail closed.
 Owner-only transcripts remain private acceptance state, preserve the launcher
 exit status, and are never copied into public evidence. Each task has a separate
 output-only completion marker that the prompt may describe but must not contain.
 Deterministic candidate commands and confirmations retain the 180-second hard
-bound. Only the three named-launcher agent tasks use a 600-second hard bound;
+bound. Only fresh installed-capability invocation tasks use a 600-second hard bound;
 they keep the same runner environment, process-group, signal, escaped-descendant,
 reaping, and final-quiescence authority.
 Transcript marker checks normalize carriage returns and search in the C locale,
@@ -249,11 +239,15 @@ detach. It publishes non-approving
 Identify the exact run from failure evidence and inspect `marker.json`. It must
 bind schema `capability-workshop-run-v1`, issue 51, candidate SHA, artifact,
 run ID, nonce, and current UID. Never recursively remove the parent or an
-ambiguous assistant. Recover a proven interrupted capability with:
+ambiguous assistant. Recover a proven interrupted source transaction by
+re-entering the workshop:
 
 ```sh
-my-friday capability recover <random-instance> daily-brief
+my-friday capability workshop <random-instance> daily-brief
 ```
+
+Use `capability recover` only for a lifecycle projection journal; it never gains
+source-write or source-delete authority.
 
 Then remove that exact instance through `assistant remove` and ordinarily
 detach the marker-bound image without `-force`. If marker, manifest, inode,

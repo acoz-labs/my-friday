@@ -32,6 +32,15 @@ const (
 var slugPattern = regexp.MustCompile(`^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$`)
 var versionPattern = regexp.MustCompile(`^[0-9]+\.[0-9]+\.[0-9]+$`)
 
+// ValidateSlug is the single public validation seam for capability command
+// surfaces. The package parser remains the contract authority.
+func ValidateSlug(slug string) error {
+	if !slugPattern.MatchString(slug) {
+		return errors.New("invalid capability slug")
+	}
+	return nil
+}
+
 type Manifest struct {
 	ContractVersion    int      `json:"contract_version"`
 	Slug               string   `json:"slug"`
@@ -89,6 +98,19 @@ func strictJSON(body []byte, out any) error {
 }
 
 func Validate(root string) (Package, error) {
+	return validateForSlug(root, filepath.Base(filepath.Clean(root)))
+}
+
+// ValidateForSlug validates a journal-bound staging or quarantine tree whose
+// directory name is intentionally not the package slug.
+func ValidateForSlug(root, expectedSlug string) (Package, error) {
+	if err := ValidateSlug(expectedSlug); err != nil {
+		return Package{}, err
+	}
+	return validateForSlug(root, expectedSlug)
+}
+
+func validateForSlug(root, expectedSlug string) (Package, error) {
 	abs, err := filepath.Abs(root)
 	if err != nil {
 		return Package{}, err
@@ -165,7 +187,7 @@ func Validate(root string) (Package, error) {
 	if err = strictJSON(bodies["capability.json"], &m); err != nil {
 		return Package{}, fmt.Errorf("capability manifest: %w", err)
 	}
-	if m.ContractVersion != 1 || !slugPattern.MatchString(m.Slug) || filepath.Base(abs) != m.Slug || !versionPattern.MatchString(m.Version) || m.Profile != "instruction-only" || m.CodexCompatibility != "skills-v1" {
+	if m.ContractVersion != 1 || !slugPattern.MatchString(m.Slug) || expectedSlug != m.Slug || !versionPattern.MatchString(m.Version) || m.Profile != "instruction-only" || m.CodexCompatibility != "skills-v1" {
 		return Package{}, errors.New("unsupported capability manifest identity or profile")
 	}
 	for name, value := range map[string]string{"scripts": m.Scripts, "dependencies": m.Dependencies, "network": m.Network, "credentials": m.Credentials, "background": m.Background, "durable_data": m.DurableData, "publishing": m.Publishing} {
@@ -469,7 +491,7 @@ func regularFile(path string) ([]byte, fs.FileInfo, error) {
 		return nil, nil, err
 	}
 	st, ok := info.Sys().(*syscall.Stat_t)
-	if !ok || !info.Mode().IsRegular() || info.Mode()&os.ModeSymlink != 0 || st.Nlink != 1 {
+	if !ok || !info.Mode().IsRegular() || info.Mode()&os.ModeSymlink != 0 || st.Nlink != 1 || st.Uid != uint32(os.Getuid()) {
 		return nil, info, errors.New("unsafe owned regular file")
 	}
 	b, err := os.ReadFile(path)
@@ -634,6 +656,28 @@ func projectionDigest(path string) (string, error) {
 
 func Inspect(instance, source string) (Status, error) {
 	slug := filepath.Base(filepath.Clean(source))
+	workshopJournal := filepath.Join(instance, "capabilities", ".workshop-"+slug+".json")
+	if body, info, journalErr := regularFile(workshopJournal); journalErr == nil {
+		var envelope struct {
+			ContractVersion int    `json:"contract_version"`
+			Action          string `json:"action"`
+			Slug            string `json:"slug"`
+			OldDigest       string `json:"old_digest"`
+			NewDigest       string `json:"new_digest"`
+			Phase           string `json:"phase"`
+			SourceInode     uint64 `json:"source_inode"`
+			StageInode      uint64 `json:"stage_inode"`
+		}
+		decodeErr := strictJSON(body, &envelope)
+		canonical, _ := json.MarshalIndent(envelope, "", "  ")
+		canonical = append(canonical, '\n')
+		if info.Mode().Perm() != 0o600 || decodeErr != nil || !bytes.Equal(body, canonical) || envelope.ContractVersion != 1 || envelope.Slug != slug || (envelope.Action != "create" && envelope.Action != "update") || !validDigest(envelope.NewDigest) || envelope.StageInode == 0 || (envelope.Action == "update" && (!validDigest(envelope.OldDigest) || envelope.SourceInode == 0)) || (envelope.Action == "create" && envelope.SourceInode != 0) || envelope.Phase != "staged" {
+			return Status{State: StateRecoveryRequired}, errors.New("source workshop recovery required")
+		}
+		return Status{State: StateInterrupted}, nil
+	} else if !errors.Is(journalErr, os.ErrNotExist) {
+		return Status{State: StateRecoveryRequired}, errors.New("source workshop recovery required")
+	}
 	control := filepath.Join(instance, "capabilities", slug)
 	proj := projectionPath(instance, slug)
 	_, controlErr := os.Lstat(control)
@@ -1640,6 +1684,11 @@ func Execute(p LifecyclePlan) (resultErr error) {
 // Recover restores the receipt-declared stable state after an interrupted
 // lifecycle mutation. It never consults or deletes source.
 func Recover(instance, slug string) error {
+	if _, err := os.Lstat(filepath.Join(instance, "capabilities", ".workshop-"+slug+".json")); err == nil {
+		return errors.New("source workshop recovery requires capability workshop")
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return errors.New("source workshop recovery required")
+	}
 	if !slugPattern.MatchString(slug) {
 		return errors.New("invalid capability slug")
 	}

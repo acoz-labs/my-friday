@@ -15,14 +15,25 @@ Instruction-only capability validation is structural, not semantic safety
 certification. It excludes executable files, scripts, dependencies, network
 and credential declarations, background work, durable capability data,
 publishing, links, devices, and unknown entries. Natural-language instructions
-can still be harmful, so users must inspect the complete Git diff and exact CLI
-plan. TTY plus exact-token confirmation prevents accidental piping; it does not
+can still be harmful, so users must inspect the workshop's complete source
+files, diff, unresolved judgments, and exact CLI plan. Workshop answers remain
+in memory; no public proposal file, telemetry, network request, credential
+request, or model participates in source authority. TTY plus exact-token
+confirmation prevents accidental piping; it does not
 authenticate a human or isolate against a malicious same-UID process.
 
 Capability receipts and journals are accepted as mutation authority only after
 no-follow regular-file, one-link, owner-mode, canonical-schema, slug, action,
 digest, and prior-state validation. Foreign projection, control, and workspace
 entries fail closed and are never adopted for cleanup.
+
+Source creation and enhancement use a separate owner-only workshop journal and
+the same per-instance capability lock as lifecycle mutations. The exact
+`Create source` or `Update source` token authorizes only the previewed core
+bytes and byte-identical preservation of validated optional files; it grants no
+Install, Upgrade, Enable, Remove, credential, or model authority. A retained
+source journal takes state precedence and can recover only digest-proven old or
+new package trees.
 
 Projection lifecycle operations use descriptor-relative no-follow writes,
 exclusive no-replace promotion, and identity/digest-bound quarantine before

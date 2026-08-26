@@ -1,7 +1,7 @@
 # Deployment
 
 Capability-bearing candidates must additionally prove the strict package
-contract, builder isolation, exact install/upgrade plans, drift and collision
+contract, deterministic workshop isolation, exact install/upgrade plans, drift and collision
 refusal, retained-generation enable, complete reversal with source preserved,
 and fresh-task Codex discovery. Existing v1 roots remain unchanged until an
 explicit migration; release publication never mutates a user root. Acceptance
@@ -23,8 +23,9 @@ GITHUB_REPOSITORY=acoz-labs/my-friday \
 ```
 
 The command downloads nominated bytes, creates no-follow receipt-bound APFS and
-named-assistant state, and exercises explicit private-builder authoring without
-activation, deterministic checks, fresh-task install/use/disabled absence,
+named-assistant state, and exercises deterministic workshop creation and
+enhancement without activation, complete private source review, exact
+source-only confirmation, deterministic checks, fresh-task install/use/disabled absence,
 upgrade, collision and drift refusal, complete lifecycle reversal, a real
 stopped-and-reaped candidate interruption, and v1 migrations. A valid sibling
 assistant is a protected content/identity canary. It compares
