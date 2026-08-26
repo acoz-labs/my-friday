@@ -30,11 +30,19 @@ proc pre_submit_marker {} {
   exit 65
 }
 proc drain_pending_output {} {
-  global timeout
+  global marker timeout expect_out
   set prior_timeout $timeout
   set timeout 0
+  set marker_window ""
   expect {
-    -re {(.|\n)+} { exp_continue }
+    -re {(.|\n)} {
+      append marker_window $expect_out(0,string)
+      if {[string first $marker $marker_window] >= 0} { pre_submit_marker }
+      if {[string length $marker_window] > [string length $marker]} {
+        set marker_window [string range $marker_window end-[string length $marker] end]
+      }
+      exp_continue
+    }
     eof { child_eof }
     timeout {}
   }

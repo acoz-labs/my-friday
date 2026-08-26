@@ -211,6 +211,7 @@ literal builder-mention autocomplete readiness, distinct mention-selection and
 task-submission Enter events, first-key completion refusal, ordinary one-key
 non-mention submission, stale autocomplete drainage, delayed first-key
 completion refusal, and missing selected-composer refusal,
+marker-safe bytewise drainage including a selected-redraw-plus-marker burst,
 pre-submission marker refusal, output-only marker observation, prompt self-match
 refusal, missing-marker and nonzero failure, bytewise observation through
 invalid UTF-8/control bytes, marker-triggered TUI/descendant closure, and the

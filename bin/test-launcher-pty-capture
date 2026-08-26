@@ -73,7 +73,11 @@ if [[ "$submitted" == "$mention "* ]]; then
     exit 99
   fi
   task="${submitted#"$mention "}"
-  printf '%s  %s\n' "$mention" "$task"
+  if [[ "${TUI_MODE:-}" == selected-marker-burst ]]; then
+    printf '%s  %s\n%s\n' "$mention" "$task" "$TUI_MARKER"
+  else
+    printf '%s  %s\n' "$mention" "$task"
+  fi
   second=""
   while [[ "$second" != *"$enter" ]]; do
     IFS= read -r -n 1 byte || exit 96
@@ -146,6 +150,8 @@ run_tui stale-description "$tmp/stale-description.private" NEVER_SEEN
 stale_description_status=$?
 run_tui missing-selection "$tmp/missing-selection.private" NEVER_SEEN
 missing_selection_status=$?
+run_tui selected-marker-burst "$tmp/selected-marker-burst.private" SELECTED_BURST_MARKER
+selected_marker_burst_status=$?
 /usr/bin/expect "$root/config/acceptance/launcher-capture.exp" "$tmp/self.private" SELF_MARKER "$tmp/fake-tui" 'prompt contains SELF_MARKER'
 self_status=$?
 set -e
@@ -157,6 +163,7 @@ set -e
 [[ "$delayed_first_status" == 65 ]]
 [[ "$stale_description_status" == 124 ]]
 [[ "$missing_selection_status" == 124 ]]
+[[ "$selected_marker_burst_status" == 65 ]]
 grep -Fq PRIVATE_FAILURE "$tmp/status.private"
 [[ "$self_status" == 65 ]]
 [[ ! -e "$tmp/self.private" ]]

@@ -103,6 +103,9 @@ then requires the fresh selected-composer redraw with the extra separator that
 Codex 0.149 inserts before an existing suffix, refusing completion or a missing
 selection state at that boundary, before sending a separate CSI-u Enter to
 submit the composed task. Non-mention workshop prompts retain one-key submission.
+Every output-drain boundary consumes incrementally with rolling marker detection;
+a marker split across bytes or coalesced with a selected-composer redraw fails
+before later output or a submit key can hide it.
 
 Standalone runtimes can roll back to the v1 placeholder only while `skills/`
 contains no package. Named instances use an explicit capability revision inside

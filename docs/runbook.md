@@ -218,7 +218,9 @@ uses one Enter only to select the mention. Before sending the distinct submit
 Enter, it requires Codex 0.149's fresh selected-composer redraw with the extra
 separator before the existing task suffix; a marker, delayed completion, or
 missing selection state fails closed. Non-mention tasks retain one-key
-submission. A marker seen before submission is refused. Their
+submission. Every drainage boundary scans bytes through a rolling marker window,
+so a marker coalesced with other output still fails before submission. A marker
+seen before submission is refused. Their
 builder task receives an instance-specific manifest-bound skill. Managed Codex
 trusts the disposable workspace, adds only that instance's private runtime to
 workspace-write, sets approvals to never, and disables network. The builder
