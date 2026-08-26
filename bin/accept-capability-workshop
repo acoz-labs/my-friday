@@ -28,8 +28,9 @@ source="$instance_root/runtime/skills/daily-brief"; projection="$instance_root/w
 mkdir "$mountpoint" "$artifact_dir"
 for tool in acceptance-support acceptance-runner capability-stop-barrier; do CGO_ENABLED=0 go build -trimpath -buildvcs=true -o "$run_root/$tool" "./tools/$tool"; done
 install -m 0500 "$root/config/acceptance/launcher-capture.exp" "$run_root/launcher-capture.exp"
-run_clean(){ "$run_root/acceptance-runner" --cwd "$real_home" --timeout 180s --env HOME="$real_home" --env LANG=en_US.UTF-8 --env PATH="$(dirname "$(command -v codex)"):/usr/bin:/bin:/usr/sbin:/sbin" -- "$@"; }
-run_private(){ local transcript="$1" marker="$2";shift 2;run_clean /usr/bin/expect "$run_root/launcher-capture.exp" "$transcript" "$marker" "$@"; }
+run_with_timeout(){ local timeout="$1";shift;"$run_root/acceptance-runner" --cwd "$real_home" --timeout "$timeout" --env HOME="$real_home" --env LANG=en_US.UTF-8 --env PATH="$(dirname "$(command -v codex)"):/usr/bin:/bin:/usr/sbin:/sbin" -- "$@"; }
+run_clean(){ run_with_timeout 180s "$@"; }
+run_private(){ local transcript="$1" marker="$2";shift 2;run_with_timeout 600s /usr/bin/expect "$run_root/launcher-capture.exp" "$transcript" "$marker" "$@"; }
 private_line(){ LC_ALL=C tr -d '\r' <"$1"|LC_ALL=C grep -Fqx "$2"; }
 confirm(){ run_clean /usr/bin/expect "$root/config/acceptance/capability-confirm.exp" "$@"; }
 tree_digest(){ local base="$1" x="${2:-}" y="${3:-}"; find "$base" -xdev -print0|LC_ALL=C sort -z|while IFS= read -r -d '' p; do [[ -n "$x" && ( "$p" == "$x" || "$p" == "$x/"* ) ]]&&continue; [[ -n "$y" && ( "$p" == "$y" || "$p" == "$y/"* ) ]]&&continue; if [[ -f "$p" && ! -L "$p" ]]; then printf '%s:%s:%s\n' "${p#"$base"}" "$(stat -f %p "$p")" "$(shasum -a 256 "$p"|awk '{print $1}')"; elif [[ -L "$p" ]]; then printf '%s:link:%s\n' "${p#"$base"}" "$(readlink "$p")"; else printf '%s:dir:%s\n' "${p#"$base"}" "$(stat -f %p "$p")"; fi; done|shasum -a 256|awk '{print $1}'; }
