@@ -38,6 +38,17 @@ func (r *lineCallbackReader) Read(p []byte) (int, error) {
 }
 
 func TestMain(m *testing.M) {
+	// Production rejects every symlink in the supplied instance path. Keep the
+	// test harness from implicitly supplying macOS's /var -> /private/var alias.
+	tempRoot, err := filepath.EvalSymlinks(os.TempDir())
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	if err = os.Setenv("TMPDIR", tempRoot); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
 	if os.Getenv("MY_FRIDAY_WORKSHOP_EXPECT_HELPER") == "1" {
 		if len(os.Args) != 5 || os.Args[1] != "capability" || os.Args[2] != "workshop" {
 			os.Exit(64)
@@ -50,6 +61,30 @@ func TestMain(m *testing.M) {
 		os.Exit(0)
 	}
 	os.Exit(m.Run())
+}
+
+func TestPlanRefusesIntermediateSymlinkBeforePreviewOrWrite(t *testing.T) {
+	root := t.TempDir()
+	realParent := filepath.Join(root, "real-parent")
+	instance := filepath.Join(realParent, "alfred")
+	if err := capability.InitializeInstance(instance); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(instance, "runtime", "skills"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	linkedParent := filepath.Join(root, "linked-parent")
+	if err := os.Symlink(realParent, linkedParent); err != nil {
+		t.Fatal(err)
+	}
+	redirectedInstance := filepath.Join(linkedParent, "alfred")
+	redirectedSource := filepath.Join(redirectedInstance, "runtime", "skills", "daily-brief")
+	if _, err := Plan(redirectedInstance, redirectedSource, "daily-brief"); err == nil {
+		t.Fatal("pre-Plan intermediate symlink accepted")
+	}
+	if _, err := os.Lstat(filepath.Join(instance, "runtime", "skills", "daily-brief")); !os.IsNotExist(err) {
+		t.Fatalf("source changed before preview: %v", err)
+	}
 }
 
 func createPackage(t *testing.T, instance, slug string, p proposal) string {

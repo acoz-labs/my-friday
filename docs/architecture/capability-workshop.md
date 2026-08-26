@@ -72,9 +72,11 @@ transaction/receipt plus an exact whole-target proof. Unsafe temp type, link,
 mode, owner, or target identity is preserved and refused. The containing
 directory is synced after authority promotion and after final authority removal.
 
-Before prompting, the source workshop records every canonical instance-path
-ancestor's device, inode, directory type, owner, and mode. Commit reopens that
-chain descriptor-relatively from `/`, refuses any replacement, and derives both
+Before prompting, the source workshop walks the supplied already-canonical
+absolute instance path descriptor-relatively from `/` without resolving it and
+refuses every symlink component. It records every instance-path ancestor's
+device, inode, directory type, owner, and mode. Commit reopens that same chain,
+refuses any replacement, and derives both
 the shared `capabilities/` lock and `runtime/skills` from the same verified root
 descriptor. The workshop creates a random, exclusive staging root descriptor-
 relatively beneath that opened `runtime/skills` directory. Every staged

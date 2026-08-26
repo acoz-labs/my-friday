@@ -50,8 +50,8 @@ type ancestorProof struct {
 	Mode, Owner   uint32
 }
 
-// SourcePlan binds the canonical instance ancestry observed before any
-// workshop prompt. Commit and recovery must reopen that same chain.
+// SourcePlan binds the supplied canonical instance ancestry observed before
+// any workshop prompt. Commit and recovery must reopen that same chain.
 type SourcePlan struct {
 	Instance, Source, Slug string
 	ancestors              []ancestorProof
@@ -64,11 +64,6 @@ func Plan(instance, source, slug string) (SourcePlan, error) {
 	if !filepath.IsAbs(instance) || filepath.Clean(instance) != instance || source != filepath.Join(instance, "runtime", "skills", slug) {
 		return SourcePlan{}, errors.New("non-canonical source workshop plan")
 	}
-	canonicalInstance, err := filepath.EvalSymlinks(instance)
-	if err != nil {
-		return SourcePlan{}, err
-	}
-	instance, source = canonicalInstance, filepath.Join(canonicalInstance, "runtime", "skills", slug)
 	fd, err := unix.Open("/", unix.O_RDONLY|unix.O_DIRECTORY|unix.O_NOFOLLOW, 0)
 	if err != nil {
 		return SourcePlan{}, err
