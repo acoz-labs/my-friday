@@ -1,6 +1,7 @@
 package assistantinstance
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	bootstrap "github.com/acoz-labs/my-friday/internal/plan"
@@ -29,6 +30,91 @@ func fixture(t *testing.T) (string, string, string) {
 		}
 	}
 	return home, exe, codex
+}
+
+func downgradeFixtureToV1(t *testing.T, p Paths) {
+	t.Helper()
+	manifestPath := filepath.Join(p.Root, "manifest.json")
+	body, err := os.ReadFile(manifestPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var m Manifest
+	if err = json.Unmarshal(body, &m); err != nil {
+		t.Fatal(err)
+	}
+	m.ContractVersion = 1
+	m.CapabilityRevision = 0
+	m.RollbackContractVersion = 0
+	m.RollbackCapabilityRevision = 0
+	m.Owned = []string{"codex", "dependencies", "memory", "runtime", "workspace"}
+	m.CapabilityBuilder = ""
+	m.CapabilityBuilderSHA256 = ""
+	m.CapabilityPolicySHA256 = ""
+	m.MyFridayExecutable = ""
+	m.MyFridaySHA256 = ""
+	config, err := managedCodexConfig(p, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	m.CodexConfigSHA256 = digest(config)
+	body, _ = json.MarshalIndent(m, "", "  ")
+	if err = os.WriteFile(manifestPath, append(body, '\n'), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err = os.WriteFile(m.CodexConfig, config, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err = os.Remove(filepath.Join(p.Root, "dependencies", "my-friday")); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func downgradeFixtureToLegacyV2(t *testing.T, p Paths) {
+	t.Helper()
+	manifestPath := filepath.Join(p.Root, "manifest.json")
+	body, err := os.ReadFile(manifestPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var m Manifest
+	if err = json.Unmarshal(body, &m); err != nil {
+		t.Fatal(err)
+	}
+	m.CapabilityRevision = 0
+	m.RollbackContractVersion = 0
+	m.RollbackCapabilityRevision = 0
+	m.MyFridayExecutable = ""
+	m.MyFridaySHA256 = ""
+	m.CapabilityBuilderSHA256 = digest([]byte(legacyBuilderSkill))
+	m.CapabilityPolicySHA256 = digest([]byte(builderPolicy))
+	config, err := managedCodexConfig(p, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	m.CodexConfigSHA256 = digest(config)
+	body, _ = json.MarshalIndent(m, "", "  ")
+	if err = os.WriteFile(manifestPath, append(body, '\n'), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err = os.WriteFile(m.CodexConfig, config, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err = os.WriteFile(filepath.Join(m.CapabilityBuilder, "SKILL.md"), []byte(legacyBuilderSkill), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err = os.Remove(filepath.Join(p.Root, "dependencies", "my-friday")); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func candidateFixture(t *testing.T, home, body string) string {
+	t.Helper()
+	path := filepath.Join(home, "current-my-friday")
+	if err := os.WriteFile(path, []byte(body), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	return path
 }
 
 func TestFindCodexResolvesPATHSymlink(t *testing.T) {
@@ -133,25 +219,7 @@ func TestUpgradeV1InstanceProjectsManifestBoundBuilder(t *testing.T) {
 	if err = Create(p, exe, codex); err != nil {
 		t.Fatal(err)
 	}
-	manifestPath := filepath.Join(p.Paths.Root, "manifest.json")
-	body, err := os.ReadFile(manifestPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	var m Manifest
-	if err = json.Unmarshal(body, &m); err != nil {
-		t.Fatal(err)
-	}
-	m.ContractVersion = 1
-	m.Owned = []string{"codex", "dependencies", "memory", "runtime", "workspace"}
-	m.CapabilityBuilder = ""
-	m.CapabilityBuilderSHA256 = ""
-	m.CapabilityPolicySHA256 = ""
-	body, _ = json.MarshalIndent(m, "", "  ")
-	body = append(body, '\n')
-	if err = os.WriteFile(manifestPath, body, 0o600); err != nil {
-		t.Fatal(err)
-	}
+	downgradeFixtureToV1(t, p.Paths)
 	if err = os.RemoveAll(filepath.Join(p.Paths.Root, "capabilities")); err != nil {
 		t.Fatal(err)
 	}
@@ -161,7 +229,8 @@ func TestUpgradeV1InstanceProjectsManifestBoundBuilder(t *testing.T) {
 	if _, err = Verify(home, "alfred"); err != nil {
 		t.Fatalf("v1 compatibility: %v", err)
 	}
-	upgrade, err := PlanUpgrade(home, "alfred")
+	candidate := candidateFixture(t, home, "new candidate bytes")
+	upgrade, err := PlanUpgrade(home, "alfred", candidate)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -175,11 +244,102 @@ func TestUpgradeV1InstanceProjectsManifestBoundBuilder(t *testing.T) {
 	if upgraded.ContractVersion != 2 || upgraded.CapabilityBuilderSHA256 == "" {
 		t.Fatalf("not upgraded: %#v", upgraded)
 	}
+	if upgraded.MyFridaySHA256 != digest([]byte("new candidate bytes")) {
+		t.Fatalf("upgrade retained old launcher authority: %#v", upgraded)
+	}
+	managed, err := os.ReadFile(upgraded.MyFridayExecutable)
+	if err != nil || string(managed) != "new candidate bytes" {
+		t.Fatalf("managed candidate mismatch: %q %v", managed, err)
+	}
+	oldLauncher, err := os.ReadFile(exe)
+	if err != nil || string(oldLauncher) != "launcher" {
+		t.Fatalf("old candidate changed: %q %v", oldLauncher, err)
+	}
 	if err = os.WriteFile(filepath.Join(upgraded.CapabilityBuilder, "SKILL.md"), []byte("drift"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if _, err = Verify(home, "alfred"); err == nil || !strings.Contains(err.Error(), "builder drift") {
 		t.Fatalf("builder drift accepted: %v", err)
+	}
+}
+
+func TestLegacyV2UpgradeAndRollbackRemainSupported(t *testing.T) {
+	home, exe, codex := fixture(t)
+	p, err := PlanCreate(home, "alfred", exe, codex)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = Create(p, exe, codex); err != nil {
+		t.Fatal(err)
+	}
+	downgradeFixtureToLegacyV2(t, p.Paths)
+	if _, err = Verify(home, "alfred"); err != nil {
+		t.Fatalf("legacy v2 compatibility: %v", err)
+	}
+	candidate := candidateFixture(t, home, "replacement candidate")
+	upgrade, err := PlanUpgrade(home, "alfred", candidate)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = Upgrade(upgrade); err != nil {
+		t.Fatal(err)
+	}
+	m, err := Verify(home, "alfred")
+	if err != nil || m.CapabilityRevision != CapabilityRevision || m.RollbackContractVersion != ContractVersion || m.RollbackCapabilityRevision != 0 || m.MyFridaySHA256 != digest([]byte("replacement candidate")) {
+		t.Fatalf("legacy v2 upgrade mismatch: %#v %v", m, err)
+	}
+	rollback, err := PlanRollback(home, "alfred")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = Rollback(rollback); err != nil {
+		t.Fatal(err)
+	}
+	m, err = Verify(home, "alfred")
+	if err != nil || m.ContractVersion != ContractVersion || m.CapabilityRevision != 0 || m.MyFridayExecutable != "" {
+		t.Fatalf("legacy v2 rollback mismatch: %#v %v", m, err)
+	}
+}
+
+func TestLegacyV2InterruptedUpgradeRecoversAndRollsBack(t *testing.T) {
+	home, exe, codex := fixture(t)
+	p, err := PlanCreate(home, "alfred", exe, codex)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = Create(p, exe, codex); err != nil {
+		t.Fatal(err)
+	}
+	downgradeFixtureToLegacyV2(t, p.Paths)
+	candidate := candidateFixture(t, home, "interrupted candidate")
+	upgrade, err := PlanUpgrade(home, "alfred", candidate)
+	if err != nil {
+		t.Fatal(err)
+	}
+	upgradeHook = func(phase string) error {
+		if phase == "execution-context-created" {
+			return errors.New("stop")
+		}
+		return nil
+	}
+	if err = Upgrade(upgrade); err == nil {
+		t.Fatal("interruption missing")
+	}
+	upgradeHook = nil
+	defer func() { upgradeHook = nil }()
+	if _, err = Recover(home, "alfred"); err != nil {
+		t.Fatal(err)
+	}
+	rollback, err := PlanRollback(home, "alfred")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = Rollback(rollback); err != nil {
+		t.Fatal(err)
+	}
+	m, err := Verify(home, "alfred")
+	if err != nil || m.ContractVersion != ContractVersion || m.CapabilityRevision != 0 {
+		t.Fatalf("legacy recovery rollback mismatch: %#v %v", m, err)
 	}
 }
 
@@ -206,6 +366,20 @@ func TestCapabilityEmptyInstanceCanRollbackToV1(t *testing.T) {
 	if m.ContractVersion != 1 || m.CapabilityBuilder != "" {
 		t.Fatalf("rollback failed: %#v", m)
 	}
+	if m.MyFridayExecutable != "" || m.MyFridaySHA256 != "" {
+		t.Fatalf("rollback retained managed My Friday authority: %#v", m)
+	}
+	if _, err = os.Stat(filepath.Join(p.Paths.Root, "dependencies", "my-friday")); !os.IsNotExist(err) {
+		t.Fatalf("rollback retained managed My Friday executable: %v", err)
+	}
+	wantConfig, err := managedCodexConfig(p.Paths, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	gotConfig, err := os.ReadFile(filepath.Join(p.Paths.Root, "codex", "config.toml"))
+	if err != nil || !bytes.Equal(gotConfig, wantConfig) {
+		t.Fatalf("rollback did not restore v1 config: %v", err)
+	}
 }
 
 func TestUpgradeFailurePreservesPreexistingWorkspaceAgents(t *testing.T) {
@@ -217,25 +391,7 @@ func TestUpgradeFailurePreservesPreexistingWorkspaceAgents(t *testing.T) {
 	if err = Create(p, exe, codex); err != nil {
 		t.Fatal(err)
 	}
-	manifestPath := filepath.Join(p.Paths.Root, "manifest.json")
-	body, err := os.ReadFile(manifestPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	var m Manifest
-	if err = json.Unmarshal(body, &m); err != nil {
-		t.Fatal(err)
-	}
-	m.ContractVersion = 1
-	m.Owned = []string{"codex", "dependencies", "memory", "runtime", "workspace"}
-	m.CapabilityBuilder = ""
-	m.CapabilityBuilderSHA256 = ""
-	m.CapabilityPolicySHA256 = ""
-	body, _ = json.MarshalIndent(m, "", "  ")
-	body = append(body, '\n')
-	if err = os.WriteFile(manifestPath, body, 0o600); err != nil {
-		t.Fatal(err)
-	}
+	downgradeFixtureToV1(t, p.Paths)
 	if err = os.RemoveAll(filepath.Join(p.Paths.Root, "capabilities")); err != nil {
 		t.Fatal(err)
 	}
@@ -249,7 +405,7 @@ func TestUpgradeFailurePreservesPreexistingWorkspaceAgents(t *testing.T) {
 	if err = os.WriteFile(filepath.Join(keep, "foreign"), []byte("keep"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	pl, err := PlanUpgrade(home, "alfred")
+	pl, err := PlanUpgrade(home, "alfred", exe)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -269,12 +425,90 @@ func TestUpgradeFailurePreservesPreexistingWorkspaceAgents(t *testing.T) {
 	if !strings.Contains(result, "completed capability upgrade") {
 		t.Fatalf("result=%q", result)
 	}
-	m, err = Verify(home, "alfred")
+	m, err := Verify(home, "alfred")
 	if err != nil || m.ContractVersion != 2 {
 		t.Fatalf("upgrade recovery failed: %#v %v", m, err)
 	}
 	if b, err := os.ReadFile(filepath.Join(keep, "foreign")); err != nil || string(b) != "keep" {
 		t.Fatal("foreign state changed during recovery")
+	}
+}
+
+func TestRecoverCompletesUpgradeAfterExecutionContextMutation(t *testing.T) {
+	home, exe, codex := fixture(t)
+	p, err := PlanCreate(home, "alfred", exe, codex)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = Create(p, exe, codex); err != nil {
+		t.Fatal(err)
+	}
+	downgradeFixtureToV1(t, p.Paths)
+	if err = os.RemoveAll(filepath.Join(p.Paths.Root, "capabilities")); err != nil {
+		t.Fatal(err)
+	}
+	if err = os.RemoveAll(filepath.Join(p.Paths.Root, "workspace", ".agents")); err != nil {
+		t.Fatal(err)
+	}
+	pl, err := PlanUpgrade(home, "alfred", exe)
+	if err != nil {
+		t.Fatal(err)
+	}
+	upgradeHook = func(phase string) error {
+		if phase == "execution-context-created" {
+			return errors.New("injected post-context interruption")
+		}
+		return nil
+	}
+	if err = Upgrade(pl); err == nil {
+		t.Fatal("post-context fault missing")
+	}
+	upgradeHook = nil
+	defer func() { upgradeHook = nil }()
+	if _, err = os.Stat(filepath.Join(p.Paths.Root, "dependencies", "my-friday")); err != nil {
+		t.Fatal("managed executable mutation was not reached")
+	}
+	result, err := Recover(home, "alfred")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result != "completed capability upgrade" {
+		t.Fatalf("result=%q", result)
+	}
+	if _, err = Verify(home, "alfred"); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestUpgradeRefusesManagedMyFridayCollisionWithoutChangingBytes(t *testing.T) {
+	home, exe, codex := fixture(t)
+	p, err := PlanCreate(home, "alfred", exe, codex)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = Create(p, exe, codex); err != nil {
+		t.Fatal(err)
+	}
+	downgradeFixtureToV1(t, p.Paths)
+	if err = os.RemoveAll(filepath.Join(p.Paths.Root, "capabilities")); err != nil {
+		t.Fatal(err)
+	}
+	if err = os.RemoveAll(filepath.Join(p.Paths.Root, "workspace", ".agents")); err != nil {
+		t.Fatal(err)
+	}
+	pl, err := PlanUpgrade(home, "alfred", exe)
+	if err != nil {
+		t.Fatal(err)
+	}
+	collision := filepath.Join(p.Paths.Root, "dependencies", "my-friday")
+	if err = os.WriteFile(collision, []byte("foreign"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err = Upgrade(pl); err == nil || !strings.Contains(err.Error(), "collision") {
+		t.Fatalf("managed executable collision accepted: %v", err)
+	}
+	if body, readErr := os.ReadFile(collision); readErr != nil || string(body) != "foreign" {
+		t.Fatalf("managed executable collision changed: %q %v", body, readErr)
 	}
 }
 
@@ -337,6 +571,143 @@ func TestRollbackFaultRecoversFromQuarantinedOwnedState(t *testing.T) {
 	}
 }
 
+func TestRollbackRefusesPreexistingQuarantineCollisions(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		path func(Paths) string
+	}{
+		{"builder", func(p Paths) string {
+			return filepath.Join(p.Root, "workspace", ".agents", "skills", "capability-builder.rollback")
+		}},
+		{"capabilities", func(p Paths) string { return filepath.Join(p.Root, "capabilities.rollback") }},
+		{"executable", func(p Paths) string { return filepath.Join(p.Root, "dependencies", "my-friday.rollback") }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			home, exe, codex := fixture(t)
+			p, err := PlanCreate(home, "alfred", exe, codex)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err = Create(p, exe, codex); err != nil {
+				t.Fatal(err)
+			}
+			rollback, err := PlanRollback(home, "alfred")
+			if err != nil {
+				t.Fatal(err)
+			}
+			collision := tc.path(p.Paths)
+			if err = os.WriteFile(collision, []byte("foreign"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			if err = Rollback(rollback); err == nil || !strings.Contains(err.Error(), "quarantine collision") {
+				t.Fatalf("collision accepted: %v", err)
+			}
+			body, readErr := os.ReadFile(collision)
+			if readErr != nil || string(body) != "foreign" {
+				t.Fatalf("foreign collision changed: %q %v", body, readErr)
+			}
+			if _, statErr := os.Lstat(capabilityMigrationPath(p.Paths.Root)); !errors.Is(statErr, os.ErrNotExist) {
+				t.Fatalf("collision created migration journal: %v", statErr)
+			}
+		})
+	}
+}
+
+func TestRollbackRecoveryRefusesQuarantineByteSubstitution(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		path func(Paths) string
+	}{
+		{"builder", func(p Paths) string {
+			return filepath.Join(p.Root, "workspace", ".agents", "skills", "capability-builder.rollback", "SKILL.md")
+		}},
+		{"capabilities", func(p Paths) string { return filepath.Join(p.Root, "capabilities.rollback", "foreign") }},
+		{"executable", func(p Paths) string { return filepath.Join(p.Root, "dependencies", "my-friday.rollback") }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			home, exe, codex := fixture(t)
+			p, err := PlanCreate(home, "alfred", exe, codex)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err = Create(p, exe, codex); err != nil {
+				t.Fatal(err)
+			}
+			rollback, err := PlanRollback(home, "alfred")
+			if err != nil {
+				t.Fatal(err)
+			}
+			rollbackHook = func(phase string) error {
+				if phase == "quarantined" {
+					return errors.New("stop")
+				}
+				return nil
+			}
+			if err = Rollback(rollback); err == nil {
+				t.Fatal("interruption missing")
+			}
+			rollbackHook = nil
+			defer func() { rollbackHook = nil }()
+			substitute := tc.path(p.Paths)
+			if err = os.WriteFile(substitute, []byte("substituted"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			if _, err = Recover(home, "alfred"); err == nil || !strings.Contains(err.Error(), "quarantine drift") {
+				t.Fatalf("substitution accepted: %v", err)
+			}
+			body, readErr := os.ReadFile(substitute)
+			if readErr != nil || string(body) != "substituted" {
+				t.Fatalf("substituted bytes changed: %q %v", body, readErr)
+			}
+		})
+	}
+}
+
+func TestUpgradeRecoveryRefusesCandidateStageSubstitution(t *testing.T) {
+	home, exe, codex := fixture(t)
+	p, err := PlanCreate(home, "alfred", exe, codex)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = Create(p, exe, codex); err != nil {
+		t.Fatal(err)
+	}
+	downgradeFixtureToV1(t, p.Paths)
+	if err = os.RemoveAll(filepath.Join(p.Paths.Root, "capabilities")); err != nil {
+		t.Fatal(err)
+	}
+	if err = os.RemoveAll(filepath.Join(p.Paths.Root, "workspace", ".agents")); err != nil {
+		t.Fatal(err)
+	}
+	candidate := candidateFixture(t, home, "candidate")
+	upgrade, err := PlanUpgrade(home, "alfred", candidate)
+	if err != nil {
+		t.Fatal(err)
+	}
+	upgradeHook = func(phase string) error {
+		if phase == "execution-context-created" {
+			return errors.New("stop")
+		}
+		return nil
+	}
+	if err = Upgrade(upgrade); err == nil {
+		t.Fatal("interruption missing")
+	}
+	upgradeHook = nil
+	defer func() { upgradeHook = nil }()
+	stage := filepath.Join(p.Paths.Root, "dependencies", "my-friday.upgrade")
+	if err = os.WriteFile(stage, []byte("substituted"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = Recover(home, "alfred"); err == nil || !strings.Contains(err.Error(), "candidate staging drift") {
+		t.Fatalf("candidate substitution accepted: %v", err)
+	}
+	body, readErr := os.ReadFile(stage)
+	if readErr != nil || string(body) != "substituted" {
+		t.Fatalf("substituted candidate changed: %q %v", body, readErr)
+	}
+}
+
 func TestUpgradeInitializesOnlyPrivateCopiedRuntime(t *testing.T) {
 	home, exe, codex := fixture(t)
 	runtimeRoot := filepath.Join(home, "source-runtime")
@@ -361,27 +732,14 @@ func TestUpgradeInitializesOnlyPrivateCopiedRuntime(t *testing.T) {
 	if err = repository.RollbackCapabilities(privateRuntime); err != nil {
 		t.Fatal(err)
 	}
-	manifestPath := filepath.Join(p.Paths.Root, "manifest.json")
-	body, _ := os.ReadFile(manifestPath)
-	var m Manifest
-	_ = json.Unmarshal(body, &m)
-	m.ContractVersion = 1
-	m.Owned = []string{"codex", "dependencies", "memory", "runtime", "workspace"}
-	m.CapabilityBuilder = ""
-	m.CapabilityBuilderSHA256 = ""
-	m.CapabilityPolicySHA256 = ""
-	body, _ = json.MarshalIndent(m, "", "  ")
-	body = append(body, '\n')
-	if err = os.WriteFile(manifestPath, body, 0o600); err != nil {
-		t.Fatal(err)
-	}
+	downgradeFixtureToV1(t, p.Paths)
 	if err = os.RemoveAll(filepath.Join(p.Paths.Root, "capabilities")); err != nil {
 		t.Fatal(err)
 	}
 	if err = os.RemoveAll(filepath.Join(p.Paths.Root, "workspace", ".agents")); err != nil {
 		t.Fatal(err)
 	}
-	pl, err := PlanUpgrade(home, "alfred")
+	pl, err := PlanUpgrade(home, "alfred", exe)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -513,34 +871,40 @@ func TestRecoverForeignRootPreservesEntriesAndContent(t *testing.T) {
 	}
 }
 
-func TestForgedCodexExecutableIsDenied(t *testing.T) {
-	home, exe, codex := fixture(t)
-	p, err := PlanCreate(home, "alfred", exe, codex)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err = Create(p, exe, codex); err != nil {
-		t.Fatal(err)
-	}
-	manifestPath := filepath.Join(p.Paths.Root, "manifest.json")
-	b, err := os.ReadFile(manifestPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	var m Manifest
-	if err = json.Unmarshal(b, &m); err != nil {
-		t.Fatal(err)
-	}
-	m.CodexExecutable = "/bin/echo"
-	b, err = json.MarshalIndent(m, "", "  ")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err = os.WriteFile(manifestPath, append(b, '\n'), 0600); err != nil {
-		t.Fatal(err)
-	}
-	if _, err = Verify(home, "alfred"); err == nil || !strings.Contains(err.Error(), "manifest ownership contract mismatch") {
-		t.Fatalf("forged executable accepted: %v", err)
+func TestForgedManagedExecutableManifestIsDenied(t *testing.T) {
+	for _, mutate := range []func(*Manifest){
+		func(m *Manifest) { m.CodexExecutable = "/bin/echo" },
+		func(m *Manifest) { m.MyFridayExecutable = "/bin/echo" },
+		func(m *Manifest) { m.MyFridaySHA256 = strings.Repeat("a", 64) },
+	} {
+		home, exe, codex := fixture(t)
+		p, err := PlanCreate(home, "alfred", exe, codex)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err = Create(p, exe, codex); err != nil {
+			t.Fatal(err)
+		}
+		manifestPath := filepath.Join(p.Paths.Root, "manifest.json")
+		b, err := os.ReadFile(manifestPath)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var m Manifest
+		if err = json.Unmarshal(b, &m); err != nil {
+			t.Fatal(err)
+		}
+		mutate(&m)
+		b, err = json.MarshalIndent(m, "", "  ")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err = os.WriteFile(manifestPath, append(b, '\n'), 0600); err != nil {
+			t.Fatal(err)
+		}
+		if _, err = Verify(home, "alfred"); err == nil {
+			t.Fatalf("forged executable accepted: %v", err)
+		}
 	}
 }
 
@@ -591,14 +955,82 @@ func TestCreateTrustsOnlyExactInstanceWorkspaceWithTOMLEscaping(t *testing.T) {
 		t.Fatal(err)
 	}
 	escapedWorkspace := strings.NewReplacer(`\`, `\\`, `"`, `\"`).Replace(filepath.Join(p.Paths.Root, "workspace"))
-	want := "[projects.\"" + escapedWorkspace + "\"]\ntrust_level = \"trusted\"\n"
+	escapedRuntime := strings.NewReplacer(`\`, `\\`, `"`, `\"`).Replace(filepath.Join(p.Paths.Root, "runtime"))
+	want := "approval_policy = \"never\"\nsandbox_mode = \"workspace-write\"\n\n[sandbox_workspace_write]\nnetwork_access = false\nwritable_roots = [\"" + escapedRuntime + "\"]\n\n[projects.\"" + escapedWorkspace + "\"]\ntrust_level = \"trusted\"\n"
 	if string(config) != want {
 		t.Fatalf("unexpected instance trust config\nwant: %q\n got: %q", want, config)
 	}
-	for _, forbidden := range []string{home, p.Paths.Root, "*", "approval_policy", "sandbox_mode"} {
-		if forbidden != filepath.Join(p.Paths.Root, "workspace") && strings.Contains(string(config), "projects.\""+forbidden+"\"") {
-			t.Fatalf("broader trust scope rendered: %q", forbidden)
+	if strings.Count(string(config), "writable_roots") != 1 || strings.Contains(string(config), "danger-full-access") || strings.Contains(string(config), "network_access = true") {
+		t.Fatalf("broader sandbox authority rendered: %q", config)
+	}
+}
+
+func TestCreateBindsInstanceSpecificBuilderAndMyFridayExecutable(t *testing.T) {
+	home, exe, codex := fixture(t)
+	paths := make(map[string]Paths)
+	builders := make(map[string][]byte)
+	for _, name := range []string{"alfred", "robin"} {
+		p, err := PlanCreate(home, name, exe, codex)
+		if err != nil {
+			t.Fatal(err)
 		}
+		if err = Create(p, exe, codex); err != nil {
+			t.Fatal(err)
+		}
+		paths[name] = p.Paths
+		m, err := Verify(home, name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		wantExecutable := filepath.Join(p.Paths.Root, "dependencies", "my-friday")
+		if m.MyFridayExecutable != wantExecutable || m.MyFridaySHA256 != digest([]byte("launcher")) {
+			t.Fatalf("managed executable is not manifest-bound: %#v", m)
+		}
+		body, err := os.ReadFile(filepath.Join(m.CapabilityBuilder, "SKILL.md"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		builders[name] = body
+		for _, exact := range []string{p.Paths.Root + "/runtime", wantExecutable, "capability inspect " + name, "capability validate " + name, "capability test " + name} {
+			if !strings.Contains(string(body), exact) {
+				t.Fatalf("builder lacks %q: %s", exact, body)
+			}
+		}
+		for _, forbidden := range []string{" capability install ", " capability upgrade ", " capability enable ", " capability disable ", " capability remove ", " capability recover "} {
+			if strings.Contains(string(body), forbidden) {
+				t.Fatalf("builder grants mutation command %q", forbidden)
+			}
+		}
+	}
+	if string(builders["alfred"]) == string(builders["robin"]) || strings.Contains(string(builders["alfred"]), paths["robin"].Root) {
+		t.Fatal("builder bytes are not instance-specific")
+	}
+}
+
+func TestManagedMyFridayDriftRefusesVerifyRemoveAndRecovery(t *testing.T) {
+	home, exe, codex := fixture(t)
+	p, err := PlanCreate(home, "alfred", exe, codex)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = Create(p, exe, codex); err != nil {
+		t.Fatal(err)
+	}
+	managed := filepath.Join(p.Paths.Root, "dependencies", "my-friday")
+	if err = os.WriteFile(managed, []byte("drift"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = Verify(home, "alfred"); err == nil || !strings.Contains(err.Error(), "My Friday executable drift") {
+		t.Fatalf("managed executable drift accepted: %v", err)
+	}
+	if _, err = PlanRemove(home, "alfred"); err == nil {
+		t.Fatal("managed executable drift granted removal authority")
+	}
+	if err = os.Remove(p.Paths.Launcher); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = Recover(home, "alfred"); err == nil || !strings.Contains(err.Error(), "My Friday executable drift") {
+		t.Fatalf("managed executable drift granted recovery authority: %v", err)
 	}
 }
 

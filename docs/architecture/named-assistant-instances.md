@@ -17,13 +17,17 @@ renders its non-secret display name, purpose, form of address, and communication
 guidance directly into `codex/AGENTS.md`; Codex therefore discovers its purpose
 without resolving a caller-working-directory-relative profile path or using a
 tool. No symlink or additional projection is introduced. Codex is copied to
-`dependencies/codex`. Creation also renders
-`codex/config.toml` with only the exact absolute workspace in
-`projects.<path>.trust_level = "trusted"`. The path is TOML-escaped as data;
-no ancestor, wildcard, caller workspace, sibling instance, approval policy, or
-sandbox policy is configured. The manifest fixes the schema, name, root,
+`dependencies/codex`. Contract-v2 creation also copies the exact creating My
+Friday executable to `dependencies/my-friday` for private builder checks.
+Creation renders `codex/config.toml` with the exact absolute workspace trusted,
+`sandbox_mode = "workspace-write"`, `approval_policy = "never"`, network
+disabled, and only the exact private `runtime/` added to
+`sandbox_workspace_write.writable_roots`. Paths are TOML-escaped as data; no
+ancestor, wildcard, caller workspace, sibling instance, or other writable root
+is configured. The manifest fixes the schema, name, root,
 owned children, launcher path/digest, the exact
-`<root>/dependencies/codex` path and digest, the exact private config path and
+`<root>/dependencies/codex` and `<root>/dependencies/my-friday` paths and
+digests, the exact private config path and
 rendered digest, the exact private instructions path and rendered digest, and
 assistant ID. PATH discovery
 may traverse a symlink, but creation resolves it first and copies only the
@@ -31,12 +35,12 @@ resolved current-user regular executable into managed state.
 
 Create verifies the existing current-user-owned `$HOME/.local/bin`, refuses
 collisions, stages the root, then uses a no-replace launcher projection. Verify
-re-derives paths and checks the layout, launcher bytes, managed Codex, exact
-private trust config, and instructions re-rendered from the validated copied
+re-derives paths and checks the layout, launcher bytes, both managed
+executables, exact private sandbox/trust config, and instructions re-rendered from the validated copied
 profile. Remove requires that complete verification before it
 removes the launcher and selected root. `assistant recover <name>` finishes an
 interrupted removal only when the launcher is absent and the retained manifest,
-managed Codex, exact trust config, and managed instructions still prove the
+managed executables, exact config, and managed instructions still prove the
 exact root.
 Foreign, linked, drifted, unsupported, or contradictory state is preserved.
 Atomic staging serializes competing creates. The transaction holds a

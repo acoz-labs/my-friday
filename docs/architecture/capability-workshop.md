@@ -82,18 +82,34 @@ prohibited effect. Structurally readable but contradictory cases are
 
 The bootstrap-owned `capability-builder` is private to each named instance and
 is not an ordinary removable package. Its instructions permit source editing
-and read-only checks while prohibiting lifecycle mutations and confirmation
-tokens. This is an instruction boundary, not an OS boundary.
+only beneath that instance's exact private runtime. They name the instance and
+manifest-owned `dependencies/my-friday` executable, and allow only exact
+`inspect`, `validate`, and `test` command forms while prohibiting lifecycle
+mutations and confirmation tokens. Managed Codex enforces workspace-write with
+only that private runtime as an additional writable root, approvals never, and
+network disabled. The trusted workspace remains writable Codex workspace state;
+no sibling instance, ambient runtime, or broader root is granted.
 
 Standalone runtimes can roll back to the v1 placeholder only while `skills/`
-contains no package. Named instances can roll back to v1 only while capability
-control is empty and the builder is exact and alone in the managed skill root.
+contains no package. Named instances use an explicit capability revision inside
+contract v2. Revision 2 is the instance-specific execution contract; an
+unversioned revision-0 v2 manifest remains accepted only for a bounded upgrade
+to revision 2 and rollback to its exact prior revision. New revision-2 instances
+roll back to v1. Either rollback requires empty capability control and the exact
+builder alone in the managed skill root.
 Both paths use an exact `Rollback` preview and preserve source, credentials,
 launchers, global skills, and sibling instances.
 
 Runtime initialize/rollback and named-instance upgrade/rollback are serialized
 one-root migrations with canonical durable journals and explicit recovery. An
-instance upgrade initializes its private copied runtime; it never follows or
-mutates the external runtime originally used to create the instance. Rollback
-rechecks capability control and workspace-skill observations under the held
-instance lock before quarantining exact owned leaves.
+instance upgrade initializes its private copied runtime and stages a digest of
+the currently executing candidate before installing that exact executable with
+the manifest-bound builder/config; it never derives builder authority from the
+old launcher or follows or mutates the external runtime originally used to
+create the instance. The journal binds source manifest, source/target revision,
+and candidate digest for recovery. Rollback restores the recorded prior config
+and revision and rechecks capability control and workspace-skill observations
+under the held instance lock before quarantining exact owned leaves. Foreign
+quarantine names are refused. Quarantine tree type, owner, mode, link count, and
+digest remain journal-bound and are revalidated immediately before deletion,
+including after interrupted rollback.

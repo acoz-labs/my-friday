@@ -339,7 +339,15 @@ func runAssistant() error {
 		if len(os.Args) != 4 {
 			return fmt.Errorf("usage: my-friday assistant upgrade NAME")
 		}
-		p, err := assistantinstance.PlanUpgrade(home, name)
+		executable, err := os.Executable()
+		if err != nil {
+			return err
+		}
+		executable, err = filepath.EvalSymlinks(executable)
+		if err != nil {
+			return err
+		}
+		p, err := assistantinstance.PlanUpgrade(home, name, executable)
 		if err != nil {
 			return err
 		}

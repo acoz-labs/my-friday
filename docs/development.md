@@ -129,10 +129,16 @@ prompt rendering, adjacent prompt/Enter ordering, and
 line-discipline CR-to-NL translation from making an invalid PTY driver appear
 correct.
 Named-instance regressions prove the private Codex config TOML-escapes special
-workspace paths, trusts only the exact instance workspace, separates two
-instances, projects each validated purpose into manifest-bound private Codex
-instructions, and denies verify, remove, and recovery authority after config or
-instruction tampering. Reversal tests preserve ambient user Codex state. The
+workspace/runtime paths, trusts only the exact instance workspace, adds only
+the private runtime as extra workspace-write authority, fixes approvals/network,
+and separates two instances. They bind an instance-specific builder and exact
+currently executing My Friday candidate copy, refuse executable/config/builder
+drift, exercise v1 and legacy-v2 revision upgrades and bounded rollback
+reversal, and recover an interruption after execution-context mutation.
+Adversarial migration tests substitute candidate staging and each rollback
+quarantine, and prove foreign quarantine collisions remain untouched. Purpose
+instructions remain manifest-bound, and verify,
+remove, and recovery authority is denied after managed-state tampering. Reversal tests preserve ambient user Codex state. The
 acceptance contract forbids scripting an onboarding response.
 The native primitive performs a fresh valid install under the final lifecycle
 profile (including Git/xcrun), while regressions cover immediate double-fork
@@ -160,7 +166,11 @@ credential-free executable stubs; they never inspect or mutate developer
 Codex, shell, launcher, or credential state.
 Regression coverage includes PATH symlink resolution, caller-`HOME` refusal as
 authority, forged managed-executable manifests, same-name concurrency, and
-migration success plus injected legacy-cleanup failure.
+migration success plus injected legacy-cleanup failure. A subprocess flow
+against a fixture `$HOME` is intentionally not used because the production CLI
+derives authority from the operating-system account home; acceptance exercises
+the exact managed executable and read-only builder commands in a disposable
+real-home instance.
 
 Capability contract and lifecycle tests live under `internal/capability`.
 They use deterministic temporary fixtures and never invoke Codex or the

@@ -47,10 +47,10 @@ Mutations print a plan and require the exact action word. Each instance owns
 separate `codex`, `runtime`, `memory`, `workspace`, and `dependencies`
 directories. Its native launcher is the sole outside projection. It preserves
 real `HOME`, sets instance `CODEX_HOME`, fixes Codex `--cd` to the workspace,
-and forwards literal arguments. The private `codex/config.toml` trusts only
-that instance's exact absolute workspace so a fresh instance can launch without
-Codex's first-run workspace prompt; it does not change approval or sandbox
-policy. Put file-backed credentials only in that
+and forwards literal arguments. The private `codex/config.toml` trusts that
+instance's exact absolute workspace. Contract v2 also uses workspace-write,
+adds only the private runtime as a writable root, sets approvals to never, and
+disables network for the managed builder context. Put file-backed credentials only in that
 instance's `codex` directory; My Friday does not read, copy, or report them.
 To migrate a manifest-owned legacy projection, use the same arguments with
 `assistant migrate`; My Friday verifies the named replacement before executing
@@ -76,7 +76,9 @@ configuration. See [the installed-baseline contract](docs/architecture/installed
 ## Instruction-only capabilities
 
 Each named assistant includes a private capability builder. It may edit and
-review versioned source under `runtime/skills/<slug>/`, but activation remains
+review versioned source under its exact private `runtime/skills/<slug>/`, and
+uses its manifest-owned My Friday copy only for inspect, validate, and test;
+activation remains
 an independent CLI action:
 
 ```sh
