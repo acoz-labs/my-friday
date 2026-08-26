@@ -12,20 +12,66 @@ trap 'rm -rf "$tmp"' EXIT
 candidate="$tmp/candidate"
 instance="$tmp/instance"
 source="$instance/runtime/skills/daily-brief"
+eof_marker="$tmp/clean-eof"
 mkdir -p "$instance/runtime/skills"
 printf '%s\n' \
   '#!/bin/sh' \
-  "trap 'exit 0' HUP INT TERM" \
   "printf 'Display name'" \
-  'IFS= read -r _ || true' \
+  'case ${ABANDON_FIXTURE_BEHAVIOR:-expected} in' \
+  "  expected) trap 'exit 0' INT TERM; if ! IFS= read -r _; then : >\"\$ABANDON_EOF_MARKER\"; fi ;;" \
+  '  exit7) IFS= read -r _ || true; exit 7 ;;' \
+  '  hup) IFS= read -r _ || true; kill -HUP $$; sleep 1 ;;' \
+  '  signal) IFS= read -r _ || true ;;' \
+  '  *) exit 64 ;;' \
+  'esac' \
   'exit 0' >"$candidate"
 chmod 0700 "$candidate"
 
 for mode in q eof int term; do
-  /usr/bin/expect "$root/config/acceptance/capability-workshop-abandon.exp" \
+  ABANDON_EOF_MARKER="$eof_marker" /usr/bin/expect "$root/config/acceptance/capability-workshop-abandon.exp" \
     "$mode" "$candidate" "$instance" daily-brief
+  if [[ "$mode" == eof && ! -e "$eof_marker" ]]; then
+    echo "EOF abandon did not deliver terminal EOF" >&2
+    exit 1
+  fi
   [[ ! -e "$source" ]] || {
     echo "$mode abandon fixture wrote source" >&2
+    exit 1
+  }
+done
+
+set +e
+ABANDON_FIXTURE_BEHAVIOR=exit7 /usr/bin/expect "$root/config/acceptance/capability-workshop-abandon.exp" \
+  q "$candidate" "$instance" daily-brief
+status=$?
+set -e
+[[ "$status" == 7 ]] || {
+  echo "normal exit 7 became $status" >&2
+  exit 1
+}
+[[ ! -e "$source" ]] || {
+  echo "normal exit 7 fixture wrote source" >&2
+  exit 1
+}
+
+for signal_case in hup int term; do
+  mode="$signal_case"
+  behavior=signal
+  if [[ "$signal_case" == hup ]]; then
+    mode=q
+    behavior=hup
+  fi
+  set +e
+  ABANDON_FIXTURE_BEHAVIOR="$behavior" /usr/bin/expect "$root/config/acceptance/capability-workshop-abandon.exp" \
+    "$mode" "$candidate" "$instance" daily-brief
+  status=$?
+  set -e
+  [[ "$status" == 125 ]] || {
+    echo "untrapped $signal_case became $status, want 125" >&2
+    exit 1
+  }
+  [[ ! -e "$source" ]] || {
+    echo "untrapped $signal_case fixture wrote source" >&2
     exit 1
   }
 done

@@ -209,8 +209,10 @@ preservation, timeout/escaped-child reaping, `INT`/`TERM` exit status and
 ordinary/escaped-descendant quiescence, and the capability stop barrier's
 canonical post-mutation journal boundary.
 The minimal native workshop-abandon fixture executes q, EOF, `INT`, and `TERM`
-through the checked-in Expect driver, preserves child status, and proves that
-no source is written. It skips only on portable hosts without
+through the checked-in Expect driver and proves that no source is written. EOF
+is delivered as terminal EOF rather than PTY close; normal nonzero child exits
+are preserved, while wait errors and unexpected HUP/`INT`/`TERM` deaths return
+stable nonzero failure. The fixture skips only on portable hosts without
 `/usr/bin/expect`.
 Native workshop acceptance separately stops built candidate bytes at the
 durable source-journal boundary, re-enters `capability workshop` for source-only

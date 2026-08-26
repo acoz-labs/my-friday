@@ -4,15 +4,16 @@ lassign $argv mode candidate instance slug
 set timeout 30
 spawn -noecho {*}[list $candidate capability workshop $instance $slug]
 expect "Display name"
-set expect_eof 1
 switch -- $mode {
   q { send -- "q\r" }
-  eof { close; set expect_eof 0 }
+  eof { send -- "\004" }
   int { exec kill -INT [exp_pid] }
   term { exec kill -TERM [exp_pid] }
   default { exit 64 }
 }
-if {$expect_eof} { expect eof }
-if {[catch wait result]} { exit 1 }
+expect eof
+if {[catch wait result]} { exit 125 }
+if {[llength $result] != 4 || [lindex $result 2] != 0} { exit 125 }
 set code [lindex $result 3]
-if {$code != 0} { exit $code }
+if {![string is integer -strict $code] || $code < 0 || $code > 255} { exit 125 }
+exit $code
