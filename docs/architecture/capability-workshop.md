@@ -89,6 +89,12 @@ mutations and confirmation tokens. Managed Codex enforces workspace-write with
 only that private runtime as an additional writable root, approvals never, and
 network disabled. The trusted workspace remains writable Codex workspace state;
 no sibling instance, ambient runtime, or broader root is granted.
+Exact-candidate acceptance starts the builder prompt with the literal
+`$capability-builder` invocation. Before opening the private PTY task, a bounded
+managed-Codex `debug prompt-input` preflight proves that the exact prompt digest,
+builder description, and skill file are model-visible and that any reported
+skill-root alias resolves to the instance's exact private workspace skill root.
+The preflight emits no transcript or prompt content into public evidence.
 
 Standalone runtimes can roll back to the v1 placeholder only while `skills/`
 contains no package. Named instances use an explicit capability revision inside
