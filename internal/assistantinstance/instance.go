@@ -25,6 +25,26 @@ import (
 const ContractVersion = 2
 const CapabilityRevision = 3
 
+const capabilityRevision2BuilderSkillTemplate = `---
+name: capability-builder
+description: Help define, scaffold, inspect, validate, and test a My Friday instruction-only capability through its versioned source workflow.
+---
+
+# Capability builder
+
+You are building for assistant instance %q. Its exact private runtime source root is %q. Edit only capability source beneath %q and its deterministic tests. This runtime root is the only writable root outside the trusted workspace.
+
+Use only this manifest-owned My Friday executable for read-only checks: %q. For a capability slug, the only allowed command forms are:
+
+- %s capability inspect %s <slug> --plain
+- %s capability validate %s <slug>
+- %s capability test %s <slug>
+
+Clarify purpose, explicit triggers, non-triggers, inputs, outputs, examples, and failure behavior. Show the complete Git diff and unresolved judgments before suggesting activation.
+
+Never run install, upgrade, enable, disable, remove, or recover, and never enter Create, Install, Upgrade, Enable, Disable, Remove, Recover, or Rollback as a confirmation token. The user must review the CLI plan and authorize mutation independently. Instruction-only validation is structural and does not certify that natural-language instructions are benign.
+`
+
 const legacyBuilderSkill = `---
 name: capability-builder
 description: Help define, scaffold, inspect, validate, and test a My Friday instruction-only capability through its versioned source workflow.
@@ -82,6 +102,7 @@ type Manifest struct {
 	CapabilityRevision         int      `json:"capability_revision,omitempty"`
 	RollbackContractVersion    int      `json:"rollback_contract_version,omitempty"`
 	RollbackCapabilityRevision int      `json:"rollback_capability_revision,omitempty"`
+	RollbackMyFridaySHA256     string   `json:"rollback_my_friday_sha256,omitempty"`
 	CapabilityBuilder          string   `json:"capability_builder"`
 	CapabilityBuilderSHA256    string   `json:"capability_builder_sha256"`
 	CapabilityPolicySHA256     string   `json:"capability_policy_sha256"`
@@ -148,7 +169,7 @@ func readCapabilityMigration(root string) (capabilityMigration, error) {
 	canonical = append(canonical, '\n')
 	validTarget := m.Action == "upgrade" && m.TargetContractVersion == 0 && m.TargetCapabilityRevision == 0
 	if m.Action == "rollback" {
-		validTarget = (m.TargetContractVersion == 1 && m.TargetCapabilityRevision == 0) || (m.TargetContractVersion == ContractVersion && m.TargetCapabilityRevision == 0)
+		validTarget = (m.TargetContractVersion == 1 && m.TargetCapabilityRevision == 0) || (m.TargetContractVersion == ContractVersion && (m.TargetCapabilityRevision == 0 || m.TargetCapabilityRevision == 2))
 	}
 	validQuarantines := m.BuilderQuarantineSHA256 == "" && m.CapabilitiesQuarantineSHA256 == "" && m.MyFridayQuarantineSHA256 == ""
 	if m.BuilderQuarantineSHA256 != "" || m.CapabilitiesQuarantineSHA256 != "" || m.MyFridayQuarantineSHA256 != "" {
@@ -315,6 +336,14 @@ func capabilityBuilder(p Paths) []byte {
 	executable := filepath.Join(p.Root, "dependencies", "my-friday")
 	command := shellSingleQuote(executable)
 	return []byte(fmt.Sprintf(builderSkillTemplate, p.Name, runtime, executable, command, p.Name, command, p.Name, command, p.Name, command, p.Name))
+}
+
+func capabilityRevision2Builder(p Paths) []byte {
+	runtime := filepath.Join(p.Root, "runtime")
+	skills := filepath.Join(runtime, "skills")
+	executable := filepath.Join(p.Root, "dependencies", "my-friday")
+	command := shellSingleQuote(executable)
+	return []byte(fmt.Sprintf(capabilityRevision2BuilderSkillTemplate, p.Name, runtime, skills, executable, command, p.Name, command, p.Name, command, p.Name))
 }
 
 func shellSingleQuote(value string) string {
@@ -759,7 +788,7 @@ func readManifest(p Paths) (Manifest, error) {
 	wantCodex := filepath.Join(p.Root, "dependencies", "codex")
 	wantMyFriday := ""
 	validMyFridayDigest := m.MyFridaySHA256 == ""
-	if m.ContractVersion == ContractVersion && m.CapabilityRevision == CapabilityRevision {
+	if m.ContractVersion == ContractVersion && (m.CapabilityRevision == 2 || m.CapabilityRevision == CapabilityRevision) {
 		wantMyFriday = filepath.Join(p.Root, "dependencies", "my-friday")
 		validMyFridayDigest = validDigest(m.MyFridaySHA256)
 	}
@@ -782,9 +811,17 @@ func readManifest(p Paths) (Manifest, error) {
 	}
 	if m.ContractVersion == ContractVersion && m.CapabilityRevision == CapabilityRevision {
 		validBuilder = m.CapabilityBuilder == wantBuilder && m.CapabilityBuilderSHA256 == digest(capabilityBuilder(p)) && m.CapabilityPolicySHA256 == digest([]byte(builderPolicy))
+		validRollback = ((m.RollbackContractVersion == 1 && m.RollbackCapabilityRevision == 0) || (m.RollbackContractVersion == ContractVersion && m.RollbackCapabilityRevision == 0)) && m.RollbackMyFridaySHA256 == ""
+		if m.RollbackContractVersion == ContractVersion && m.RollbackCapabilityRevision == 2 {
+			backup, backupInfo, backupErr := regular(filepath.Join(p.Root, "dependencies", "my-friday.rollback-source"))
+			validRollback = backupErr == nil && backupInfo.Mode().Perm() == 0700 && validDigest(m.RollbackMyFridaySHA256) && digest(backup) == m.RollbackMyFridaySHA256
+		}
+	}
+	if m.ContractVersion == ContractVersion && m.CapabilityRevision == 2 {
+		validBuilder = m.CapabilityBuilder == wantBuilder && m.CapabilityBuilderSHA256 == digest(capabilityRevision2Builder(p)) && m.CapabilityPolicySHA256 == digest([]byte(builderPolicy))
 		validRollback = (m.RollbackContractVersion == 1 && m.RollbackCapabilityRevision == 0) || (m.RollbackContractVersion == ContractVersion && m.RollbackCapabilityRevision == 0)
 	}
-	validRevision := (m.ContractVersion == 1 && m.CapabilityRevision == 0) || (m.ContractVersion == ContractVersion && (m.CapabilityRevision == 0 || m.CapabilityRevision == CapabilityRevision))
+	validRevision := (m.ContractVersion == 1 && m.CapabilityRevision == 0) || (m.ContractVersion == ContractVersion && (m.CapabilityRevision == 0 || m.CapabilityRevision == 2 || m.CapabilityRevision == CapabilityRevision))
 	if configErr != nil || !validRevision || !validRollback || m.Name != p.Name || m.Root != p.Root || m.Launcher != p.Launcher || m.CodexExecutable != wantCodex || !validDigest(m.CodexSHA256) || m.MyFridayExecutable != wantMyFriday || !validMyFridayDigest || m.CodexConfig != wantConfig || m.CodexConfigSHA256 != digest(configBytes) || m.CodexInstructions != wantInstructions || !validInstructionsDigest || !validBuilder || strings.Join(m.Owned, "\x00") != strings.Join(want, "\x00") {
 		return m, errors.New("manifest ownership contract mismatch")
 	}
@@ -826,6 +863,9 @@ func verifyManagedInstructions(p Paths, m Manifest) error {
 
 func verifyCapabilityBuilder(p Paths, m Manifest) error {
 	expectedSkill := []byte(legacyBuilderSkill)
+	if m.CapabilityRevision == 2 {
+		expectedSkill = capabilityRevision2Builder(p)
+	}
 	if m.CapabilityRevision == CapabilityRevision {
 		expectedSkill = capabilityBuilder(p)
 	}
@@ -918,6 +958,8 @@ func PlanRollback(home, name string) (Plan, error) {
 	target := "v1"
 	if m.RollbackContractVersion == ContractVersion && m.RollbackCapabilityRevision == 0 {
 		target = "legacy capability contract v2"
+	} else if m.RollbackContractVersion == ContractVersion && m.RollbackCapabilityRevision == 2 {
+		target = "capability revision 2"
 	}
 	return Plan{Action: "rollback", Paths: p, Items: []string{"quarantine the exact manifest-owned capability builder, builder executable, and empty control root", "restore the " + target + " private Codex config and instance manifest", "delete quarantines only after journal-bound type, mode, and digest revalidation", "leave runtime source, Codex credentials, launcher, and other instances unchanged"}, rootDevice: uint64(st.Dev), rootInode: uint64(st.Ino)}, nil
 }
@@ -1085,10 +1127,12 @@ func completeRollback(p Paths, m Manifest) error {
 		}
 	}
 	targetContract, targetRevision := m.RollbackContractVersion, m.RollbackCapabilityRevision
+	rollbackExecutableDigest := m.RollbackMyFridaySHA256
 	m.ContractVersion = targetContract
 	m.CapabilityRevision = targetRevision
 	m.RollbackContractVersion = 0
 	m.RollbackCapabilityRevision = 0
+	m.RollbackMyFridaySHA256 = ""
 	m.MyFridayExecutable = ""
 	m.MyFridaySHA256 = ""
 	if targetContract == 1 {
@@ -1096,11 +1140,15 @@ func completeRollback(p Paths, m Manifest) error {
 		m.CapabilityBuilder = ""
 		m.CapabilityBuilderSHA256 = ""
 		m.CapabilityPolicySHA256 = ""
-	} else if targetContract == ContractVersion && targetRevision == 0 {
+	} else if targetContract == ContractVersion && (targetRevision == 0 || targetRevision == 2) {
 		if err = os.MkdirAll(filepath.Join(builder, "agents"), 0o700); err != nil {
 			return err
 		}
-		if err = os.WriteFile(filepath.Join(builder, "SKILL.md"), []byte(legacyBuilderSkill), 0o600); err != nil {
+		builderBytes := []byte(legacyBuilderSkill)
+		if targetRevision == 2 {
+			builderBytes = capabilityRevision2Builder(p)
+		}
+		if err = os.WriteFile(filepath.Join(builder, "SKILL.md"), builderBytes, 0o600); err != nil {
 			return err
 		}
 		if err = os.WriteFile(filepath.Join(builder, "agents", "openai.yaml"), []byte(builderPolicy), 0o600); err != nil {
@@ -1110,12 +1158,22 @@ func completeRollback(p Paths, m Manifest) error {
 			return err
 		}
 		m.CapabilityBuilder = builder
-		m.CapabilityBuilderSHA256 = digest([]byte(legacyBuilderSkill))
+		m.CapabilityBuilderSHA256 = digest(builderBytes)
 		m.CapabilityPolicySHA256 = digest([]byte(builderPolicy))
+		if targetRevision == 2 {
+			backup := filepath.Join(p.Root, "dependencies", "my-friday.rollback-source")
+			if err = os.Rename(backup, managedMyFriday); err != nil {
+				return err
+			}
+			m.MyFridayExecutable = managedMyFriday
+			m.MyFridaySHA256 = rollbackExecutableDigest
+			m.RollbackContractVersion = 1
+			m.RollbackCapabilityRevision = 0
+		}
 	} else {
 		return errors.New("assistant rollback target is unsupported")
 	}
-	configBytes, configErr := managedCodexConfig(p, 0)
+	configBytes, configErr := managedCodexConfig(p, targetRevision)
 	if configErr != nil {
 		return configErr
 	}
@@ -1161,12 +1219,13 @@ func upgradeLocked(plan Plan) error {
 	if err != nil {
 		return fmt.Errorf("upgrade refused: %w", err)
 	}
-	if m.ContractVersion != 1 && !(m.ContractVersion == ContractVersion && m.CapabilityRevision == 0) {
+	if m.ContractVersion != 1 && !(m.ContractVersion == ContractVersion && (m.CapabilityRevision == 0 || m.CapabilityRevision == 2)) {
 		return errors.New("assistant upgrade requires contract v1 or legacy capability contract v2")
 	}
 	capabilities := filepath.Join(plan.Paths.Root, "capabilities")
 	builder := filepath.Join(plan.Paths.Root, "workspace", ".agents", "skills", "capability-builder")
 	managedMyFriday := filepath.Join(plan.Paths.Root, "dependencies", "my-friday")
+	rollbackSource := managedMyFriday + ".rollback-source"
 	candidateStage := managedMyFriday + ".upgrade"
 	if !resuming {
 		if !errors.Is(journalErr, os.ErrNotExist) {
@@ -1185,7 +1244,15 @@ func upgradeLocked(plan Plan) error {
 				return errors.New("legacy v2 capability control is not empty")
 			}
 		}
-		if _, statErr := os.Lstat(managedMyFriday); !errors.Is(statErr, os.ErrNotExist) {
+		if m.CapabilityRevision == 2 {
+			existing, info, existingErr := regular(managedMyFriday)
+			if existingErr != nil || info.Mode().Perm() != 0700 || digest(existing) != m.MyFridaySHA256 {
+				return errors.New("managed My Friday executable drift")
+			}
+			if _, statErr := os.Lstat(rollbackSource); !errors.Is(statErr, os.ErrNotExist) {
+				return errors.New("managed My Friday rollback-source collision")
+			}
+		} else if _, statErr := os.Lstat(managedMyFriday); !errors.Is(statErr, os.ErrNotExist) {
 			return errors.New("managed My Friday executable collision")
 		}
 		if _, statErr := os.Lstat(candidateStage); !errors.Is(statErr, os.ErrNotExist) {
@@ -1216,6 +1283,19 @@ func upgradeLocked(plan Plan) error {
 	candidateBytes, candidateInfo, candidateErr := regular(candidateStage)
 	if candidateErr != nil || candidateInfo.Mode().Perm() != 0o700 || digest(candidateBytes) != migration.CandidateSHA256 {
 		return errors.New("assistant upgrade candidate staging drift")
+	}
+	if m.CapabilityRevision == 2 {
+		if _, backupErr := os.Lstat(rollbackSource); errors.Is(backupErr, os.ErrNotExist) {
+			existing, info, existingErr := regular(managedMyFriday)
+			if existingErr != nil || info.Mode().Perm() != 0700 || digest(existing) != m.MyFridaySHA256 {
+				return errors.New("managed My Friday executable drift")
+			}
+			if err = os.Rename(managedMyFriday, rollbackSource); err != nil {
+				return err
+			}
+		} else if backupErr != nil {
+			return backupErr
+		}
 	}
 	runtimeRoot := filepath.Join(plan.Paths.Root, "runtime")
 	if _, runtimeManifestErr := os.Lstat(filepath.Join(runtimeRoot, ".my-friday", "manifest.json")); runtimeManifestErr == nil {
@@ -1277,6 +1357,9 @@ func upgradeLocked(plan Plan) error {
 		}
 	}
 	sourceContract, sourceRevision := m.ContractVersion, m.CapabilityRevision
+	if sourceRevision == 2 {
+		m.RollbackMyFridaySHA256 = m.MyFridaySHA256
+	}
 	m.ContractVersion = ContractVersion
 	m.CapabilityRevision = CapabilityRevision
 	m.RollbackContractVersion = sourceContract

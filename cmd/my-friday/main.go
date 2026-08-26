@@ -235,12 +235,7 @@ func runCapability() error {
 		}()
 		err = capabilityworkshop.Run(paths.Root, source, os.Args[4], os.Stdin, os.Stdout)
 		close(done)
-		select {
-		case <-interrupted:
-			return nil
-		default:
-			return err
-		}
+		return workshopResult(err, interrupted)
 	}
 	if action == "recover" {
 		info, err := os.Stdin.Stat()
@@ -330,6 +325,14 @@ func runCapability() error {
 	}
 	fmt.Fprintf(os.Stdout, "Capability %s %sd; start a fresh Codex task for lifecycle changes\n", os.Args[4], action)
 	return nil
+}
+
+func workshopResult(runErr error, interrupted <-chan struct{}) error {
+	select {
+	case <-interrupted:
+	default:
+	}
+	return runErr
 }
 
 func reportCapabilityTest(out io.Writer, pkg capability.Package) error {

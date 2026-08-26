@@ -6,6 +6,7 @@ package capabilityworkshop
 import (
 	"bufio"
 	"bytes"
+	cryptorand "crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -16,6 +17,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"syscall"
 	"unicode/utf8"
@@ -39,6 +41,7 @@ type proposal struct {
 	Triggers, NonTriggers, Inputs, Outputs, Facts                  []string
 	Examples                                                       []example
 	Body                                                           []byte
+	InputsAnswered, OutputsAnswered, RetainBody                    bool
 }
 
 // Run conducts one workshop and returns without mutation unless the exact
@@ -71,18 +74,28 @@ func Run(instance, source, slug string, in io.Reader, out io.Writer) error {
 		return err
 	}
 	r := bufio.NewReader(in)
-	fmt.Fprintf(out, "Capability workshop: %s\nMode: %s\nEnter q at any prompt to exit without changes. Enter b to go back or r to restart the current section.\n", slug, map[bool]string{true: "create", false: "enhance"}[creating])
+	fmt.Fprintf(out, "Capability workshop: %s\nMode: %s\nEnter q at any prompt to exit without changes. Enter b for the previous item or r to restart the current section. At a section boundary, b repeats that boundary.\n", slug, map[bool]string{true: "create", false: "enhance"}[creating])
 	if !creating {
 		fmt.Fprintln(out, "Existing instruction body: retained user-authored content")
-		choice, stop, err := prompt(r, out, "Instruction body [retain/regenerate] (Return retains)", 0, true)
-		if err != nil || stop {
-			return finishNoChange(out, err)
-		}
-		if choice != "" && choice != "retain" && choice != "regenerate" {
-			return errors.New("instruction body choice must be retain or regenerate")
-		}
-		if choice == "regenerate" {
-			p.Body = nil
+		for {
+			fmt.Fprintln(out, "Current: retain the exact existing SKILL body bytes")
+			choice, stop, err := prompt(r, out, "Instruction body [retain/regenerate]", 0, true)
+			if err != nil || stop {
+				return finishNoChange(out, err)
+			}
+			if choice == "b" || choice == "r" {
+				fmt.Fprintln(out, "Already at the instruction-section boundary; retrying.")
+				continue
+			}
+			if choice != "" && choice != "retain" && choice != "regenerate" {
+				fmt.Fprintln(out, "Invalid: instruction body choice must be retain or regenerate. Try again.")
+				continue
+			}
+			if choice == "regenerate" {
+				p.Body = nil
+				p.RetainBody = false
+			}
+			break
 		}
 	}
 	fields := []struct {
@@ -91,11 +104,21 @@ func Run(instance, source, slug string, in io.Reader, out io.Writer) error {
 		dst   *string
 	}{
 		{"Display name (1-200 UTF-8 bytes; create default shown)", 200, &p.DisplayName}, {"Summary (1-200 UTF-8 bytes)", 200, &p.Summary},
-		{"Version (semantic x.y.z; create default 0.1.0)", 32, &p.Version}, {"Purpose (1-1000 UTF-8 bytes)", 1000, &p.Purpose},
+		{"Version (semantic x.y.z)", 32, &p.Version},
 		{"Success behavior (1-1000 UTF-8 bytes)", 1000, &p.Success}, {"Failure behavior (1-1000 UTF-8 bytes)", 1000, &p.Failure},
+	}
+	if !p.RetainBody {
+		fields = append(fields[:3], append([]struct {
+			label string
+			max   int
+			dst   *string
+		}{{"Purpose (1-1000 UTF-8 bytes)", 1000, &p.Purpose}}, fields[3:]...)...)
 	}
 	for i := 0; i < len(fields); i++ {
 		for {
+			if *fields[i].dst != "" {
+				fmt.Fprintf(out, "Current/default: %s\n", *fields[i].dst)
+			}
 			v, stop, e := prompt(r, out, fields[i].label, fields[i].max, *fields[i].dst != "")
 			if e != nil {
 				if errors.Is(e, io.EOF) || errors.Is(e, io.ErrUnexpectedEOF) {
@@ -145,7 +168,11 @@ func Run(instance, source, slug string, in io.Reader, out io.Writer) error {
 	for i := 0; i < len(lists); i++ {
 		f := lists[i]
 		for {
-			v, stop, e := prompt(r, out, f.label+" (1-16; separate entries with |"+map[bool]string{true: "; 'none' allowed", false: ""}[f.none]+")", 4096, len(*f.dst) > 0)
+			answered := len(*f.dst) > 0 || (f.label == "Inputs" && p.InputsAnswered) || (f.label == "Outputs" && p.OutputsAnswered)
+			if answered {
+				fmt.Fprintf(out, "Current (%d): %s\n", len(*f.dst), listSummary(*f.dst))
+			}
+			v, stop, e := prompt(r, out, f.label+" (1-16; separate entries with |"+map[bool]string{true: "; 'none' allowed", false: ""}[f.none]+")", 4096, answered)
 			if e != nil {
 				if errors.Is(e, io.EOF) || errors.Is(e, io.ErrUnexpectedEOF) {
 					return finishNoChange(out, e)
@@ -183,36 +210,96 @@ func Run(instance, source, slug string, in io.Reader, out io.Writer) error {
 					continue
 				}
 				*f.dst = values
+				if f.label == "Inputs" {
+					p.InputsAnswered = true
+				}
+				if f.label == "Outputs" {
+					p.OutputsAnswered = true
+				}
 			}
-			if len(*f.dst) == 0 {
+			answered = len(*f.dst) > 0 || (f.label == "Inputs" && p.InputsAnswered) || (f.label == "Outputs" && p.OutputsAnswered)
+			if !answered {
 				fmt.Fprintln(out, "Invalid: a consequential answer is required.")
 				continue
 			}
 			break
 		}
 	}
+	for i, ex := range p.Examples {
+		fmt.Fprintf(out, "Current example %d: input=%q; output=%s\n", i+1, ex.Input, listSummary(ex.Output))
+	}
+	baseExamples := append([]example(nil), p.Examples...)
 	for {
-		ex, stop, err := prompt(r, out, "Example input (must contain a trigger; 1-512 UTF-8 bytes)", 512, !creating)
+		currentInput := ""
+		currentOutput := []string(nil)
+		if len(baseExamples) > 0 {
+			currentInput, currentOutput = baseExamples[0].Input, baseExamples[0].Output
+		}
+		ex, stop, err := prompt(r, out, "Example 1 input (must contain a trigger; 1-512 UTF-8 bytes)", 512, currentInput != "")
 		if err != nil || stop {
 			return finishNoChange(out, err)
 		}
-		if ex == "r" {
+		if ex == "r" || ex == "b" {
 			continue
 		}
-		outs, stop, err := prompt(r, out, "Expected output fragments (1-8; separate with |)", 2048, !creating)
+		outs, stop, err := prompt(r, out, "Expected output fragments for example 1 (1-8; separate with |)", 2048, len(currentOutput) > 0)
 		if err != nil || stop {
 			return finishNoChange(out, err)
 		}
-		if outs == "r" {
+		if outs == "r" || outs == "b" {
 			continue
 		}
-		if ex != "" || outs != "" {
-			ov, e := list(outs, false, 256, 8)
+		if ex == "" {
+			ex = currentInput
+		}
+		ov := append([]string(nil), currentOutput...)
+		if outs != "" {
+			var e error
+			ov, e = list(outs, false, 256, 8)
 			if e != nil {
 				fmt.Fprintf(out, "Invalid: %v. Restarting examples.\n", e)
 				continue
 			}
-			p.Examples = []example{{Input: ex, Output: ov}}
+		}
+		if ex == "" || len(ov) == 0 {
+			fmt.Fprintln(out, "Invalid: a complete example is required.")
+			continue
+		}
+		remaining := []example(nil)
+		if len(baseExamples) > 1 {
+			remaining = baseExamples[1:]
+		}
+		p.Examples = append([]example{{Input: ex, Output: ov}}, remaining...)
+		for len(p.Examples) < 16 {
+			more, stop, e := prompt(r, out, "Add another example? [yes/no] (Return keeps current suite)", 3, true)
+			if e != nil || stop {
+				return finishNoChange(out, e)
+			}
+			if more == "b" || more == "r" {
+				break
+			}
+			if more == "" || more == "no" {
+				break
+			}
+			if more != "yes" {
+				fmt.Fprintln(out, "Invalid: enter yes or no. Try again.")
+				continue
+			}
+			n := len(p.Examples) + 1
+			ei, stop, e := prompt(r, out, fmt.Sprintf("Example %d input (1-512 UTF-8 bytes)", n), 512, false)
+			if e != nil || stop {
+				return finishNoChange(out, e)
+			}
+			eo, stop, e := prompt(r, out, fmt.Sprintf("Example %d expected output fragments (1-8; separate with |)", n), 2048, false)
+			if e != nil || stop {
+				return finishNoChange(out, e)
+			}
+			vals, e := list(eo, false, 256, 8)
+			if ei == "" || e != nil {
+				fmt.Fprintln(out, "Invalid: a complete bounded example is required. Try again.")
+				continue
+			}
+			p.Examples = append(p.Examples, example{ei, vals})
 		}
 		break
 	}
@@ -317,7 +404,7 @@ func prompt(r *bufio.Reader, out io.Writer, label string, max int, retain bool) 
 }
 func list(s string, none bool, maxBytes, maxCount int) ([]string, error) {
 	if none && s == "none" {
-		return []string{"none"}, nil
+		return []string{}, nil
 	}
 	parts := strings.Split(s, "|")
 	if len(parts) < 1 || len(parts) > maxCount {
@@ -338,6 +425,17 @@ func list(s string, none bool, maxBytes, maxCount int) ([]string, error) {
 	return parts, nil
 }
 
+func listSummary(values []string) string {
+	if len(values) == 0 {
+		return "none"
+	}
+	parts := make([]string, len(values))
+	for i, value := range values {
+		parts[i] = fmt.Sprintf("%d=%q", i+1, value)
+	}
+	return strings.Join(parts, "; ")
+}
+
 func initialProposal(slug string, pkg *capability.Package) (proposal, error) {
 	p := proposal{Slug: slug, Version: "0.1.0", DisplayName: strings.Title(strings.ReplaceAll(slug, "-", " "))}
 	if pkg == nil {
@@ -352,6 +450,7 @@ func initialProposal(slug string, pkg *capability.Package) (proposal, error) {
 	p.Triggers = append([]string(nil), m.Triggers...)
 	p.Inputs = append([]string(nil), m.Inputs...)
 	p.Outputs = append([]string(nil), m.Outputs...)
+	p.InputsAnswered, p.OutputsAnswered, p.RetainBody = true, true, true
 	p.NonTriggers = append([]string(nil), pkg.Cases.NonTriggers...)
 	p.Facts = append([]string(nil), pkg.Cases.RequiredFacts...)
 	for _, e := range pkg.Cases.Examples {
@@ -382,8 +481,8 @@ func render(p proposal) (map[string][]byte, error) {
 	if body == nil {
 		body = []byte(fmt.Sprintf("\n# %s\n\n## Purpose\n\n%s\n\n## Inputs\n\n%s\n\n## Outputs\n\n%s\n\n## Success\n\n%s\n\n## Failure\n\n%s\n\n## Required facts\n\n- %s\n", p.DisplayName, p.Purpose, strings.Join(p.Inputs, ", "), strings.Join(p.Outputs, ", "), p.Success, p.Failure, strings.Join(p.Facts, "\n- ")))
 	}
-	skill := append([]byte(fmt.Sprintf("---\nname: %s\ndescription: %s\n---\n", p.Slug, p.Summary)), body...)
-	if len(skill) == 0 || skill[len(skill)-1] != '\n' {
+	skill := append([]byte(fmt.Sprintf("---\nname: %s\ndescription: %s\n---\n", p.Slug, strconv.Quote(p.Summary))), body...)
+	if !p.RetainBody && (len(skill) == 0 || skill[len(skill)-1] != '\n') {
 		skill = append(skill, '\n')
 	}
 	return map[string][]byte{"capability.json": mb, "skill/SKILL.md": skill, "tests/cases.json": cb}, nil
@@ -393,8 +492,16 @@ func validateRendered(slug string, files map[string][]byte) error {
 	if e != nil {
 		return e
 	}
-	defer os.RemoveAll(d)
 	root := filepath.Join(d, slug)
+	defer func() {
+		for _, name := range []string{"capability.json", "skill/SKILL.md", "tests/cases.json"} {
+			_ = os.Remove(filepath.Join(root, filepath.FromSlash(name)))
+		}
+		_ = os.Remove(filepath.Join(root, "skill"))
+		_ = os.Remove(filepath.Join(root, "tests"))
+		_ = os.Remove(root)
+		_ = os.Remove(d)
+	}()
 	for n, b := range files {
 		p := filepath.Join(root, filepath.FromSlash(n))
 		if e = os.MkdirAll(filepath.Dir(p), 0700); e != nil {
@@ -447,16 +554,8 @@ func preview(out io.Writer, source string, status capability.Status, files map[s
 			return e
 		}
 		fmt.Fprintf(out, "--- a/%s\n+++ b/%s\n", n, n)
-		for _, l := range strings.Split(string(old), "\n") {
-			if l != "" {
-				fmt.Fprintf(out, "-%s\n", l)
-			}
-		}
-		for _, l := range strings.Split(string(files[n]), "\n") {
-			if l != "" {
-				fmt.Fprintf(out, "+%s\n", l)
-			}
-		}
+		writeDiffBytes(out, '-', old)
+		writeDiffBytes(out, '+', files[n])
 	}
 	if status.Package != nil {
 		var optional []string
@@ -486,19 +585,70 @@ func preview(out io.Writer, source string, status capability.Status, files map[s
 	return nil
 }
 
+func writeDiffBytes(out io.Writer, prefix byte, body []byte) {
+	if len(body) == 0 {
+		return
+	}
+	lines := bytes.Split(body, []byte{'\n'})
+	terminated := body[len(body)-1] == '\n'
+	limit := len(lines)
+	if terminated {
+		limit--
+	}
+	for _, line := range lines[:limit] {
+		fmt.Fprintf(out, "%c%s\n", prefix, line)
+	}
+	if !terminated {
+		fmt.Fprintln(out, "\\ No newline at end of file")
+	}
+}
+
 type journal struct {
-	ContractVersion int    `json:"contract_version"`
-	Action          string `json:"action"`
-	Slug            string `json:"slug"`
-	OldDigest       string `json:"old_digest"`
-	NewDigest       string `json:"new_digest"`
-	Phase           string `json:"phase"`
-	SourceInode     uint64 `json:"source_inode"`
-	StageInode      uint64 `json:"stage_inode"`
+	ContractVersion int                     `json:"contract_version"`
+	Action          string                  `json:"action"`
+	Slug            string                  `json:"slug"`
+	OldDigest       string                  `json:"old_digest"`
+	NewDigest       string                  `json:"new_digest"`
+	Phase           string                  `json:"phase"`
+	SourceInode     uint64                  `json:"source_inode"`
+	StageInode      uint64                  `json:"stage_inode"`
+	StageRoot       string                  `json:"stage_root"`
+	StageTree       map[string]journalEntry `json:"stage_tree"`
+	OldTree         map[string]journalEntry `json:"old_tree,omitempty"`
+}
+
+type journalEntry struct {
+	Device    uint64 `json:"device"`
+	Inode     uint64 `json:"inode"`
+	Mode      uint32 `json:"mode"`
+	Owner     uint32 `json:"owner"`
+	Links     uint64 `json:"links"`
+	SHA256    string `json:"sha256,omitempty"`
+	Directory bool   `json:"directory"`
+}
+
+func journalTree(entries map[string]snapshotEntry) map[string]journalEntry {
+	out := make(map[string]journalEntry, len(entries))
+	for path, entry := range entries {
+		out[path] = journalEntry{entry.dev, entry.ino, uint32(entry.mode.Perm()), entry.uid, entry.nlink, entry.digest, entry.dir}
+	}
+	return out
+}
+
+func snapshotAuthority(entries map[string]journalEntry) map[string]snapshotEntry {
+	out := make(map[string]snapshotEntry, len(entries))
+	for path, entry := range entries {
+		out[path] = snapshotEntry{entry.Device, entry.Inode, os.FileMode(entry.Mode), entry.Owner, entry.Links, entry.SHA256, entry.Directory}
+	}
+	return out
 }
 
 func readJournal(path, slug string) (journal, error) {
 	var j journal
+	info, statErr := os.Lstat(path)
+	if statErr != nil || info.Mode().Perm() != 0600 || !info.Mode().IsRegular() {
+		return j, errors.New("source workshop recovery required")
+	}
 	b, err := readOwnedRegular(path)
 	if err != nil {
 		return j, err
@@ -508,10 +658,19 @@ func readJournal(path, slug string) (journal, error) {
 	}
 	canonical, _ := json.MarshalIndent(j, "", "  ")
 	canonical = append(canonical, '\n')
-	if !bytes.Equal(b, canonical) || j.ContractVersion != 1 || j.Slug != slug || (j.Action != "create" && j.Action != "update") || j.Phase != "staged" || len(j.NewDigest) != 64 || j.StageInode == 0 || (j.Action == "update" && (len(j.OldDigest) != 64 || j.SourceInode == 0)) || (j.Action == "create" && j.SourceInode != 0) {
+	if !bytes.Equal(b, canonical) || j.ContractVersion != 1 || j.Slug != slug || (j.Action != "create" && j.Action != "update") || j.Phase != "staged" || len(j.NewDigest) != 64 || j.StageInode == 0 || !validStageRoot(slug, j.StageRoot) || len(j.StageTree) == 0 || (j.Action == "update" && (len(j.OldDigest) != 64 || j.SourceInode == 0 || len(j.OldTree) == 0)) || (j.Action == "create" && (j.SourceInode != 0 || len(j.OldTree) != 0)) {
 		return j, errors.New("source workshop recovery required")
 	}
 	return j, nil
+}
+
+func validStageRoot(slug, name string) bool {
+	prefix := "." + slug + ".workshop-new-"
+	if !strings.HasPrefix(name, prefix) || len(name) != len(prefix)+32 {
+		return false
+	}
+	_, err := hex.DecodeString(strings.TrimPrefix(name, prefix))
+	return err == nil && filepath.Base(name) == name
 }
 
 func packageDigest(path, slug string) string {
@@ -650,6 +809,100 @@ func writeExclusiveMode(path string, body []byte, mode os.FileMode) error {
 	}
 	return ce
 }
+
+func createStage(parentFD int, slug string) (string, int, error) {
+	for attempts := 0; attempts < 8; attempts++ {
+		random := make([]byte, 16)
+		if _, err := cryptorand.Read(random); err != nil {
+			return "", -1, err
+		}
+		name := "." + slug + ".workshop-new-" + hex.EncodeToString(random)
+		if err := unix.Mkdirat(parentFD, name, 0700); errors.Is(err, unix.EEXIST) {
+			continue
+		} else if err != nil {
+			return "", -1, err
+		}
+		fd, err := unix.Openat(parentFD, name, unix.O_RDONLY|unix.O_DIRECTORY|unix.O_NOFOLLOW, 0)
+		if err != nil {
+			return "", -1, err
+		}
+		return name, fd, nil
+	}
+	return "", -1, errors.New("source workshop could not allocate staging")
+}
+
+func openOrCreateDirAt(rootFD int, rel string, mode os.FileMode) (int, error) {
+	fd, err := unix.Dup(rootFD)
+	if err != nil {
+		return -1, err
+	}
+	components := strings.Split(filepath.ToSlash(rel), "/")
+	finalCreated := false
+	for index, component := range components {
+		if component == "" || component == "." || component == ".." {
+			unix.Close(fd)
+			return -1, errors.New("unsafe staging directory")
+		}
+		next, openErr := unix.Openat(fd, component, unix.O_RDONLY|unix.O_DIRECTORY|unix.O_NOFOLLOW, 0)
+		if errors.Is(openErr, unix.ENOENT) {
+			if err = unix.Mkdirat(fd, component, uint32(mode.Perm())); err != nil {
+				unix.Close(fd)
+				return -1, err
+			}
+			next, openErr = unix.Openat(fd, component, unix.O_RDONLY|unix.O_DIRECTORY|unix.O_NOFOLLOW, 0)
+			if index == len(components)-1 {
+				finalCreated = true
+			}
+		}
+		unix.Close(fd)
+		if openErr != nil {
+			return -1, openErr
+		}
+		fd = next
+	}
+	if finalCreated {
+		err = unix.Fchmod(fd, uint32(mode.Perm()))
+	}
+	if err != nil {
+		unix.Close(fd)
+		return -1, err
+	}
+	return fd, nil
+}
+
+func writeExclusiveAt(rootFD int, rel string, body []byte, mode os.FileMode) error {
+	dir, base := filepath.ToSlash(filepath.Dir(rel)), filepath.Base(rel)
+	fd := rootFD
+	owned := false
+	var err error
+	if dir != "." {
+		fd, err = openOrCreateDirAt(rootFD, dir, 0700)
+		if err != nil {
+			return err
+		}
+		owned = true
+	}
+	if owned {
+		defer unix.Close(fd)
+	}
+	fileFD, err := unix.Openat(fd, base, unix.O_WRONLY|unix.O_CREAT|unix.O_EXCL|unix.O_NOFOLLOW, uint32(mode.Perm()))
+	if err != nil {
+		return err
+	}
+	file := os.NewFile(uintptr(fileFD), base)
+	_, err = file.Write(body)
+	if err == nil {
+		err = file.Sync()
+	}
+	if err == nil {
+		err = unix.Fchmod(fileFD, uint32(mode.Perm()))
+	}
+	closeErr := file.Close()
+	if err != nil {
+		return err
+	}
+	return closeErr
+}
 func syncDir(path string) error {
 	f, e := os.Open(path)
 	if e != nil {
@@ -698,8 +951,18 @@ func renameNoReplace(from, to string) error {
 	return renameNoReplaceAt(ffd, filepath.Base(from), tfd, filepath.Base(to))
 }
 
-func removeExactTree(root string, want map[string]snapshotEntry, wantDigest string) error {
-	_ = wantDigest
+func removeExactTree(root, slug string, want map[string]snapshotEntry, wantDigest string) error {
+	if err := validateExactTree(root, slug, want, wantDigest); err != nil {
+		return err
+	}
+	if mutationHook != nil {
+		if err := mutationHook("cleanup-validated"); err != nil {
+			return err
+		}
+	}
+	if err := validateExactTree(root, slug, want, wantDigest); err != nil {
+		return err
+	}
 	rfd, e := unix.Open(root, unix.O_RDONLY|unix.O_DIRECTORY|unix.O_NOFOLLOW, 0)
 	if e != nil {
 		return e
@@ -789,6 +1052,27 @@ func removeExactTree(root string, want map[string]snapshotEntry, wantDigest stri
 	return unix.Rmdir(root)
 }
 
+func validateExactTree(root, slug string, want map[string]snapshotEntry, wantDigest string) error {
+	pkg, packageErr := capability.ValidateForSlug(root, slug)
+	if packageErr != nil || capability.TestCases(pkg) != nil || pkg.SourceDigest != wantDigest {
+		return errors.New("source cleanup digest mismatch")
+	}
+	got, err := snapshotTree(root, slug)
+	if err != nil {
+		return err
+	}
+	if len(got) != len(want) {
+		return errors.New("source cleanup entry set mismatch")
+	}
+	for path, expected := range want {
+		actual, ok := got[path]
+		if !ok || actual != expected {
+			return fmt.Errorf("source cleanup authority changed %s", path)
+		}
+	}
+	return nil
+}
+
 func recoverSource(instance, source, slug string) error {
 	lock, e := os.Open(filepath.Join(instance, "capabilities"))
 	if e != nil {
@@ -800,16 +1084,26 @@ func recoverSource(instance, source, slug string) error {
 	}
 	defer unix.Flock(int(lock.Fd()), unix.LOCK_UN)
 	parent := filepath.Dir(source)
-	stageRoot := filepath.Join(parent, "."+slug+".workshop-new")
-	stage := filepath.Join(stageRoot, slug)
 	old := filepath.Join(parent, "."+slug+".workshop-old")
 	jp := filepath.Join(instance, "capabilities", ".workshop-"+slug+".json")
 	j, e := readJournal(jp, slug)
 	if e != nil {
 		return e
 	}
+	stageRoot := filepath.Join(parent, j.StageRoot)
+	stage := filepath.Join(stageRoot, slug)
 	sd, od, nd := packageDigest(source, slug), packageDigest(old, slug), packageDigest(stage, slug)
 	si, oi, ni := inode(source), inode(old), inode(stage)
+	if nd != "" {
+		if e = validateExactTree(stage, slug, snapshotAuthority(j.StageTree), j.NewDigest); e != nil {
+			return e
+		}
+	}
+	if od != "" && len(j.OldTree) > 0 {
+		if e = validateExactTree(old, slug, snapshotAuthority(j.OldTree), j.OldDigest); e != nil {
+			return e
+		}
+	}
 	if j.Action == "create" {
 		switch {
 		case sd == j.NewDigest && si == j.StageInode:
@@ -827,11 +1121,8 @@ func recoverSource(instance, source, slug string) error {
 	} else {
 		switch {
 		case sd == j.NewDigest && si == j.StageInode && od == j.OldDigest && oi == j.SourceInode:
-			oldSnap, x := snapshotTree(old, slug)
-			if x != nil {
-				return x
-			}
-			if e = removeExactTree(old, oldSnap, j.OldDigest); e != nil {
+			oldSnap := snapshotAuthority(j.OldTree)
+			if e = removeExactTree(old, slug, oldSnap, j.OldDigest); e != nil {
 				return e
 			}
 			if e = os.Remove(stageRoot); e != nil && !errors.Is(e, os.ErrNotExist) {
@@ -846,11 +1137,8 @@ func recoverSource(instance, source, slug string) error {
 				return e
 			}
 			_ = os.Remove(stageRoot)
-			oldSnap, x := snapshotTree(old, slug)
-			if x != nil {
-				return x
-			}
-			if e = removeExactTree(old, oldSnap, j.OldDigest); e != nil {
+			oldSnap := snapshotAuthority(j.OldTree)
+			if e = removeExactTree(old, slug, oldSnap, j.OldDigest); e != nil {
 				return e
 			}
 		case sd == "" && od == j.OldDigest && oi == j.SourceInode && nd == j.NewDigest && ni == j.StageInode:
@@ -858,11 +1146,8 @@ func recoverSource(instance, source, slug string) error {
 				return e
 			}
 			_ = os.Remove(stageRoot)
-			oldSnap, x := snapshotTree(old, slug)
-			if x != nil {
-				return x
-			}
-			if e = removeExactTree(old, oldSnap, j.OldDigest); e != nil {
+			oldSnap := snapshotAuthority(j.OldTree)
+			if e = removeExactTree(old, slug, oldSnap, j.OldDigest); e != nil {
 				return e
 			}
 		default:
@@ -903,17 +1188,34 @@ func commit(instance, source, slug string, before capability.Status, files map[s
 		}
 	}
 	parent := filepath.Dir(source)
-	stageRoot := filepath.Join(parent, "."+slug+".workshop-new")
-	stage := filepath.Join(stageRoot, slug)
 	old := filepath.Join(parent, "."+slug+".workshop-old")
 	jp := filepath.Join(instance, "capabilities", ".workshop-"+slug+".json")
-	for _, p := range []string{stageRoot, old, jp} {
+	for _, p := range []string{old, jp} {
 		if _, x := os.Lstat(p); !errors.Is(x, os.ErrNotExist) {
 			return errors.New("source workshop collision; recovery required")
 		}
 	}
-	if e = os.MkdirAll(stage, 0700); e != nil {
+	parentFD, e := unix.Open(parent, unix.O_RDONLY|unix.O_DIRECTORY|unix.O_NOFOLLOW, 0)
+	if e != nil {
 		return e
+	}
+	defer unix.Close(parentFD)
+	stageName, stageRootFD, e := createStage(parentFD, slug)
+	if e != nil {
+		return e
+	}
+	defer unix.Close(stageRootFD)
+	stageRoot := filepath.Join(parent, stageName)
+	stage := filepath.Join(stageRoot, slug)
+	stageFD, e := openOrCreateDirAt(stageRootFD, slug, 0700)
+	if e != nil {
+		return e
+	}
+	defer unix.Close(stageFD)
+	if mutationHook != nil {
+		if e = mutationHook("stage-created"); e != nil {
+			return e
+		}
 	}
 	if before.Package != nil {
 		var optionalDirs []string
@@ -924,13 +1226,11 @@ func commit(instance, source, slug string, before capability.Status, files map[s
 		}
 		sort.Slice(optionalDirs, func(i, j int) bool { return strings.Count(optionalDirs[i], "/") < strings.Count(optionalDirs[j], "/") })
 		for _, n := range optionalDirs {
-			p := filepath.Join(stage, filepath.FromSlash(n))
-			if e = os.MkdirAll(p, priorSnapshot[n].mode); e != nil {
-				return e
+			dfd, dirErr := openOrCreateDirAt(stageFD, n, priorSnapshot[n].mode)
+			if dirErr != nil {
+				return dirErr
 			}
-			if e = os.Chmod(p, priorSnapshot[n].mode); e != nil {
-				return e
-			}
+			unix.Close(dfd)
 		}
 		for _, n := range before.Package.Files {
 			if n == "capability.json" || n == "skill/SKILL.md" || n == "tests/cases.json" {
@@ -940,30 +1240,29 @@ func commit(instance, source, slug string, before capability.Status, files map[s
 			if x != nil {
 				return x
 			}
-			p := filepath.Join(stage, filepath.FromSlash(n))
-			if x = os.MkdirAll(filepath.Dir(p), 0700); x != nil {
-				return x
-			}
 			mode := priorSnapshot[n].mode
-			if x = writeExclusiveMode(p, b, mode); x != nil {
-				return x
-			}
-			if x = os.Chmod(p, mode); x != nil {
+			if x = writeExclusiveAt(stageFD, n, b, mode); x != nil {
 				return x
 			}
 		}
 	}
 	for n, b := range files {
-		p := filepath.Join(stage, filepath.FromSlash(n))
-		if e = os.MkdirAll(filepath.Dir(p), 0700); e != nil {
+		if e = writeExclusiveAt(stageFD, n, b, 0600); e != nil {
 			return e
 		}
-		if e = writeExclusiveMode(p, b, 0600); e != nil {
+	}
+	if mutationHook != nil {
+		if e = mutationHook("stage-written"); e != nil {
 			return e
 		}
 	}
 	if e = syncTreeDirs(stage); e != nil {
 		return e
+	}
+	if mutationHook != nil {
+		if e = mutationHook("stage-synced"); e != nil {
+			return e
+		}
 	}
 	pkg, e := capability.Validate(stage)
 	if e != nil {
@@ -971,6 +1270,11 @@ func commit(instance, source, slug string, before capability.Status, files map[s
 	}
 	if e = capability.TestCases(pkg); e != nil {
 		return e
+	}
+	if mutationHook != nil {
+		if e = mutationHook("stage-validated"); e != nil {
+			return e
+		}
 	}
 	stageSnapshot, e := snapshotTree(stage, slug)
 	if e != nil {
@@ -980,9 +1284,10 @@ func commit(instance, source, slug string, before capability.Status, files map[s
 	if before.Package != nil {
 		oldDigest = before.Package.SourceDigest
 	}
-	j := journal{ContractVersion: 1, Action: action, Slug: slug, OldDigest: oldDigest, NewDigest: pkg.SourceDigest, Phase: "staged", StageInode: stageSnapshot[""].ino}
+	j := journal{ContractVersion: 1, Action: action, Slug: slug, OldDigest: oldDigest, NewDigest: pkg.SourceDigest, Phase: "staged", StageInode: stageSnapshot[""].ino, StageRoot: stageName, StageTree: journalTree(stageSnapshot)}
 	if before.Package != nil {
 		j.SourceInode = priorSnapshot[""].ino
+		j.OldTree = journalTree(priorSnapshot)
 	}
 	jb, _ := json.MarshalIndent(j, "", "  ")
 	jb = append(jb, '\n')
@@ -1023,7 +1328,7 @@ func commit(instance, source, slug string, before capability.Status, files map[s
 				return e
 			}
 		}
-		if e = removeExactTree(old, priorSnapshot, oldDigest); e != nil {
+		if e = removeExactTree(old, slug, priorSnapshot, oldDigest); e != nil {
 			return e
 		}
 		if e = syncDir(parent); e != nil {

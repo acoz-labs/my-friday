@@ -122,3 +122,12 @@ func TestReadConfirmationRequiresExactCaseSensitiveNewlineTerminatedToken(t *tes
 		})
 	}
 }
+
+func TestWorkshopSignalNeverHidesCommitOrRecoveryError(t *testing.T) {
+	interrupted := make(chan struct{}, 1)
+	interrupted <- struct{}{}
+	want := errors.New("source recovery required")
+	if got := workshopResult(want, interrupted); !errors.Is(got, want) {
+		t.Fatalf("signal replaced transaction error: %v", got)
+	}
+}

@@ -15,6 +15,7 @@ import (
 	"regexp"
 	"slices"
 	"sort"
+	"strconv"
 	"strings"
 	"syscall"
 	"unicode/utf8"
@@ -353,6 +354,13 @@ func parseFrontmatter(body []byte) (string, string, error) {
 		}
 		if strings.HasPrefix(line, "description: ") {
 			d = strings.TrimSpace(strings.TrimPrefix(line, "description: "))
+			if strings.HasPrefix(d, "\"") {
+				decoded, decodeErr := strconv.Unquote(d)
+				if decodeErr != nil {
+					return "", "", errors.New("SKILL.md description scalar invalid")
+				}
+				d = decoded
+			}
 		}
 	}
 	return n, d, nil
@@ -659,19 +667,22 @@ func Inspect(instance, source string) (Status, error) {
 	workshopJournal := filepath.Join(instance, "capabilities", ".workshop-"+slug+".json")
 	if body, info, journalErr := regularFile(workshopJournal); journalErr == nil {
 		var envelope struct {
-			ContractVersion int    `json:"contract_version"`
-			Action          string `json:"action"`
-			Slug            string `json:"slug"`
-			OldDigest       string `json:"old_digest"`
-			NewDigest       string `json:"new_digest"`
-			Phase           string `json:"phase"`
-			SourceInode     uint64 `json:"source_inode"`
-			StageInode      uint64 `json:"stage_inode"`
+			ContractVersion int                        `json:"contract_version"`
+			Action          string                     `json:"action"`
+			Slug            string                     `json:"slug"`
+			OldDigest       string                     `json:"old_digest"`
+			NewDigest       string                     `json:"new_digest"`
+			Phase           string                     `json:"phase"`
+			SourceInode     uint64                     `json:"source_inode"`
+			StageInode      uint64                     `json:"stage_inode"`
+			StageRoot       string                     `json:"stage_root"`
+			StageTree       map[string]json.RawMessage `json:"stage_tree"`
+			OldTree         map[string]json.RawMessage `json:"old_tree,omitempty"`
 		}
 		decodeErr := strictJSON(body, &envelope)
 		canonical, _ := json.MarshalIndent(envelope, "", "  ")
 		canonical = append(canonical, '\n')
-		if info.Mode().Perm() != 0o600 || decodeErr != nil || !bytes.Equal(body, canonical) || envelope.ContractVersion != 1 || envelope.Slug != slug || (envelope.Action != "create" && envelope.Action != "update") || !validDigest(envelope.NewDigest) || envelope.StageInode == 0 || (envelope.Action == "update" && (!validDigest(envelope.OldDigest) || envelope.SourceInode == 0)) || (envelope.Action == "create" && envelope.SourceInode != 0) || envelope.Phase != "staged" {
+		if info.Mode().Perm() != 0o600 || decodeErr != nil || !bytes.Equal(body, canonical) || envelope.ContractVersion != 1 || envelope.Slug != slug || (envelope.Action != "create" && envelope.Action != "update") || !validDigest(envelope.NewDigest) || envelope.StageInode == 0 || len(envelope.StageTree) == 0 || (envelope.Action == "update" && (!validDigest(envelope.OldDigest) || envelope.SourceInode == 0 || len(envelope.OldTree) == 0)) || (envelope.Action == "create" && (envelope.SourceInode != 0 || len(envelope.OldTree) != 0)) || envelope.Phase != "staged" {
 			return Status{State: StateRecoveryRequired}, errors.New("source workshop recovery required")
 		}
 		return Status{State: StateInterrupted}, nil

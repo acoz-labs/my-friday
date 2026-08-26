@@ -2,8 +2,11 @@ package capabilityworkshop
 
 import (
 	"bytes"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -11,6 +14,21 @@ import (
 	"github.com/acoz-labs/my-friday/internal/capability"
 	"golang.org/x/sys/unix"
 )
+
+func TestMain(m *testing.M) {
+	if os.Getenv("MY_FRIDAY_WORKSHOP_EXPECT_HELPER") == "1" {
+		if len(os.Args) != 5 || os.Args[1] != "capability" || os.Args[2] != "workshop" {
+			os.Exit(64)
+		}
+		instance, slug := os.Args[3], os.Args[4]
+		if err := Run(instance, filepath.Join(instance, "runtime", "skills", slug), slug, os.Stdin, os.Stdout); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		os.Exit(0)
+	}
+	os.Exit(m.Run())
+}
 
 func createPackage(t *testing.T, instance, slug string, p proposal) string {
 	t.Helper()
@@ -52,7 +70,7 @@ func TestWorkshopCreatesValidatedInactiveSourceAfterExactConfirmation(t *testing
 		"Daily brief", "Prepare a concise daily brief", "0.1.0",
 		"Prepare a daily brief from supplied topics", "Return a concise brief", "Explain missing topics",
 		"prepare my daily brief", "chat casually", "topics", "brief", "explicit invocation only",
-		"prepare my daily brief for today", "brief", "Create source", "",
+		"prepare my daily brief for today", "brief", "", "Create source", "",
 	}, "\n")
 	var out bytes.Buffer
 	if err := Run(instance, source, "daily-brief", strings.NewReader(input), &out); err != nil {
@@ -84,7 +102,7 @@ func TestWorkshopDefaultAndWrongConfirmationDoNotWrite(t *testing.T) {
 				t.Fatal(err)
 			}
 			source := filepath.Join(instance, "runtime", "skills", "daily-brief")
-			input := strings.Join([]string{"Daily brief", "Prepare a concise daily brief", "0.1.0", "Prepare a daily brief from supplied topics", "Return a concise brief", "Explain missing topics", "prepare my daily brief", "chat casually", "topics", "brief", "explicit invocation only", "prepare my daily brief", "brief", confirm, ""}, "\n")
+			input := strings.Join([]string{"Daily brief", "Prepare a concise daily brief", "0.1.0", "Prepare a daily brief from supplied topics", "Return a concise brief", "Explain missing topics", "prepare my daily brief", "chat casually", "topics", "brief", "explicit invocation only", "prepare my daily brief", "brief", "", confirm, ""}, "\n")
 			var out bytes.Buffer
 			if err := Run(instance, source, "daily-brief", strings.NewReader(input), &out); err != nil {
 				t.Fatal(err)
@@ -109,7 +127,7 @@ func TestWorkshopRecoversDigestProvenInterruptedCreateBeforeQuestions(t *testing
 		t.Fatal(err)
 	}
 	source := filepath.Join(instance, "runtime", "skills", "daily-brief")
-	input := strings.Join([]string{"Daily brief", "Prepare a concise daily brief", "0.1.0", "Prepare a daily brief from supplied topics", "Return a concise brief", "Explain missing topics", "prepare my daily brief", "chat casually", "topics", "brief", "explicit invocation only", "prepare my daily brief", "brief", "Create source", ""}, "\n")
+	input := strings.Join([]string{"Daily brief", "Prepare a concise daily brief", "0.1.0", "Prepare a daily brief from supplied topics", "Return a concise brief", "Explain missing topics", "prepare my daily brief", "chat casually", "topics", "brief", "explicit invocation only", "prepare my daily brief", "brief", "", "Create source", ""}, "\n")
 	mutationHook = func(phase string) error {
 		if phase == "journal-written" {
 			return os.ErrClosed
@@ -159,7 +177,7 @@ func TestEnhancementRetainsArbitraryBodyAndOptionalBytesAndMode(t *testing.T) {
 	if err := os.WriteFile(optional, []byte("opaque\x00bytes\n"), 0640); err != nil {
 		t.Fatal(err)
 	}
-	input := strings.Join([]string{"retain", "", "", "", "Prepare a daily brief from supplied topics", "", "", "", "", "", "", "", "", "", "Update source", ""}, "\n")
+	input := "retain\n" + strings.Repeat("\n", 13) + "Update source\n"
 	var out bytes.Buffer
 	if err := Run(instance, source, "daily-brief", strings.NewReader(input), &out); err != nil {
 		t.Fatal(err)
@@ -310,6 +328,62 @@ func TestExactOldTreeCleanupPreservesRacedForeignEntry(t *testing.T) {
 	if readErr != nil || string(b) != "preserve" {
 		t.Fatalf("foreign bytes=%q err=%v", b, readErr)
 	}
+	if _, readErr = os.ReadFile(filepath.Join(old, "capability.json")); readErr != nil {
+		t.Fatalf("cleanup partially removed recoverable old tree: %v", readErr)
+	}
+}
+
+func TestRecoveryRefusesStagedAndOldModeDrift(t *testing.T) {
+	for _, phase := range []string{"journal-written", "source-promoted"} {
+		t.Run(phase, func(t *testing.T) {
+			root := t.TempDir()
+			instance := filepath.Join(root, "alfred")
+			if err := capability.InitializeInstance(instance); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.MkdirAll(filepath.Join(instance, "runtime", "skills"), 0700); err != nil {
+				t.Fatal(err)
+			}
+			source := createPackage(t, instance, "daily-brief", validProposal("daily-brief"))
+			before, err := capability.Inspect(instance, source)
+			if err != nil {
+				t.Fatal(err)
+			}
+			p := validProposal("daily-brief")
+			p.Version = "1.1.0"
+			files, _ := render(p)
+			mutationHook = func(got string) error {
+				if got == phase {
+					return errors.New("stop")
+				}
+				return nil
+			}
+			if err = commit(instance, source, "daily-brief", before, files, "update"); err == nil {
+				t.Fatal("fault not injected")
+			}
+			mutationHook = nil
+			defer func() { mutationHook = nil }()
+			jp := filepath.Join(instance, "capabilities", ".workshop-daily-brief.json")
+			j, err := readJournal(jp, "daily-brief")
+			if err != nil {
+				t.Fatal(err)
+			}
+			target := filepath.Join(filepath.Dir(source), j.StageRoot, "daily-brief", "skill")
+			if phase == "source-promoted" {
+				target = filepath.Join(filepath.Dir(source), ".daily-brief.workshop-old", "skill")
+			}
+			if err = os.Chmod(target, 0755); err != nil {
+				t.Fatal(err)
+			}
+			var out bytes.Buffer
+			if err = Run(instance, source, "daily-brief", strings.NewReader(""), &out); err == nil {
+				t.Fatal("mode drift recovered")
+			}
+			if _, err = os.Stat(target); err != nil {
+				t.Fatalf("drifted authority removed: %v", err)
+			}
+		})
+	}
 }
 
 func TestCreatePromotionNeverReplacesRacedCollision(t *testing.T) {
@@ -342,6 +416,86 @@ func TestCreatePromotionNeverReplacesRacedCollision(t *testing.T) {
 	b, readErr := os.ReadFile(filepath.Join(source, "foreign"))
 	if readErr != nil || string(b) != "keep" {
 		t.Fatalf("foreign=%q err=%v", b, readErr)
+	}
+}
+
+func TestPreJournalStageFaultsDoNotBlockRetry(t *testing.T) {
+	for _, phase := range []string{"stage-created", "stage-written", "stage-synced", "stage-validated"} {
+		t.Run(phase, func(t *testing.T) {
+			root := t.TempDir()
+			instance := filepath.Join(root, "alfred")
+			if err := capability.InitializeInstance(instance); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.MkdirAll(filepath.Join(instance, "runtime", "skills"), 0700); err != nil {
+				t.Fatal(err)
+			}
+			source := filepath.Join(instance, "runtime", "skills", "daily-brief")
+			before, _ := capability.Inspect(instance, source)
+			files, _ := render(validProposal("daily-brief"))
+			mutationHook = func(got string) error {
+				if got == phase {
+					return errors.New("stop")
+				}
+				return nil
+			}
+			if err := commit(instance, source, "daily-brief", before, files, "create"); err == nil {
+				t.Fatal("fault missing")
+			}
+			mutationHook = nil
+			defer func() { mutationHook = nil }()
+			if err := commit(instance, source, "daily-brief", before, files, "create"); err != nil {
+				t.Fatalf("retry blocked: %v", err)
+			}
+		})
+	}
+}
+
+func TestDescriptorRelativeStageRaceNeverWritesThroughSymlink(t *testing.T) {
+	root := t.TempDir()
+	instance := filepath.Join(root, "alfred")
+	if err := capability.InitializeInstance(instance); err != nil {
+		t.Fatal(err)
+	}
+	skills := filepath.Join(instance, "runtime", "skills")
+	if err := os.MkdirAll(skills, 0700); err != nil {
+		t.Fatal(err)
+	}
+	source := filepath.Join(skills, "daily-brief")
+	before, _ := capability.Inspect(instance, source)
+	files, _ := render(validProposal("daily-brief"))
+	external := filepath.Join(root, "external")
+	if err := os.Mkdir(external, 0700); err != nil {
+		t.Fatal(err)
+	}
+	mutationHook = func(phase string) error {
+		if phase != "stage-created" {
+			return nil
+		}
+		entries, err := os.ReadDir(skills)
+		if err != nil {
+			return err
+		}
+		for _, entry := range entries {
+			if strings.HasPrefix(entry.Name(), ".daily-brief.workshop-new-") {
+				if err = os.Rename(filepath.Join(skills, entry.Name()), filepath.Join(skills, entry.Name()+"-held")); err != nil {
+					return err
+				}
+				return os.Symlink(external, filepath.Join(skills, entry.Name()))
+			}
+		}
+		return errors.New("stage absent")
+	}
+	if err := commit(instance, source, "daily-brief", before, files, "create"); err == nil {
+		t.Fatal("ancestor race accepted")
+	}
+	mutationHook = nil
+	entries, err := os.ReadDir(external)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 0 {
+		t.Fatalf("external write: %v", entries)
 	}
 }
 
@@ -478,5 +632,147 @@ func TestBoundsRepromptAndNavigationExitWithoutWrite(t *testing.T) {
 				t.Fatal("missing no-change result")
 			}
 		})
+	}
+}
+
+func TestExplicitNoneRendersEmptyAnsweredInputsAndOutputs(t *testing.T) {
+	p := validProposal("daily-brief")
+	p.Inputs = nil
+	p.Outputs = nil
+	p.InputsAnswered = true
+	p.OutputsAnswered = true
+	files, err := render(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var manifest capability.Manifest
+	if err = json.Unmarshal(files["capability.json"], &manifest); err != nil {
+		t.Fatal(err)
+	}
+	if len(manifest.Inputs) != 0 || len(manifest.Outputs) != 0 {
+		t.Fatalf("none rendered as values: %#v %#v", manifest.Inputs, manifest.Outputs)
+	}
+	if values, err := list("none", true, 256, 16); err != nil || len(values) != 0 {
+		t.Fatalf("none=%#v err=%v", values, err)
+	}
+}
+
+func TestRetainedSkillBodySuffixPreservesTerminalNewlineExactly(t *testing.T) {
+	for _, suffix := range [][]byte{[]byte("\n# Exact\n"), []byte("\n# Exact")} {
+		t.Run(fmt.Sprintf("newline-%t", bytes.HasSuffix(suffix, []byte("\n"))), func(t *testing.T) {
+			p := validProposal("daily-brief")
+			p.Body = append([]byte(nil), suffix...)
+			p.RetainBody = true
+			files, err := render(p)
+			if err != nil {
+				t.Fatal(err)
+			}
+			marker := []byte("---\n")
+			idx := bytes.Index(files["skill/SKILL.md"], marker)
+			idx = bytes.Index(files["skill/SKILL.md"][idx+len(marker):], marker) + idx + 2*len(marker)
+			if got := files["skill/SKILL.md"][idx:]; !bytes.Equal(got, suffix) {
+				t.Fatalf("suffix=%q want=%q", got, suffix)
+			}
+		})
+	}
+}
+
+func TestSummaryUsesYAMLSafeScalarAcceptedByPackageConsumer(t *testing.T) {
+	p := validProposal("daily-brief")
+	p.Summary = "Brief: #1 with \"quoted\" punctuation"
+	files, err := render(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Contains(files["skill/SKILL.md"], []byte(`description: "Brief: #1 with \"quoted\" punctuation"`)) {
+		t.Fatalf("frontmatter=%s", files["skill/SKILL.md"])
+	}
+	root := t.TempDir()
+	for name, body := range files {
+		path := filepath.Join(root, filepath.FromSlash(name))
+		if err = os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+			t.Fatal(err)
+		}
+		if err = os.WriteFile(path, body, 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err = capability.ValidateForSlug(root, "daily-brief"); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestCompleteDiffPreservesBlankLinesAndNoFinalNewlineGolden(t *testing.T) {
+	var out bytes.Buffer
+	writeDiffBytes(&out, '-', []byte("first\n\nlast"))
+	writeDiffBytes(&out, '+', []byte("first\n\nlast\n"))
+	want := "-first\n-\n-last\n\\ No newline at end of file\n+first\n+\n+last\n"
+	if out.String() != want {
+		t.Fatalf("diff:\n%s\nwant:\n%s", out.String(), want)
+	}
+}
+
+func TestEnhancementSummariesPartialExampleRetentionAndMultiExamplePreservation(t *testing.T) {
+	root := t.TempDir()
+	instance := filepath.Join(root, "alfred")
+	if err := capability.InitializeInstance(instance); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(instance, "runtime", "skills"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	p := validProposal("daily-brief")
+	p.Success += " or TOMORROW"
+	p.Examples = append(p.Examples, example{"prepare my daily brief tomorrow", []string{"TOMORROW"}})
+	source := createPackage(t, instance, "daily-brief", p)
+	input := "retain\n" + strings.Repeat("\n", 5) + strings.Repeat("\n", 5) + "\nTOMORROW\n\nUpdate source\n"
+	var out bytes.Buffer
+	if err := Run(instance, source, "daily-brief", strings.NewReader(input), &out); err != nil {
+		t.Fatal(err)
+	}
+	pkg, err := capability.Validate(source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(pkg.Cases.Examples) != 2 || pkg.Cases.Examples[0].Input != p.Examples[0].Input || pkg.Cases.Examples[0].OutputContains[0] != "TOMORROW" || pkg.Cases.Examples[1].Input != p.Examples[1].Input {
+		t.Fatalf("examples=%#v", pkg.Cases.Examples)
+	}
+	for _, want := range []string{"Current/default: Daily brief", "Current (1): 1=\"topics\"", "Current example 2:"} {
+		if !strings.Contains(out.String(), want) {
+			t.Errorf("missing %q", want)
+		}
+	}
+	if strings.Contains(out.String(), "Purpose (1-1000") {
+		t.Fatal("retained body requested unused purpose")
+	}
+}
+
+func TestCheckedInEnhancementExpectRunsAgainstCandidateProcess(t *testing.T) {
+	if _, err := os.Stat("/usr/bin/expect"); err != nil {
+		t.Skip("native Expect unavailable")
+	}
+	root := t.TempDir()
+	instance := filepath.Join(root, "alfred")
+	if err := capability.InitializeInstance(instance); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(instance, "runtime", "skills"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	source := createPackage(t, instance, "daily-brief", validProposal("daily-brief"))
+	transcript := filepath.Join(root, "enhance.transcript")
+	script := filepath.Join("..", "..", "config", "acceptance", "capability-workshop.exp")
+	cmd := exec.Command("/usr/bin/expect", script, "enhance", os.Args[0], instance, "daily-brief", transcript)
+	cmd.Env = append(os.Environ(), "MY_FRIDAY_WORKSHOP_EXPECT_HELPER=1", "MY_FRIDAY_EXPECT_TIMEOUT=5")
+	if output, err := cmd.CombinedOutput(); err != nil {
+		transcriptBody, _ := os.ReadFile(transcript)
+		t.Fatalf("native enhancement journey: %v\n%s\ntranscript:\n%s", err, output, transcriptBody)
+	}
+	pkg, err := capability.Validate(source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if pkg.Manifest.Version != "1.1.0" || pkg.Cases.Examples[0].Input != "prepare my daily brief" || pkg.Cases.Examples[0].OutputContains[0] != "DAILY_BRIEF_UPDATED" {
+		t.Fatalf("enhancement=%#v %#v", pkg.Manifest, pkg.Cases.Examples)
 	}
 }

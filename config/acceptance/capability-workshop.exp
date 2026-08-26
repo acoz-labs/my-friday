@@ -1,7 +1,7 @@
 #!/usr/bin/expect -f
 if {$argc != 5} { exit 64 }
 lassign $argv mode candidate instance slug transcript
-set timeout 180
+set timeout [expr {[info exists env(MY_FRIDAY_EXPECT_TIMEOUT)] ? $env(MY_FRIDAY_EXPECT_TIMEOUT) : 180}]
 log_file -noappend $transcript
 spawn -noecho {*}[list $candidate capability workshop $instance $slug]
 expect "Mode: $mode"
@@ -11,7 +11,7 @@ if {$mode eq "enhance"} {
 expect "Display name"; if {$mode eq "create"} {send -- "Daily brief\r"} else {send -- "\r"}
 expect "Summary"; if {$mode eq "create"} {send -- "Prepare a concise daily brief\r"} else {send -- "\r"}
 expect "Version"; if {$mode eq "create"} {send -- "1.0.0\r"} else {send -- "1.1.0\r"}
-expect "Purpose"; send -- "Prepare a daily brief from supplied topics\r"
+if {$mode eq "create"} { expect "Purpose"; send -- "Prepare a daily brief from supplied topics\r" }
 expect "Success behavior"; if {$mode eq "create"} {send -- "Return a concise brief containing DAILY_BRIEF_READY\r"} else {send -- "Return an updated concise brief containing DAILY_BRIEF_UPDATED\r"}
 expect "Failure behavior"; if {$mode eq "create"} {send -- "Explain missing topics\r"} else {send -- "\r"}
 expect "Triggers"; if {$mode eq "create"} {send -- "prepare my daily brief\r"} else {send -- "\r"}
@@ -21,6 +21,7 @@ expect "Outputs"; if {$mode eq "create"} {send -- "brief\r"} else {send -- "\r"}
 expect "Required facts"; if {$mode eq "create"} {send -- "explicit invocation only\r"} else {send -- "\r"}
 expect "Example input"; if {$mode eq "create"} {send -- "prepare my daily brief\r"} else {send -- "\r"}
 expect "Expected output fragments"; if {$mode eq "create"} {send -- "DAILY_BRIEF_READY\r"} else {send -- "DAILY_BRIEF_UPDATED\r"}
+expect "Add another example?"; send -- "\r"
 if {$mode eq "create"} {
   expect "Type Create source to continue"; send -- "Create source\r"
 } else {
