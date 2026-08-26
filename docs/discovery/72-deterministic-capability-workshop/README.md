@@ -2,7 +2,7 @@
 
 - **Status:** Final
 - **Discovery issue:** #72
-- **Discovery PR:** Pending
+- **Discovery PR:** #73
 - **Repository basis:** d40950fd54cfd6bfbea7467de6f83af1d4619f08
 - **Recommended decision:** approve
 - **Gate 1:** awaiting-authority
