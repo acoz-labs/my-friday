@@ -208,6 +208,10 @@ auth copy/source-swap refusal, secure-root collision and ambiguous cleanup
 preservation, timeout/escaped-child reaping, `INT`/`TERM` exit status and
 ordinary/escaped-descendant quiescence, and the capability stop barrier's
 canonical post-mutation journal boundary.
+The minimal native workshop-abandon fixture executes q, EOF, `INT`, and `TERM`
+through the checked-in Expect driver, preserves child status, and proves that
+no source is written. It skips only on portable hosts without
+`/usr/bin/expect`.
 Native workshop acceptance separately stops built candidate bytes at the
 durable source-journal boundary, re-enters `capability workshop` for source-only
 recovery, and proves journal quiescence. Its typed evidence is distinct from
