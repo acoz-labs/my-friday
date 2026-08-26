@@ -2,15 +2,69 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
 
 	"github.com/acoz-labs/my-friday/internal/capability"
+	"github.com/acoz-labs/my-friday/internal/capabilityworkshop"
 	"github.com/acoz-labs/my-friday/internal/codexhome"
 )
+
+func TestWorkshopSignalHelper(t *testing.T) {
+	if os.Getenv("MY_FRIDAY_WORKSHOP_SIGNAL_HELPER") != "1" {
+		return
+	}
+	instance := os.Getenv("MY_FRIDAY_WORKSHOP_SIGNAL_INSTANCE")
+	if err := capability.InitializeInstance(instance); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(70)
+	}
+	if err := os.MkdirAll(filepath.Join(instance, "runtime", "skills"), 0700); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(70)
+	}
+	plan, err := capabilityworkshop.Plan(instance, filepath.Join(instance, "runtime", "skills", "daily-brief"), "daily-brief")
+	if err == nil {
+		err = runCapabilityWorkshop(plan, os.Stdin, os.Stdout)
+	}
+	code, _ := classifyError([]string{"my-friday", "capability", "workshop"}, err)
+	if err == nil {
+		code = 0
+	}
+	os.Exit(code)
+}
+
+func TestRealWorkshopSignalsInterruptPromptWithoutWriting(t *testing.T) {
+	if _, err := os.Stat("/usr/bin/expect"); err != nil {
+		t.Skip("native workshop signal integration requires Expect")
+	}
+	root, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	script := filepath.Join("..", "..", "config", "acceptance", "capability-workshop-signal-real.exp")
+	for _, mode := range []string{"int", "term"} {
+		t.Run(mode, func(t *testing.T) {
+			instance := filepath.Join(root, mode)
+			cmd := exec.Command("/usr/bin/expect", script, mode, os.Args[0], instance)
+			cmd.Env = append(os.Environ(), "MY_FRIDAY_WORKSHOP_SIGNAL_HELPER=1", "MY_FRIDAY_WORKSHOP_SIGNAL_INSTANCE="+instance)
+			if output, runErr := cmd.CombinedOutput(); runErr != nil {
+				t.Fatalf("real workshop %s signal failed: %v\n%s", mode, runErr, output)
+			}
+			for _, path := range []string{filepath.Join(instance, "runtime", "skills", "daily-brief"), filepath.Join(instance, "capabilities", ".workshop-daily-brief.json")} {
+				if _, statErr := os.Lstat(path); !os.IsNotExist(statErr) {
+					t.Fatalf("%s signal changed %s: %v", mode, path, statErr)
+				}
+			}
+		})
+	}
+}
 
 func TestRealHomeIgnoresCallerHOME(t *testing.T) {
 	want, err := realHome()
@@ -124,8 +178,8 @@ func TestReadConfirmationRequiresExactCaseSensitiveNewlineTerminatedToken(t *tes
 }
 
 func TestWorkshopSignalNeverHidesCommitOrRecoveryError(t *testing.T) {
-	interrupted := make(chan struct{}, 1)
-	interrupted <- struct{}{}
+	interrupted := make(chan os.Signal, 1)
+	interrupted <- os.Interrupt
 	want := errors.New("source recovery required")
 	if got := workshopResult(want, interrupted); !errors.Is(got, want) {
 		t.Fatalf("signal replaced transaction error: %v", got)
@@ -133,10 +187,25 @@ func TestWorkshopSignalNeverHidesCommitOrRecoveryError(t *testing.T) {
 }
 
 func TestWorkshopSignalAfterSuccessfulCommitReturnsStableInterruption(t *testing.T) {
-	interrupted := make(chan struct{}, 1)
-	interrupted <- struct{}{}
+	interrupted := make(chan os.Signal, 1)
+	interrupted <- os.Interrupt
 	got := workshopResult(nil, interrupted)
 	if got == nil || got.Error() != "capability workshop interrupted after source transaction completed" {
 		t.Fatalf("successful signaled commit error = %v", got)
+	}
+	if code, stable := classifyError([]string{"my-friday", "capability", "workshop"}, got); code != 130 || stable != "workshop.interrupted" {
+		t.Fatalf("successful signal classification = (%d, %q)", code, stable)
+	}
+}
+
+func TestWorkshopSignalClassifiesStableStatuses(t *testing.T) {
+	for _, test := range []struct {
+		signal os.Signal
+		code   int
+	}{{os.Interrupt, 130}, {syscall.SIGTERM, 143}} {
+		code, stable := classifyError([]string{"my-friday", "capability", "workshop"}, workshopInterruptedError{signal: test.signal})
+		if code != test.code || stable != "workshop.interrupted" {
+			t.Fatalf("%s classification = (%d, %q), want (%d, workshop.interrupted)", test.signal, code, stable, test.code)
+		}
 	}
 }

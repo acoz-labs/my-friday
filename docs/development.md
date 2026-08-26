@@ -214,6 +214,12 @@ is delivered as terminal EOF rather than PTY close; normal nonzero child exits
 are preserved, while wait errors and unexpected HUP/`INT`/`TERM` deaths return
 stable nonzero failure. The fixture skips only on portable hosts without
 `/usr/bin/expect`.
+The native real-command signal journey starts a valid create workshop at its
+first prompt and requires pre-confirmation `INT` and `TERM` to exit within three
+seconds with status 130 and 143 respectively, with neither source nor a source
+journal created. The CLI copies terminal input through an interruptible pipe;
+after exact confirmation, a phase hook defers signal completion until the
+bounded transaction returns so transaction and recovery errors remain primary.
 Native workshop acceptance separately stops built candidate bytes at the
 durable source-journal boundary, re-enters `capability workshop` for source-only
 recovery, and proves journal quiescence. Its typed evidence is distinct from

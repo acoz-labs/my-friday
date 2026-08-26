@@ -7,13 +7,15 @@ expect "Display name"
 switch -- $mode {
   q { send -- "q\r" }
   eof { send -- "\004" }
-  int { exec kill -INT [exp_pid] }
-  term { exec kill -TERM [exp_pid] }
+  int { exec kill -INT [exp_pid]; set expected 130 }
+  term { exec kill -TERM [exp_pid]; set expected 143 }
   default { exit 64 }
 }
+if {$mode eq "q" || $mode eq "eof"} { set expected 0 }
 expect eof
 if {[catch wait result]} { exit 125 }
 if {[llength $result] != 4 || [lindex $result 2] != 0} { exit 125 }
 set code [lindex $result 3]
 if {![string is integer -strict $code] || $code < 0 || $code > 255} { exit 125 }
-exit $code
+if {$code != $expected} { exit $code }
+exit 0

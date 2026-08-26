@@ -18,7 +18,7 @@ printf '%s\n' \
   '#!/bin/sh' \
   "printf 'Display name'" \
   'case ${ABANDON_FIXTURE_BEHAVIOR:-expected} in' \
-  "  expected) trap 'exit 0' INT TERM; if ! IFS= read -r _; then : >\"\$ABANDON_EOF_MARKER\"; fi ;;" \
+  "  expected) trap 'exit 130' INT; trap 'exit 143' TERM; if ! IFS= read -r _; then : >\"\$ABANDON_EOF_MARKER\"; fi ;;" \
   '  exit7) IFS= read -r _ || true; exit 7 ;;' \
   '  hup) IFS= read -r _ || true; kill -HUP $$; sleep 1 ;;' \
   '  signal) IFS= read -r _ || true ;;' \

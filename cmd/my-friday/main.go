@@ -30,6 +30,15 @@ func main() {
 }
 
 func classifyError(args []string, err error) (int, string) {
+	var interrupted workshopInterruptedError
+	if errors.As(err, &interrupted) {
+		if interrupted.signal == os.Interrupt {
+			return 130, "workshop.interrupted"
+		}
+		if interrupted.signal == syscall.SIGTERM {
+			return 143, "workshop.interrupted"
+		}
+	}
 	message := err.Error()
 	command := "init"
 	if len(args) > 1 {
@@ -227,22 +236,7 @@ func runCapability() error {
 		if info.Mode()&os.ModeCharDevice == 0 {
 			return errors.New("capability workshop requires an interactive TTY")
 		}
-		signals := make(chan os.Signal, 1)
-		done := make(chan struct{})
-		interrupted := make(chan struct{}, 1)
-		signal.Notify(signals, os.Interrupt, syscall.SIGTERM)
-		defer signal.Stop(signals)
-		go func() {
-			select {
-			case <-signals:
-				interrupted <- struct{}{}
-				_ = os.Stdin.Close()
-			case <-done:
-			}
-		}()
-		err = capabilityworkshop.RunPlan(sourcePlan, os.Stdin, os.Stdout)
-		close(done)
-		return workshopResult(err, interrupted)
+		return runCapabilityWorkshop(sourcePlan, os.Stdin, os.Stdout)
 	}
 	if action == "recover" {
 		info, err := os.Stdin.Stat()
@@ -334,13 +328,58 @@ func runCapability() error {
 	return nil
 }
 
-func workshopResult(runErr error, interrupted <-chan struct{}) error {
+func runCapabilityWorkshop(plan capabilityworkshop.SourcePlan, input *os.File, output io.Writer) error {
+	signals := make(chan os.Signal, 1)
+	done := make(chan struct{})
+	interrupted := make(chan os.Signal, 1)
+	confirmed := make(chan struct{})
+	pipeReader, pipeWriter := io.Pipe()
+	defer pipeReader.Close()
+	defer pipeWriter.Close()
+	go func() {
+		_, copyErr := io.Copy(pipeWriter, input)
+		_ = pipeWriter.CloseWithError(copyErr)
+	}()
+	signal.Notify(signals, os.Interrupt, syscall.SIGTERM)
+	defer signal.Stop(signals)
+	go func() {
+		select {
+		case received := <-signals:
+			interrupted <- received
+			select {
+			case <-confirmed:
+			default:
+				_ = pipeWriter.CloseWithError(workshopInterruptedError{signal: received})
+			}
+		case <-done:
+		}
+	}()
+	err := capabilityworkshop.RunPlanWithConfirmation(plan, pipeReader, output, func() { close(confirmed) })
+	close(done)
+	return workshopResult(err, interrupted)
+}
+
+type workshopInterruptedError struct {
+	signal           os.Signal
+	afterTransaction bool
+}
+
+func (e workshopInterruptedError) Error() string {
+	if e.afterTransaction {
+		return "capability workshop interrupted after source transaction completed"
+	}
+	return fmt.Sprintf("capability workshop interrupted by %s before source confirmation", e.signal)
+}
+
+func (workshopInterruptedError) WorkshopInterrupted() {}
+
+func workshopResult(runErr error, interrupted <-chan os.Signal) error {
 	if runErr != nil {
 		return runErr
 	}
 	select {
-	case <-interrupted:
-		return errors.New("capability workshop interrupted after source transaction completed")
+	case received := <-interrupted:
+		return workshopInterruptedError{signal: received, afterTransaction: true}
 	default:
 	}
 	return nil
