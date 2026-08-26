@@ -16,6 +16,27 @@ import (
 	"golang.org/x/sys/unix"
 )
 
+type lineCallbackReader struct {
+	lines          []string
+	index, trigger int
+	callback       func() error
+}
+
+func (r *lineCallbackReader) Read(p []byte) (int, error) {
+	if r.index >= len(r.lines) {
+		return 0, io.EOF
+	}
+	if r.index == r.trigger && r.callback != nil {
+		if err := r.callback(); err != nil {
+			return 0, err
+		}
+		r.callback = nil
+	}
+	line := r.lines[r.index]
+	r.index++
+	return copy(p, line), nil
+}
+
 func TestMain(m *testing.M) {
 	if os.Getenv("MY_FRIDAY_WORKSHOP_EXPECT_HELPER") == "1" {
 		if len(os.Args) != 5 || os.Args[1] != "capability" || os.Args[2] != "workshop" {
@@ -288,6 +309,92 @@ func TestCommitRefusesMetadataAndByteIdenticalPreviewReplacement(t *testing.T) {
 	}
 }
 
+func TestCreateCommitRefusesInstanceAndIntermediateReplacementAfterPlan(t *testing.T) {
+	for _, target := range []string{"instance", "ancestor"} {
+		t.Run(target, func(t *testing.T) {
+			base := t.TempDir()
+			ancestor := filepath.Join(base, "workshop-parent")
+			instance := filepath.Join(ancestor, "alfred")
+			if err := capability.InitializeInstance(instance); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.MkdirAll(filepath.Join(instance, "runtime", "skills"), 0700); err != nil {
+				t.Fatal(err)
+			}
+			source := filepath.Join(instance, "runtime", "skills", "daily-brief")
+			plan, err := Plan(instance, source, "daily-brief")
+			if err != nil {
+				t.Fatal(err)
+			}
+			before, _ := capability.Inspect(instance, source)
+			files, _ := render(validProposal("daily-brief"))
+			if target == "instance" {
+				if err = os.Rename(instance, instance+"-held"); err != nil {
+					t.Fatal(err)
+				}
+			} else {
+				if err = os.Rename(ancestor, ancestor+"-held"); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if err = capability.InitializeInstance(instance); err != nil {
+				t.Fatal(err)
+			}
+			if err = os.MkdirAll(filepath.Join(instance, "runtime", "skills"), 0700); err != nil {
+				t.Fatal(err)
+			}
+			if err = commitPlan(plan, before, files, "create"); err == nil || !strings.Contains(err.Error(), "instance ancestry changed") {
+				t.Fatalf("replacement accepted: %v", err)
+			}
+			if _, err = os.Lstat(source); !os.IsNotExist(err) {
+				t.Fatalf("replacement source changed: %v", err)
+			}
+		})
+	}
+}
+
+func TestCreateWorkshopRefusesInstanceAndAncestorReplacementAtConfirmation(t *testing.T) {
+	for _, target := range []string{"instance", "ancestor"} {
+		t.Run(target, func(t *testing.T) {
+			base := t.TempDir()
+			ancestor := filepath.Join(base, "prompt-parent")
+			instance := filepath.Join(ancestor, "alfred")
+			if err := capability.InitializeInstance(instance); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.MkdirAll(filepath.Join(instance, "runtime", "skills"), 0700); err != nil {
+				t.Fatal(err)
+			}
+			source := filepath.Join(instance, "runtime", "skills", "daily-brief")
+			plan, err := Plan(instance, source, "daily-brief")
+			if err != nil {
+				t.Fatal(err)
+			}
+			lines := []string{"Daily brief\n", "Prepare a concise daily brief\n", "0.1.0\n", "Prepare a daily brief\n", "Return a brief\n", "Explain failure\n", "prepare brief\n", "casual chat\n", "topics\n", "brief\n", "facts\n", "prepare brief now\n", "brief\n", "\n", "Create source\n"}
+			reader := &lineCallbackReader{lines: lines, trigger: len(lines) - 1, callback: func() error {
+				old, held := instance, instance+"-held"
+				if target == "ancestor" {
+					old, held = ancestor, ancestor+"-held"
+				}
+				if err := os.Rename(old, held); err != nil {
+					return err
+				}
+				if err := capability.InitializeInstance(instance); err != nil {
+					return err
+				}
+				return os.MkdirAll(filepath.Join(instance, "runtime", "skills"), 0700)
+			}}
+			err = RunPlan(plan, reader, io.Discard)
+			if err == nil || !strings.Contains(err.Error(), "instance ancestry changed") {
+				t.Fatalf("replacement accepted: %v", err)
+			}
+			if _, err = os.Lstat(source); !os.IsNotExist(err) {
+				t.Fatalf("replacement source changed: %v", err)
+			}
+		})
+	}
+}
+
 func TestMalformedJournalPrecedesValidSourceAndWorkshopOnlyRecovery(t *testing.T) {
 	root := t.TempDir()
 	instance := filepath.Join(root, "alfred")
@@ -366,7 +473,8 @@ func TestSemanticWorkshopJournalContradictionsAreRecoveryRequired(t *testing.T) 
 				}
 				return nil
 			}
-			if err := commit(instance, source, "daily-brief", before, files, "create"); err == nil {
+			commitErr := commit(instance, source, "daily-brief", before, files, "create")
+			if commitErr == nil {
 				t.Fatal("fault missing")
 			}
 			mutationHook = nil
@@ -622,7 +730,8 @@ func TestPreJournalStageFaultsDoNotBlockRetry(t *testing.T) {
 				}
 				return nil
 			}
-			if err := commit(instance, source, "daily-brief", before, files, "create"); err == nil {
+			commitErr := commit(instance, source, "daily-brief", before, files, "create")
+			if commitErr == nil {
 				t.Fatal("fault missing")
 			}
 			mutationHook = nil
@@ -633,13 +742,63 @@ func TestPreJournalStageFaultsDoNotBlockRetry(t *testing.T) {
 			}
 			for _, entry := range entries {
 				if strings.HasPrefix(entry.Name(), ".daily-brief.workshop-new-") {
-					t.Fatalf("pre-journal residue: %s", entry.Name())
+					t.Fatalf("pre-journal residue: %s (%v)", entry.Name(), commitErr)
 				}
 			}
 			if err := commit(instance, source, "daily-brief", before, files, "create"); err != nil {
 				t.Fatalf("retry blocked: %v", err)
 			}
 		})
+	}
+}
+
+func TestPreJournalCleanupPreservesAllowedPathRegularFileSubstitution(t *testing.T) {
+	instance := filepath.Join(t.TempDir(), "alfred")
+	if err := capability.InitializeInstance(instance); err != nil {
+		t.Fatal(err)
+	}
+	skills := filepath.Join(instance, "runtime", "skills")
+	if err := os.MkdirAll(skills, 0700); err != nil {
+		t.Fatal(err)
+	}
+	source := filepath.Join(skills, "daily-brief")
+	before, _ := capability.Inspect(instance, source)
+	files, _ := render(validProposal("daily-brief"))
+	var substituted string
+	mutationHook = func(phase string) error {
+		if phase != "stage-written" {
+			return nil
+		}
+		entries, err := os.ReadDir(skills)
+		if err != nil {
+			return err
+		}
+		for _, entry := range entries {
+			if !strings.HasPrefix(entry.Name(), ".daily-brief.workshop-new-") {
+				continue
+			}
+			target := filepath.Join(skills, entry.Name(), "daily-brief", "capability.json")
+			tmp := target + ".substitute"
+			if err = os.WriteFile(tmp, []byte("same-owner substitution"), 0600); err == nil {
+				err = os.Rename(tmp, target)
+			}
+			substituted = target
+			if err != nil {
+				return err
+			}
+			return errors.New("stop after substitution")
+		}
+		return errors.New("stage missing")
+	}
+	err := commit(instance, source, "daily-brief", before, files, "create")
+	mutationHook = nil
+	t.Cleanup(func() { mutationHook = nil })
+	if err == nil || !strings.Contains(err.Error(), "cleanup refused") {
+		t.Fatalf("substitution cleanup error=%v", err)
+	}
+	body, readErr := os.ReadFile(substituted)
+	if readErr != nil || string(body) != "same-owner substitution" {
+		t.Fatalf("substitution=%q err=%v", body, readErr)
 	}
 }
 

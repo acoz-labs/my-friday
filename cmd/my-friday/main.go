@@ -204,11 +204,18 @@ func runCapability() error {
 	if err != nil {
 		return err
 	}
+	source := filepath.Join(paths.Root, "runtime", "skills", os.Args[4])
+	action := os.Args[2]
+	var sourcePlan capabilityworkshop.SourcePlan
+	if action == "workshop" {
+		sourcePlan, err = capabilityworkshop.Plan(paths.Root, source, os.Args[4])
+		if err != nil {
+			return err
+		}
+	}
 	if _, err = assistantinstance.Verify(home, os.Args[3]); err != nil {
 		return err
 	}
-	source := filepath.Join(paths.Root, "runtime", "skills", os.Args[4])
-	action := os.Args[2]
 	if action == "workshop" {
 		if len(os.Args) != 5 {
 			return fmt.Errorf("usage: my-friday capability workshop NAME SLUG")
@@ -233,7 +240,7 @@ func runCapability() error {
 			case <-done:
 			}
 		}()
-		err = capabilityworkshop.Run(paths.Root, source, os.Args[4], os.Stdin, os.Stdout)
+		err = capabilityworkshop.RunPlan(sourcePlan, os.Stdin, os.Stdout)
 		close(done)
 		return workshopResult(err, interrupted)
 	}
@@ -328,11 +335,15 @@ func runCapability() error {
 }
 
 func workshopResult(runErr error, interrupted <-chan struct{}) error {
+	if runErr != nil {
+		return runErr
+	}
 	select {
 	case <-interrupted:
+		return errors.New("capability workshop interrupted after source transaction completed")
 	default:
 	}
-	return runErr
+	return nil
 }
 
 func reportCapabilityTest(out io.Writer, pkg capability.Package) error {

@@ -72,8 +72,12 @@ transaction/receipt plus an exact whole-target proof. Unsafe temp type, link,
 mode, owner, or target identity is preserved and refused. The containing
 directory is synced after authority promotion and after final authority removal.
 
-The source workshop creates a random, exclusive staging root descriptor-
-relatively beneath the already-opened `runtime/skills` directory. Every staged
+Before prompting, the source workshop records every canonical instance-path
+ancestor's device, inode, directory type, owner, and mode. Commit reopens that
+chain descriptor-relatively from `/`, refuses any replacement, and derives both
+the shared `capabilities/` lock and `runtime/skills` from the same verified root
+descriptor. The workshop creates a random, exclusive staging root descriptor-
+relatively beneath that opened `runtime/skills` directory. Every staged
 directory and file is created through no-follow descriptors, so replacing the
 pathname with a symlink cannot redirect a write. The canonical source journal
 records that stage name and the complete staged and prior-tree device, inode,
@@ -83,9 +87,11 @@ set drift. Cleanup validates the complete old tree and package digest twice
 before its first unlink, journals each file and directory unlink, and on
 re-entry treats a missing expected entry only as completed work while every
 survivor still matches its original inode and metadata. Additions and
-substitutions are preserved and refused. Pre-journal staging failures remove
-only the descriptor-bound random root after exact authority checks, so they
-cannot create a deterministic retry collision.
+substitutions are preserved and refused. Pre-journal staging records exact
+entry inode, digest, type, owner, mode, and link authority after each successful
+construction step. Failure removes only that exact descriptor-bound tree;
+same-owner pathname substitution or other ambiguous residue is preserved and
+refused rather than deleted.
 
 Retained `SKILL.md` bodies preserve their suffix bytes, including whether the
 last byte is a newline. Generated frontmatter renders the summary as a JSON-
@@ -116,6 +122,9 @@ unless regeneration is explicit. Only exact `Create source` or `Update source`
 authorizes one source transaction. Return, EOF, `q`, interruption, and every
 other token leave source unchanged. Source confirmation never authorizes or
 calls Install, Upgrade, Enable, Disable, Remove, or lifecycle recovery.
+If INT or TERM arrives during a confirmed transaction, its transaction or
+recovery error remains primary; after a successful durable flush the command
+returns a stable interruption error rather than reporting ordinary success.
 
 Source mutation shares the non-blocking instance `capabilities/` lock with
 lifecycle mutation and uses a separate mode-0600

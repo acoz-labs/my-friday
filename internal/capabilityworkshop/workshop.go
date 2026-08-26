@@ -44,18 +44,100 @@ type proposal struct {
 	InputsAnswered, OutputsAnswered, RetainBody                    bool
 }
 
+type ancestorProof struct {
+	Name          string
+	Device, Inode uint64
+	Mode, Owner   uint32
+}
+
+// SourcePlan binds the canonical instance ancestry observed before any
+// workshop prompt. Commit and recovery must reopen that same chain.
+type SourcePlan struct {
+	Instance, Source, Slug string
+	ancestors              []ancestorProof
+}
+
+func Plan(instance, source, slug string) (SourcePlan, error) {
+	if err := capability.ValidateSlug(slug); err != nil {
+		return SourcePlan{}, err
+	}
+	if !filepath.IsAbs(instance) || filepath.Clean(instance) != instance || source != filepath.Join(instance, "runtime", "skills", slug) {
+		return SourcePlan{}, errors.New("non-canonical source workshop plan")
+	}
+	canonicalInstance, err := filepath.EvalSymlinks(instance)
+	if err != nil {
+		return SourcePlan{}, err
+	}
+	instance, source = canonicalInstance, filepath.Join(canonicalInstance, "runtime", "skills", slug)
+	fd, err := unix.Open("/", unix.O_RDONLY|unix.O_DIRECTORY|unix.O_NOFOLLOW, 0)
+	if err != nil {
+		return SourcePlan{}, err
+	}
+	defer func() { unix.Close(fd) }()
+	plan := SourcePlan{Instance: instance, Source: source, Slug: slug}
+	for _, name := range strings.Split(strings.TrimPrefix(instance, "/"), "/") {
+		if name == "" || name == "." || name == ".." {
+			return SourcePlan{}, errors.New("unsafe instance ancestor")
+		}
+		next, openErr := unix.Openat(fd, name, unix.O_RDONLY|unix.O_DIRECTORY|unix.O_NOFOLLOW, 0)
+		if openErr != nil {
+			return SourcePlan{}, openErr
+		}
+		var st unix.Stat_t
+		if openErr = unix.Fstat(next, &st); openErr != nil || st.Mode&unix.S_IFMT != unix.S_IFDIR {
+			unix.Close(next)
+			return SourcePlan{}, errors.New("unsafe instance ancestor")
+		}
+		plan.ancestors = append(plan.ancestors, ancestorProof{Name: name, Device: uint64(st.Dev), Inode: st.Ino, Mode: uint32(os.FileMode(st.Mode).Perm()), Owner: st.Uid})
+		unix.Close(fd)
+		fd = next
+	}
+	last := plan.ancestors[len(plan.ancestors)-1]
+	if last.Owner != uint32(os.Getuid()) || last.Mode != 0700 {
+		return SourcePlan{}, errors.New("unsafe instance root authority")
+	}
+	return plan, nil
+}
+
+func openPlanRoot(plan SourcePlan) (int, error) {
+	fd, err := unix.Open("/", unix.O_RDONLY|unix.O_DIRECTORY|unix.O_NOFOLLOW, 0)
+	if err != nil {
+		return -1, err
+	}
+	for _, want := range plan.ancestors {
+		next, openErr := unix.Openat(fd, want.Name, unix.O_RDONLY|unix.O_DIRECTORY|unix.O_NOFOLLOW, 0)
+		unix.Close(fd)
+		if openErr != nil {
+			return -1, errors.New("stale workshop preview: instance ancestry changed")
+		}
+		var st unix.Stat_t
+		if openErr = unix.Fstat(next, &st); openErr != nil || st.Mode&unix.S_IFMT != unix.S_IFDIR || uint64(st.Dev) != want.Device || st.Ino != want.Inode || uint32(os.FileMode(st.Mode).Perm()) != want.Mode || st.Uid != want.Owner {
+			unix.Close(next)
+			return -1, errors.New("stale workshop preview: instance ancestry changed")
+		}
+		fd = next
+	}
+	return fd, nil
+}
+
 // Run conducts one workshop and returns without mutation unless the exact
 // source action shown in the final review is confirmed.
 func Run(instance, source, slug string, in io.Reader, out io.Writer) error {
-	if err := capability.ValidateSlug(slug); err != nil {
+	plan, err := Plan(instance, source, slug)
+	if err != nil {
 		return err
 	}
+	return RunPlan(plan, in, out)
+}
+
+func RunPlan(plan SourcePlan, in io.Reader, out io.Writer) error {
+	instance, source, slug := plan.Instance, plan.Source, plan.Slug
 	status, inspectErr := capability.Inspect(instance, source)
 	if status.State == capability.StateInterrupted {
 		if status.Interruption != "source-workshop" {
 			return fmt.Errorf("capability lifecycle recovery required; run capability recover %s", slug)
 		}
-		if err := recoverSource(instance, source, slug); err != nil {
+		if err := recoverSourcePlan(plan); err != nil {
 			return err
 		}
 		status, inspectErr = capability.Inspect(instance, source)
@@ -349,7 +431,7 @@ examplesSection:
 	if line != token+"\n" {
 		return finishNoChange(out, nil)
 	}
-	if err = commit(instance, source, slug, status, files, action, previewSnapshot); err != nil {
+	if err = commitPlan(plan, status, files, action, previewSnapshot); err != nil {
 		return err
 	}
 	post, postErr := capability.Inspect(instance, source)
@@ -805,66 +887,147 @@ func createStage(parentFD int, slug string) (string, int, error) {
 	}
 	return "", -1, errors.New("source workshop could not allocate staging")
 }
-func openSkillsFromInstance(instance string) (int, error) {
-	root, err := unix.Open(instance, unix.O_RDONLY|unix.O_DIRECTORY|unix.O_NOFOLLOW, 0)
+func openSkillsFromRoot(root int) (int, error) {
+	var rootStat unix.Stat_t
+	if err := unix.Fstat(root, &rootStat); err != nil || rootStat.Uid != uint32(os.Getuid()) || os.FileMode(rootStat.Mode).Perm() != 0700 {
+		return -1, errors.New("unsafe instance root authority")
+	}
+	fd, err := unix.Dup(root)
 	if err != nil {
 		return -1, err
 	}
-	var rootStat unix.Stat_t
-	if err = unix.Fstat(root, &rootStat); err != nil || rootStat.Uid != uint32(os.Getuid()) || os.FileMode(rootStat.Mode).Perm() != 0700 {
-		unix.Close(root)
-		return -1, errors.New("unsafe instance root authority")
-	}
-	fd := root
 	for _, name := range []string{"runtime", "skills"} {
 		next, x := unix.Openat(fd, name, unix.O_RDONLY|unix.O_DIRECTORY|unix.O_NOFOLLOW, 0)
-		if fd != root {
-			unix.Close(fd)
-		}
+		unix.Close(fd)
 		if x != nil {
-			unix.Close(root)
 			return -1, x
 		}
 		var st unix.Stat_t
 		if x = unix.Fstat(next, &st); x != nil || st.Dev != rootStat.Dev || st.Uid != rootStat.Uid || os.FileMode(st.Mode).Perm() != 0700 {
 			unix.Close(next)
-			unix.Close(root)
 			return -1, errors.New("unsafe skills ancestor authority")
 		}
 		fd = next
 	}
-	unix.Close(root)
 	return fd, nil
 }
 
-func stageAllowed(files map[string][]byte, prior map[string]snapshotEntry, slug string) map[string]bool {
-	allowed := map[string]bool{slug: true}
-	add := func(rel string) {
-		parts := strings.Split(filepath.ToSlash(rel), "/")
-		current := slug
-		for _, part := range parts {
-			current += "/" + part
-			allowed[current] = true
+func snapshotOpenTree(rootFD int) (map[string]snapshotEntry, error) {
+	entries := map[string]snapshotEntry{}
+	var walk func(int, string) error
+	walk = func(fd int, rel string) error {
+		var st unix.Stat_t
+		if err := unix.Fstat(fd, &st); err != nil {
+			return err
 		}
-	}
-	for name := range files {
-		add(name)
-	}
-	for name := range prior {
-		if name != "" {
-			add(name)
+		entries[rel] = snapshotEntry{dev: uint64(st.Dev), ino: st.Ino, mode: os.FileMode(st.Mode).Perm(), uid: st.Uid, nlink: uint64(st.Nlink), dir: true}
+		dup, err := unix.Openat(fd, ".", unix.O_RDONLY|unix.O_DIRECTORY|unix.O_NOFOLLOW, 0)
+		if err != nil {
+			return err
 		}
+		f := os.NewFile(uintptr(dup), "stage-snapshot")
+		children, err := f.ReadDir(-1)
+		f.Close()
+		if err != nil {
+			return err
+		}
+		sort.Slice(children, func(i, j int) bool { return children[i].Name() < children[j].Name() })
+		for _, child := range children {
+			name := child.Name()
+			path := name
+			if rel != "" {
+				path = rel + "/" + name
+			}
+			var childStat unix.Stat_t
+			if err = unix.Fstatat(fd, name, &childStat, unix.AT_SYMLINK_NOFOLLOW); err != nil {
+				return err
+			}
+			if childStat.Mode&unix.S_IFMT == unix.S_IFDIR {
+				cfd, openErr := unix.Openat(fd, name, unix.O_RDONLY|unix.O_DIRECTORY|unix.O_NOFOLLOW, 0)
+				if openErr != nil {
+					return openErr
+				}
+				err = walk(cfd, path)
+				unix.Close(cfd)
+				if err != nil {
+					return err
+				}
+				continue
+			}
+			if childStat.Mode&unix.S_IFMT != unix.S_IFREG || childStat.Nlink != 1 {
+				return errors.New("unsafe staged entry")
+			}
+			cfd, openErr := unix.Openat(fd, name, unix.O_RDONLY|unix.O_NOFOLLOW, 0)
+			if openErr != nil {
+				return openErr
+			}
+			file := os.NewFile(uintptr(cfd), name)
+			body, readErr := io.ReadAll(file)
+			var final unix.Stat_t
+			statErr := unix.Fstat(cfd, &final)
+			file.Close()
+			if readErr != nil {
+				return readErr
+			}
+			if statErr != nil {
+				return statErr
+			}
+			initial := snapshotEntry{dev: uint64(childStat.Dev), ino: childStat.Ino, mode: os.FileMode(childStat.Mode).Perm(), uid: childStat.Uid, nlink: uint64(childStat.Nlink)}
+			if !sameStat(&final, initial) {
+				return errors.New("staged entry changed during snapshot")
+			}
+			entries[path] = snapshotEntry{dev: uint64(final.Dev), ino: final.Ino, mode: os.FileMode(final.Mode).Perm(), uid: final.Uid, nlink: uint64(final.Nlink), digest: digest(body)}
+		}
+		return nil
 	}
-	return allowed
+	return entries, walk(rootFD, "")
 }
-func removeOwnedStage(parentFD, stageFD int, name string, rootInode uint64, allowed map[string]bool) error {
+
+func removeOwnedStage(parentFD, stageFD int, name string, want map[string]snapshotEntry) error {
+	rootWant, ok := want[""]
+	if !ok {
+		return errors.New("stage cleanup authority missing")
+	}
+	random := make([]byte, 16)
+	if _, err := cryptorand.Read(random); err != nil {
+		return err
+	}
+	quarantine := name + ".cleanup-" + hex.EncodeToString(random)
+	if err := renameNoReplaceAt(parentFD, name, parentFD, quarantine); err != nil {
+		return fmt.Errorf("stage cleanup quarantine refused: %w", err)
+	}
+	restore := func() { _ = renameNoReplaceAt(parentFD, quarantine, parentFD, name) }
+	qfd, err := unix.Openat(parentFD, quarantine, unix.O_RDONLY|unix.O_DIRECTORY|unix.O_NOFOLLOW, 0)
+	if err != nil {
+		restore()
+		return errors.New("stage cleanup quarantine unavailable")
+	}
+	var quarantined unix.Stat_t
+	err = unix.Fstat(qfd, &quarantined)
+	unix.Close(qfd)
+	if err != nil || uint64(quarantined.Dev) != rootWant.dev || quarantined.Ino != rootWant.ino {
+		restore()
+		return errors.New("stage cleanup quarantine identity changed")
+	}
 	var rootStat unix.Stat_t
-	if err := unix.Fstat(stageFD, &rootStat); err != nil || rootStat.Ino != rootInode || rootStat.Uid != uint32(os.Getuid()) || rootStat.Mode&unix.S_IFMT != unix.S_IFDIR {
+	if err := unix.Fstat(stageFD, &rootStat); err != nil || !sameStat(&rootStat, rootWant) {
+		restore()
 		return errors.New("stage cleanup root authority changed")
+	}
+	current, err := snapshotOpenTree(stageFD)
+	if err != nil || len(current) != len(want) {
+		restore()
+		return errors.New("stage cleanup refused: staged tree changed")
+	}
+	for path, expected := range want {
+		if actual, exists := current[path]; !exists || actual != expected {
+			restore()
+			return fmt.Errorf("stage cleanup refused: authority changed %s", path)
+		}
 	}
 	var walk func(int, string) error
 	walk = func(fd int, rel string) error {
-		dup, err := unix.Dup(fd)
+		dup, err := unix.Openat(fd, ".", unix.O_RDONLY|unix.O_DIRECTORY|unix.O_NOFOLLOW, 0)
 		if err != nil {
 			return err
 		}
@@ -880,32 +1043,49 @@ func removeOwnedStage(parentFD, stageFD int, name string, rootInode uint64, allo
 			if rel != "" {
 				path = rel + "/" + child
 			}
-			if !allowed[path] {
+			w, allowed := want[path]
+			if !allowed {
 				return fmt.Errorf("foreign stage cleanup entry %s", path)
 			}
 			var st unix.Stat_t
 			if err = unix.Fstatat(fd, child, &st, unix.AT_SYMLINK_NOFOLLOW); err != nil {
 				return err
 			}
-			if st.Uid != uint32(os.Getuid()) {
-				return errors.New("stage cleanup owner changed")
-			}
-			if st.Mode&unix.S_IFMT == unix.S_IFDIR {
+			if w.dir {
 				cfd, x := unix.Openat(fd, child, unix.O_RDONLY|unix.O_DIRECTORY|unix.O_NOFOLLOW, 0)
 				if x != nil {
 					return x
 				}
 				x = walk(cfd, path)
+				if x != nil {
+					unix.Close(cfd)
+					return x
+				}
+				var final unix.Stat_t
+				if x = unix.Fstat(cfd, &final); x == nil && !sameDirAfter(&final, w) {
+					x = errors.New("stage cleanup directory changed")
+				}
 				unix.Close(cfd)
+				if x == nil {
+					x = unix.Unlinkat(fd, child, unix.AT_REMOVEDIR)
+				}
 				if x != nil {
 					return x
 				}
-				if x = unix.Unlinkat(fd, child, unix.AT_REMOVEDIR); x != nil {
+			} else {
+				cfd, x := unix.Openat(fd, child, unix.O_RDONLY|unix.O_NOFOLLOW, 0)
+				if x != nil {
 					return x
 				}
-			} else {
-				if st.Mode&unix.S_IFMT != unix.S_IFREG || st.Nlink != 1 {
-					return errors.New("unsafe stage cleanup entry")
+				file := os.NewFile(uintptr(cfd), child)
+				body, x := io.ReadAll(file)
+				var final unix.Stat_t
+				if x == nil {
+					x = unix.Fstat(cfd, &final)
+				}
+				file.Close()
+				if x != nil || !sameStat(&final, w) || digest(body) != w.digest {
+					return errors.New("stage cleanup file changed")
 				}
 				if err = unix.Unlinkat(fd, child, 0); err != nil {
 					return err
@@ -915,9 +1095,14 @@ func removeOwnedStage(parentFD, stageFD int, name string, rootInode uint64, allo
 		return nil
 	}
 	if err := walk(stageFD, ""); err != nil {
+		restore()
 		return err
 	}
-	return unix.Unlinkat(parentFD, name, unix.AT_REMOVEDIR)
+	if err := unix.Unlinkat(parentFD, quarantine, unix.AT_REMOVEDIR); err != nil {
+		restore()
+		return err
+	}
+	return nil
 }
 func removeEmptyStageRoot(parentFD int, name string, wantInode uint64) error {
 	fd, err := unix.Openat(parentFD, name, unix.O_RDONLY|unix.O_DIRECTORY|unix.O_NOFOLLOW, 0)
@@ -1264,16 +1449,31 @@ func validateExactTree(root, slug string, want map[string]snapshotEntry, wantDig
 }
 
 func recoverSource(instance, source, slug string) error {
-	lock, e := os.Open(filepath.Join(instance, "capabilities"))
+	plan, err := Plan(instance, source, slug)
+	if err != nil {
+		return err
+	}
+	return recoverSourcePlan(plan)
+}
+
+func recoverSourcePlan(plan SourcePlan) error {
+	instance, source, slug := plan.Instance, plan.Source, plan.Slug
+	rootFD, e := openPlanRoot(plan)
 	if e != nil {
 		return e
 	}
+	defer unix.Close(rootFD)
+	lockFD, e := unix.Openat(rootFD, "capabilities", unix.O_RDONLY|unix.O_DIRECTORY|unix.O_NOFOLLOW, 0)
+	if e != nil {
+		return e
+	}
+	lock := os.NewFile(uintptr(lockFD), "capabilities")
 	defer lock.Close()
 	if e = unix.Flock(int(lock.Fd()), unix.LOCK_EX|unix.LOCK_NB); e != nil {
 		return errors.New("capability mutation already in progress")
 	}
 	defer unix.Flock(int(lock.Fd()), unix.LOCK_UN)
-	parentFD, e := openSkillsFromInstance(instance)
+	parentFD, e := openSkillsFromRoot(rootFD)
 	if e != nil {
 		return e
 	}
@@ -1388,11 +1588,26 @@ func recoverSource(instance, source, slug string) error {
 	return syncDir(filepath.Dir(jp))
 }
 
-func commit(instance, source, slug string, before capability.Status, files map[string][]byte, action string, previewAuthority ...map[string]snapshotEntry) (resultErr error) {
-	lock, e := os.Open(filepath.Join(instance, "capabilities"))
+func commit(instance, source, slug string, before capability.Status, files map[string][]byte, action string, previewAuthority ...map[string]snapshotEntry) error {
+	plan, err := Plan(instance, source, slug)
+	if err != nil {
+		return err
+	}
+	return commitPlan(plan, before, files, action, previewAuthority...)
+}
+
+func commitPlan(plan SourcePlan, before capability.Status, files map[string][]byte, action string, previewAuthority ...map[string]snapshotEntry) (resultErr error) {
+	instance, source, slug := plan.Instance, plan.Source, plan.Slug
+	rootFD, e := openPlanRoot(plan)
 	if e != nil {
 		return e
 	}
+	defer unix.Close(rootFD)
+	lockFD, e := unix.Openat(rootFD, "capabilities", unix.O_RDONLY|unix.O_DIRECTORY|unix.O_NOFOLLOW, 0)
+	if e != nil {
+		return e
+	}
+	lock := os.NewFile(uintptr(lockFD), "capabilities")
 	defer lock.Close()
 	if e = unix.Flock(int(lock.Fd()), unix.LOCK_EX|unix.LOCK_NB); e != nil {
 		return errors.New("capability mutation already in progress")
@@ -1430,7 +1645,7 @@ func commit(instance, source, slug string, before capability.Status, files map[s
 			return errors.New("source workshop collision; recovery required")
 		}
 	}
-	parentFD, e := openSkillsFromInstance(instance)
+	parentFD, e := openSkillsFromRoot(rootFD)
 	if e != nil {
 		return e
 	}
@@ -1445,10 +1660,17 @@ func commit(instance, source, slug string, before capability.Status, files map[s
 		return e
 	}
 	journalWritten := false
-	allowedStage := stageAllowed(files, priorSnapshot, slug)
+	stageAuthority, authorityErr := snapshotOpenTree(stageRootFD)
+	if authorityErr != nil {
+		return authorityErr
+	}
+	refreshStageAuthority := func() error {
+		stageAuthority, authorityErr = snapshotOpenTree(stageRootFD)
+		return authorityErr
+	}
 	defer func() {
 		if resultErr != nil && !journalWritten {
-			if cleanupErr := removeOwnedStage(parentFD, stageRootFD, stageName, stageRootStat.Ino, allowedStage); cleanupErr != nil {
+			if cleanupErr := removeOwnedStage(parentFD, stageRootFD, stageName, stageAuthority); cleanupErr != nil {
 				resultErr = fmt.Errorf("%w; stage cleanup refused: %v", resultErr, cleanupErr)
 			}
 		}
@@ -1460,6 +1682,9 @@ func commit(instance, source, slug string, before capability.Status, files map[s
 		return e
 	}
 	defer unix.Close(stageFD)
+	if e = refreshStageAuthority(); e != nil {
+		return e
+	}
 	if mutationHook != nil {
 		if e = mutationHook("stage-created"); e != nil {
 			return e
@@ -1479,6 +1704,9 @@ func commit(instance, source, slug string, before capability.Status, files map[s
 				return dirErr
 			}
 			unix.Close(dfd)
+			if e = refreshStageAuthority(); e != nil {
+				return e
+			}
 		}
 		for _, n := range before.Package.Files {
 			if n == "capability.json" || n == "skill/SKILL.md" || n == "tests/cases.json" {
@@ -1492,10 +1720,16 @@ func commit(instance, source, slug string, before capability.Status, files map[s
 			if x = writeExclusiveAt(stageFD, n, b, mode); x != nil {
 				return x
 			}
+			if e = refreshStageAuthority(); e != nil {
+				return e
+			}
 		}
 	}
 	for n, b := range files {
 		if e = writeExclusiveAt(stageFD, n, b, 0600); e != nil {
+			return e
+		}
+		if e = refreshStageAuthority(); e != nil {
 			return e
 		}
 	}
