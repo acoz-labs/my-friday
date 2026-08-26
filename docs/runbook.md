@@ -203,6 +203,8 @@ tasks run under an Expect-owned PTY inside that same bounded runner. Their
 owner-only transcripts remain private acceptance state, preserve the launcher
 exit status, and are never copied into public evidence. Each task has a separate
 output-only completion marker that the prompt may describe but must not contain.
+Transcript marker checks normalize carriage returns and search in the C locale,
+so arbitrary PTY bytes cannot make observation depend on the host locale.
 After observing it, Expect closes and waits the PTY child so the bounded runner
 can prove full quiescence; EOF before observation is a failure even after a
 zero exit. Failure cleanup disarms
