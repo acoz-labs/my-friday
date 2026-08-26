@@ -80,6 +80,7 @@ func TestRunnerReapsChildrenOnSignals(t *testing.T) {
 }
 
 func TestRunnerPTYWrappedTimeoutReapsEscapedDescendant(t *testing.T) {
+	requireExpect(t)
 	dir := t.TempDir()
 	runner := buildTestRunner(t, dir)
 	rootPIDFile := filepath.Join(dir, "root.pid")
@@ -102,6 +103,7 @@ func TestRunnerPTYWrappedTimeoutReapsEscapedDescendant(t *testing.T) {
 }
 
 func TestRunnerPTYWrappedSignalsReapDescendants(t *testing.T) {
+	requireExpect(t)
 	for _, sig := range []syscall.Signal{syscall.SIGINT, syscall.SIGTERM} {
 		t.Run(sig.String(), func(t *testing.T) {
 			dir := t.TempDir()
@@ -153,6 +155,13 @@ func launcherCaptureDriver(t *testing.T) string {
 		t.Fatal(err)
 	}
 	return path
+}
+
+func requireExpect(t *testing.T) {
+	t.Helper()
+	if _, err := os.Stat("/usr/bin/expect"); err != nil {
+		t.Skip("PTY integration requires /usr/bin/expect")
+	}
 }
 
 func assertPrivateTranscript(t *testing.T, path string) {

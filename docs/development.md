@@ -188,3 +188,6 @@ canonical post-mutation journal boundary.
 receive a real stdout TTY, capture no public transcript, retain owner-only
 transcript permissions and child exit status, and remain inside the runner's
 timeout/signal descendant-reaping boundary.
+This integration runs on the required Apple-silicon acceptance host and skips
+on portable CI hosts without `/usr/bin/expect`; the remaining contract and
+cross-platform runner tests still run there.
