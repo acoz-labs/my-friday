@@ -209,8 +209,9 @@ reaps the root, verifies quiescence, and returns status 130 or 143 before
 failure cleanup proceeds. Builder, installed-invocation, and disabled-absence
 tasks run under an Expect-owned PTY inside that same bounded runner. Each starts
 the named launcher with no forwarded arguments, waits for the CSI-u, initial
-composer, MCP progress, plain workspace title, and final composer readiness
-sequence, then types its separate prompt and submits the terminal Enter
+composer, zero or more optional MCP progress messages, the authoritative plain
+workspace-title transition, and final composer readiness sequence, then types
+its separate prompt and submits the terminal Enter
 sequence. A marker seen before submission is refused. Their builder task
 receives an instance-specific manifest-bound skill. Managed Codex
 trusts the disposable workspace, adds only that instance's private runtime to

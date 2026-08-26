@@ -42,11 +42,7 @@ expect {
 }
 expect {
   -exact $marker { pre_submit_marker }
-  -re {(Booting MCP server:|Starting MCP servers)} {}
-  eof { child_eof }
-}
-expect {
-  -exact $marker { pre_submit_marker }
+  -re {(Booting MCP server:|Starting MCP servers)} { exp_continue }
   -exact "\033]0;workspace\007" {}
   -exact "\033]0;workspace\033\\" {}
   eof { child_eof }
