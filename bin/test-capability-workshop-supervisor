@@ -23,7 +23,9 @@ grep -Fq 'run_private "$evidence_root/invocation.private" DAILY_BRIEF_READY "$la
 grep -Fq 'run_private "$evidence_root/disabled.private" DAILY_BRIEF_ABSENT "$launcher" '\''Start a fresh task. If daily-brief is not available, reply with exactly one line formed by concatenating DAILY, underscore, BRIEF, underscore, and ABSENT. Do not simulate the capability.'\''' bin/accept-capability-workshop
 grep -Fq 'config/acceptance/launcher-capture.exp' bin/accept-capability-workshop
 grep -Fq '.my-friday-acceptance:launcher-capture.exp' bin/accept-capability-workshop
-grep -Fq 'run_private(){ local transcript="$1" marker="$2";shift 2;run_clean /usr/bin/expect "$run_root/launcher-capture.exp" "$transcript" "$marker"' bin/accept-capability-workshop
+grep -Fq 'run_clean(){ run_with_timeout 180s "$@"; }' bin/accept-capability-workshop
+grep -Fq 'run_private(){ local transcript="$1" marker="$2";shift 2;run_with_timeout 600s /usr/bin/expect "$run_root/launcher-capture.exp" "$transcript" "$marker"' bin/accept-capability-workshop
+[[ "$(grep -o '600s' bin/accept-capability-workshop | wc -l | tr -d ' ')" == 1 ]]
 grep -Fq "private_line(){ LC_ALL=C tr -d '\\r' <\"\$1\"|LC_ALL=C grep -Fqx \"\$2\"; }" bin/accept-capability-workshop
 
 bytewise_transcript="$tmp/invalid-utf8.private"

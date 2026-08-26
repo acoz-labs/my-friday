@@ -190,7 +190,8 @@ transcript permissions and child exit status, and remain inside the runner's
 timeout/signal descendant-reaping boundary.
 It also locks output-only marker observation, prompt self-match refusal,
 missing-marker failure, bytewise observation through invalid UTF-8/control
-bytes, and marker-triggered TUI/descendant closure.
+bytes, marker-triggered TUI/descendant closure, and the split 180-second
+deterministic-command / 600-second named-launcher timeout contract.
 This integration runs on the required Apple-silicon acceptance host and skips
 on portable CI hosts without `/usr/bin/expect`; the remaining contract and
 cross-platform runner tests still run there.
