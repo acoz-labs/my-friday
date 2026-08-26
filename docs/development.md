@@ -136,7 +136,8 @@ currently executing My Friday candidate copy, refuse executable/config/builder
 drift, exercise v1 and legacy-v2 revision upgrades and bounded rollback
 reversal, and recover an interruption after execution-context mutation.
 Adversarial migration tests substitute candidate staging and each rollback
-quarantine, and prove foreign quarantine collisions remain untouched. Purpose
+quarantine, interrupt revision-2 executable restoration and manifest promotion,
+and prove foreign quarantine collisions remain untouched. Purpose
 instructions remain manifest-bound, and verify,
 remove, and recovery authority is denied after managed-state tampering. Reversal tests preserve ambient user Codex state. The
 acceptance contract forbids scripting an onboarding response.
@@ -177,6 +178,19 @@ They use deterministic temporary fixtures and never invoke Codex or the
 network. Run `go test -race ./internal/capability` while iterating and the full
 `bin/container bin/ci` before review.
 
+Deterministic workshop rendering, exact confirmation, source-only transaction,
+opaque-file preservation, interruption recovery, and terminal-flow tests live
+under `internal/capabilityworkshop`. Run:
+
+```sh
+go test -race ./internal/capability ./internal/capabilityworkshop ./cmd/my-friday ./internal/assistantinstance
+```
+
+The workshop tests use injected readers/writers and temporary instance roots;
+they do not publish proposal answers or source diffs. Native exact-candidate
+acceptance additionally exercises the interactive TTY, Unicode and narrow
+terminal rendering, separate Install/Upgrade confirmations, and APFS recovery.
+
 Issue-51 release authority has a separate deterministic contract suite:
 
 ```sh
@@ -194,11 +208,17 @@ auth copy/source-swap refusal, secure-root collision and ambiguous cleanup
 preservation, timeout/escaped-child reaping, `INT`/`TERM` exit status and
 ordinary/escaped-descendant quiescence, and the capability stop barrier's
 canonical post-mutation journal boundary.
-They also exercise the managed Codex prompt-input boundary: the workshop
-builder prompt must begin with literal `$capability-builder`, match its expected
-digest, and expose the builder description and exact private workspace skill
-root in one unique catalog record, either directly or through one exact bound
-Codex skill-root alias. Duplicate, conflicting, or suffix-matched records fail.
+Native workshop acceptance separately stops built candidate bytes at the
+durable source-journal boundary, re-enters `capability workshop` for source-only
+recovery, and proves journal quiescence. Its typed evidence is distinct from
+the lifecycle projection stop/recover scenario. The checked-in enhancement
+Expect journey also runs as a native package integration test against a spawned
+candidate process, including partial example retention.
+The managed `capability-builder` points users to the manifest-owned
+deterministic workshop and has no direct source-write or lifecycle authority.
+The retired model prompt-input validator and its live Codex debug invocation
+have no remaining production or test surface; model completion is not workshop
+acceptance authority.
 `bin/test-launcher-pty-capture` additionally proves that private launcher tasks
 receive a real stdout TTY, capture no public transcript, retain owner-only
 transcript permissions and child exit status, and remain inside the runner's

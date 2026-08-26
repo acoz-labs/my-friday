@@ -854,6 +854,10 @@ func TestFaultAfterMutationLeavesJournalAndRecoveryRestoresStableState(t *testin
 		t.Fatalf("fault not injected: %v", err)
 	}
 	mutationHook = nil
+	status, inspectErr := Inspect(instance, p)
+	if inspectErr != nil || status.State != StateInterrupted || status.Interruption != "lifecycle" {
+		t.Fatalf("interruption=%q state=%s err=%v", status.Interruption, status.State, inspectErr)
+	}
 	if _, err = Plan(instance, p, ActionInstall); err == nil || !strings.Contains(err.Error(), "recovery required") {
 		t.Fatalf("journal did not block plan: %v", err)
 	}

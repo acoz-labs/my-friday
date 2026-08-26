@@ -15,6 +15,7 @@ import (
 	"regexp"
 	"slices"
 	"sort"
+	"strconv"
 	"strings"
 	"syscall"
 	"unicode/utf8"
@@ -31,6 +32,15 @@ const (
 
 var slugPattern = regexp.MustCompile(`^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$`)
 var versionPattern = regexp.MustCompile(`^[0-9]+\.[0-9]+\.[0-9]+$`)
+
+// ValidateSlug is the single public validation seam for capability command
+// surfaces. The package parser remains the contract authority.
+func ValidateSlug(slug string) error {
+	if !slugPattern.MatchString(slug) {
+		return errors.New("invalid capability slug")
+	}
+	return nil
+}
 
 type Manifest struct {
 	ContractVersion    int      `json:"contract_version"`
@@ -89,6 +99,19 @@ func strictJSON(body []byte, out any) error {
 }
 
 func Validate(root string) (Package, error) {
+	return validateForSlug(root, filepath.Base(filepath.Clean(root)))
+}
+
+// ValidateForSlug validates a journal-bound staging or quarantine tree whose
+// directory name is intentionally not the package slug.
+func ValidateForSlug(root, expectedSlug string) (Package, error) {
+	if err := ValidateSlug(expectedSlug); err != nil {
+		return Package{}, err
+	}
+	return validateForSlug(root, expectedSlug)
+}
+
+func validateForSlug(root, expectedSlug string) (Package, error) {
 	abs, err := filepath.Abs(root)
 	if err != nil {
 		return Package{}, err
@@ -165,7 +188,7 @@ func Validate(root string) (Package, error) {
 	if err = strictJSON(bodies["capability.json"], &m); err != nil {
 		return Package{}, fmt.Errorf("capability manifest: %w", err)
 	}
-	if m.ContractVersion != 1 || !slugPattern.MatchString(m.Slug) || filepath.Base(abs) != m.Slug || !versionPattern.MatchString(m.Version) || m.Profile != "instruction-only" || m.CodexCompatibility != "skills-v1" {
+	if m.ContractVersion != 1 || !slugPattern.MatchString(m.Slug) || expectedSlug != m.Slug || !versionPattern.MatchString(m.Version) || m.Profile != "instruction-only" || m.CodexCompatibility != "skills-v1" {
 		return Package{}, errors.New("unsupported capability manifest identity or profile")
 	}
 	for name, value := range map[string]string{"scripts": m.Scripts, "dependencies": m.Dependencies, "network": m.Network, "credentials": m.Credentials, "background": m.Background, "durable_data": m.DurableData, "publishing": m.Publishing} {
@@ -331,6 +354,13 @@ func parseFrontmatter(body []byte) (string, string, error) {
 		}
 		if strings.HasPrefix(line, "description: ") {
 			d = strings.TrimSpace(strings.TrimPrefix(line, "description: "))
+			if strings.HasPrefix(d, "\"") {
+				decoded, decodeErr := strconv.Unquote(d)
+				if decodeErr != nil {
+					return "", "", errors.New("SKILL.md description scalar invalid")
+				}
+				d = decoded
+			}
 		}
 	}
 	return n, d, nil
@@ -396,9 +426,10 @@ type Receipt struct {
 	Generations      []string `json:"generations"`
 }
 type Status struct {
-	State   State
-	Package *Package
-	Receipt *Receipt
+	State        State
+	Interruption string
+	Package      *Package
+	Receipt      *Receipt
 }
 type LifecyclePlan struct {
 	Action     Action
@@ -469,7 +500,7 @@ func regularFile(path string) ([]byte, fs.FileInfo, error) {
 		return nil, nil, err
 	}
 	st, ok := info.Sys().(*syscall.Stat_t)
-	if !ok || !info.Mode().IsRegular() || info.Mode()&os.ModeSymlink != 0 || st.Nlink != 1 {
+	if !ok || !info.Mode().IsRegular() || info.Mode()&os.ModeSymlink != 0 || st.Nlink != 1 || st.Uid != uint32(os.Getuid()) {
 		return nil, info, errors.New("unsafe owned regular file")
 	}
 	b, err := os.ReadFile(path)
@@ -634,6 +665,12 @@ func projectionDigest(path string) (string, error) {
 
 func Inspect(instance, source string) (Status, error) {
 	slug := filepath.Base(filepath.Clean(source))
+	workshopJournal := filepath.Join(instance, "capabilities", ".workshop-"+slug+".json")
+	if _, journalErr := ReadWorkshopJournal(workshopJournal, slug); journalErr == nil {
+		return Status{State: StateInterrupted, Interruption: "source-workshop"}, nil
+	} else if !errors.Is(journalErr, os.ErrNotExist) {
+		return Status{State: StateRecoveryRequired}, errors.New("source workshop recovery required")
+	}
 	control := filepath.Join(instance, "capabilities", slug)
 	proj := projectionPath(instance, slug)
 	_, controlErr := os.Lstat(control)
@@ -658,7 +695,7 @@ func Inspect(instance, source string) (Status, error) {
 		if _, err := readTransaction(journal, slug, r); err != nil {
 			return Status{State: StateRecoveryRequired, Receipt: r}, err
 		}
-		return Status{State: StateInterrupted, Receipt: r}, nil
+		return Status{State: StateInterrupted, Interruption: "lifecycle", Receipt: r}, nil
 	} else if !errors.Is(journalErr, os.ErrNotExist) {
 		return Status{State: StateRecoveryRequired, Receipt: r}, journalErr
 	}
@@ -703,6 +740,98 @@ func Inspect(instance, source string) (Status, error) {
 		return Status{State: StateSourceChanged, Package: &pkg, Receipt: r}, nil
 	}
 	return Status{State: StateInstalledHealthy, Package: &pkg, Receipt: r}, nil
+}
+
+type WorkshopJournalEntry struct {
+	Device    uint64 `json:"device"`
+	Inode     uint64 `json:"inode"`
+	Mode      uint32 `json:"mode"`
+	Owner     uint32 `json:"owner"`
+	Links     uint64 `json:"links"`
+	SHA256    string `json:"sha256,omitempty"`
+	Directory bool   `json:"directory"`
+}
+type WorkshopJournal struct {
+	ContractVersion int                             `json:"contract_version"`
+	Action          string                          `json:"action"`
+	Slug            string                          `json:"slug"`
+	OldDigest       string                          `json:"old_digest"`
+	NewDigest       string                          `json:"new_digest"`
+	Phase           string                          `json:"phase"`
+	SourceInode     uint64                          `json:"source_inode"`
+	StageInode      uint64                          `json:"stage_inode"`
+	StageRootInode  uint64                          `json:"stage_root_inode"`
+	StageRoot       string                          `json:"stage_root"`
+	StageTree       map[string]WorkshopJournalEntry `json:"stage_tree"`
+	OldTree         map[string]WorkshopJournalEntry `json:"old_tree,omitempty"`
+	CleanupRemoved  []string                        `json:"cleanup_removed,omitempty"`
+}
+
+func validWorkshopTree(tree map[string]WorkshopJournalEntry, rootInode uint64) bool {
+	root, ok := tree[""]
+	if !ok || !root.Directory || root.Inode != rootInode {
+		return false
+	}
+	for path, entry := range tree {
+		if entry.Device == 0 || entry.Inode == 0 || entry.Owner != uint32(os.Getuid()) || entry.Links == 0 || entry.Mode > 0777 {
+			return false
+		}
+		if path != "" && (filepath.IsAbs(path) || filepath.ToSlash(filepath.Clean(path)) != path || path == "." || strings.HasPrefix(path, "../")) {
+			return false
+		}
+		if entry.Directory {
+			if entry.SHA256 != "" {
+				return false
+			}
+		} else if !validDigest(entry.SHA256) || entry.Links != 1 || entry.Mode&0111 != 0 {
+			return false
+		}
+	}
+	return true
+}
+func validWorkshopStageRoot(slug, name string) bool {
+	prefix := "." + slug + ".workshop-new-"
+	if !strings.HasPrefix(name, prefix) || len(name) != len(prefix)+32 || filepath.Base(name) != name {
+		return false
+	}
+	_, err := hex.DecodeString(strings.TrimPrefix(name, prefix))
+	return err == nil
+}
+func ReadWorkshopJournal(path, slug string) (WorkshopJournal, error) {
+	var j WorkshopJournal
+	body, info, err := regularFile(path)
+	if err != nil {
+		return j, err
+	}
+	if info.Mode().Perm() != 0600 || strictJSON(body, &j) != nil {
+		return j, errors.New("source workshop recovery required")
+	}
+	canonical, _ := json.MarshalIndent(j, "", "  ")
+	canonical = append(canonical, '\n')
+	valid := bytes.Equal(body, canonical) && j.ContractVersion == 1 && j.Slug == slug && (j.Action == "create" || j.Action == "update") && (j.Phase == "staged" || j.Phase == "cleanup") && validDigest(j.NewDigest) && j.StageRootInode != 0 && validWorkshopStageRoot(slug, j.StageRoot) && validWorkshopTree(j.StageTree, j.StageInode)
+	valid = valid && ((j.Action == "create" && j.SourceInode == 0 && len(j.OldTree) == 0 && len(j.CleanupRemoved) == 0) || (j.Action == "update" && validDigest(j.OldDigest) && validWorkshopTree(j.OldTree, j.SourceInode)))
+	seen := map[string]bool{}
+	for _, p := range j.CleanupRemoved {
+		if p == "" || seen[p] {
+			valid = false
+			break
+		}
+		if _, ok := j.OldTree[p]; !ok {
+			valid = false
+			break
+		}
+		seen[p] = true
+	}
+	if j.Phase == "staged" && len(j.CleanupRemoved) > 0 {
+		valid = false
+	}
+	if j.Phase == "cleanup" && j.Action != "update" {
+		valid = false
+	}
+	if !valid {
+		return j, errors.New("source workshop recovery required")
+	}
+	return j, nil
 }
 
 func Plan(instance, source string, action Action) (LifecyclePlan, error) {
@@ -1640,6 +1769,11 @@ func Execute(p LifecyclePlan) (resultErr error) {
 // Recover restores the receipt-declared stable state after an interrupted
 // lifecycle mutation. It never consults or deletes source.
 func Recover(instance, slug string) error {
+	if _, err := os.Lstat(filepath.Join(instance, "capabilities", ".workshop-"+slug+".json")); err == nil {
+		return errors.New("source workshop recovery requires capability workshop")
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return errors.New("source workshop recovery required")
+	}
 	if !slugPattern.MatchString(slug) {
 		return errors.New("invalid capability slug")
 	}

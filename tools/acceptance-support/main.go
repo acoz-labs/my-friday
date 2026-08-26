@@ -75,7 +75,7 @@ func decodeCodexCleanupReceipts(encoded []string, candidate, runID string) (map[
 
 func main() {
 	if len(os.Args) < 2 {
-		fatal("usage: acceptance-support <fixture|update|resolve-executable|render-profile|validate-builder-prompt-input|protected-content|secure-roots|cleanup-named>")
+		fatal("usage: acceptance-support <fixture|update|resolve-executable|render-profile|protected-content|secure-roots|cleanup-named>")
 	}
 	switch os.Args[1] {
 	case "fixture":
@@ -169,15 +169,6 @@ func main() {
 		body, err := io.ReadAll(io.LimitReader(os.Stdin, 16<<10))
 		if err != nil || !validSandboxDiagnostic(*version, string(body)) {
 			fatal("unreviewed sandbox diagnostic")
-		}
-	case "validate-builder-prompt-input":
-		fs := flag.NewFlagSet("validate-builder-prompt-input", flag.ExitOnError)
-		skillRoot := fs.String("skill-root", "", "exact model-visible skill root")
-		skill := fs.String("skill", "", "literal skill name")
-		promptSHA256 := fs.String("prompt-sha256", "", "exact submitted prompt digest")
-		_ = fs.Parse(os.Args[2:])
-		if err := validateBuilderPromptInput(os.Stdin, *skillRoot, *skill, *promptSHA256); err != nil {
-			fatal(err.Error())
 		}
 	case "protected-content":
 		fs := flag.NewFlagSet("protected-content", flag.ExitOnError)

@@ -108,6 +108,175 @@ func downgradeFixtureToLegacyV2(t *testing.T, p Paths) {
 	}
 }
 
+func downgradeFixtureToRevision2(t *testing.T, p Paths) {
+	t.Helper()
+	manifestPath := filepath.Join(p.Root, "manifest.json")
+	body, err := os.ReadFile(manifestPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var m Manifest
+	if err = json.Unmarshal(body, &m); err != nil {
+		t.Fatal(err)
+	}
+	m.CapabilityRevision = 2
+	m.CapabilityBuilderSHA256 = digest(capabilityRevision2Builder(p))
+	config, err := managedCodexConfig(p, 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	m.CodexConfigSHA256 = digest(config)
+	body, _ = json.MarshalIndent(m, "", "  ")
+	if err = os.WriteFile(manifestPath, append(body, '\n'), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err = os.WriteFile(m.CodexConfig, config, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err = os.WriteFile(filepath.Join(m.CapabilityBuilder, "SKILL.md"), capabilityRevision2Builder(p), 0o600); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestActualRevision2ManifestVerifiesPlansUpgradeAndRefusesDrift(t *testing.T) {
+	home, exe, codex := fixture(t)
+	p, err := PlanCreate(home, "alfred", exe, codex)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = Create(p, exe, codex); err != nil {
+		t.Fatal(err)
+	}
+	downgradeFixtureToRevision2(t, p.Paths)
+	if _, err = Verify(home, "alfred"); err != nil {
+		t.Fatalf("revision 2 compatibility: %v", err)
+	}
+	managed := filepath.Join(p.Paths.Root, "dependencies", "my-friday")
+	original, err := os.ReadFile(managed)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = os.WriteFile(managed, []byte("revision 2 executable drift"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = Verify(home, "alfred"); err == nil || !strings.Contains(err.Error(), "My Friday executable drift") {
+		t.Fatalf("revision 2 executable drift accepted: %v", err)
+	}
+	if err = os.WriteFile(managed, original, 0700); err != nil {
+		t.Fatal(err)
+	}
+	candidate := candidateFixture(t, home, "revision 3 candidate")
+	if _, err = PlanUpgrade(home, "alfred", candidate); err != nil {
+		t.Fatalf("revision 2 plan: %v", err)
+	}
+	if err = os.Chmod(filepath.Join(p.Paths.Root, "workspace", ".agents", "skills", "capability-builder", "SKILL.md"), 0o640); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = Verify(home, "alfred"); err == nil || !strings.Contains(err.Error(), "builder drift") {
+		t.Fatalf("revision 2 drift accepted: %v", err)
+	}
+}
+
+func TestActualRevision2UpgradeRecoveryAndRollback(t *testing.T) {
+	home, exe, codex := fixture(t)
+	p, err := PlanCreate(home, "alfred", exe, codex)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = Create(p, exe, codex); err != nil {
+		t.Fatal(err)
+	}
+	downgradeFixtureToRevision2(t, p.Paths)
+	candidate := candidateFixture(t, home, "revision 3 interrupted candidate")
+	upgrade, err := PlanUpgrade(home, "alfred", candidate)
+	if err != nil {
+		t.Fatal(err)
+	}
+	upgradeHook = func(phase string) error {
+		if phase == "builder-created" {
+			return errors.New("stop")
+		}
+		return nil
+	}
+	if err = Upgrade(upgrade); err == nil {
+		t.Fatal("interruption missing")
+	}
+	upgradeHook = nil
+	defer func() { upgradeHook = nil }()
+	if _, err = Recover(home, "alfred"); err != nil {
+		t.Fatal(err)
+	}
+	m, err := Verify(home, "alfred")
+	if err != nil || m.CapabilityRevision != CapabilityRevision || m.RollbackCapabilityRevision != 2 {
+		t.Fatalf("recovered=%#v err=%v", m, err)
+	}
+	rollback, err := PlanRollback(home, "alfred")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = Rollback(rollback); err != nil {
+		t.Fatal(err)
+	}
+	m, err = Verify(home, "alfred")
+	if err != nil || m.CapabilityRevision != 2 {
+		t.Fatalf("rollback=%#v err=%v", m, err)
+	}
+}
+
+func TestActualRevision2RollbackResumesExecutableAndManifestPhases(t *testing.T) {
+	for _, phase := range []string{"executable-restored", "manifest-promoted"} {
+		t.Run(phase, func(t *testing.T) {
+			home, exe, codex := fixture(t)
+			p, err := PlanCreate(home, "alfred", exe, codex)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err = Create(p, exe, codex); err != nil {
+				t.Fatal(err)
+			}
+			downgradeFixtureToRevision2(t, p.Paths)
+			rollbackBytes, err := os.ReadFile(filepath.Join(p.Paths.Root, "dependencies", "my-friday"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			candidate := candidateFixture(t, home, "revision 3 candidate for rollback interruption")
+			upgrade, err := PlanUpgrade(home, "alfred", candidate)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err = Upgrade(upgrade); err != nil {
+				t.Fatal(err)
+			}
+			plan, err := PlanRollback(home, "alfred")
+			if err != nil {
+				t.Fatal(err)
+			}
+			rollbackHook = func(got string) error {
+				if got == phase {
+					return errors.New("stop")
+				}
+				return nil
+			}
+			if err = Rollback(plan); err == nil {
+				t.Fatal("rollback fault missing")
+			}
+			rollbackHook = nil
+			t.Cleanup(func() { rollbackHook = nil })
+			if _, err = Recover(home, "alfred"); err != nil {
+				t.Fatal(err)
+			}
+			m, err := Verify(home, "alfred")
+			if err != nil || m.CapabilityRevision != 2 {
+				t.Fatalf("manifest=%#v err=%v", m, err)
+			}
+			got, err := os.ReadFile(m.MyFridayExecutable)
+			if err != nil || !bytes.Equal(got, rollbackBytes) {
+				t.Fatalf("restored executable mismatch err=%v", err)
+			}
+		})
+	}
+}
+
 func candidateFixture(t *testing.T, home, body string) string {
 	t.Helper()
 	path := filepath.Join(home, "current-my-friday")

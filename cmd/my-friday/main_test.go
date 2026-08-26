@@ -122,3 +122,21 @@ func TestReadConfirmationRequiresExactCaseSensitiveNewlineTerminatedToken(t *tes
 		})
 	}
 }
+
+func TestWorkshopSignalNeverHidesCommitOrRecoveryError(t *testing.T) {
+	interrupted := make(chan struct{}, 1)
+	interrupted <- struct{}{}
+	want := errors.New("source recovery required")
+	if got := workshopResult(want, interrupted); !errors.Is(got, want) {
+		t.Fatalf("signal replaced transaction error: %v", got)
+	}
+}
+
+func TestWorkshopSignalAfterSuccessfulCommitReturnsStableInterruption(t *testing.T) {
+	interrupted := make(chan struct{}, 1)
+	interrupted <- struct{}{}
+	got := workshopResult(nil, interrupted)
+	if got == nil || got.Error() != "capability workshop interrupted after source transaction completed" {
+		t.Fatalf("successful signaled commit error = %v", got)
+	}
+}

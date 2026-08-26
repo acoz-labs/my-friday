@@ -75,13 +75,14 @@ configuration. See [the installed-baseline contract](docs/architecture/installed
 
 ## Instruction-only capabilities
 
-Each named assistant includes a private capability builder. It may edit and
-review versioned source under its exact private `runtime/skills/<slug>/`, and
-uses its manifest-owned My Friday copy only for inspect, validate, and test;
-activation remains
-an independent CLI action:
+Each named assistant includes a private capability builder. It creates and
+reviews versioned source under its exact private `runtime/skills/<slug>/`
+through a deterministic terminal workshop. The workshop shows all three core
+files and their complete source diff before exact source-only confirmation; it
+then inspects, validates, and tests the result without activating it:
 
 ```sh
+my-friday capability workshop alfred daily-brief
 my-friday capability inspect alfred daily-brief --plain
 my-friday capability validate alfred daily-brief
 my-friday capability test alfred daily-brief
@@ -94,7 +95,9 @@ my-friday capability remove alfred daily-brief
 
 Mutations preview exact digests and paths, require an interactive terminal and
 case-sensitive action word, and affect only the selected instance. Source
-survives disable and remove. Lifecycle changes apply to a fresh Codex task.
+creation requires `Create source`; enhancement requires `Update source`.
+Install and Upgrade remain separate confirmations. Source survives disable and
+remove, and lifecycle changes apply to a fresh Codex task.
 See [the capability workshop contract](docs/architecture/capability-workshop.md).
 
 The broader product direction and deferred outcomes remain in

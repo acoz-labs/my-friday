@@ -72,6 +72,35 @@ transaction/receipt plus an exact whole-target proof. Unsafe temp type, link,
 mode, owner, or target identity is preserved and refused. The containing
 directory is synced after authority promotion and after final authority removal.
 
+Before prompting, the source workshop walks the supplied already-canonical
+absolute instance path descriptor-relatively from `/` without resolving it and
+refuses every symlink component. It records every instance-path ancestor's
+device, inode, directory type, owner, and mode. Commit reopens that same chain,
+refuses any replacement, and derives both
+the shared `capabilities/` lock and `runtime/skills` from the same verified root
+descriptor. The workshop creates a random, exclusive staging root descriptor-
+relatively beneath that opened `runtime/skills` directory. Every staged
+directory and file is created through no-follow descriptors, so replacing the
+pathname with a symlink cannot redirect a write. The canonical source journal
+records that stage name and the complete staged and prior-tree device, inode,
+owner, mode, link-count, type, path, and content-digest authority. Recovery
+revalidates those facts before promotion or cleanup and refuses chmod or entry-
+set drift. Cleanup validates the complete old tree and package digest twice
+before its first unlink, journals each file and directory unlink, and on
+re-entry treats a missing expected entry only as completed work while every
+survivor still matches its original inode and metadata. Additions and
+substitutions are preserved and refused. Pre-journal staging records exact
+entry inode, digest, type, owner, mode, and link authority after each successful
+construction step. Failure removes only that exact descriptor-bound tree;
+same-owner pathname substitution or other ambiguous residue is preserved and
+refused rather than deleted.
+
+Retained `SKILL.md` bodies preserve their suffix bytes, including whether the
+last byte is a newline. Generated frontmatter renders the summary as a JSON-
+quoted YAML scalar. Complete source diffs retain blank lines and emit the
+standard missing-final-newline marker, so review accounts for every source
+byte.
+
 `capability test` is a bounded structural contract check, not a model run. It
 requires nonempty unique declarations, an exact normalized match between
 manifest and positive triggers,
@@ -80,37 +109,55 @@ expectations, instruction-backed required facts, and assertions for every
 prohibited effect. Structurally readable but contradictory cases are
 `test-failed`, never `ready`.
 
+`capability workshop NAME SLUG` is the guided source-authoring interface. It
+verifies the real-home named instance, refuses unsafe source/control states,
+and holds answers only in memory. One proposal renders the existing strict
+package contract; no proposal file or second public schema exists. The fixed
+sequence collects identity, purpose, success and failure, triggers and
+non-triggers, inputs and outputs, examples, and required facts. All seven
+prohibited effects remain fixed to `none`.
+
+Final review prints the complete canonical three-file package, the complete
+core diff, unchanged optional-file digests, source action, current state, and
+post-write state. Existing valid instruction bodies are retained byte-for-byte
+unless regeneration is explicit. Only exact `Create source` or `Update source`
+authorizes one source transaction. Return, EOF, `q`, interruption, and every
+other token leave source unchanged. Source confirmation never authorizes or
+calls Install, Upgrade, Enable, Disable, Remove, or lifecycle recovery.
+If INT or TERM arrives during a confirmed transaction, its transaction or
+recovery error remains primary; after a successful durable flush the command
+returns a stable interruption error rather than reporting ordinary success.
+
+Source mutation shares the non-blocking instance `capabilities/` lock with
+lifecycle mutation and uses a separate mode-0600
+`capabilities/.workshop-<slug>.json` journal. It re-inspects previewed facts
+while locked, stages and validates the complete package with byte-identical
+optional files, and promotes only the exact staged source. A retained canonical
+journal is `interrupted` with interruption kind `source-workshop`; a valid
+lifecycle journal is separately `interrupted` with kind `lifecycle`. Malformed
+or contradictory authority is `recovery-required`. Re-entering the workshop
+performs only digest-proven source-workshop recovery and exits before collecting
+answers; lifecycle interruption directs the existing `capability recover`
+command and is not consumed by the workshop.
+
+Successful create reports `ready` and a separate Install command. Updating an
+active projection reports `source-changed` and a separate Upgrade command;
+disabled source remains disabled. Postconditions call inspect, validation, and
+deterministic tests directly and never invoke lifecycle mutation.
+
 The bootstrap-owned `capability-builder` is private to each named instance and
-is not an ordinary removable package. Its instructions permit source editing
-only beneath that instance's exact private runtime. They name the instance and
-manifest-owned `dependencies/my-friday` executable, and allow only exact
-`inspect`, `validate`, and `test` command forms while prohibiting lifecycle
-mutations and confirmation tokens. Managed Codex enforces workspace-write with
-only that private runtime as an additional writable root, approvals never, and
-network disabled. The trusted workspace remains writable Codex workspace state;
-no sibling instance, ambient runtime, or broader root is granted.
-Exact-candidate acceptance starts the builder prompt with the literal
-`$capability-builder` invocation. Before opening the private PTY task, a bounded
-managed-Codex `debug prompt-input` preflight proves that the exact prompt digest,
-builder description, and exact skill file path are model-visible in one unique
-builder catalog record and that its reported skill-root alias resolves uniquely
-to the instance's exact private workspace skill root.
-The preflight emits no transcript or prompt content into public evidence.
-Under the private PTY, the driver passes the prompt as exactly one positional
-argument to the named launcher. The launcher places it after its owned Codex
-`--`, so option-shaped or shell-shaped prompt bytes cannot become Codex options
-or additional argv elements. Prompt/marker overlap is refused before transcript
-creation or spawn. The exact raw marker event after native launch is completion.
-Raw TUI output remains private; after that exact match, raw logging stops and
-the driver appends one flushed CR/LF-delimited marker receipt to the same
-owner-only transcript. Deterministic evidence checks consume that normalized
-exact-line receipt without interpreting terminal framing.
+is not an ordinary removable package. Revision 3 names the instance and its
+manifest-owned `dependencies/my-friday` executable, directs users to the
+deterministic workshop, and prohibits direct source edits, lifecycle mutations,
+and every confirmation token. Managed Codex retains workspace-write with only
+that private runtime as an additional writable root, approvals never, and
+network disabled, but model output is not source or acceptance authority.
 
 Standalone runtimes can roll back to the v1 placeholder only while `skills/`
 contains no package. Named instances use an explicit capability revision inside
-contract v2. Revision 2 is the instance-specific execution contract; an
-unversioned revision-0 v2 manifest remains accepted only for a bounded upgrade
-to revision 2 and rollback to its exact prior revision. New revision-2 instances
+contract v2. Revision 3 is the deterministic-workshop contract; supported older
+manifests remain accepted only for a bounded explicit upgrade and rollback to
+their exact prior revision. New revision-3 instances
 roll back to v1. Either rollback requires empty capability control and the exact
 builder alone in the managed skill root.
 Both paths use an exact `Rollback` preview and preserve source, credentials,
@@ -128,4 +175,7 @@ and revision and rechecks capability control and workspace-skill observations
 under the held instance lock before quarantining exact owned leaves. Foreign
 quarantine names are refused. Quarantine tree type, owner, mode, link count, and
 digest remain journal-bound and are revalidated immediately before deletion,
-including after interrupted rollback.
+including after interrupted rollback. Revision-2 verification also binds the
+managed executable bytes and mode. A rollback to revision 2 journals executable
+restoration before manifest promotion, so recovery can resume on either side of
+that promotion without requiring the already-restored rollback-source name.

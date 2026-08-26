@@ -1,0 +1,9 @@
+#!/usr/bin/expect -f
+if {$argc != 3} { exit 64 }
+lassign $argv candidate instance slug
+set timeout 30
+spawn -noecho {*}[list $candidate capability workshop $instance $slug]
+expect "Source workshop recovered"
+expect eof
+catch wait result
+exit [lindex $result 3]
