@@ -1,13 +1,16 @@
 package main
 
 import (
+	"bytes"
 	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"syscall"
@@ -26,6 +29,10 @@ const testCleanupCandidate = "0123456789abcdef0123456789abcdef01234567"
 const testCleanupRunID = "receipt-test-run"
 
 func managedNamedFixture(t *testing.T) (string, assistantinstance.Paths) {
+	return managedNamedFixtureWithCodex(t, "")
+}
+
+func managedNamedFixtureWithCodex(t *testing.T, codex string) (string, assistantinstance.Paths) {
 	t.Helper()
 	home := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(home, ".local", "bin"), 0o755); err != nil {
@@ -47,9 +54,11 @@ func managedNamedFixture(t *testing.T) (string, assistantinstance.Paths) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	codex := filepath.Join(home, "codex-stub")
-	if err = os.WriteFile(codex, []byte("codex"), 0o700); err != nil {
-		t.Fatal(err)
+	if codex == "" {
+		codex = filepath.Join(home, "codex-stub")
+		if err = os.WriteFile(codex, []byte("codex"), 0o700); err != nil {
+			t.Fatal(err)
+		}
 	}
 	instance, err := assistantinstance.PlanCreate(home, "primary", executable, codex)
 	if err != nil {
@@ -63,6 +72,38 @@ func managedNamedFixture(t *testing.T) (string, assistantinstance.Paths) {
 		t.Fatal(err)
 	}
 	return home, instance.Paths
+}
+
+func TestManagedNamedBuilderIsModelVisibleAndLiteralInvocationBound(t *testing.T) {
+	codex, err := exec.LookPath("codex")
+	if err != nil {
+		t.Skip("Codex debug prompt-input is unavailable")
+	}
+	codex, err = filepath.EvalSymlinks(codex)
+	if err != nil {
+		t.Fatal(err)
+	}
+	home, paths := managedNamedFixtureWithCodex(t, codex)
+	manifest, err := assistantinstance.Verify(home, paths.Name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	prompt := "$capability-builder Report only whether the skill is available."
+	cmd := exec.Command(manifest.CodexExecutable, "--cd", filepath.Join(paths.Root, "workspace"), "debug", "prompt-input", prompt)
+	cmd.Env = append(os.Environ(), "HOME="+home, "CODEX_HOME="+filepath.Join(paths.Root, "codex"))
+	body, err := cmd.Output()
+	if err != nil {
+		t.Fatalf("managed Codex prompt-input failed: %v", err)
+	}
+	sum := sha256.Sum256([]byte(prompt))
+	if err = validateBuilderPromptInput(bytes.NewReader(body), filepath.Join(paths.Root, "workspace", ".agents", "skills"), "capability-builder", hex.EncodeToString(sum[:])); err != nil {
+		matches := regexp.MustCompile(`(?m)^.*capability-builder.*file: ([^) ]+)`).FindAllSubmatch(body, -1)
+		var fields []string
+		for _, match := range matches {
+			fields = append(fields, string(match[1]))
+		}
+		t.Fatalf("%v; builder file fields=%q", err, fields)
+	}
 }
 
 func TestCleanupNamedRemovesOnlySafeDisposableAuthBeforeInstance(t *testing.T) {
@@ -1469,4 +1510,81 @@ func TestMountedDeviceRefusesMissingAndAmbiguousMountpoints(t *testing.T) {
 	if _, err := mountedDeviceFromPlist(strings.NewReader(ambiguous), "/private/tmp/workshop/mount"); err == nil {
 		t.Fatal("ambiguous mount point was accepted")
 	}
+}
+
+func TestValidateBuilderPromptInputBindsVisibleSkillAliasAndLiteralInvocation(t *testing.T) {
+	skillRoot := filepath.Join(t.TempDir(), "workspace", ".agents", "skills")
+	if err := os.MkdirAll(skillRoot, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	canonicalRoot, err := filepath.EvalSymlinks(skillRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	prompt := "$capability-builder Create the requested source and report completion."
+	system := "Available skills:\n- capability-builder: Help define, scaffold, inspect, validate, and test (file: r2/capability-builder/SKILL.md)\nSkill roots:\n- `r2` = `" + canonicalRoot + "`\n"
+	body, err := json.Marshal([]map[string]any{
+		{"role": "developer", "content": []map[string]string{{"type": "input_text", "text": system}}},
+		{"role": "user", "content": []map[string]string{{"type": "input_text", "text": prompt}}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	sum := sha256.Sum256([]byte(prompt))
+	if err = validateBuilderPromptInput(bytes.NewReader(body), skillRoot, "capability-builder", hex.EncodeToString(sum[:])); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestValidateBuilderPromptInputRefusesUnboundOrNonliteralSkill(t *testing.T) {
+	skillRoot := filepath.Join(t.TempDir(), "workspace", ".agents", "skills")
+	if err := os.MkdirAll(skillRoot, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	canonicalRoot, err := filepath.EvalSymlinks(skillRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	prompt := "$capability-builder Create source."
+	sum := sha256.Sum256([]byte(prompt))
+	digest := hex.EncodeToString(sum[:])
+	validRecord := "- capability-builder: Help define, scaffold, inspect, validate, and test (file: r2/capability-builder/SKILL.md)"
+	validSystem := validRecord + "\n- `r2` = `" + canonicalRoot + "`\n"
+	directPath := filepath.Join(canonicalRoot, "capability-builder", "SKILL.md")
+	for name, fixture := range map[string]struct {
+		system string
+		prompt string
+		digest string
+	}{
+		"missing-description":   {"- capability-builder: Build things (file: r2/capability-builder/SKILL.md)\n- `r2` = `" + canonicalRoot + "`", prompt, digest},
+		"wrong-root":            {validRecord + "\n- `r2` = `/private/tmp/foreign/.agents/skills`\n", prompt, digest},
+		"nonliteral-invocation": {validSystem, "Explicitly invoke $capability-builder.", promptDigest("Explicitly invoke $capability-builder.")},
+		"changed-prompt":        {validSystem, prompt, strings.Repeat("0", 64)},
+		"duplicate-entry":       {validSystem + validRecord + "\n", prompt, digest},
+		"conflicting-entry":     {validSystem + "- capability-builder: Help define, scaffold, inspect, validate, and test (file: r3/capability-builder/SKILL.md)\n- `r3` = `/private/tmp/foreign/.agents/skills`\n", prompt, digest},
+		"unrelated-canonical-path": {"- capability-builder: Help define, scaffold, inspect, validate, and test (file: /private/tmp/foreign/capability-builder/SKILL.md)\n" +
+			"- unrelated-skill: Help define, scaffold, inspect, validate, and test (file: " + directPath + ")\n", prompt, digest},
+		"direct-path-suffix":        {"- capability-builder: Help define, scaffold, inspect, validate, and test (file: " + directPath + ".backup)\n", prompt, digest},
+		"alias-path-suffix":         {"- capability-builder: Help define, scaffold, inspect, validate, and test (file: r2/capability-builder/SKILL.md.backup)\n- `r2` = `" + canonicalRoot + "`\n", prompt, digest},
+		"duplicate-alias-binding":   {validSystem + "- `r2` = `" + canonicalRoot + "`\n", prompt, digest},
+		"conflicting-alias-binding": {validSystem + "- `r2` = `/private/tmp/foreign/.agents/skills`\n", prompt, digest},
+	} {
+		t.Run(name, func(t *testing.T) {
+			body, err := json.Marshal([]map[string]any{
+				{"role": "developer", "content": []map[string]string{{"type": "input_text", "text": fixture.system}}},
+				{"role": "user", "content": []map[string]string{{"type": "input_text", "text": fixture.prompt}}},
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err = validateBuilderPromptInput(bytes.NewReader(body), skillRoot, "capability-builder", fixture.digest); err == nil {
+				t.Fatal("invalid builder prompt input accepted")
+			}
+		})
+	}
+}
+
+func promptDigest(prompt string) string {
+	sum := sha256.Sum256([]byte(prompt))
+	return hex.EncodeToString(sum[:])
 }

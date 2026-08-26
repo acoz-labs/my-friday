@@ -8,6 +8,7 @@ trap 'rm -rf "$tmp"' EXIT
 
 go test ./tools/acceptance-support -run 'Test(SecureRootsRefusesCollision|SecureRootsRejectsSymlinkedAncestor|CleanupRootsPreservesUnexpectedEntry|CleanupRootsPrevalidatesBothRootsBeforeMutation|CopyAuthNoFollowAndSourceSwapRefusal|CopyAuthRefusesLinkedAncestryAndDestinationCollision)$'
 go test ./tools/acceptance-support -run 'TestMountedDevice(SelectsRequestedMountpointAfterPhysicalStore|RefusesMissingAndAmbiguousMountpoints)$'
+go test ./tools/acceptance-support -run 'TestValidateBuilderPromptInput(BindsVisibleSkillAliasAndLiteralInvocation|RefusesUnboundOrNonliteralSkill)$'
 go test ./tools/acceptance-runner -run 'TestRunner(TimesOutProcessGroup|KillsEscapedSetsidDescendant|ReapsChildrenOnSignals)$'
 go test ./tools/capability-stop-barrier -run 'TestStablePostMutationRequiresOwnedCanonicalJournalAndAbsentProjection$'
 
@@ -19,6 +20,9 @@ grep -Fq 'sibling_owned=1' bin/accept-capability-workshop
 grep -Fq 'mounted-device --mountpoint "$mountpoint"' bin/accept-capability-workshop
 grep -Fq 'argv := append([]string{"codex", "--cd", workspace, "--"}, args...)' internal/assistantinstance/instance.go
 grep -Fq 'run_private "$evidence_root/builder.private" BUILDER_SOURCE_READY "$launcher" "$builder_prompt"' bin/accept-capability-workshop
+grep -Fq "builder_prompt='\$capability-builder " bin/accept-capability-workshop
+grep -Fq 'debug prompt-input "$builder_prompt"|"$run_root/acceptance-support" validate-builder-prompt-input --skill-root "$instance_root/workspace/.agents/skills" --skill capability-builder --prompt-sha256 "$builder_prompt_sha"' bin/accept-capability-workshop
+grep -Fq 'tools/acceptance-support/prompt_input.go' bin/accept-capability-workshop
 grep -Fq 'run_private "$evidence_root/invocation.private" DAILY_BRIEF_READY "$launcher" '\''Explicitly invoke daily-brief and return its exact declared token.'\''' bin/accept-capability-workshop
 grep -Fq 'run_private "$evidence_root/disabled.private" DAILY_BRIEF_ABSENT "$launcher" '\''Start a fresh task. If daily-brief is not available, reply with exactly one line formed by concatenating DAILY, underscore, BRIEF, underscore, and ABSENT. Do not simulate the capability.'\''' bin/accept-capability-workshop
 grep -Fq 'config/acceptance/launcher-capture.exp' bin/accept-capability-workshop

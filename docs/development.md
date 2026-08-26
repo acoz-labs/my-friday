@@ -194,6 +194,11 @@ auth copy/source-swap refusal, secure-root collision and ambiguous cleanup
 preservation, timeout/escaped-child reaping, `INT`/`TERM` exit status and
 ordinary/escaped-descendant quiescence, and the capability stop barrier's
 canonical post-mutation journal boundary.
+They also exercise the managed Codex prompt-input boundary: the workshop
+builder prompt must begin with literal `$capability-builder`, match its expected
+digest, and expose the builder description and exact private workspace skill
+root in one unique catalog record, either directly or through one exact bound
+Codex skill-root alias. Duplicate, conflicting, or suffix-matched records fail.
 `bin/test-launcher-pty-capture` additionally proves that private launcher tasks
 receive a real stdout TTY, capture no public transcript, retain owner-only
 transcript permissions and child exit status, and remain inside the runner's
