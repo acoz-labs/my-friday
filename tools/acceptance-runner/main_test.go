@@ -86,9 +86,10 @@ func TestRunnerPTYWrappedTimeoutReapsEscapedDescendant(t *testing.T) {
 	rootPIDFile := filepath.Join(dir, "root.pid")
 	escapedPIDFile := filepath.Join(dir, "escaped.pid")
 	transcript := filepath.Join(dir, "timeout.private")
+	launcher := writeSignalTUILauncher(t, dir)
 	cmd := exec.Command(runner, "--cwd", dir, "--timeout", "500ms",
 		"--env", "SIGNAL_HELPER=escaped", "--env", "ROOT_PIDFILE="+rootPIDFile, "--env", "ESCAPED_PIDFILE="+escapedPIDFile,
-		"--", "/usr/bin/expect", launcherCaptureDriver(t), transcript, "NEVER_SEEN", os.Args[0], "-test.run=TestSignalDescendantHelper")
+		"--", "/usr/bin/expect", launcherCaptureDriver(t), transcript, "NEVER_SEEN", launcher, "submit timeout task")
 	if err := cmd.Start(); err != nil {
 		t.Fatal(err)
 	}
@@ -111,9 +112,10 @@ func TestRunnerPTYWrappedSignalsReapDescendants(t *testing.T) {
 			rootPIDFile := filepath.Join(dir, "root.pid")
 			escapedPIDFile := filepath.Join(dir, "escaped.pid")
 			transcript := filepath.Join(dir, "signal.private")
+			launcher := writeSignalTUILauncher(t, dir)
 			cmd := exec.Command(runner, "--cwd", dir, "--timeout", "30s",
 				"--env", "SIGNAL_HELPER=escaped", "--env", "ROOT_PIDFILE="+rootPIDFile, "--env", "ESCAPED_PIDFILE="+escapedPIDFile,
-				"--", "/usr/bin/expect", launcherCaptureDriver(t), transcript, "NEVER_SEEN", os.Args[0], "-test.run=TestSignalDescendantHelper")
+				"--", "/usr/bin/expect", launcherCaptureDriver(t), transcript, "NEVER_SEEN", launcher, "submit signal task")
 			if err := cmd.Start(); err != nil {
 				t.Fatal(err)
 			}
@@ -152,6 +154,16 @@ func launcherCaptureDriver(t *testing.T) string {
 	}
 	path := filepath.Clean(filepath.Join(cwd, "..", "..", "config", "acceptance", "launcher-capture.exp"))
 	if _, err = os.Stat(path); err != nil {
+		t.Fatal(err)
+	}
+	return path
+}
+
+func writeSignalTUILauncher(t *testing.T, dir string) string {
+	t.Helper()
+	path := filepath.Join(dir, "fake-tui-launcher")
+	body := fmt.Sprintf("#!/bin/sh\n[ \"$#\" -eq 0 ] || exit 91\nprintf '\\033[>7uAsk Codex to do anything\\nStarting MCP servers\\n\\033]0;workspace\\007Ask Codex to do anything\\n'\nexec %q -test.run=TestSignalDescendantHelper\n", os.Args[0])
+	if err := os.WriteFile(path, []byte(body), 0o700); err != nil {
 		t.Fatal(err)
 	}
 	return path

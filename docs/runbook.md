@@ -207,14 +207,18 @@ assistant/launcher pairs. The bounded runner catches `INT` and `TERM`, freezes
 and kills its exact process group plus identity-tracked escaped descendants,
 reaps the root, verifies quiescence, and returns status 130 or 143 before
 failure cleanup proceeds. Builder, installed-invocation, and disabled-absence
-tasks run under an Expect-owned PTY inside that same bounded runner. Their
-builder task receives an instance-specific manifest-bound skill. Managed Codex
+tasks run under an Expect-owned PTY inside that same bounded runner. Each starts
+the named launcher with no forwarded arguments, waits for the CSI-u, initial
+composer, MCP progress, plain workspace title, and final composer readiness
+sequence, then types its separate prompt and submits the terminal Enter
+sequence. A marker seen before submission is refused. Their builder task
+receives an instance-specific manifest-bound skill. Managed Codex
 trusts the disposable workspace, adds only that instance's private runtime to
 workspace-write, sets approvals to never, and disables network. The builder
 uses the instance-owned `dependencies/my-friday` copy only for inspect,
 validate, and test; executable, config, or builder drift refuses launch and
 cleanup authority.
-owner-only transcripts remain private acceptance state, preserve the launcher
+Owner-only transcripts remain private acceptance state, preserve the launcher
 exit status, and are never copied into public evidence. Each task has a separate
 output-only completion marker that the prompt may describe but must not contain.
 Deterministic candidate commands and confirmations retain the 180-second hard
