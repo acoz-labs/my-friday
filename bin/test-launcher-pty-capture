@@ -9,31 +9,73 @@ fi
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
 go build -o "$tmp/acceptance-runner" "$root/tools/acceptance-runner"
-runner=("$tmp/acceptance-runner" --cwd "$tmp" --timeout 5s --env PATH=/usr/bin:/bin --)
 
-output="$("${runner[@]}" /usr/bin/expect "$root/config/acceptance/launcher-capture.exp" "$tmp/tty.private" PTY_CAPTURED /bin/sh -c '[ -t 1 ] || exit 90; printf "PTY_%s\n" CAPTURED')"
+prompt='Perform the private workshop task and construct the final marker.'
+cat >"$tmp/fake-tui" <<'EOF'
+#!/bin/bash
+set -euo pipefail
+[[ "$#" == 0 ]] || exit 91
+[[ -t 1 ]] || exit 90
+printf '\033[>7uAsk Codex to do anything\nStarting MCP servers\n\033]0;workspace\007Ask Codex to do anything\n'
+if [[ "${TUI_MODE:-}" == pre-submit ]]; then printf '%s\n' "$TUI_MARKER"; fi
+payload=""
+enter=$'\033[13;1u'
+while [[ "$payload" != *"$enter" ]]; do
+  IFS= read -r -n 1 byte || exit 92
+  payload+="$byte"
+done
+submitted="${payload%"$enter"}"
+printf '%s' "$submitted" >"$TUI_SUBMITTED"
+[[ "$submitted" == "$TUI_PROMPT" ]] || exit 93
+case "${TUI_MODE:-success}" in
+  success) printf '%s\n' "$TUI_MARKER" ;;
+  missing) exit 0 ;;
+  nonzero) printf 'PRIVATE_FAILURE\n'; exit 37 ;;
+  descendant)
+    trap 'kill "$child" 2>/dev/null; wait "$child" 2>/dev/null; exit 0' HUP
+    sleep 30 & child=$!
+    printf '%s\n' "$child" >"$TUI_CHILD_PID"
+    printf '%s\n' "$TUI_MARKER"
+    wait "$child"
+    ;;
+  pre-submit) exit 94 ;;
+esac
+EOF
+chmod 0700 "$tmp/fake-tui"
+
+run_tui() {
+  local mode="$1" transcript="$2" marker="$3"
+  "$tmp/acceptance-runner" --cwd "$tmp" --timeout 5s \
+    --env PATH=/usr/bin:/bin --env TUI_MODE="$mode" --env TUI_MARKER="$marker" \
+    --env TUI_PROMPT="$prompt" --env TUI_SUBMITTED="$tmp/submitted" \
+    --env TUI_CHILD_PID="$tmp/child.pid" -- \
+    /usr/bin/expect "$root/config/acceptance/launcher-capture.exp" "$transcript" "$marker" "$tmp/fake-tui" "$prompt"
+}
+
+output="$(run_tui success "$tmp/tty.private" TUI_COMPLETE)"
 [[ -z "$output" ]]
 [[ "$(stat -f %Lp "$tmp/tty.private" 2>/dev/null || stat -c %a "$tmp/tty.private")" == 600 ]]
-grep -Fq PTY_CAPTURED "$tmp/tty.private"
+[[ "$(cat "$tmp/submitted")" == "$prompt" ]]
+grep -Fq TUI_COMPLETE "$tmp/tty.private"
 
 set +e
-"${runner[@]}" /usr/bin/expect "$root/config/acceptance/launcher-capture.exp" "$tmp/status.private" NEVER_SEEN /bin/sh -c 'printf "PRIVATE_FAILURE\n"; exit 37'
-status=$?
-set -e
-[[ "$status" == 37 ]]
-grep -Fq PRIVATE_FAILURE "$tmp/status.private"
-
-set +e
-"${runner[@]}" /usr/bin/expect "$root/config/acceptance/launcher-capture.exp" "$tmp/missing.private" NEVER_SEEN /bin/sh -c 'exit 0'
+run_tui pre-submit "$tmp/pre-submit.private" PRE_SUBMIT_MARKER
+pre_submit_status=$?
+run_tui missing "$tmp/missing.private" NEVER_SEEN
 missing_status=$?
-"${runner[@]}" /usr/bin/expect "$root/config/acceptance/launcher-capture.exp" "$tmp/self.private" SELF_MARKER /bin/sh -c 'printf SELF_MARKER'
+run_tui nonzero "$tmp/status.private" NEVER_SEEN
+status=$?
+/usr/bin/expect "$root/config/acceptance/launcher-capture.exp" "$tmp/self.private" SELF_MARKER "$tmp/fake-tui" 'prompt contains SELF_MARKER'
 self_status=$?
 set -e
+[[ "$pre_submit_status" == 65 ]]
 [[ "$missing_status" == 1 ]]
+[[ "$status" == 37 ]]
+grep -Fq PRIVATE_FAILURE "$tmp/status.private"
 [[ "$self_status" == 65 ]]
 [[ ! -e "$tmp/self.private" ]]
 
-"${runner[@]}" /usr/bin/expect "$root/config/acceptance/launcher-capture.exp" "$tmp/tui.private" TUI_COMPLETE /bin/sh -c 'trap '\''kill "$child" 2>/dev/null; wait "$child" 2>/dev/null; exit 0'\'' HUP; sleep 30 & child=$!; printf "%s\n" "$child" > child.pid; printf "TUI_%s\n" COMPLETE; wait "$child"'
+run_tui descendant "$tmp/tui.private" TUI_COMPLETE
 child_pid="$(cat "$tmp/child.pid")"
 if kill -0 "$child_pid" 2>/dev/null; then
   echo "marker-triggered PTY closure left a descendant" >&2

@@ -1,21 +1,70 @@
 #!/usr/bin/expect -f
-if {$argc < 3} { exit 64 }
+if {$argc != 4} { exit 64 }
 set timeout -1
 set transcript [lindex $argv 0]
 set marker [lindex $argv 1]
-set executable [lindex $argv 2]
-set args [lrange $argv 3 end]
+set launcher [lindex $argv 2]
+set prompt [lindex $argv 3]
 if {[file pathtype $transcript] ne "absolute"} { exit 64 }
 if {$marker eq ""} { exit 64 }
-foreach arg $args {
-  if {[string first $marker $arg] >= 0} { exit 65 }
-}
+if {[string first $marker $prompt] >= 0} { exit 65 }
 if {[catch {set transcript_fd [open $transcript {WRONLY CREAT EXCL} 0600]}]} { exit 73 }
 fconfigure $transcript_fd -translation binary -encoding binary
 set stty_init "rows 30 columns 120"
 log_user 0
 log_file -a -open $transcript_fd
-spawn -noecho $executable {*}$args
+spawn -noecho $launcher
+
+proc child_eof {} {
+  global transcript_fd
+  set status [wait]
+  log_file
+  set child_status [lindex $status 3]
+  if {$child_status != 0} { exit $child_status }
+  exit 1
+}
+proc pre_submit_marker {} {
+  log_file
+  close
+  catch wait
+  exit 65
+}
+
+expect {
+  -exact $marker { pre_submit_marker }
+  -exact "\033\[>7u" {}
+  eof { child_eof }
+}
+expect {
+  -exact $marker { pre_submit_marker }
+  -exact "Ask Codex to do anything" {}
+  eof { child_eof }
+}
+expect {
+  -exact $marker { pre_submit_marker }
+  -re {(Booting MCP server:|Starting MCP servers)} {}
+  eof { child_eof }
+}
+expect {
+  -exact $marker { pre_submit_marker }
+  -exact "\033]0;workspace\007" {}
+  -exact "\033]0;workspace\033\\" {}
+  eof { child_eof }
+}
+expect {
+  -exact $marker { pre_submit_marker }
+  -exact "Ask Codex to do anything" {}
+  eof { child_eof }
+}
+set timeout 0
+expect {
+  -exact $marker { pre_submit_marker }
+  eof { child_eof }
+  timeout {}
+}
+set timeout -1
+send -- $prompt
+send -- "\033\[13;1u"
 expect {
   -exact $marker {
     close
@@ -23,11 +72,5 @@ expect {
     log_file
     exit 0
   }
-  eof {
-    set status [wait]
-    log_file
-    set child_status [lindex $status 3]
-    if {$child_status != 0} { exit $child_status }
-    exit 1
-  }
+  eof { child_eof }
 }
