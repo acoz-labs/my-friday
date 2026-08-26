@@ -13,6 +13,9 @@ import (
 
 const builderDescriptionPrefix = "Help define, scaffold, inspect, validate, and test"
 
+var skillCatalogRecordPattern = regexp.MustCompile(`^[ \t]*-[ \t]+([^:[:space:]]+):[ \t]+(.+)[ \t]+\(file:[ \t]+([^()[:space:]]+)\)[ \t]*$`)
+var skillRootBindingPattern = regexp.MustCompile("^[ \\t]*-[ \\t]+`(r[0-9]+)`[ \\t]+=[ \\t]+`([^`]+)`[ \\t]*$")
+
 type promptInputContent struct {
 	Type string `json:"type"`
 	Text string `json:"text"`
@@ -48,7 +51,7 @@ func validateBuilderPromptInput(input io.Reader, skillRoot, skill, promptSHA256 
 	if json.Unmarshal(body, &items) != nil || len(items) == 0 {
 		return errors.New("invalid builder prompt input")
 	}
-	var developer strings.Builder
+	var developerLines []string
 	var prompt string
 	for _, item := range items {
 		for _, content := range item.Content {
@@ -56,8 +59,7 @@ func validateBuilderPromptInput(input io.Reader, skillRoot, skill, promptSHA256 
 				continue
 			}
 			if item.Role == "developer" {
-				developer.WriteString(content.Text)
-				developer.WriteByte('\n')
+				developerLines = append(developerLines, strings.Split(content.Text, "\n")...)
 			}
 			if item.Role == "user" {
 				prompt = content.Text
@@ -72,22 +74,42 @@ func validateBuilderPromptInput(input io.Reader, skillRoot, skill, promptSHA256 
 	if hex.EncodeToString(sum[:]) != promptSHA256 {
 		return errors.New("builder prompt digest mismatch")
 	}
-	system := developer.String()
-	if !strings.Contains(system, skill+": "+builderDescriptionPrefix) {
+	return validateBuilderCatalogRecord(developerLines, canonicalRoot, skill)
+}
+
+func validateBuilderCatalogRecord(lines []string, canonicalRoot, skill string) error {
+	var records [][]string
+	for _, line := range lines {
+		match := skillCatalogRecordPattern.FindStringSubmatch(line)
+		if len(match) == 4 && match[1] == skill {
+			records = append(records, match)
+		}
+	}
+	if len(records) != 1 {
+		return errors.New("builder skill catalog record is missing or duplicated")
+	}
+	record := records[0]
+	if !strings.HasPrefix(record[2], builderDescriptionPrefix) {
 		return errors.New("builder skill description is not model-visible")
 	}
-	directSkill := "file: " + filepath.Join(canonicalRoot, skill, "SKILL.md")
-	if strings.Contains(system, directSkill) {
+	directPath := filepath.Join(canonicalRoot, skill, "SKILL.md")
+	if record[3] == directPath {
 		return nil
 	}
-	aliasPattern := regexp.MustCompile(`file:\s*(r[0-9]+)/` + regexp.QuoteMeta(skill) + `/SKILL\.md`)
-	match := aliasPattern.FindStringSubmatch(system)
-	if len(match) != 2 {
+	aliasPathPattern := regexp.MustCompile(`^(r[0-9]+)/` + regexp.QuoteMeta(skill) + `/SKILL\.md$`)
+	aliasPath := aliasPathPattern.FindStringSubmatch(record[3])
+	if len(aliasPath) != 2 {
 		return errors.New("builder skill file is not model-visible")
 	}
-	rootBinding := "- `" + match[1] + "` = `" + canonicalRoot + "`"
-	if !strings.Contains(system, rootBinding) {
-		return errors.New("builder skill root alias is not bound")
+	var bindings []string
+	for _, line := range lines {
+		match := skillRootBindingPattern.FindStringSubmatch(line)
+		if len(match) == 3 && match[1] == aliasPath[1] {
+			bindings = append(bindings, match[2])
+		}
+	}
+	if len(bindings) != 1 || bindings[0] != canonicalRoot {
+		return errors.New("builder skill root alias is missing, duplicated, or conflicting")
 	}
 	return nil
 }

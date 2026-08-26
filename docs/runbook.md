@@ -221,8 +221,9 @@ validate, and test; executable, config, or builder drift refuses launch and
 cleanup authority.
 Before the builder PTY starts, a bounded managed-Codex prompt-input preflight
 requires a leading literal `$capability-builder` invocation and binds the exact
-prompt digest, model-visible builder description, and direct or aliased skill
-path to that instance's private workspace skill root. A preflight mismatch
+prompt digest and one unique model-visible builder catalog record whose exact
+direct or aliased skill path binds to that instance's private workspace skill
+root. Duplicate, conflicting, and path-suffix records fail. A preflight mismatch
 fails before the model task and publishes no prompt-input content.
 Owner-only transcripts remain private acceptance state, preserve the launcher
 exit status, and are never copied into public evidence. Each task has a separate

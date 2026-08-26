@@ -1548,24 +1548,30 @@ func TestValidateBuilderPromptInputRefusesUnboundOrNonliteralSkill(t *testing.T)
 	prompt := "$capability-builder Create source."
 	sum := sha256.Sum256([]byte(prompt))
 	digest := hex.EncodeToString(sum[:])
-	validSystem := "capability-builder: Help define, scaffold, inspect, validate, and test (file: r2/capability-builder/SKILL.md)\n- `r2` = `" + canonicalRoot + "`\n"
+	validRecord := "- capability-builder: Help define, scaffold, inspect, validate, and test (file: r2/capability-builder/SKILL.md)"
+	validSystem := validRecord + "\n- `r2` = `" + canonicalRoot + "`\n"
+	directPath := filepath.Join(canonicalRoot, "capability-builder", "SKILL.md")
 	for name, fixture := range map[string]struct {
 		system string
 		prompt string
 		digest string
 	}{
-		"missing-description":   {"file: r2/capability-builder/SKILL.md\n- `r2` = `" + skillRoot + "`", prompt, digest},
-		"wrong-root":            {validSystem, prompt, digest},
+		"missing-description":   {"- capability-builder: Build things (file: r2/capability-builder/SKILL.md)\n- `r2` = `" + canonicalRoot + "`", prompt, digest},
+		"wrong-root":            {validRecord + "\n- `r2` = `/private/tmp/foreign/.agents/skills`\n", prompt, digest},
 		"nonliteral-invocation": {validSystem, "Explicitly invoke $capability-builder.", promptDigest("Explicitly invoke $capability-builder.")},
 		"changed-prompt":        {validSystem, prompt, strings.Repeat("0", 64)},
+		"duplicate-entry":       {validSystem + validRecord + "\n", prompt, digest},
+		"conflicting-entry":     {validSystem + "- capability-builder: Help define, scaffold, inspect, validate, and test (file: r3/capability-builder/SKILL.md)\n- `r3` = `/private/tmp/foreign/.agents/skills`\n", prompt, digest},
+		"unrelated-canonical-path": {"- capability-builder: Help define, scaffold, inspect, validate, and test (file: /private/tmp/foreign/capability-builder/SKILL.md)\n" +
+			"- unrelated-skill: Help define, scaffold, inspect, validate, and test (file: " + directPath + ")\n", prompt, digest},
+		"direct-path-suffix":        {"- capability-builder: Help define, scaffold, inspect, validate, and test (file: " + directPath + ".backup)\n", prompt, digest},
+		"alias-path-suffix":         {"- capability-builder: Help define, scaffold, inspect, validate, and test (file: r2/capability-builder/SKILL.md.backup)\n- `r2` = `" + canonicalRoot + "`\n", prompt, digest},
+		"duplicate-alias-binding":   {validSystem + "- `r2` = `" + canonicalRoot + "`\n", prompt, digest},
+		"conflicting-alias-binding": {validSystem + "- `r2` = `/private/tmp/foreign/.agents/skills`\n", prompt, digest},
 	} {
 		t.Run(name, func(t *testing.T) {
-			system := fixture.system
-			if name == "wrong-root" {
-				system = strings.ReplaceAll(system, skillRoot, "/private/tmp/foreign/.agents/skills")
-			}
 			body, err := json.Marshal([]map[string]any{
-				{"role": "developer", "content": []map[string]string{{"type": "input_text", "text": system}}},
+				{"role": "developer", "content": []map[string]string{{"type": "input_text", "text": fixture.system}}},
 				{"role": "user", "content": []map[string]string{{"type": "input_text", "text": fixture.prompt}}},
 			})
 			if err != nil {
