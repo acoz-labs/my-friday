@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+set -euo pipefail
+issue="${1:-}" sha="${2:-}" artifact="${3:-}" role="${4:-}" retention="${5:-}" repo="${GITHUB_REPOSITORY:-}"
+[[ -n "$repo" && "$issue" == 51 && "$sha" =~ ^[0-9a-f]{40}$ && "$artifact" =~ ^artifact-v1:run=[0-9]+:id=[0-9]+:name=[A-Za-z0-9._-]+:sha256=[0-9a-f]{64}$ && "$role" =~ ^(product-owner|design-partner)$ && "$retention" =~ ^(retain|remove)$ ]] || {
+  echo "Usage: GITHUB_REPOSITORY=OWNER/REPO bin/record-capability-workshop-receipt 51 <full-sha> <artifact-v1> <product-owner|design-partner> <retain|remove>" >&2
+  exit 64
+}
+json="$(jq -nc --argjson issue "$issue" --arg sha "$sha" --arg artifact "$artifact" --arg role "$role" --arg retention "$retention" \
+  '{schema:"capability-workshop-partner-receipt-v1",issue:$issue,candidate:$sha,artifact:$artifact,role:$role,completion:true,source_comprehension:true,projection_comprehension:true,recovery_needed:false,retention_decision:$retention,redacted:true}')"
+body="<!-- capability-workshop-partner-receipt-v1 -->
+$json"
+url="$(gh api -X POST "repos/$repo/issues/$issue/comments" -f body="$body" --jq .url)"; id="${url##*/}"
+digest="$(printf %s "$body" | shasum -a 256 | awk '{print $1}')"
+token="capability-workshop-partner-v1:comment=$id:$digest"
+actor="$(gh api user --jq .login)"
+GITHUB_REPOSITORY="$repo" bin/verify-capability-workshop-receipt "$token" "$issue" "$sha" "$artifact" "$role" "$actor" >/dev/null
+printf '%s\n' "$token"

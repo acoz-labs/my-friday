@@ -1,6 +1,8 @@
 package main
 
 import (
+	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -37,6 +39,103 @@ func TestRunnerKillsEscapedSetsidDescendant(t *testing.T) {
 	if err = syscall.Kill(pid, 0); err == nil {
 		t.Fatal("setsid descendant survived runner cleanup")
 	}
+}
+
+func TestRunnerReapsChildrenOnSignals(t *testing.T) {
+	for _, sig := range []syscall.Signal{syscall.SIGINT, syscall.SIGTERM} {
+		for _, mode := range []string{"ordinary", "escaped"} {
+			t.Run(fmt.Sprintf("%s/%s", sig, mode), func(t *testing.T) {
+				t.Parallel()
+				dir := t.TempDir()
+				runner := filepath.Join(dir, "acceptance-runner")
+				build := exec.Command("go", "build", "-o", runner, ".")
+				if output, err := build.CombinedOutput(); err != nil {
+					t.Fatalf("build runner: %v: %s", err, output)
+				}
+				rootPIDFile := filepath.Join(dir, "root.pid")
+				escapedPIDFile := filepath.Join(dir, "escaped.pid")
+				cmd := exec.Command(runner, "--cwd", dir, "--timeout", "30s", "--env", "SIGNAL_HELPER="+mode, "--env", "ROOT_PIDFILE="+rootPIDFile, "--env", "ESCAPED_PIDFILE="+escapedPIDFile, "--", os.Args[0], "-test.run=TestSignalDescendantHelper")
+				if err := cmd.Start(); err != nil {
+					t.Fatal(err)
+				}
+				rootPID := waitForPID(t, rootPIDFile)
+				pids := []int{rootPID}
+				if mode == "escaped" {
+					pids = append(pids, waitForPID(t, escapedPIDFile))
+				}
+				if err := cmd.Process.Signal(sig); err != nil {
+					t.Fatalf("signal runner: %v", err)
+				}
+				err := cmd.Wait()
+				var exit *exec.ExitError
+				if !errors.As(err, &exit) || exit.ExitCode() != 128+int(sig) {
+					t.Fatalf("runner status = %v, want %d", err, 128+int(sig))
+				}
+				for _, pid := range pids {
+					waitForGone(t, pid)
+				}
+			})
+		}
+	}
+}
+
+func TestSignalDescendantHelper(t *testing.T) {
+	mode := os.Getenv("SIGNAL_HELPER")
+	if mode == "" {
+		return
+	}
+	if err := os.WriteFile(os.Getenv("ROOT_PIDFILE"), []byte(strconv.Itoa(os.Getpid())), 0o600); err != nil {
+		os.Exit(3)
+	}
+	if mode == "escaped" {
+		cmd := exec.Command(os.Args[0], "-test.run=TestSignalEscapedHelper")
+		cmd.Env = []string{"SIGNAL_ESCAPED_HELPER=1", "ESCAPED_PIDFILE=" + os.Getenv("ESCAPED_PIDFILE"), "MY_FRIDAY_ACCEPTANCE_PROCESS_TOKEN=" + os.Getenv("MY_FRIDAY_ACCEPTANCE_PROCESS_TOKEN")}
+		cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
+		if err := cmd.Start(); err != nil {
+			os.Exit(4)
+		}
+	}
+	time.Sleep(30 * time.Second)
+}
+
+func TestSignalEscapedHelper(t *testing.T) {
+	if os.Getenv("SIGNAL_ESCAPED_HELPER") == "" {
+		return
+	}
+	if err := os.WriteFile(os.Getenv("ESCAPED_PIDFILE"), []byte(strconv.Itoa(os.Getpid())), 0o600); err != nil {
+		os.Exit(3)
+	}
+	time.Sleep(30 * time.Second)
+}
+
+func waitForPID(t *testing.T, path string) int {
+	t.Helper()
+	deadline := time.Now().Add(10 * time.Second)
+	for time.Now().Before(deadline) {
+		body, err := os.ReadFile(path)
+		if err == nil {
+			pid, parseErr := strconv.Atoi(string(body))
+			if parseErr == nil {
+				return pid
+			}
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatalf("PID file %s was not created", path)
+	return 0
+}
+
+func waitForGone(t *testing.T, pid int) {
+	t.Helper()
+	defer syscall.Kill(pid, syscall.SIGKILL)
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		if syscall.Kill(pid, 0) != nil {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatalf("process %d survived runner exit", pid)
 }
 
 func TestEscapedDescendantHelper(t *testing.T) {

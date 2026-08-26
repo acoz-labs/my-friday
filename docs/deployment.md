@@ -8,6 +8,46 @@ explicit migration; release publication never mutates a user root. Acceptance
 must use the nominated immutable artifact and independent evidence rather than
 contributor-local model behavior.
 
+### Capability workshop acceptance
+
+Issue 51 uses a distinct acceptance authority; issue-4 installed-baseline
+evidence is never interchangeable. After implementation merges and a new
+artifact is nominated, an independent Apple-silicon acceptor runs:
+
+```sh
+MY_FRIDAY_RUNTIME_PROJECTION=/absolute/validated/runtime \
+MY_FRIDAY_CODEX_AUTH_FILE=/absolute/codex/auth.json \
+GITHUB_REPOSITORY=acoz-labs/my-friday \
+  bin/accept-capability-workshop \
+  'artifact-v1:run=…:id=…:name=my-friday-darwin-arm64:sha256=…' 51
+```
+
+The command downloads nominated bytes, creates no-follow receipt-bound APFS and
+named-assistant state, and exercises explicit private-builder authoring without
+activation, deterministic checks, fresh-task install/use/disabled absence,
+upgrade, collision and drift refusal, complete lifecycle reversal, a real
+stopped-and-reaped candidate interruption, and v1 migrations. A valid sibling
+assistant is a protected content/identity canary. It compares
+protected ambient state and removes manifest-owned disposable state before
+publishing final authority. Public evidence contains only digests, state names,
+and boolean results—not instruction bodies, full diffs, prompts, model
+transcripts, private paths, foreign bytes, or credentials.
+
+Approved issue-51 acceptance uses one exact bundle:
+
+```text
+capability-workshop-acceptance-v1:<evidence>|<product-owner-receipt>|<design-partner-receipt>|<design-partner-receipt>
+```
+
+The evidence author is the independent acceptor. The product owner and two
+design partners must be three distinct GitHub actors and bind completed,
+redacted receipts to the same issue, candidate, and artifact. Both
+`record-product-acceptance` and `finalize-release` re-fetch and validate the
+bundle; `named-instance-acceptance-evidence-v1` remains valid only for issue 4.
+Each participant records their own bounded receipt with
+`bin/record-capability-workshop-receipt`; no free-form response or personal
+profile enters the authority.
+
 ## Delivery profile
 
 My Friday is an `artifact`: one native macOS/ARM64 command. It has no staging

@@ -237,7 +237,7 @@ for issue_number in "${issue_numbers[@]}"; do
       --arg artifact "$artifact_digest" \
       --arg implementation "$implementation_digest" '
       ([.[][] | select((.user.login // "") == "github-actions[bot]") | (.body // "") |
-        capture("<!-- product-acceptance issue=(?<issue>[0-9]+) sha=(?<sha>[0-9a-f]{40}) artifact=(?<artifact>[0-9a-f]{40}) implementation=(?<implementation>[0-9a-f]{40}) acceptor=(?<acceptor>[A-Za-z0-9-]+) decision=(?<decision>approved|changes-required)(?: evidence=(?<evidence>evidence-v1:[^ ]+))? -->")? |
+        capture("<!-- product-acceptance issue=(?<issue>[0-9]+) sha=(?<sha>[0-9a-f]{40}) artifact=(?<artifact>[0-9a-f]{40}) implementation=(?<implementation>[0-9a-f]{40}) acceptor=(?<acceptor>[A-Za-z0-9-]+) decision=(?<decision>approved|changes-required)(?: evidence=(?<evidence>(?:evidence-v1|capability-workshop-acceptance-v1):[^ ]+))? -->")? |
         select(.issue == $issue and .sha == $sha and .artifact == $artifact and
           .implementation == $implementation)] | last) // {}' <<< "$comments_json")"
     latest_decision="$(jq -r '.decision // ""' <<< "$latest_acceptance")"
@@ -249,6 +249,8 @@ for issue_number in "${issue_numbers[@]}"; do
     fi
     if [[ "$issue_number" == 4 ]]; then
       bin/verify-acceptance-evidence "$evidence_authority" "$issue_number" "$sha" "$artifact" "$acceptor" >/dev/null
+    elif [[ "$issue_number" == 51 ]]; then
+      bin/verify-capability-workshop-acceptance "$evidence_authority" "$issue_number" "$sha" "$artifact" "$acceptor" >/dev/null
     fi
     artifact_issue_context="product-acceptance-artifact/$artifact_digest/issue-$issue_number/implementation-$implementation_digest/acceptor-$acceptor"
     for wanted_context in "$issue_context" "$artifact_issue_context"; do

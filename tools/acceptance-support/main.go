@@ -30,6 +30,8 @@ import (
 
 type stringList []string
 
+var copyAuthHook func(string)
+
 func (v *stringList) String() string     { return strings.Join(*v, ",") }
 func (v *stringList) Set(s string) error { *v = append(*v, s); return nil }
 
@@ -234,6 +236,17 @@ func main() {
 		if err = validateRuntimeNoFollow(os.Args[2]); err != nil {
 			fatal(err.Error())
 		}
+	case "copy-auth":
+		fs := flag.NewFlagSet("copy-auth", flag.ExitOnError)
+		source := fs.String("source", "", "absolute source auth.json")
+		destination := fs.String("destination-dir", "", "absolute destination Codex directory")
+		_ = fs.Parse(os.Args[2:])
+		receipt, err := copyAuthNoFollow(*source, *destination)
+		if err != nil {
+			fatal(err.Error())
+		}
+		body, _ := json.Marshal(receipt)
+		fmt.Println(string(body))
 	case "protected-metadata":
 		if len(os.Args) != 4 || (os.Args[3] != "codex" && os.Args[3] != "runtime") {
 			fatal("usage: acceptance-support protected-metadata ROOT codex|runtime")
@@ -345,6 +358,61 @@ func main() {
 	default:
 		fatal("unknown acceptance-support command")
 	}
+}
+
+func copyAuthNoFollow(source, destinationDir string) (map[string]any, error) {
+	if !filepath.IsAbs(source) || filepath.Base(source) != "auth.json" || !filepath.IsAbs(destinationDir) {
+		return nil, errors.New("auth copy requires absolute auth.json and destination directory")
+	}
+	sourceParent, err := openAbsoluteDirNoFollow(filepath.Dir(source))
+	if err != nil {
+		return nil, err
+	}
+	defer unix.Close(sourceParent)
+	sourceFD, err := unix.Openat(sourceParent, "auth.json", unix.O_RDONLY|unix.O_CLOEXEC|unix.O_NOFOLLOW, 0)
+	if err != nil {
+		return nil, err
+	}
+	defer unix.Close(sourceFD)
+	var opened, entry unix.Stat_t
+	if unix.Fstat(sourceFD, &opened) != nil || unix.Fstatat(sourceParent, "auth.json", &entry, unix.AT_SYMLINK_NOFOLLOW) != nil ||
+		opened.Dev != entry.Dev || opened.Ino != entry.Ino || opened.Mode&unix.S_IFMT != unix.S_IFREG || opened.Uid != uint32(os.Getuid()) || opened.Mode&0o777 != 0o600 || opened.Nlink != 1 {
+		return nil, errors.New("auth source identity or metadata is unsafe")
+	}
+	if copyAuthHook != nil {
+		copyAuthHook("source-opened")
+	}
+	destination, err := openAbsoluteDirNoFollow(destinationDir)
+	if err != nil {
+		return nil, err
+	}
+	defer unix.Close(destination)
+	destinationFD, err := unix.Openat(destination, "auth.json", unix.O_WRONLY|unix.O_CREAT|unix.O_EXCL|unix.O_CLOEXEC|unix.O_NOFOLLOW, 0o600)
+	if err != nil {
+		return nil, err
+	}
+	destinationFile := os.NewFile(uintptr(destinationFD), "auth-copy")
+	sourceFile := os.NewFile(uintptr(sourceFD), "auth-source")
+	h := sha256.New()
+	_, copyErr := io.Copy(io.MultiWriter(destinationFile, h), sourceFile)
+	sourceCloseErr := sourceFile.Close()
+	sourceFD = -1
+	syncErr := destinationFile.Sync()
+	closeErr := destinationFile.Close()
+	if copyErr != nil || sourceCloseErr != nil || syncErr != nil || closeErr != nil {
+		_ = unix.Unlinkat(destination, "auth.json", 0)
+		return nil, errors.Join(copyErr, sourceCloseErr, syncErr, closeErr)
+	}
+	if copyAuthHook != nil {
+		copyAuthHook("destination-synced")
+	}
+	var sourceAfter, destinationEntry unix.Stat_t
+	if unix.Fstatat(sourceParent, "auth.json", &sourceAfter, unix.AT_SYMLINK_NOFOLLOW) != nil || sourceAfter.Dev != opened.Dev || sourceAfter.Ino != opened.Ino || sourceAfter.Mtim != opened.Mtim || sourceAfter.Size != opened.Size ||
+		unix.Fstatat(destination, "auth.json", &destinationEntry, unix.AT_SYMLINK_NOFOLLOW) != nil || destinationEntry.Mode&unix.S_IFMT != unix.S_IFREG || destinationEntry.Uid != uint32(os.Getuid()) || destinationEntry.Mode&0o777 != 0o600 || destinationEntry.Nlink != 1 {
+		_ = unix.Unlinkat(destination, "auth.json", 0)
+		return nil, errors.New("auth source changed or destination is unsafe")
+	}
+	return map[string]any{"schema": "auth-copy-receipt-v1", "source_device": uint64(opened.Dev), "source_inode": opened.Ino, "destination_device": uint64(destinationEntry.Dev), "destination_inode": destinationEntry.Ino, "sha256": fmt.Sprintf("%x", h.Sum(nil))}, nil
 }
 
 type exactLeaf struct {

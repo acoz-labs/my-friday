@@ -1374,3 +1374,76 @@ func TestSandboxDiagnosticRejectsUnknownVersionBeforeContent(t *testing.T) {
 		})
 	}
 }
+
+func TestCopyAuthNoFollowAndSourceSwapRefusal(t *testing.T) {
+	root := t.TempDir()
+	sourceDir, destination := filepath.Join(root, "source"), filepath.Join(root, "destination")
+	if err := os.Mkdir(sourceDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(destination, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	source := filepath.Join(sourceDir, "auth.json")
+	if err := os.WriteFile(source, []byte("secret"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	receipt, err := copyAuthNoFollow(source, destination)
+	if err != nil || receipt["schema"] != "auth-copy-receipt-v1" {
+		t.Fatalf("copy=%v %v", receipt, err)
+	}
+	if body, readErr := os.ReadFile(filepath.Join(destination, "auth.json")); readErr != nil || string(body) != "secret" {
+		t.Fatal("copied bytes differ")
+	}
+	if err = os.Remove(filepath.Join(destination, "auth.json")); err != nil {
+		t.Fatal(err)
+	}
+	copyAuthHook = func(phase string) {
+		if phase == "source-opened" {
+			if renameErr := os.Rename(source, source+".old"); renameErr != nil {
+				t.Fatal(renameErr)
+			}
+			if writeErr := os.WriteFile(source, []byte("replacement"), 0o600); writeErr != nil {
+				t.Fatal(writeErr)
+			}
+		}
+	}
+	defer func() { copyAuthHook = nil }()
+	if _, err = copyAuthNoFollow(source, destination); err == nil {
+		t.Fatal("source pathname swap was accepted")
+	}
+	if _, statErr := os.Stat(filepath.Join(destination, "auth.json")); !os.IsNotExist(statErr) {
+		t.Fatal("refused copy left destination")
+	}
+}
+
+func TestCopyAuthRefusesLinkedAncestryAndDestinationCollision(t *testing.T) {
+	root := t.TempDir()
+	sourceDir := filepath.Join(root, "source")
+	destination := filepath.Join(root, "destination")
+	if err := os.Mkdir(sourceDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(destination, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(sourceDir, "auth.json"), []byte("secret"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	linked := filepath.Join(root, "linked")
+	if err := os.Symlink(sourceDir, linked); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := copyAuthNoFollow(filepath.Join(linked, "auth.json"), destination); err == nil {
+		t.Fatal("linked ancestry accepted")
+	}
+	if err := os.WriteFile(filepath.Join(destination, "auth.json"), []byte("foreign"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := copyAuthNoFollow(filepath.Join(sourceDir, "auth.json"), destination); err == nil {
+		t.Fatal("destination collision accepted")
+	}
+	if body, _ := os.ReadFile(filepath.Join(destination, "auth.json")); string(body) != "foreign" {
+		t.Fatal("destination collision changed")
+	}
+}

@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+set -euo pipefail
+root="$(cd "$(dirname "$0")/.." && pwd)"; tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' EXIT
+sha="$(printf 'a%.0s' {1..40})"; h40="$(printf 'c%.0s' {1..40})"; h64="$(printf 'd%.0s' {1..64})"
+artifact="artifact-v1:run=12:id=34:name=my-friday-darwin-arm64:sha256=$(printf 'b%.0s' {1..64})"
+mkdir "$tmp/bin" "$tmp/counts"
+write_comment() { local id="$1" actor="$2" body="$3"; jq -nc --argjson id "$id" --arg body "$body" --arg actor "$actor" '{id:$id,body:$body,issue_url:"https://api.github.com/repos/owner/repo/issues/51",user:{login:$actor},created_at:"2026-08-25T00:00:00Z"}' >"$tmp/$id.json"; }
+cat >"$tmp/bin/gh" <<'SH'
+#!/usr/bin/env bash
+set -euo pipefail
+id="${*: -1}"; id="${id##*/}"; count_file="$EVIDENCE_FIXTURES/counts/$id"; count=0; [[ ! -f "$count_file" ]] || count="$(cat "$count_file")"; echo $((count+1)) >"$count_file"
+if [[ -n "${MUTATE_ID:-}" && "$id" == "$MUTATE_ID" && "$count" -gt 0 ]]; then jq '.body += " edited"' "$EVIDENCE_FIXTURES/$id.json"; else cat "$EVIDENCE_FIXTURES/$id.json"; fi
+SH
+chmod +x "$tmp/bin/gh"
+pjson="$(jq -nc --arg sha "$sha" --arg artifact "$artifact" --arg h40 "$h40" --arg h64 "$h64" '
+ def p($s;$e):{passed:true,expected_state:$s,exit_class:$e};
+ {schema:"capability-workshop-acceptance-evidence-v1",authority:"provisional",issue:51,candidate:$sha,artifact:$artifact,run_id:"0123456789abcdef0123456789abcdef",checkout:{tree:$h40,supervisor_blob:$h40,helper_closure_sha256:$h64,executable_sha256:$h64,archive_sha256:$h64,source_diff_sha256:$h64},platform:{architecture:"arm64",filesystem:"apfs",runtime_contract:2},controls:{builder_has_no_mutation_token:true,credential_by_path:true,deterministic_tests:true,fresh_tasks:true,private_builder:true,redacted_complete_diff:true},scenarios:{author_without_activation:p("ready-no-projection";"success"),validate_and_test:p("ready";"success"),install:p("installed-healthy";"success"),explicit_invocation:p("declared-behavior-observed";"success"),source_change_and_upgrade:p("source-changed-stale-refused-upgraded";"success"),collision_and_drift:p("foreign-and-owned-bytes-preserved";"refused"),disable_enable_remove:p("fresh-task-absent-source-preserved-control-reversed";"success"),interruption_recovery:p("real-candidate-stopped-reaped-recovered";"success"),migration_and_rollback:p("private-copy-bounded";"success"),ambient_preservation:p("all-protected-equal";"success")},preservation:{ambient_home_equal:true,credential_source_equal:true,global_codex_equal:true,protected_canaries_equal:true,sibling_instance_equal:true,source_preserved:true},cleanup_expected:["credential-copy","instance","launcher","mount","run-root","volume-image"],redacted:true}')"
+pbody="<!-- capability-workshop-acceptance-evidence-v1 authority=provisional -->
+$pjson"; pdigest="$(printf %s "$pbody" | shasum -a 256 | awk '{print $1}')"; write_comment 101 acceptor "$pbody"
+fjson="$(jq -nc --arg sha "$sha" --arg artifact "$artifact" --arg digest "$pdigest" --arg h64 "$h64" '{schema:"capability-workshop-acceptance-evidence-v1",authority:"final",issue:51,candidate:$sha,artifact:$artifact,provisional:{id:101,digest:$digest},helper_closure_sha256:$h64,cleanup:{ambient_unchanged:true,credential_copy_deleted:true,instance_removed:true,launcher_removed:true,mount_absent:true,non_forced_detach:true,run_root_deleted:true,source_preserved:true,volume_image_deleted:true}}')"
+fbody="<!-- capability-workshop-acceptance-evidence-v1 authority=final -->
+$fjson"; fdigest="$(printf %s "$fbody" | shasum -a 256 | awk '{print $1}')"; write_comment 102 acceptor "$fbody"
+token="capability-workshop-evidence-v1:provisional=101:$pdigest:final=102:$fdigest"
+verify() { rm -f "$tmp/counts/"*; PATH="$tmp/bin:$PATH" EVIDENCE_FIXTURES="$tmp" GITHUB_REPOSITORY=owner/repo "$root/bin/verify-capability-workshop-evidence" "$@"; }
+[[ "$(verify "$token" 51 "$sha" "$artifact" acceptor)" == acceptor ]]
+if verify "$token" 4 "$sha" "$artifact" acceptor >/dev/null 2>&1; then echo "accepted issue-4 binding" >&2; exit 1; fi
+if verify "$token" 51 "$sha" "$artifact" other >/dev/null 2>&1; then echo "accepted wrong actor" >&2; exit 1; fi
+if MUTATE_ID=101 verify "$token" 51 "$sha" "$artifact" acceptor >/dev/null 2>&1; then echo "accepted edited evidence" >&2; exit 1; fi
+bad="$(jq '.controls.private_builder="true"' <<<"$pjson")"; badbody="<!-- capability-workshop-acceptance-evidence-v1 authority=provisional -->
+$bad"; write_comment 103 acceptor "$badbody"; baddigest="$(printf %s "$badbody" | shasum -a 256 | awk '{print $1}')"
+if verify "capability-workshop-evidence-v1:provisional=103:$baddigest:final=102:$fdigest" 51 "$sha" "$artifact" acceptor >/dev/null 2>&1; then echo "accepted truthy-string control" >&2; exit 1; fi
+failure="$(jq -nc --arg sha "$sha" --arg artifact "$artifact" '{schema:"capability-workshop-acceptance-evidence-v1",authority:"failure",issue:51,candidate:$sha,artifact:$artifact,run_id:"run",failure_scope:"candidate",failure_class:"candidate",failure_phase:"builder",cleanup:{ambient_unchanged:true,credential_copy_deleted:true,detached:true,owned_state_removed:true},redacted:true}')"; failure_body="<!-- capability-workshop-acceptance-evidence-v1 authority=failure -->
+$failure"; write_comment 104 acceptor "$failure_body"; failure_digest="$(printf %s "$failure_body" | shasum -a 256 | awk '{print $1}')"
+verify "capability-workshop-failure-v1:comment=104:$failure_digest" 51 "$sha" "$artifact" acceptor >/dev/null
+
+receipt() { local id="$1" actor="$2" role="$3"; local json body digest; json="$(jq -nc --arg sha "$sha" --arg artifact "$artifact" --arg role "$role" '{schema:"capability-workshop-partner-receipt-v1",issue:51,candidate:$sha,artifact:$artifact,role:$role,completion:true,source_comprehension:true,projection_comprehension:true,recovery_needed:false,retention_decision:"remove",redacted:true}')"; body="<!-- capability-workshop-partner-receipt-v1 -->
+$json"; write_comment "$id" "$actor" "$body"; digest="$(printf %s "$body" | shasum -a 256 | awk '{print $1}')"; printf 'capability-workshop-partner-v1:comment=%s:%s' "$id" "$digest"; }
+owner="$(receipt 105 owner product-owner)"; partner_one="$(receipt 106 partner-one design-partner)"; partner_two="$(receipt 107 partner-two design-partner)"
+rm -f "$tmp/counts/"*; PATH="$tmp/bin:$PATH" EVIDENCE_FIXTURES="$tmp" GITHUB_REPOSITORY=owner/repo "$root/bin/verify-capability-workshop-acceptance" "capability-workshop-acceptance-v1:$token|$owner|$partner_one|$partner_two" 51 "$sha" "$artifact" acceptor >/dev/null
+if PATH="$tmp/bin:$PATH" EVIDENCE_FIXTURES="$tmp" GITHUB_REPOSITORY=owner/repo "$root/bin/verify-capability-workshop-acceptance" "capability-workshop-acceptance-v1:$token|$owner|$partner_one|$partner_one" 51 "$sha" "$artifact" acceptor >/dev/null 2>&1; then echo "accepted duplicate partners" >&2; exit 1; fi
+echo "capability workshop evidence tests passed."

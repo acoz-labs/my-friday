@@ -1,0 +1,70 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+evidence="${1:-}" issue="${2:-}" sha="${3:-}" artifact="${4:-}" expected_actor="${5:-}"
+repo="${GITHUB_REPOSITORY:-}"
+die() { echo "$*" >&2; exit 1; }
+digest_body() { printf %s "$1" | shasum -a 256 | awk '{print $1}'; }
+fetch_stable() {
+  local id="$1" first second
+  first="$(gh api "repos/$repo/issues/comments/$id")" || die "Workshop evidence comment is unavailable."
+  second="$(gh api "repos/$repo/issues/comments/$id")" || die "Workshop evidence disappeared during verification."
+  [[ "$(jq -c '{id,body,issue_url,user:.user.login,created_at}' <<<"$first")" == "$(jq -c '{id,body,issue_url,user:.user.login,created_at}' <<<"$second")" ]] || die "Workshop evidence changed during verification."
+  printf '%s\n' "$second"
+}
+validate_comment() {
+  local comment="$1" digest="$2" marker="$3" body json actor
+  body="$(jq -r .body <<<"$comment")"
+  [[ "$(digest_body "$body")" == "$digest" ]] || die "Workshop evidence digest mismatch."
+  [[ "$body" == "$marker"$'\n'* && "${body#"$marker"$'\n'}" != *$'\n'* ]] || die "Workshop evidence body format mismatch."
+  json="${body#"$marker"$'\n'}"
+  jq -e --argjson issue "$issue" --arg sha "$sha" --arg artifact "$artifact" \
+    '.issue==$issue and .candidate==$sha and .artifact==$artifact' <<<"$json" >/dev/null || die "Workshop evidence binding mismatch."
+  [[ "$(jq -r .issue_url <<<"$comment")" == "https://api.github.com/repos/$repo/issues/$issue" ]] || die "Workshop evidence belongs to another issue."
+  actor="$(jq -r '.user.login|ascii_downcase' <<<"$comment")"
+  [[ -z "$expected_actor" || "$actor" == "$(printf %s "$expected_actor" | tr '[:upper:]' '[:lower:]')" ]] || die "Workshop evidence author mismatch."
+  printf '%s\n%s\n' "$actor" "$json"
+}
+
+[[ -n "$repo" && "$issue" == 51 && "$sha" =~ ^[0-9a-f]{40}$ && "$artifact" =~ ^artifact-v1:run=[0-9]+:id=[0-9]+:name=[A-Za-z0-9._-]+:sha256=[0-9a-f]{64}$ ]] || exit 64
+if [[ "$evidence" =~ ^capability-workshop-failure-v1:comment=([0-9]+):([0-9a-f]{64})$ ]]; then
+  result="$(validate_comment "$(fetch_stable "${BASH_REMATCH[1]}")" "${BASH_REMATCH[2]}" '<!-- capability-workshop-acceptance-evidence-v1 authority=failure -->')"
+  json="$(tail -n +2 <<<"$result")"
+  jq -e 'keys==["artifact","authority","candidate","cleanup","failure_class","failure_phase","failure_scope","issue","redacted","run_id","schema"] and
+    .schema=="capability-workshop-acceptance-evidence-v1" and .authority=="failure" and .redacted==true and
+    (.failure_scope|IN("candidate","harness")) and (.failure_class|IN("refused","preflight","containment","artifact","candidate","evidence","cleanup")) and
+    (.failure_phase|type)=="string" and (.failure_phase|length)>0 and (.run_id|type)=="string" and (.run_id|length)>0 and
+    (.cleanup|keys)==["ambient_unchanged","credential_copy_deleted","detached","owned_state_removed"] and all(.cleanup[];type=="boolean")' <<<"$json" >/dev/null || die "Workshop failure evidence schema is incomplete."
+  head -n1 <<<"$result"; exit 0
+fi
+
+pattern='^capability-workshop-evidence-v1:provisional=([0-9]+):([0-9a-f]{64}):final=([0-9]+):([0-9a-f]{64})$'
+[[ "$evidence" =~ $pattern ]] || exit 64
+pid="${BASH_REMATCH[1]}" pdigest="${BASH_REMATCH[2]}" fid="${BASH_REMATCH[3]}" fdigest="${BASH_REMATCH[4]}"
+[[ "$pid" != "$fid" ]] || die "Workshop evidence comments must be distinct."
+presult="$(validate_comment "$(fetch_stable "$pid")" "$pdigest" '<!-- capability-workshop-acceptance-evidence-v1 authority=provisional -->')"
+fresult="$(validate_comment "$(fetch_stable "$fid")" "$fdigest" '<!-- capability-workshop-acceptance-evidence-v1 authority=final -->')"
+pactor="$(head -n1 <<<"$presult")"; pjson="$(tail -n +2 <<<"$presult")"
+factor="$(head -n1 <<<"$fresult")"; fjson="$(tail -n +2 <<<"$fresult")"
+[[ "$pactor" == "$factor" ]] || die "Workshop evidence authors differ."
+jq -e '
+  def h40: type=="string" and test("^[0-9a-f]{40}$"); def h64: type=="string" and test("^[0-9a-f]{64}$");
+  def pass($state;$exit): .=={exit_class:$exit,expected_state:$state,passed:true};
+  keys==["artifact","authority","candidate","checkout","cleanup_expected","controls","issue","platform","preservation","redacted","run_id","scenarios","schema"] and
+  .schema=="capability-workshop-acceptance-evidence-v1" and .authority=="provisional" and .redacted==true and (.run_id|test("^[0-9a-f]{32}$")) and
+  (.checkout|keys)==["archive_sha256","executable_sha256","helper_closure_sha256","source_diff_sha256","supervisor_blob","tree"] and (.checkout.tree|h40) and (.checkout.supervisor_blob|h40) and all([.checkout.archive_sha256,.checkout.executable_sha256,.checkout.helper_closure_sha256,.checkout.source_diff_sha256][];h64) and
+  .platform=={architecture:"arm64",filesystem:"apfs",runtime_contract:2} and
+  (.controls|keys)==["builder_has_no_mutation_token","credential_by_path","deterministic_tests","fresh_tasks","private_builder","redacted_complete_diff"] and all(.controls[];.==true) and
+  (.scenarios|keys)==["ambient_preservation","author_without_activation","collision_and_drift","disable_enable_remove","explicit_invocation","install","interruption_recovery","migration_and_rollback","source_change_and_upgrade","validate_and_test"] and
+  (.scenarios.author_without_activation|pass("ready-no-projection";"success")) and (.scenarios.validate_and_test|pass("ready";"success")) and (.scenarios.install|pass("installed-healthy";"success")) and
+  (.scenarios.explicit_invocation|pass("declared-behavior-observed";"success")) and (.scenarios.source_change_and_upgrade|pass("source-changed-stale-refused-upgraded";"success")) and
+  (.scenarios.collision_and_drift|pass("foreign-and-owned-bytes-preserved";"refused")) and (.scenarios.disable_enable_remove|pass("fresh-task-absent-source-preserved-control-reversed";"success")) and
+  (.scenarios.interruption_recovery|pass("real-candidate-stopped-reaped-recovered";"success")) and (.scenarios.migration_and_rollback|pass("private-copy-bounded";"success")) and
+  (.scenarios.ambient_preservation|pass("all-protected-equal";"success")) and
+  .preservation=={ambient_home_equal:true,credential_source_equal:true,global_codex_equal:true,protected_canaries_equal:true,sibling_instance_equal:true,source_preserved:true} and
+  .cleanup_expected==["credential-copy","instance","launcher","mount","run-root","volume-image"]' <<<"$pjson" >/dev/null || die "Workshop provisional evidence schema or semantics are incomplete."
+jq -e --argjson pid "$pid" --arg pd "$pdigest" --arg closure "$(jq -r .checkout.helper_closure_sha256 <<<"$pjson")" '
+  keys==["artifact","authority","candidate","cleanup","helper_closure_sha256","issue","provisional","schema"] and
+  .schema=="capability-workshop-acceptance-evidence-v1" and .authority=="final" and .provisional=={id:$pid,digest:$pd} and .helper_closure_sha256==$closure and
+  .cleanup=={ambient_unchanged:true,credential_copy_deleted:true,instance_removed:true,launcher_removed:true,mount_absent:true,non_forced_detach:true,run_root_deleted:true,source_preserved:true,volume_image_deleted:true}' <<<"$fjson" >/dev/null || die "Workshop final evidence schema or cross-binding is incomplete."
+printf '%s\n' "$pactor"
