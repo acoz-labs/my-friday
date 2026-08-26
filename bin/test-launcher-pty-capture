@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+if [[ ! -x /usr/bin/expect ]]; then
+  echo "Launcher PTY capture integration skipped: /usr/bin/expect unavailable."
+  exit 0
+fi
+tmp="$(mktemp -d)"
+trap 'rm -rf "$tmp"' EXIT
+go build -o "$tmp/acceptance-runner" "$root/tools/acceptance-runner"
+runner=("$tmp/acceptance-runner" --cwd "$tmp" --timeout 5s --env PATH=/usr/bin:/bin --)
+
+output="$("${runner[@]}" /usr/bin/expect "$root/config/acceptance/launcher-capture.exp" "$tmp/tty.private" /bin/sh -c '[ -t 1 ] || exit 90; printf "PTY_CAPTURED\n"')"
+[[ -z "$output" ]]
+[[ "$(stat -f %Lp "$tmp/tty.private" 2>/dev/null || stat -c %a "$tmp/tty.private")" == 600 ]]
+grep -Fq PTY_CAPTURED "$tmp/tty.private"
+
+set +e
+"${runner[@]}" /usr/bin/expect "$root/config/acceptance/launcher-capture.exp" "$tmp/status.private" /bin/sh -c 'printf "PRIVATE_FAILURE\n"; exit 37'
+status=$?
+set -e
+[[ "$status" == 37 ]]
+grep -Fq PRIVATE_FAILURE "$tmp/status.private"
+
+go test ./tools/acceptance-runner -run 'TestRunner(PTYWrappedTimeoutReapsEscapedDescendant|PTYWrappedSignalsReapDescendants)$'
+
+echo "Launcher PTY capture tests passed."
