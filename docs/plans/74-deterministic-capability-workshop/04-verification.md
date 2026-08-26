@@ -10,7 +10,8 @@
 - Add source-transaction tests with fault hooks at journal/stage/quarantine/
   promotion/sync/cleanup boundaries. Prove create/update success, no-replace,
   stale preview, shared-lock refusal, old-or-new recovery, unsafe-entry refusal,
-  and no deletion without exact inode/digest authority.
+  `Inspect`/lifecycle state precedence, workshop-only source recovery, and no
+  deletion without exact inode/digest authority.
 - Extend `internal/capability` tests only for narrow exported helpers or state
   integration; keep the strict parser/test/lifecycle regression matrix green.
 - Extend `cmd/my-friday/main_test.go` for usage, real-home authority, TTY gate,

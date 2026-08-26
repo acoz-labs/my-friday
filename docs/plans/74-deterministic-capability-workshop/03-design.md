@@ -113,6 +113,16 @@ for uninstalled source, `source-changed` for an active installed projection,
 and `disabled` for a disabled projection. An already `source-changed` package
 remains `source-changed` with the newly proposed digest.
 
+`capability.Inspect` and every lifecycle `Plan`/`Execute` recheck the exact
+per-slug source-journal path. A canonical valid journal has precedence over
+source/package state and reports the existing `interrupted` state; a malformed,
+unsafe, or contradictory journal reports `recovery-required`. The stable
+guidance is to rerun `capability workshop NAME SLUG`, which takes the shared
+lock, performs only digest/inode-proven source recovery, reports the recovered
+state, and exits before collecting new answers. Existing `capability recover`
+continues to mean lifecycle projection recovery and never gains source-write or
+source-delete authority.
+
 ## Interfaces And Contracts
 
 ```text
