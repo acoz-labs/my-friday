@@ -146,8 +146,9 @@ instance-owned Codex executable. That smoke receives the reviewed
 `TERM=xterm-256color` explicitly, so a hostile or `dumb` caller terminal cannot
 divert the purpose prompt into Codex's terminal-safety confirmation. Other
 candidate lifecycle commands retain their existing sanitized environment. The
-named instance's manifest-bound private `codex/config.toml` trusts only its
-exact absolute workspace, so the smoke sends no first-run workspace-trust
+named instance's manifest-bound private `codex/config.toml` trusts its exact
+absolute workspace and grants only its private runtime as an additional
+workspace-write root, so the smoke sends no first-run workspace-trust
 answer. After Codex explicitly enables CSI-u enhanced keyboard reporting, the
 driver observes the initial `Ask Codex to do anything` composer, requires
 concrete MCP boot progress, then requires the post-progress exact plain
@@ -161,7 +162,8 @@ are not accepted as equivalent. The
 child PTY is initialized to 30 rows by 120 columns before spawn so the exact
 token remains contiguous. The interactive smoke has a 90-second outer bound;
 the driver then closes its PTY, with the bounded process runner retaining
-descendant cleanup authority. Approval and sandbox policy remain Codex defaults. The
+descendant cleanup authority. Contract-v2 managed policy fixes approvals to
+never and network off; no broader sandbox is used. The
 copy is removed with the instance. The
 same file-backed OAuth credential is deliberately not routed through
 `codex login --with-api-key`.

@@ -22,6 +22,14 @@ package source; assistant rollback refuses any receipt, generation,
 transaction, or additional workspace skill. Preserve the compatible v2 binary
 if either refusal occurs.
 
+Named-assistant contract-v2 revision 0 remains a compatibility boundary for
+instances created by earlier candidates. `assistant upgrade NAME` copies and
+digest-binds the currently executing My Friday candidate, migrates revision 0
+to the instance-specific revision, and records revision 0 as its rollback
+target. Recovery refuses changed candidate staging. Rollback refuses existing
+quarantine names and preserves any quarantine whose type, mode, ownership,
+link count, or digest differs from its journal before cleanup.
+
 Runtime migration recovery is `my-friday capability recover --runtime PATH`.
 Named-instance migration recovery is `my-friday assistant recover NAME`. Both
 require exact `Recover` confirmation and accept only canonical owned journals;
@@ -200,6 +208,12 @@ and kills its exact process group plus identity-tracked escaped descendants,
 reaps the root, verifies quiescence, and returns status 130 or 143 before
 failure cleanup proceeds. Builder, installed-invocation, and disabled-absence
 tasks run under an Expect-owned PTY inside that same bounded runner. Their
+builder task receives an instance-specific manifest-bound skill. Managed Codex
+trusts the disposable workspace, adds only that instance's private runtime to
+workspace-write, sets approvals to never, and disables network. The builder
+uses the instance-owned `dependencies/my-friday` copy only for inspect,
+validate, and test; executable, config, or builder drift refuses launch and
+cleanup authority.
 owner-only transcripts remain private acceptance state, preserve the launcher
 exit status, and are never copied into public evidence. Each task has a separate
 output-only completion marker that the prompt may describe but must not contain.
