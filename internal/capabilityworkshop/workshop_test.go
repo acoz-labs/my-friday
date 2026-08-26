@@ -79,8 +79,8 @@ func TestPlanRefusesIntermediateSymlinkBeforePreviewOrWrite(t *testing.T) {
 	}
 	redirectedInstance := filepath.Join(linkedParent, "alfred")
 	redirectedSource := filepath.Join(redirectedInstance, "runtime", "skills", "daily-brief")
-	if _, err := Plan(redirectedInstance, redirectedSource, "daily-brief"); err == nil {
-		t.Fatal("pre-Plan intermediate symlink accepted")
+	if _, err := Plan(redirectedInstance, redirectedSource, "daily-brief"); err == nil || (!errors.Is(err, unix.ELOOP) && !errors.Is(err, unix.ENOTDIR)) {
+		t.Fatalf("pre-Plan intermediate symlink was not refused by no-follow walk: %v", err)
 	}
 	if _, err := os.Lstat(filepath.Join(instance, "runtime", "skills", "daily-brief")); !os.IsNotExist(err) {
 		t.Fatalf("source changed before preview: %v", err)
