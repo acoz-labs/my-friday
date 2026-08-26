@@ -207,9 +207,17 @@ auth copy/source-swap refusal, secure-root collision and ambiguous cleanup
 preservation, timeout/escaped-child reaping, `INT`/`TERM` exit status and
 ordinary/escaped-descendant quiescence, and the capability stop barrier's
 canonical post-mutation journal boundary.
+Native workshop acceptance separately stops built candidate bytes at the
+durable source-journal boundary, re-enters `capability workshop` for source-only
+recovery, and proves journal quiescence. Its typed evidence is distinct from
+the lifecycle projection stop/recover scenario. The checked-in enhancement
+Expect journey also runs as a native package integration test against a spawned
+candidate process, including partial example retention.
 The managed `capability-builder` points users to the manifest-owned
 deterministic workshop and has no direct source-write or lifecycle authority.
-Model prompt-input and completion are not workshop acceptance authority.
+The retired model prompt-input validator and its live Codex debug invocation
+have no remaining production or test surface; model completion is not workshop
+acceptance authority.
 `bin/test-launcher-pty-capture` additionally proves that private launcher tasks
 receive a real stdout TTY, capture no public transcript, retain owner-only
 transcript permissions and child exit status, and remain inside the runner's

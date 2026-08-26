@@ -212,6 +212,12 @@ that same bounded runner. Owner-only evidence retains complete source review,
 exact source-only confirmation, separate lifecycle confirmation, and terminal
 navigation facts. Model prompts, model completion, and builder catalog
 visibility are not authoring or acceptance authority.
+Acceptance records source-workshop interruption separately from lifecycle
+projection interruption. The source barrier stops only after a canonical
+`.workshop-<slug>.json` and its journal-bound stage are stable, kills and reaps
+the candidate process group, then re-enters the workshop to recover and proves
+the source journal is absent. The lifecycle barrier continues to exercise
+`capability recover` against projection state independently.
 
 Installed-invocation and disabled-absence tasks still pass one prompt as one
 positional argument to the named launcher. The launcher places it after its

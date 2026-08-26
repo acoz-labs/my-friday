@@ -72,6 +72,24 @@ transaction/receipt plus an exact whole-target proof. Unsafe temp type, link,
 mode, owner, or target identity is preserved and refused. The containing
 directory is synced after authority promotion and after final authority removal.
 
+The source workshop creates a random, exclusive staging root descriptor-
+relatively beneath the already-opened `runtime/skills` directory. Every staged
+directory and file is created through no-follow descriptors, so replacing the
+pathname with a symlink cannot redirect a write. The canonical source journal
+records that stage name and the complete staged and prior-tree device, inode,
+owner, mode, link-count, type, path, and content-digest authority. Recovery
+revalidates those facts before promotion or cleanup and refuses chmod or entry-
+set drift. Cleanup validates the complete old tree and package digest twice
+before its first unlink; a race before that boundary preserves the entire old
+tree. Pre-journal staging failures use unique roots and therefore cannot create
+a deterministic retry collision.
+
+Retained `SKILL.md` bodies preserve their suffix bytes, including whether the
+last byte is a newline. Generated frontmatter renders the summary as a JSON-
+quoted YAML scalar. Complete source diffs retain blank lines and emit the
+standard missing-final-newline marker, so review accounts for every source
+byte.
+
 `capability test` is a bounded structural contract check, not a model run. It
 requires nonempty unique declarations, an exact normalized match between
 manifest and positive triggers,
