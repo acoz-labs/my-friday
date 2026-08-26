@@ -198,8 +198,10 @@ canonical post-mutation journal boundary.
 receive a real stdout TTY, capture no public transcript, retain owner-only
 transcript permissions and child exit status, and remain inside the runner's
 timeout/signal descendant-reaping boundary.
-It also locks empty-forwarded-argv launch, the CSI-u/composer/MCP/title/composer
-readiness sequence, separate prompt typing and protocol-Enter submission,
+It also locks empty-forwarded-argv launch, the CSI-u/initial-composer/optional-
+MCP/title/final-composer readiness sequence with zero, one, or multiple MCP
+messages, separate prompt typing and protocol-Enter submission, title ordering
+and absence refusal,
 pre-submission marker refusal, output-only marker observation, prompt self-match
 refusal, missing-marker and nonzero failure, bytewise observation through
 invalid UTF-8/control bytes, marker-triggered TUI/descendant closure, and the

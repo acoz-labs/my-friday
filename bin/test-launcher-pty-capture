@@ -16,8 +16,30 @@ cat >"$tmp/fake-tui" <<'EOF'
 set -euo pipefail
 [[ "$#" == 0 ]] || exit 91
 [[ -t 1 ]] || exit 90
-printf '\033[>7uAsk Codex to do anything\nStarting MCP servers\n\033]0;workspace\007Ask Codex to do anything\n'
-if [[ "${TUI_MODE:-}" == pre-submit ]]; then printf '%s\n' "$TUI_MARKER"; fi
+mark() { if [[ "${TUI_MARKER_PHASE:-}" == "$1" ]]; then printf '%s\n' "$TUI_MARKER"; fi; }
+mark before-cursor
+printf '\033[>7u'
+mark after-cursor
+if [[ "${TUI_MODE:-}" == reordered-title ]]; then
+  printf '\033]0;workspace\007Ask Codex to do anything\n'
+  exit 38
+fi
+printf 'Ask Codex to do anything\n'
+mark after-first-composer
+mcp_count=1
+case "${TUI_MODE:-}" in
+  zero-mcp) mcp_count=0 ;;
+  multiple-mcp) mcp_count=3 ;;
+esac
+for ((i=0; i<mcp_count; i++)); do
+  printf 'Starting MCP servers\n'
+  mark after-mcp
+done
+if [[ "${TUI_MODE:-}" == absent-title ]]; then exit 39; fi
+printf '\033]0;workspace\007'
+mark after-title
+printf 'Ask Codex to do anything\n'
+mark after-second-composer
 payload=""
 enter=$'\033[13;1u'
 while [[ "$payload" != *"$enter" ]]; do
@@ -28,7 +50,7 @@ submitted="${payload%"$enter"}"
 printf '%s' "$submitted" >"$TUI_SUBMITTED"
 [[ "$submitted" == "$TUI_PROMPT" ]] || exit 93
 case "${TUI_MODE:-success}" in
-  success) printf '%s\n' "$TUI_MARKER" ;;
+  success|zero-mcp|multiple-mcp) printf '%s\n' "$TUI_MARKER" ;;
   missing) exit 0 ;;
   nonzero) printf 'PRIVATE_FAILURE\n'; exit 37 ;;
   descendant)
@@ -38,7 +60,6 @@ case "${TUI_MODE:-success}" in
     printf '%s\n' "$TUI_MARKER"
     wait "$child"
     ;;
-  pre-submit) exit 94 ;;
 esac
 EOF
 chmod 0700 "$tmp/fake-tui"
@@ -47,20 +68,30 @@ run_tui() {
   local mode="$1" transcript="$2" marker="$3"
   "$tmp/acceptance-runner" --cwd "$tmp" --timeout 5s \
     --env PATH=/usr/bin:/bin --env TUI_MODE="$mode" --env TUI_MARKER="$marker" \
+    --env TUI_MARKER_PHASE="${TUI_MARKER_PHASE:-}" \
     --env TUI_PROMPT="$prompt" --env TUI_SUBMITTED="$tmp/submitted" \
     --env TUI_CHILD_PID="$tmp/child.pid" -- \
     /usr/bin/expect "$root/config/acceptance/launcher-capture.exp" "$transcript" "$marker" "$tmp/fake-tui" "$prompt"
 }
 
-output="$(run_tui success "$tmp/tty.private" TUI_COMPLETE)"
-[[ -z "$output" ]]
-[[ "$(stat -f %Lp "$tmp/tty.private" 2>/dev/null || stat -c %a "$tmp/tty.private")" == 600 ]]
-[[ "$(cat "$tmp/submitted")" == "$prompt" ]]
-grep -Fq TUI_COMPLETE "$tmp/tty.private"
+for mode in zero-mcp success multiple-mcp; do
+  output="$(run_tui "$mode" "$tmp/$mode.private" TUI_COMPLETE)"
+  [[ -z "$output" ]]
+  [[ "$(stat -f %Lp "$tmp/$mode.private" 2>/dev/null || stat -c %a "$tmp/$mode.private")" == 600 ]]
+  [[ "$(cat "$tmp/submitted")" == "$prompt" ]]
+  grep -Fq TUI_COMPLETE "$tmp/$mode.private"
+done
 
 set +e
-run_tui pre-submit "$tmp/pre-submit.private" PRE_SUBMIT_MARKER
-pre_submit_status=$?
+for phase in before-cursor after-cursor after-first-composer after-mcp after-title after-second-composer; do
+  TUI_MARKER_PHASE="$phase" run_tui success "$tmp/marker-$phase.private" PRE_SUBMIT_MARKER
+  marker_status=$?
+  [[ "$marker_status" == 65 ]] || exit 1
+done
+run_tui reordered-title "$tmp/reordered.private" NEVER_SEEN
+reordered_status=$?
+run_tui absent-title "$tmp/absent-title.private" NEVER_SEEN
+absent_title_status=$?
 run_tui missing "$tmp/missing.private" NEVER_SEEN
 missing_status=$?
 run_tui nonzero "$tmp/status.private" NEVER_SEEN
@@ -68,7 +99,8 @@ status=$?
 /usr/bin/expect "$root/config/acceptance/launcher-capture.exp" "$tmp/self.private" SELF_MARKER "$tmp/fake-tui" 'prompt contains SELF_MARKER'
 self_status=$?
 set -e
-[[ "$pre_submit_status" == 65 ]]
+[[ "$reordered_status" == 38 ]]
+[[ "$absent_title_status" == 39 ]]
 [[ "$missing_status" == 1 ]]
 [[ "$status" == 37 ]]
 grep -Fq PRIVATE_FAILURE "$tmp/status.private"

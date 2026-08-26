@@ -36,6 +36,7 @@ fi
 grep -Fq -- '-exact "\033\[>7u"' config/acceptance/launcher-capture.exp
 grep -Fq -- '-exact "Ask Codex to do anything"' config/acceptance/launcher-capture.exp
 grep -Fq -- '-re {(Booting MCP server:|Starting MCP servers)}' config/acceptance/launcher-capture.exp
+grep -Fq -- '-re {(Booting MCP server:|Starting MCP servers)} { exp_continue }' config/acceptance/launcher-capture.exp
 grep -Fq -- '-exact "\033]0;workspace\007"' config/acceptance/launcher-capture.exp
 grep -Fq 'send -- $prompt' config/acceptance/launcher-capture.exp
 grep -Fq 'send -- "\033\[13;1u"' config/acceptance/launcher-capture.exp
