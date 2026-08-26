@@ -5,7 +5,7 @@ root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$root"
 
 go test ./tools/acceptance-support -run 'Test(SecureRootsRefusesCollision|SecureRootsRejectsSymlinkedAncestor|CleanupRootsPreservesUnexpectedEntry|CleanupRootsPrevalidatesBothRootsBeforeMutation|CopyAuthNoFollowAndSourceSwapRefusal|CopyAuthRefusesLinkedAncestryAndDestinationCollision)$'
-go test ./tools/acceptance-runner -run 'TestRunner(TimesOutProcessGroup|KillsEscapedSetsidDescendant)$'
+go test ./tools/acceptance-runner -run 'TestRunner(TimesOutProcessGroup|KillsEscapedSetsidDescendant|ReapsChildrenOnSignals)$'
 go test ./tools/capability-stop-barrier -run 'TestStablePostMutationRequiresOwnedCanonicalJournalAndAbsentProjection$'
 
 grep -Fq "trap 'exit 130' INT" bin/accept-capability-workshop

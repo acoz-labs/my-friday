@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -43,6 +44,9 @@ func main() {
 	cmd.Env = append(env, "MY_FRIDAY_ACCEPTANCE_PROCESS_TOKEN="+processToken)
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
+	signals := make(chan os.Signal, 1)
+	signal.Notify(signals, syscall.SIGINT, syscall.SIGTERM)
+	defer signal.Stop(signals)
 	baseline := processTable()
 	if err := cmd.Start(); err != nil {
 		fatal(err)
@@ -55,13 +59,21 @@ func main() {
 	var err error
 	select {
 	case err = <-done:
+	case received := <-signals:
+		result := tracker.stopAndKill()
+		<-done
+		if !result.quiescent {
+			fatal(errors.New("command processes remained after signal cleanup"))
+		}
+		signal.Stop(signals)
+		os.Exit(128 + int(received.(syscall.Signal)))
 	case <-time.After(*timeout):
 		tracker.stopAndKill()
 		<-done
 		fatal(errors.New("command timed out and its process group was killed"))
 	}
-	escaped := tracker.stopAndKill()
-	if escaped || groupExists(pgid) {
+	result := tracker.stopAndKill()
+	if result.descendants || !result.quiescent {
 		fatal(errors.New("command created descendants or exited with surviving process-group members"))
 	}
 	if err != nil {
@@ -144,17 +156,32 @@ func (t *processTracker) capture() {
 		}
 	}
 }
-func (t *processTracker) stopAndKill() bool {
+
+type cleanupResult struct {
+	descendants bool
+	quiescent   bool
+}
+
+func (t *processTracker) stopAndKill() cleanupResult {
+	_ = syscall.Kill(-t.root, syscall.SIGSTOP)
+	for i := 0; i < 5; i++ {
+		t.capture()
+		t.mu.Lock()
+		for pid, identity := range t.seen {
+			if pid != t.root && currentProcessIdentity(pid) == identity {
+				_ = syscall.Kill(pid, syscall.SIGSTOP)
+			}
+		}
+		t.mu.Unlock()
+		time.Sleep(2 * time.Millisecond)
+	}
 	select {
 	case <-t.stop:
 	default:
 		close(t.stop)
 	}
 	<-t.done
-	for i := 0; i < 5; i++ {
-		t.capture()
-		time.Sleep(2 * time.Millisecond)
-	}
+	t.capture()
 	t.mu.Lock()
 	seen := make(map[int]string, len(t.seen))
 	for pid, identity := range t.seen {
@@ -182,11 +209,11 @@ func (t *processTracker) stopAndKill() bool {
 			}
 		}
 		if !alive && !groupExists(t.root) {
-			return surviving
+			return cleanupResult{descendants: surviving, quiescent: true}
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
-	return true
+	return cleanupResult{descendants: surviving, quiescent: false}
 }
 
 func processTable() map[int]processRecord {

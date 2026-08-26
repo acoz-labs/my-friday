@@ -181,5 +181,6 @@ routing. They are network/model-free and do not replace the native Apple-
 silicon run of `bin/accept-capability-workshop` against nominated bytes.
 The shared acceptance-support and runner suites additionally lock no-follow
 auth copy/source-swap refusal, secure-root collision and ambiguous cleanup
-preservation, timeout/escaped-child reaping, and the capability stop barrier's
+preservation, timeout/escaped-child reaping, `INT`/`TERM` exit status and
+ordinary/escaped-descendant quiescence, and the capability stop barrier's
 canonical post-mutation journal boundary.

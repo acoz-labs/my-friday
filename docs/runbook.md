@@ -195,7 +195,10 @@ receipt before ordinary recovery.
 Capability-workshop state uses the same reviewed secure-root pair as native
 acceptance: one random child beneath `~/.my-friday-acceptance/` and
 `~/.my-friday-acceptance-evidence/`, plus randomized target and valid sibling
-assistant/launcher pairs. Failure cleanup disarms signal traps, stops and reaps
+assistant/launcher pairs. The bounded runner catches `INT` and `TERM`, freezes
+and kills its exact process group plus identity-tracked escaped descendants,
+reaps the root, verifies quiescence, and returns status 130 or 143 before
+failure cleanup proceeds. Failure cleanup disarms signal traps, stops and reaps
 bounded child groups, revalidates no-follow markers, manifests, auth receipts,
 and APFS authority, then attempts manifest-owned named cleanup and ordinary
 detach. It publishes non-approving
