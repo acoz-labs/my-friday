@@ -6,6 +6,8 @@ cd "$root"
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
 
+bin/test-capability-workshop-abandon-driver
+
 go test ./tools/acceptance-support -run 'Test(SecureRootsRefusesCollision|SecureRootsRejectsSymlinkedAncestor|CleanupRootsPreservesUnexpectedEntry|CleanupRootsPrevalidatesBothRootsBeforeMutation|CopyAuthNoFollowAndSourceSwapRefusal|CopyAuthRefusesLinkedAncestryAndDestinationCollision)$'
 go test ./tools/acceptance-support -run 'TestMountedDevice(SelectsRequestedMountpointAfterPhysicalStore|RefusesMissingAndAmbiguousMountpoints)$'
 go test ./tools/acceptance-runner -run 'TestRunner(TimesOutProcessGroup|KillsEscapedSetsidDescendant|ReapsChildrenOnSignals)$'
