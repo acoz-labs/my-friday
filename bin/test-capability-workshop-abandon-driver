@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+tmp="$(mktemp -d)"
+trap 'rm -rf "$tmp"' EXIT
+
+candidate="$tmp/candidate"
+instance="$tmp/instance"
+source="$instance/runtime/skills/daily-brief"
+mkdir -p "$instance/runtime/skills"
+printf '%s\n' \
+  '#!/bin/sh' \
+  "trap 'exit 0' HUP INT TERM" \
+  "printf 'Display name'" \
+  'IFS= read -r _ || true' \
+  'exit 0' >"$candidate"
+chmod 0700 "$candidate"
+
+for mode in q eof int term; do
+  /usr/bin/expect "$root/config/acceptance/capability-workshop-abandon.exp" \
+    "$mode" "$candidate" "$instance" daily-brief
+  [[ ! -e "$source" ]] || {
+    echo "$mode abandon fixture wrote source" >&2
+    exit 1
+  }
+done
+
+echo "Capability workshop abandon driver tests passed."
