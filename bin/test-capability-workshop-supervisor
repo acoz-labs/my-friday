@@ -3,6 +3,8 @@ set -euo pipefail
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$root"
+tmp="$(mktemp -d)"
+trap 'rm -rf "$tmp"' EXIT
 
 go test ./tools/acceptance-support -run 'Test(SecureRootsRefusesCollision|SecureRootsRejectsSymlinkedAncestor|CleanupRootsPreservesUnexpectedEntry|CleanupRootsPrevalidatesBothRootsBeforeMutation|CopyAuthNoFollowAndSourceSwapRefusal|CopyAuthRefusesLinkedAncestryAndDestinationCollision)$'
 go test ./tools/acceptance-support -run 'TestMountedDevice(SelectsRequestedMountpointAfterPhysicalStore|RefusesMissingAndAmbiguousMountpoints)$'
@@ -22,6 +24,11 @@ grep -Fq 'run_private "$evidence_root/disabled.private" DAILY_BRIEF_ABSENT "$lau
 grep -Fq 'config/acceptance/launcher-capture.exp' bin/accept-capability-workshop
 grep -Fq '.my-friday-acceptance:launcher-capture.exp' bin/accept-capability-workshop
 grep -Fq 'run_private(){ local transcript="$1" marker="$2";shift 2;run_clean /usr/bin/expect "$run_root/launcher-capture.exp" "$transcript" "$marker"' bin/accept-capability-workshop
+grep -Fq "private_line(){ LC_ALL=C tr -d '\\r' <\"\$1\"|LC_ALL=C grep -Fqx \"\$2\"; }" bin/accept-capability-workshop
+
+bytewise_transcript="$tmp/invalid-utf8.private"
+printf '\377noise\r\nBUILDER_SOURCE_READY\r\n\200tail\n' >"$bytewise_transcript"
+LANG=en_US.UTF-8 LC_ALL=C tr -d '\r' <"$bytewise_transcript" | LC_ALL=C grep -Fqx BUILDER_SOURCE_READY
 if grep -Fq 'Finish with exactly BUILDER_SOURCE_READY' bin/accept-capability-workshop; then
   echo "Builder prompt contains its completion marker" >&2
   exit 1
