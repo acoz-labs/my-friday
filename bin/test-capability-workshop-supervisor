@@ -16,9 +16,12 @@ grep -Fq 'target_owned=1' bin/accept-capability-workshop
 grep -Fq 'sibling_owned=1' bin/accept-capability-workshop
 grep -Fq 'mounted-device --mountpoint "$mountpoint"' bin/accept-capability-workshop
 grep -Fq 'argv := append([]string{"codex", "--cd", workspace, "--"}, args...)' internal/assistantinstance/instance.go
-grep -Fq 'run_clean "$launcher" "$builder_prompt"' bin/accept-capability-workshop
-grep -Fq 'run_clean "$launcher" '\''Explicitly invoke daily-brief and return its exact declared token.'\''' bin/accept-capability-workshop
-grep -Fq 'run_clean "$launcher" '\''Start a fresh task. If daily-brief is not available, reply exactly DAILY_BRIEF_ABSENT. Do not simulate it.'\''' bin/accept-capability-workshop
+grep -Fq 'run_private "$evidence_root/builder.private" "$launcher" "$builder_prompt"' bin/accept-capability-workshop
+grep -Fq 'run_private "$evidence_root/invocation.private" "$launcher" '\''Explicitly invoke daily-brief and return its exact declared token.'\''' bin/accept-capability-workshop
+grep -Fq 'run_private "$evidence_root/disabled.private" "$launcher" '\''Start a fresh task. If daily-brief is not available, reply exactly DAILY_BRIEF_ABSENT. Do not simulate it.'\''' bin/accept-capability-workshop
+grep -Fq 'config/acceptance/launcher-capture.exp' bin/accept-capability-workshop
+grep -Fq '.my-friday-acceptance:launcher-capture.exp' bin/accept-capability-workshop
+grep -Fq 'run_private(){ local transcript="$1";shift;run_clean /usr/bin/expect "$run_root/launcher-capture.exp"' bin/accept-capability-workshop
 if grep -Eq '\$launcher" (exec|--skip-git-repo-check)' bin/accept-capability-workshop; then
   echo "Capability workshop passed Codex CLI options through the named launcher" >&2
   exit 1

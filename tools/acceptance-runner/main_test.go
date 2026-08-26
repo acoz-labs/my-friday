@@ -79,6 +79,93 @@ func TestRunnerReapsChildrenOnSignals(t *testing.T) {
 	}
 }
 
+func TestRunnerPTYWrappedTimeoutReapsEscapedDescendant(t *testing.T) {
+	dir := t.TempDir()
+	runner := buildTestRunner(t, dir)
+	rootPIDFile := filepath.Join(dir, "root.pid")
+	escapedPIDFile := filepath.Join(dir, "escaped.pid")
+	transcript := filepath.Join(dir, "timeout.private")
+	cmd := exec.Command(runner, "--cwd", dir, "--timeout", "500ms",
+		"--env", "SIGNAL_HELPER=escaped", "--env", "ROOT_PIDFILE="+rootPIDFile, "--env", "ESCAPED_PIDFILE="+escapedPIDFile,
+		"--", "/usr/bin/expect", launcherCaptureDriver(t), transcript, os.Args[0], "-test.run=TestSignalDescendantHelper")
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	rootPID := waitForPID(t, rootPIDFile)
+	escapedPID := waitForPID(t, escapedPIDFile)
+	if err := cmd.Wait(); err == nil {
+		t.Fatal("PTY-wrapped timeout succeeded")
+	}
+	waitForGone(t, rootPID)
+	waitForGone(t, escapedPID)
+	assertPrivateTranscript(t, transcript)
+}
+
+func TestRunnerPTYWrappedSignalsReapDescendants(t *testing.T) {
+	for _, sig := range []syscall.Signal{syscall.SIGINT, syscall.SIGTERM} {
+		t.Run(sig.String(), func(t *testing.T) {
+			dir := t.TempDir()
+			runner := buildTestRunner(t, dir)
+			rootPIDFile := filepath.Join(dir, "root.pid")
+			escapedPIDFile := filepath.Join(dir, "escaped.pid")
+			transcript := filepath.Join(dir, "signal.private")
+			cmd := exec.Command(runner, "--cwd", dir, "--timeout", "30s",
+				"--env", "SIGNAL_HELPER=escaped", "--env", "ROOT_PIDFILE="+rootPIDFile, "--env", "ESCAPED_PIDFILE="+escapedPIDFile,
+				"--", "/usr/bin/expect", launcherCaptureDriver(t), transcript, os.Args[0], "-test.run=TestSignalDescendantHelper")
+			if err := cmd.Start(); err != nil {
+				t.Fatal(err)
+			}
+			rootPID := waitForPID(t, rootPIDFile)
+			escapedPID := waitForPID(t, escapedPIDFile)
+			if err := cmd.Process.Signal(sig); err != nil {
+				t.Fatal(err)
+			}
+			err := cmd.Wait()
+			var exit *exec.ExitError
+			if !errors.As(err, &exit) || exit.ExitCode() != 128+int(sig) {
+				t.Fatalf("runner status = %v, want %d", err, 128+int(sig))
+			}
+			waitForGone(t, rootPID)
+			waitForGone(t, escapedPID)
+			assertPrivateTranscript(t, transcript)
+		})
+	}
+}
+
+func buildTestRunner(t *testing.T, dir string) string {
+	t.Helper()
+	runner := filepath.Join(dir, "acceptance-runner")
+	build := exec.Command("go", "build", "-o", runner, ".")
+	if output, err := build.CombinedOutput(); err != nil {
+		t.Fatalf("build runner: %v: %s", err, output)
+	}
+	return runner
+}
+
+func launcherCaptureDriver(t *testing.T) string {
+	t.Helper()
+	cwd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Clean(filepath.Join(cwd, "..", "..", "config", "acceptance", "launcher-capture.exp"))
+	if _, err = os.Stat(path); err != nil {
+		t.Fatal(err)
+	}
+	return path
+}
+
+func assertPrivateTranscript(t *testing.T, path string) {
+	t.Helper()
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Mode().Perm() != 0o600 {
+		t.Fatalf("transcript mode = %o", info.Mode().Perm())
+	}
+}
+
 func TestSignalDescendantHelper(t *testing.T) {
 	mode := os.Getenv("SIGNAL_HELPER")
 	if mode == "" {

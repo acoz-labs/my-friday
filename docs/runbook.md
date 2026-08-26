@@ -198,7 +198,11 @@ acceptance: one random child beneath `~/.my-friday-acceptance/` and
 assistant/launcher pairs. The bounded runner catches `INT` and `TERM`, freezes
 and kills its exact process group plus identity-tracked escaped descendants,
 reaps the root, verifies quiescence, and returns status 130 or 143 before
-failure cleanup proceeds. Failure cleanup disarms signal traps, stops and reaps
+failure cleanup proceeds. Builder, installed-invocation, and disabled-absence
+tasks run under an Expect-owned PTY inside that same bounded runner. Their
+owner-only transcripts remain private acceptance state, preserve the launcher
+exit status, and are never copied into public evidence. Failure cleanup disarms
+signal traps, stops and reaps
 bounded child groups, revalidates no-follow markers, manifests, auth receipts,
 and APFS authority, then attempts manifest-owned named cleanup and ordinary
 detach. It publishes non-approving
