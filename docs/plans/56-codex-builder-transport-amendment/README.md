@@ -1,6 +1,6 @@
 # Solution Design Amendment: Complete Builder Contract And Native Exec Acceptance
 
-- **Status:** Draft
+- **Status:** Final
 - **Issue:** #56
 - **Planning PR:** #71
 - **Repository basis:** 7cc30e9ca934660bd3c00f62d7745e5adaded7cf

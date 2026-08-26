@@ -96,6 +96,9 @@ run-owned authority; ambiguity is preserved for diagnosis.
   private.
 - **Candidate:** exact main SHA, artifact run/id/name/digest, generated builder
   digest, native-exec helper closure, and all implementation PRs are bound.
+- **Deploy:** this artifact repository has no staging service; the production
+  action is the existing `release-artifact.yml` publication of accepted bytes,
+  with no rebuild or automatic user-root activation.
 - **Activation:** builder cannot activate; only driver-confirmed lifecycle
   commands mutate the disposable instance.
 - **Verification:** issue-51 evidence verifier, product acceptance,
