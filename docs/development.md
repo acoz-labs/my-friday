@@ -212,8 +212,10 @@ The minimal native workshop-abandon fixture executes q, EOF, `INT`, and `TERM`
 through the checked-in Expect driver and proves that no source is written. EOF
 is delivered as terminal EOF rather than PTY close; normal nonzero child exits
 are preserved, while wait errors and unexpected HUP/`INT`/`TERM` deaths return
-stable nonzero failure. The fixture skips only on portable hosts without
-`/usr/bin/expect`.
+stable nonzero failure. A mismatched normal nonzero exit remains preserved; a
+mismatched zero returns 126 instead of false success, including trapped
+`INT`/`TERM` handlers that incorrectly exit zero. The fixture skips only on
+portable hosts without `/usr/bin/expect`.
 The native real-command signal journey starts a valid create workshop at its
 first prompt and requires pre-confirmation `INT` and `TERM` to exit within three
 seconds with status 130 and 143 respectively, with neither source nor a source

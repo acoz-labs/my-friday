@@ -17,5 +17,8 @@ if {[catch wait result]} { exit 125 }
 if {[llength $result] != 4 || [lindex $result 2] != 0} { exit 125 }
 set code [lindex $result 3]
 if {![string is integer -strict $code] || $code < 0 || $code > 255} { exit 125 }
-if {$code != $expected} { exit $code }
+if {$code != $expected} {
+  if {$code == 0} { exit 126 }
+  exit $code
+}
 exit 0
