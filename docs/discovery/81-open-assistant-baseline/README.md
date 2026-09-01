@@ -1,11 +1,11 @@
 # Discovery: Define The Open Assistant Baseline
 
-- **Status:** Draft for product-owner design session
+- **Status:** Draft
 - **Discovery issue:** #81
 - **Discovery PR:** #82
-- **Repository basis:** `08b4eb4cd30df4f05bf15ea6c362acac1d48d814`
-- **Recommended decision:** Re-charter My Friday as an assistant distribution and lifecycle layer above agent harnesses, with governed memory and capability building as the first bundled core capabilities.
-- **Gate 1:** not-ready; three product-authority choices remain
+- **Repository basis:** 08b4eb4cd30df4f05bf15ea6c362acac1d48d814
+- **Recommended decision:** approve
+- **Gate 1:** awaiting-authority
 - **Confidence:** Medium
 - **Private evidence:** none
 
@@ -213,7 +213,7 @@ Adapter-produced installed state derived from canonical source. Projections are
 replaceable and verifiable; they are never the only copy of user-owned source
 or durable memory.
 
-## Recommended product decision
+## Decision
 
 ### 1. My Friday is the distribution and lifecycle layer
 
@@ -255,6 +255,24 @@ host its portable foundation while private policy and operations remain an
 overlay. Compatibility proceeds through inventory, contract mapping, export,
 shadow operation, parity evidence, and reversible cutover. Full operational
 parity is not a prerequisite for the public MVP.
+
+## Decision Spotlight
+
+- **Define My Friday above the harness:** Codex runs the model/tool loop; My
+  Friday owns the versioned assistant baseline, capability and memory
+  lifecycle, adapters, conformance, migration, verification, and reversal.
+- **Make the two principles concrete:** `governed-memory` and
+  `capability-builder` are the only first core capabilities.
+- **Keep product mechanics out of the capability catalog:** install, doctor,
+  repair, upgrade, rollback, and remove are baseline infrastructure.
+- **Support one real adapter first:** Codex on Apple Silicon remains the MVP;
+  shared adapter machinery waits for a second harness.
+- **Dogfood by composition:** the mature private deployment becomes public
+  baseline plus private overlay through inventory, shadowing, parity evidence,
+  and reversible cutover.
+- **Protect the MVP from private breadth:** modes, agents, secrets, connectors,
+  transports, scheduling, services, and software-delivery machinery are later
+  optional bundles or private composition.
 
 ## Conceptual architecture
 
@@ -318,127 +336,110 @@ This appears to reach dogfood quickly, but imports private assumptions,
 confuses optional operations with universal foundation, and creates an
 unmaintainable MVP. Reject.
 
-## Roadmap and candidate outcome map
+## Candidate outcome map
 
 ### F0 — Stabilize the existing instruction-only foundation
 
-- **Disposition:** selected; complete under already-approved issue #74
-- **Outcome:** The existing deterministic workshop receives fresh review,
-  immutable-candidate acceptance, and release so the re-charter starts from a
-  stable capability source/lifecycle contract rather than stranded work.
-- **Acceptance boundary:** The approved #74 contract passes; no new product
-  scope or profile is added.
-- **Dependencies:** Current implementation and review state.
-- **Sequence:** Immediate and parallel only with discovery; no new unapproved
-  feature work.
+- Disposition: selected
+- Existing authority: Complete under already-approved issue #74.
+- Outcome: The existing deterministic workshop receives fresh review, immutable-candidate acceptance, and release so the re-charter starts from a stable capability source/lifecycle contract rather than stranded work.
+- Acceptance: The approved #74 contract passes; no new product scope or profile is added.
+- Dependencies: Current implementation and review state.
+- Sequence: Immediate and parallel only with discovery; no new unapproved feature work.
 
 ### B1 — Versioned assistant baseline and Codex adapter
 
-- **Disposition:** selected
-- **Outcome:** A user can install, inspect, verify, diagnose, repair, upgrade,
-  roll back, migrate, and remove one versioned My Friday baseline through the
-  supported Codex/Apple-silicon adapter.
-- **Acceptance boundary:** The baseline manifest declares compatible adapter,
-  core bundle, migrations, canonical source/data ownership, and exact
-  projections; clean-machine and existing-Codex-state scenarios prove
-  deterministic lifecycle and non-interference.
-- **Dependencies:** Accepted #74 lifecycle assets and a separately approved
-  Solution Design.
-- **Sequence:** First new implementation outcome.
+- Disposition: selected
+- Outcome: A user can install, inspect, verify, diagnose, repair, upgrade, roll back, migrate, and remove one versioned My Friday baseline through the supported Codex/Apple-silicon adapter.
+- Acceptance: The baseline manifest declares compatible adapter, core bundle, migrations, canonical source/data ownership, and exact projections; clean-machine and existing-Codex-state scenarios prove deterministic lifecycle and non-interference.
+- Dependencies: Accepted #74 lifecycle assets and a separately approved Solution Design.
+- Sequence: First new implementation outcome.
 
 ### B2 — Governed memory core capability
 
-- **Disposition:** selected; supersedes the current shape of #52 while
-  preserving its approved product intent and evidence
-- **Outcome:** A user can capture observations and chronology, stage and
-  deliberately promote a sourced durable claim, and recall relevant attributed
-  context in a fresh task through the official core bundle.
-- **Acceptance boundary:** A reviewed `data-bearing` profile and the shared
-  capability lifecycle own installation, versioning, migration, verification,
-  recovery, and reversal. Automatic durable belief promotion, vectors, hosted
-  services, and multi-machine synchronization remain excluded.
-- **Dependencies:** B1 and retained governed-memory evidence.
-- **Sequence:** Second; first data-bearing dogfood proof.
+- Disposition: selected
+- Existing authority: Supersede the current shape of #52 while preserving its approved product intent and evidence.
+- Outcome: A user can capture observations and chronology, stage and deliberately promote a sourced durable claim, and recall relevant attributed context in a fresh task through the official core bundle.
+- Acceptance: A reviewed `data-bearing` profile and the shared capability lifecycle own installation, versioning, migration, verification, recovery, and reversal; automatic durable belief promotion, vectors, hosted services, and multi-machine synchronization remain excluded.
+- Dependencies: B1 and retained governed-memory evidence.
+- Sequence: Second; first data-bearing dogfood proof.
 
 ### B3 — Reproducible core bundle and first public baseline acceptance
 
-- **Disposition:** selected
-- **Outcome:** A clean supported machine receives the official baseline with
-  `capability-builder` and `governed-memory` out of the box, and a user completes
-  the full bring-up, fresh-task memory, capability creation/operation, update,
-  rollback, and removal journey.
-- **Acceptance boundary:** Anthony and two independent design partners complete
-  one immutable candidate without operator correction, understand ownership,
-  data, permission, and effect boundaries, and choose to retain it after a
-  defined review interval.
-- **Dependencies:** B1 and B2.
-- **Sequence:** Third; MVP release gate rather than a hidden integration chore.
+- Disposition: selected
+- Outcome: A clean supported machine receives the official baseline with `capability-builder` and `governed-memory` out of the box, and a user completes the full bring-up, fresh-task memory, capability creation/operation, update, rollback, and removal journey.
+- Acceptance: Anthony and two independent design partners complete one immutable candidate without operator correction, understand ownership, data, permission, and effect boundaries, and choose to retain it after a defined review interval.
+- Dependencies: B1 and B2.
+- Sequence: Third; MVP release gate rather than a hidden integration chore.
 
 ### D1 — Private reference compatibility and shadow migration
 
-- **Disposition:** deferred
-- **Outcome:** A mature private assistant can express its portable baseline as
-  a public My Friday baseline plus a private overlay, run a sanitized parity
-  suite, shadow the existing deployment, and reverse a cutover.
-- **Acceptance boundary:** Identity, memory, capabilities, migrations,
-  verification, rollback, and recovery meet explicit parity thresholds; private
-  services and policy remain optional overlay composition.
-- **Dependencies:** Retained B3 use and a sanitized compatibility inventory.
-- **Sequence:** After MVP; staged compatibility, not a single parity project.
+- Disposition: deferred
+- Outcome: A mature private assistant can express its portable baseline as a public My Friday baseline plus a private overlay, run a sanitized parity suite, shadow the existing deployment, and reverse a cutover.
+- Acceptance: Identity, memory, capabilities, migrations, verification, rollback, and recovery meet explicit parity thresholds; private services and policy remain optional overlay composition.
+- Dependencies: Retained B3 use and a sanitized compatibility inventory.
+- Sequence: After MVP; staged compatibility, not a single parity project.
 
 ### D2 — Official optional bundles and richer capability profiles
 
-- **Disposition:** deferred
-- **Outcome:** Maintainers can ship selected modes, agents, deterministic tools,
-  secret-aware integrations, services, or transports as explicit compatible
-  bundles and profiles without enlarging mandatory core.
-- **Acceptance boundary:** Each new profile declares permissions, dependencies,
-  data, secrets, background behavior, migrations, conformance, and reversal.
-- **Dependencies:** B3 dogfood and concrete optional capability demand.
-- **Sequence:** Add one evidence-backed profile at a time.
+- Disposition: deferred
+- Outcome: Maintainers can ship selected modes, agents, deterministic tools, secret-aware integrations, services, or transports as explicit compatible bundles and profiles without enlarging mandatory core.
+- Acceptance: Each new profile declares permissions, dependencies, data, secrets, background behavior, migrations, conformance, and reversal.
+- Dependencies: B3 dogfood and concrete optional capability demand.
+- Sequence: Add one evidence-backed profile at a time.
 
 ### D3 — Second harness adapter and contract extraction
 
-- **Disposition:** deferred
-- **Outcome:** My Friday can install the same assistant-domain baseline through
-  a second real harness adapter, and only then extracts common adapter
-  interfaces justified by both implementations.
-- **Acceptance boundary:** Equivalent identity, memory, capability, lifecycle,
-  and reversal conformance passes on both harnesses; harness-specific features
-  remain explicit.
-- **Dependencies:** Stable B3 and a chosen second harness with users.
-- **Sequence:** Later; never blocks the Codex MVP.
+- Disposition: deferred
+- Outcome: My Friday can install the same assistant-domain baseline through a second real harness adapter, and only then extracts common adapter interfaces justified by both implementations.
+- Acceptance: Equivalent identity, memory, capability, lifecycle, and reversal conformance passes on both harnesses; harness-specific features remain explicit.
+- Dependencies: Stable B3 and a chosen second harness with users.
+- Sequence: Later; never blocks the Codex MVP.
 
 ### P1 — Public capability registry or marketplace
 
-- **Disposition:** parked
-- **Reason:** Distribution trust, signing, provenance, moderation, dependency,
-  update, and revocation policy are unsolved and unnecessary for the first core.
+- Disposition: parked
+- Outcome: A future trusted distribution surface could help users discover and install capabilities from maintainers beyond the local assistant.
+- Acceptance: Signing, provenance, moderation, dependency, update, revocation, permission disclosure, and reversal policies are approved and conformance tested before any remote installation.
+- Dependencies: Retained core-bundle use and demonstrated third-party distribution demand.
+- Sequence: Reconsider only after B3 and later profile evidence.
+- Reason: Distribution trust, signing, provenance, moderation, dependency, update, and revocation policy are unsolved and unnecessary for the first core.
 
 ### P2 — Full agent execution engine
 
-- **Disposition:** parked
-- **Reason:** No current evidence shows that owning the model/tool loop is
-  necessary to deliver memory, capabilities, lifecycle, portability, or the
-  staged reference migration.
+- Disposition: parked
+- Outcome: A future My Friday runtime could own the model/tool loop when adapter boundaries demonstrably cannot satisfy user needs.
+- Acceptance: A separately approved decision proves execution ownership adds necessary user value and can meet model, tool, session, security, lifecycle, and migration obligations.
+- Dependencies: Stable public baseline and concrete cross-harness evidence.
+- Sequence: Reconsider only after adapter limits are observed in production.
+- Reason: No current evidence shows that owning the model/tool loop is necessary to deliver memory, capabilities, lifecycle, portability, or the staged reference migration.
 
 ### P3 — Broad audience, hosted service, and broad OS support
 
-- **Disposition:** parked
-- **Reason:** Consumer onboarding, accounts, hosting, synchronization, Windows,
-  Linux, mobile, voice, and messaging are separate product decisions.
+- Disposition: parked
+- Outcome: Later product lines may make My Friday accessible beyond technical local Apple-silicon users.
+- Acceptance: Each audience, operating system, hosted boundary, account model, and support promise receives its own evidence and product decision.
+- Dependencies: Retained technical MVP use and prioritized audience demand.
+- Sequence: Reconsider after B3 rather than enlarging its acceptance boundary.
+- Reason: Consumer onboarding, accounts, hosting, synchronization, Windows, Linux, mobile, voice, and messaging are separate product decisions.
 
 ### R1 — Keep the current narrow Codex-toolkit identity indefinitely
 
-- **Disposition:** rejected
-- **Reason:** It conflicts with the newly stated product principles and cannot
-  become the portable public foundation beneath a mature assistant.
+- Disposition: rejected
+- Outcome: No delivery outcome; the existing toolkit assets remain inputs to the approved baseline direction rather than the permanent product boundary.
+- Acceptance: Not applicable; this option conflicts with the decision sought.
+- Dependencies: None.
+- Sequence: Do not materialize.
+- Reason: It conflicts with the newly stated product principles and cannot become the portable public foundation beneath a mature assistant.
 
 ### R2 — Put the complete private deployment into core
 
-- **Disposition:** rejected
-- **Reason:** It imports deployment-specific operations and makes the public
-  baseline too broad to understand, validate, retain, or remove.
+- Disposition: rejected
+- Outcome: No delivery outcome; private operations may later compose as optional bundles or overlays only when separately evidenced.
+- Acceptance: Not applicable; copying private breadth is not an MVP strategy.
+- Dependencies: None.
+- Sequence: Do not materialize.
+- Reason: It imports deployment-specific operations and makes the public baseline too broad to understand, validate, retain, or remove.
 
 ## First-MVP acceptance journey
 
@@ -465,7 +466,7 @@ preconfigured My Friday state, a technically capable user can:
 No step requires private deployment context, provider-specific source-control
 authentication, hidden operator intervention, or unreviewed model authority.
 
-## Success and decision signals
+## Success and stop signals
 
 ### Continue
 
@@ -523,9 +524,7 @@ authentication, hidden operator intervention, or unreviewed model authority.
 | Big-bang reference cutover | Inventory, mapping, export/import, shadow run, parity gates, rollback, then bounded cutover |
 | Maintenance burden | Tiny core bundle, evidence-backed optional bundles, explicit support matrix, no marketplace in MVP |
 
-## Assumptions and unknowns ledger
-
-### Assumptions to approve or change
+## Assumptions
 
 - My Friday remains above agent harnesses rather than owning the execution loop.
 - The first replacement target is the portable baseline, not every private
@@ -535,7 +534,7 @@ authentication, hidden operator intervention, or unreviewed model authority.
 - The existing instruction-only lifecycle should be stabilized and preserved as
   one profile rather than discarded during the re-charter.
 
-### Material unknowns for later outcomes
+## Unknowns
 
 - Exact baseline/bundle manifest schemas and version negotiation.
 - Data-bearing profile permissions, data root, migrations, backup, and recovery.
@@ -560,6 +559,14 @@ After these choices, the candidate can be made Final, preflighted on its exact
 head, presented for Gate 1, and—if approved—materialized into independently
 sequenced outcomes. No new re-charter implementation is authorized before that
 gate.
+
+## Gate 1
+
+This candidate is not yet Final. Product authority must answer the three layer,
+replacement, and audience choices above. The discovery branch will then be
+updated to reflect those answers, made internally consistent, validated, and
+preflighted on one exact head. An authorized maintainer approval must target
+that exact final head; any later commit makes the signal stale.
 
 ## Privacy and evidence handling
 
