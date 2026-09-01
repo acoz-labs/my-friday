@@ -2,7 +2,7 @@
 
 - **Status:** Draft for product-owner design session
 - **Discovery issue:** #81
-- **Discovery PR:** Pending
+- **Discovery PR:** #82
 - **Repository basis:** `08b4eb4cd30df4f05bf15ea6c362acac1d48d814`
 - **Recommended decision:** Re-charter My Friday as an assistant distribution and lifecycle layer above agent harnesses, with governed memory and capability building as the first bundled core capabilities.
 - **Gate 1:** not-ready; three product-authority choices remain
@@ -567,4 +567,3 @@ The comparison uses sanitized product contracts and public repository history.
 No private paths, credentials, identities, transcripts, tool outputs, provider
 configuration, or private execution instructions are required. The mature
 deployment is represented only as an architectural capability inventory.
-
