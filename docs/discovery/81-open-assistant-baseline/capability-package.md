@@ -91,11 +91,13 @@ Optional discovery metadata that points to capability packages or capability
 sets. A marketplace is one catalog distribution mechanism. Catalog records do
 not own package semantics, installation authority, or user configuration.
 
-## Canonical package shape
+## Canonical package semantic shape
 
-The v1 contract should reserve this semantic shape. Exact encodings, limits,
-and JSON Schema are Solution Design work, but the component and trust boundaries
-belong in Product Discovery.
+The v1 contract should reserve this semantic closure. The tree below is an
+illustrative, non-authoritative layout that makes the boundaries reviewable; Gate
+1 does not freeze these filenames or directories. Exact encodings, layout,
+limits, and JSON Schema are Solution Design work, while the component and trust
+boundaries belong in Product Discovery.
 
 ```text
 capabilities/<capability-id>/
@@ -240,8 +242,9 @@ The assistant repository should therefore keep distinct artifacts:
 3. a generated lock/receipt recording exact resolved package and adapter
    digests;
 4. replaceable generated projections outside canonical package source; and
-5. capability-owned durable records under `/memory` or another manifest-bound
-   data root, never inside the package.
+5. capability-owned durable records under the independently governed `/memory`
+   module for the MVP, never inside the package. External manifest-bound data
+   roots are a later adapter decision.
 
 This separation permits a user to move the repository, bind machine-local
 secrets again, recompile for another harness, and retain the same assistant

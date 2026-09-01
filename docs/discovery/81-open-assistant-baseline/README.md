@@ -418,6 +418,9 @@ unmaintainable MVP. Reject.
 - Disposition: selected
 - Outcome: A user can create, inspect, reconcile, verify, diagnose, repair, upgrade, roll back, migrate, and remove a versioned baseline backed by one configured private Git repository with independently governed `/config`, `/memory`, and `/capabilities` modules.
 - Acceptance: The kernel owns setup/reconciliation, exact-path Git stewardship, schema/migration validation, lifecycle receipts, recovery, and launching; verified changes commit and push to the configured private remote while divergence, ambiguous conflicts, force-push, rewrite, publication, and unrelated state are refused.
+- Scope boundary: B1 establishes repository, lifecycle, Git, launcher, and stable
+  kernel port primitives only; B2 supplies the capability package/compiler
+  semantics and B3 supplies the governed-memory semantics behind those ports.
 - Dependencies: Accepted #74 lifecycle assets and a separately approved Solution Design.
 - Sequence: First new implementation outcome.
 
