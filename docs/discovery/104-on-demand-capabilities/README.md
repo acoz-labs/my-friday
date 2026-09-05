@@ -113,7 +113,7 @@ explicit lifecycle and fidelity checks. The adapter must not grant authority
 or make unavailable host abilities appear portable. This is a refinement of
 the package/compiler boundary, not a general execution engine.
 
-## Smallest experiment and success signals
+## Success and stop signals
 
 Engineering should pre-register a shared, synthetic capability corpus and task
 suite before collecting results. Compare three modes in both Codex and actual
