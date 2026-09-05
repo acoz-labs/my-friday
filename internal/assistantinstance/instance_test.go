@@ -1125,12 +1125,42 @@ func TestCreateTrustsOnlyExactInstanceWorkspaceWithTOMLEscaping(t *testing.T) {
 	}
 	escapedWorkspace := strings.NewReplacer(`\`, `\\`, `"`, `\"`).Replace(filepath.Join(p.Paths.Root, "workspace"))
 	escapedRuntime := strings.NewReplacer(`\`, `\\`, `"`, `\"`).Replace(filepath.Join(p.Paths.Root, "runtime"))
-	want := "approval_policy = \"never\"\nsandbox_mode = \"workspace-write\"\n\n[sandbox_workspace_write]\nnetwork_access = false\nwritable_roots = [\"" + escapedRuntime + "\"]\n\n[projects.\"" + escapedWorkspace + "\"]\ntrust_level = \"trusted\"\n"
+	want := "approval_policy = \"never\"\nsandbox_mode = \"workspace-write\"\n\n[features]\ncode_mode_host = false\n\n[notice]\nhide_rate_limit_model_nudge = true\n\n[sandbox_workspace_write]\nnetwork_access = false\nwritable_roots = [\"" + escapedRuntime + "\"]\n\n[projects.\"" + escapedWorkspace + "\"]\ntrust_level = \"trusted\"\n"
 	if string(config) != want {
 		t.Fatalf("unexpected instance trust config\nwant: %q\n got: %q", want, config)
 	}
 	if strings.Count(string(config), "writable_roots") != 1 || strings.Contains(string(config), "danger-full-access") || strings.Contains(string(config), "network_access = true") {
 		t.Fatalf("broader sandbox authority rendered: %q", config)
+	}
+}
+
+func TestVerifyAllowsOnlyCodexModelAvailabilityMetadata(t *testing.T) {
+	home, exe, codex := fixture(t)
+	p, err := PlanCreate(home, "alfred", exe, codex)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = Create(p, exe, codex); err != nil {
+		t.Fatal(err)
+	}
+	config := filepath.Join(p.Paths.Root, "codex", "config.toml")
+	original, err := os.ReadFile(config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	allowed := append(append([]byte{}, original...), []byte("\n[tui.model_availability_nux]\ngpt-6-astra = 1\n\"gpt-5.6-luna\" = 2\n")...)
+	if err = os.WriteFile(config, allowed, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = Verify(home, "alfred"); err != nil {
+		t.Fatalf("bounded Codex-owned TUI metadata refused: %v", err)
+	}
+	bad := append(append([]byte{}, allowed...), []byte("sandbox_mode = \"danger-full-access\"\n")...)
+	if err = os.WriteFile(config, bad, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = Verify(home, "alfred"); err == nil || !strings.Contains(err.Error(), "managed Codex config drift") {
+		t.Fatalf("security-relevant config suffix accepted: %v", err)
 	}
 }
 
