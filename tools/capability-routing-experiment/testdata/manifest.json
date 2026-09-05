@@ -1,0 +1,2635 @@
+{
+  "version": 1,
+  "source_commit": "c17f2a17d74c2cff68eee49a4f799ceff342d9a0",
+  "corpus_revision": "routing-corpus-v1",
+  "hashes": {
+    "capabilities": "59ca50a5c2adfb53d71389c25b0c452a7f2180d4c9a0189e25528825aabc4c3d",
+    "tasks": "00592e88944498ecf45ef745d2a04b82f55d43ddbec8fdc5a183a0eeea535678",
+    "labels": "735660ef53a98c8b43a8d0feb30d2e11545304f9e4c0e4b98defc5697710b1b2"
+  },
+  "budgets": {
+    "trial_wall_seconds": 120,
+    "trial_aggregate_tokens": 30000,
+    "trial_tool_calls": 8,
+    "trial_workers": 1,
+    "trial_worker_depth": 1,
+    "agent_output_tokens": 2000,
+    "batch_trials": 12,
+    "batch_wall_seconds": 1800,
+    "batch_aggregate_tokens": 360000
+  },
+  "harnesses": [
+    {
+      "id": "codex",
+      "executable_version": "codex-cli 0.153.4",
+      "model": "gpt-5.3-codex",
+      "config": "experiment-v1-unavailable-until-control-preflight"
+    },
+    {
+      "id": "claude",
+      "executable_version": "2.1.193 (Claude Code)",
+      "model": "claude-sonnet-4-6",
+      "config": "experiment-v1-unavailable-until-control-preflight"
+    }
+  ],
+  "modes": [
+    "native-catalogue",
+    "lookup-direct",
+    "lookup-worker"
+  ],
+  "repetitions": 2,
+  "cells": [
+    {
+      "trial_id": "codex-dev-explicit-csv-native-catalogue-r1",
+      "sequence": 1,
+      "harness_id": "codex",
+      "task_id": "dev-explicit-csv",
+      "mode": "native-catalogue",
+      "repetition": 1,
+      "cache": "cold"
+    },
+    {
+      "trial_id": "codex-dev-explicit-csv-lookup-direct-r1",
+      "sequence": 2,
+      "harness_id": "codex",
+      "task_id": "dev-explicit-csv",
+      "mode": "lookup-direct",
+      "repetition": 1,
+      "cache": "cold"
+    },
+    {
+      "trial_id": "codex-dev-explicit-csv-lookup-worker-r1",
+      "sequence": 3,
+      "harness_id": "codex",
+      "task_id": "dev-explicit-csv",
+      "mode": "lookup-worker",
+      "repetition": 1,
+      "cache": "cold"
+    },
+    {
+      "trial_id": "codex-dev-explicit-csv-lookup-worker-r2",
+      "sequence": 4,
+      "harness_id": "codex",
+      "task_id": "dev-explicit-csv",
+      "mode": "lookup-worker",
+      "repetition": 2,
+      "cache": "warm"
+    },
+    {
+      "trial_id": "codex-dev-explicit-csv-lookup-direct-r2",
+      "sequence": 5,
+      "harness_id": "codex",
+      "task_id": "dev-explicit-csv",
+      "mode": "lookup-direct",
+      "repetition": 2,
+      "cache": "warm"
+    },
+    {
+      "trial_id": "codex-dev-explicit-csv-native-catalogue-r2",
+      "sequence": 6,
+      "harness_id": "codex",
+      "task_id": "dev-explicit-csv",
+      "mode": "native-catalogue",
+      "repetition": 2,
+      "cache": "warm"
+    },
+    {
+      "trial_id": "codex-dev-paraphrase-notes-lookup-direct-r1",
+      "sequence": 7,
+      "harness_id": "codex",
+      "task_id": "dev-paraphrase-notes",
+      "mode": "lookup-direct",
+      "repetition": 1,
+      "cache": "cold"
+    },
+    {
+      "trial_id": "codex-dev-paraphrase-notes-lookup-worker-r1",
+      "sequence": 8,
+      "harness_id": "codex",
+      "task_id": "dev-paraphrase-notes",
+      "mode": "lookup-worker",
+      "repetition": 1,
+      "cache": "cold"
+    },
+    {
+      "trial_id": "codex-dev-paraphrase-notes-native-catalogue-r1",
+      "sequence": 9,
+      "harness_id": "codex",
+      "task_id": "dev-paraphrase-notes",
+      "mode": "native-catalogue",
+      "repetition": 1,
+      "cache": "cold"
+    },
+    {
+      "trial_id": "codex-dev-paraphrase-notes-native-catalogue-r2",
+      "sequence": 10,
+      "harness_id": "codex",
+      "task_id": "dev-paraphrase-notes",
+      "mode": "native-catalogue",
+      "repetition": 2,
+      "cache": "warm"
+    },
+    {
+      "trial_id": "codex-dev-paraphrase-notes-lookup-worker-r2",
+      "sequence": 11,
+      "harness_id": "codex",
+      "task_id": "dev-paraphrase-notes",
+      "mode": "lookup-worker",
+      "repetition": 2,
+      "cache": "warm"
+    },
+    {
+      "trial_id": "codex-dev-paraphrase-notes-lookup-direct-r2",
+      "sequence": 12,
+      "harness_id": "codex",
+      "task_id": "dev-paraphrase-notes",
+      "mode": "lookup-direct",
+      "repetition": 2,
+      "cache": "warm"
+    },
+    {
+      "trial_id": "codex-dev-ambiguous-copy-lookup-worker-r1",
+      "sequence": 13,
+      "harness_id": "codex",
+      "task_id": "dev-ambiguous-copy",
+      "mode": "lookup-worker",
+      "repetition": 1,
+      "cache": "cold"
+    },
+    {
+      "trial_id": "codex-dev-ambiguous-copy-native-catalogue-r1",
+      "sequence": 14,
+      "harness_id": "codex",
+      "task_id": "dev-ambiguous-copy",
+      "mode": "native-catalogue",
+      "repetition": 1,
+      "cache": "cold"
+    },
+    {
+      "trial_id": "codex-dev-ambiguous-copy-lookup-direct-r1",
+      "sequence": 15,
+      "harness_id": "codex",
+      "task_id": "dev-ambiguous-copy",
+      "mode": "lookup-direct",
+      "repetition": 1,
+      "cache": "cold"
+    },
+    {
+      "trial_id": "codex-dev-ambiguous-copy-lookup-direct-r2",
+      "sequence": 16,
+      "harness_id": "codex",
+      "task_id": "dev-ambiguous-copy",
+      "mode": "lookup-direct",
+      "repetition": 2,
+      "cache": "warm"
+    },
+    {
+      "trial_id": "codex-dev-ambiguous-copy-native-catalogue-r2",
+      "sequence": 17,
+      "harness_id": "codex",
+      "task_id": "dev-ambiguous-copy",
+      "mode": "native-catalogue",
+      "repetition": 2,
+      "cache": "warm"
+    },
+    {
+      "trial_id": "codex-dev-ambiguous-copy-lookup-worker-r2",
+      "sequence": 18,
+      "harness_id": "codex",
+      "task_id": "dev-ambiguous-copy",
+      "mode": "lookup-worker",
+      "repetition": 2,
+      "cache": "warm"
+    },
+    {
+      "trial_id": "codex-dev-no-match-weather-native-catalogue-r1",
+      "sequence": 19,
+      "harness_id": "codex",
+      "task_id": "dev-no-match-weather",
+      "mode": "native-catalogue",
+      "repetition": 1,
+      "cache": "cold"
+    },
+    {
+      "trial_id": "codex-dev-no-match-weather-lookup-direct-r1",
+      "sequence": 20,
+      "harness_id": "codex",
+      "task_id": "dev-no-match-weather",
+      "mode": "lookup-direct",
+      "repetition": 1,
+      "cache": "cold"
+    },
+    {
+      "trial_id": "codex-dev-no-match-weather-lookup-worker-r1",
+      "sequence": 21,
+      "harness_id": "codex",
+      "task_id": "dev-no-match-weather",
+      "mode": "lookup-worker",
+      "repetition": 1,
+      "cache": "cold"
+    },
+    {
+      "trial_id": "codex-dev-no-match-weather-lookup-worker-r2",
+      "sequence": 22,
+      "harness_id": "codex",
+      "task_id": "dev-no-match-weather",
+      "mode": "lookup-worker",
+      "repetition": 2,
+      "cache": "warm"
+    },
+    {
+      "trial_id": "codex-dev-no-match-weather-lookup-direct-r2",
+      "sequence": 23,
+      "harness_id": "codex",
+      "task_id": "dev-no-match-weather",
+      "mode": "lookup-direct",
+      "repetition": 2,
+      "cache": "warm"
+    },
+    {
+      "trial_id": "codex-dev-no-match-weather-native-catalogue-r2",
+      "sequence": 24,
+      "harness_id": "codex",
+      "task_id": "dev-no-match-weather",
+      "mode": "native-catalogue",
+      "repetition": 2,
+      "cache": "warm"
+    },
+    {
+      "trial_id": "codex-dev-dependency-incident-lookup-direct-r1",
+      "sequence": 25,
+      "harness_id": "codex",
+      "task_id": "dev-dependency-incident",
+      "mode": "lookup-direct",
+      "repetition": 1,
+      "cache": "cold"
+    },
+    {
+      "trial_id": "codex-dev-dependency-incident-lookup-worker-r1",
+      "sequence": 26,
+      "harness_id": "codex",
+      "task_id": "dev-dependency-incident",
+      "mode": "lookup-worker",
+      "repetition": 1,
+      "cache": "cold"
+    },
+    {
+      "trial_id": "codex-dev-dependency-incident-native-catalogue-r1",
+      "sequence": 27,
+      "harness_id": "codex",
+      "task_id": "dev-dependency-incident",
+      "mode": "native-catalogue",
+      "repetition": 1,
+      "cache": "cold"
+    },
+    {
+      "trial_id": "codex-dev-dependency-incident-native-catalogue-r2",
+      "sequence": 28,
+      "harness_id": "codex",
+      "task_id": "dev-dependency-incident",
+      "mode": "native-catalogue",
+      "repetition": 2,
+      "cache": "warm"
+    },
+    {
+      "trial_id": "codex-dev-dependency-incident-lookup-worker-r2",
+      "sequence": 29,
+      "harness_id": "codex",
+      "task_id": "dev-dependency-incident",
+      "mode": "lookup-worker",
+      "repetition": 2,
+      "cache": "warm"
+    },
+    {
+      "trial_id": "codex-dev-dependency-incident-lookup-direct-r2",
+      "sequence": 30,
+      "harness_id": "codex",
+      "task_id": "dev-dependency-incident",
+      "mode": "lookup-direct",
+      "repetition": 2,
+      "cache": "warm"
+    },
+    {
+      "trial_id": "codex-dev-stale-index-lookup-worker-r1",
+      "sequence": 31,
+      "harness_id": "codex",
+      "task_id": "dev-stale-index",
+      "mode": "lookup-worker",
+      "repetition": 1,
+      "cache": "cold"
+    },
+    {
+      "trial_id": "codex-dev-stale-index-native-catalogue-r1",
+      "sequence": 32,
+      "harness_id": "codex",
+      "task_id": "dev-stale-index",
+      "mode": "native-catalogue",
+      "repetition": 1,
+      "cache": "cold"
+    },
+    {
+      "trial_id": "codex-dev-stale-index-lookup-direct-r1",
+      "sequence": 33,
+      "harness_id": "codex",
+      "task_id": "dev-stale-index",
+      "mode": "lookup-direct",
+      "repetition": 1,
+      "cache": "cold"
+    },
+    {
+      "trial_id": "codex-dev-stale-index-lookup-direct-r2",
+      "sequence": 34,
+      "harness_id": "codex",
+      "task_id": "dev-stale-index",
+      "mode": "lookup-direct",
+      "repetition": 2,
+      "cache": "warm"
+    },
+    {
+      "trial_id": "codex-dev-stale-index-native-catalogue-r2",
+      "sequence": 35,
+      "harness_id": "codex",
+      "task_id": "dev-stale-index",
+      "mode": "native-catalogue",
+      "repetition": 2,
+      "cache": "warm"
+    },
+    {
+      "trial_id": "codex-dev-stale-index-lookup-worker-r2",
+      "sequence": 36,
+      "harness_id": "codex",
+      "task_id": "dev-stale-index",
+      "mode": "lookup-worker",
+      "repetition": 2,
+      "cache": "warm"
+    },
+    {
+      "trial_id": "codex-dev-unsupported-email-native-catalogue-r1",
+      "sequence": 37,
+      "harness_id": "codex",
+      "task_id": "dev-unsupported-email",
+      "mode": "native-catalogue",
+      "repetition": 1,
+      "cache": "cold"
+    },
+    {
+      "trial_id": "codex-dev-unsupported-email-lookup-direct-r1",
+      "sequence": 38,
+      "harness_id": "codex",
+      "task_id": "dev-unsupported-email",
+      "mode": "lookup-direct",
+      "repetition": 1,
+      "cache": "cold"
+    },
+    {
+      "trial_id": "codex-dev-unsupported-email-lookup-worker-r1",
+      "sequence": 39,
+      "harness_id": "codex",
+      "task_id": "dev-unsupported-email",
+      "mode": "lookup-worker",
+      "repetition": 1,
+      "cache": "cold"
+    },
+    {
+      "trial_id": "codex-dev-unsupported-email-lookup-worker-r2",
+      "sequence": 40,
+      "harness_id": "codex",
+      "task_id": "dev-unsupported-email",
+      "mode": "lookup-worker",
+      "repetition": 2,
+      "cache": "warm"
+    },
+    {
+      "trial_id": "codex-dev-unsupported-email-lookup-direct-r2",
+      "sequence": 41,
+      "harness_id": "codex",
+      "task_id": "dev-unsupported-email",
+      "mode": "lookup-direct",
+      "repetition": 2,
+      "cache": "warm"
+    },
+    {
+      "trial_id": "codex-dev-unsupported-email-native-catalogue-r2",
+      "sequence": 42,
+      "harness_id": "codex",
+      "task_id": "dev-unsupported-email",
+      "mode": "native-catalogue",
+      "repetition": 2,
+      "cache": "warm"
+    },
+    {
+      "trial_id": "codex-dev-conflicting-labels-lookup-direct-r1",
+      "sequence": 43,
+      "harness_id": "codex",
+      "task_id": "dev-conflicting-labels",
+      "mode": "lookup-direct",
+      "repetition": 1,
+      "cache": "cold"
+    },
+    {
+      "trial_id": "codex-dev-conflicting-labels-lookup-worker-r1",
+      "sequence": 44,
+      "harness_id": "codex",
+      "task_id": "dev-conflicting-labels",
+      "mode": "lookup-worker",
+      "repetition": 1,
+      "cache": "cold"
+    },
+    {
+      "trial_id": "codex-dev-conflicting-labels-native-catalogue-r1",
+      "sequence": 45,
+      "harness_id": "codex",
+      "task_id": "dev-conflicting-labels",
+      "mode": "native-catalogue",
+      "repetition": 1,
+      "cache": "cold"
+    },
+    {
+      "trial_id": "codex-dev-conflicting-labels-native-catalogue-r2",
+      "sequence": 46,
+      "harness_id": "codex",
+      "task_id": "dev-conflicting-labels",
+      "mode": "native-catalogue",
+      "repetition": 2,
+      "cache": "warm"
+    },
+    {
+      "trial_id": "codex-dev-conflicting-labels-lookup-worker-r2",
+      "sequence": 47,
+      "harness_id": "codex",
+      "task_id": "dev-conflicting-labels",
+      "mode": "lookup-worker",
+      "repetition": 2,
+      "cache": "warm"
+    },
+    {
+      "trial_id": "codex-dev-conflicting-labels-lookup-direct-r2",
+      "sequence": 48,
+      "harness_id": "codex",
+      "task_id": "dev-conflicting-labels",
+      "mode": "lookup-direct",
+      "repetition": 2,
+      "cache": "warm"
+    },
+    {
+      "trial_id": "codex-dev-permission-private-lookup-worker-r1",
+      "sequence": 49,
+      "harness_id": "codex",
+      "task_id": "dev-permission-private",
+      "mode": "lookup-worker",
+      "repetition": 1,
+      "cache": "cold"
+    },
+    {
+      "trial_id": "codex-dev-permission-private-native-catalogue-r1",
+      "sequence": 50,
+      "harness_id": "codex",
+      "task_id": "dev-permission-private",
+      "mode": "native-catalogue",
+      "repetition": 1,
+      "cache": "cold"
+    },
+    {
+      "trial_id": "codex-dev-permission-private-lookup-direct-r1",
+      "sequence": 51,
+      "harness_id": "codex",
+      "task_id": "dev-permission-private",
+      "mode": "lookup-direct",
+      "repetition": 1,
+      "cache": "cold"
+    },
+    {
+      "trial_id": "codex-dev-permission-private-lookup-direct-r2",
+      "sequence": 52,
+      "harness_id": "codex",
+      "task_id": "dev-permission-private",
+      "mode": "lookup-direct",
+      "repetition": 2,
+      "cache": "warm"
+    },
+    {
+      "trial_id": "codex-dev-permission-private-native-catalogue-r2",
+      "sequence": 53,
+      "harness_id": "codex",
+      "task_id": "dev-permission-private",
+      "mode": "native-catalogue",
+      "repetition": 2,
+      "cache": "warm"
+    },
+    {
+      "trial_id": "codex-dev-permission-private-lookup-worker-r2",
+      "sequence": 54,
+      "harness_id": "codex",
+      "task_id": "dev-permission-private",
+      "mode": "lookup-worker",
+      "repetition": 2,
+      "cache": "warm"
+    },
+    {
+      "trial_id": "codex-dev-short-checksum-native-catalogue-r1",
+      "sequence": 55,
+      "harness_id": "codex",
+      "task_id": "dev-short-checksum",
+      "mode": "native-catalogue",
+      "repetition": 1,
+      "cache": "cold"
+    },
+    {
+      "trial_id": "codex-dev-short-checksum-lookup-direct-r1",
+      "sequence": 56,
+      "harness_id": "codex",
+      "task_id": "dev-short-checksum",
+      "mode": "lookup-direct",
+      "repetition": 1,
+      "cache": "cold"
+    },
+    {
+      "trial_id": "codex-dev-short-checksum-lookup-worker-r1",
+      "sequence": 57,
+      "harness_id": "codex",
+      "task_id": "dev-short-checksum",
+      "mode": "lookup-worker",
+      "repetition": 1,
+      "cache": "cold"
+    },
+    {
+      "trial_id": "codex-dev-short-checksum-lookup-worker-r2",
+      "sequence": 58,
+      "harness_id": "codex",
+      "task_id": "dev-short-checksum",
+      "mode": "lookup-worker",
+      "repetition": 2,
+      "cache": "warm"
+    },
+    {
+      "trial_id": "codex-dev-short-checksum-lookup-direct-r2",
+      "sequence": 59,
+      "harness_id": "codex",
+      "task_id": "dev-short-checksum",
+      "mode": "lookup-direct",
+      "repetition": 2,
+      "cache": "warm"
+    },
+    {
+      "trial_id": "codex-dev-short-checksum-native-catalogue-r2",
+      "sequence": 60,
+      "harness_id": "codex",
+      "task_id": "dev-short-checksum",
+      "mode": "native-catalogue",
+      "repetition": 2,
+      "cache": "warm"
+    },
+    {
+      "trial_id": "codex-dev-complex-research-lookup-direct-r1",
+      "sequence": 61,
+      "harness_id": "codex",
+      "task_id": "dev-complex-research",
+      "mode": "lookup-direct",
+      "repetition": 1,
+      "cache": "cold"
+    },
+    {
+      "trial_id": "codex-dev-complex-research-lookup-worker-r1",
+      "sequence": 62,
+      "harness_id": "codex",
+      "task_id": "dev-complex-research",
+      "mode": "lookup-worker",
+      "repetition": 1,
+      "cache": "cold"
+    },
+    {
+      "trial_id": "codex-dev-complex-research-native-catalogue-r1",
+      "sequence": 63,
+      "harness_id": "codex",
+      "task_id": "dev-complex-research",
+      "mode": "native-catalogue",
+      "repetition": 1,
+      "cache": "cold"
+    },
+    {
+      "trial_id": "codex-dev-complex-research-native-catalogue-r2",
+      "sequence": 64,
+      "harness_id": "codex",
+      "task_id": "dev-complex-research",
+      "mode": "native-catalogue",
+      "repetition": 2,
+      "cache": "warm"
+    },
+    {
+      "trial_id": "codex-dev-complex-research-lookup-worker-r2",
+      "sequence": 65,
+      "harness_id": "codex",
+      "task_id": "dev-complex-research",
+      "mode": "lookup-worker",
+      "repetition": 2,
+      "cache": "warm"
+    },
+    {
+      "trial_id": "codex-dev-complex-research-lookup-direct-r2",
+      "sequence": 66,
+      "harness_id": "codex",
+      "task_id": "dev-complex-research",
+      "mode": "lookup-direct",
+      "repetition": 2,
+      "cache": "warm"
+    },
+    {
+      "trial_id": "codex-dev-summary-handoff-lookup-worker-r1",
+      "sequence": 67,
+      "harness_id": "codex",
+      "task_id": "dev-summary-handoff",
+      "mode": "lookup-worker",
+      "repetition": 1,
+      "cache": "cold"
+    },
+    {
+      "trial_id": "codex-dev-summary-handoff-native-catalogue-r1",
+      "sequence": 68,
+      "harness_id": "codex",
+      "task_id": "dev-summary-handoff",
+      "mode": "native-catalogue",
+      "repetition": 1,
+      "cache": "cold"
+    },
+    {
+      "trial_id": "codex-dev-summary-handoff-lookup-direct-r1",
+      "sequence": 69,
+      "harness_id": "codex",
+      "task_id": "dev-summary-handoff",
+      "mode": "lookup-direct",
+      "repetition": 1,
+      "cache": "cold"
+    },
+    {
+      "trial_id": "codex-dev-summary-handoff-lookup-direct-r2",
+      "sequence": 70,
+      "harness_id": "codex",
+      "task_id": "dev-summary-handoff",
+      "mode": "lookup-direct",
+      "repetition": 2,
+      "cache": "warm"
+    },
+    {
+      "trial_id": "codex-dev-summary-handoff-native-catalogue-r2",
+      "sequence": 71,
+      "harness_id": "codex",
+      "task_id": "dev-summary-handoff",
+      "mode": "native-catalogue",
+      "repetition": 2,
+      "cache": "warm"
+    },
+    {
+      "trial_id": "codex-dev-summary-handoff-lookup-worker-r2",
+      "sequence": 72,
+      "harness_id": "codex",
+      "task_id": "dev-summary-handoff",
+      "mode": "lookup-worker",
+      "repetition": 2,
+      "cache": "warm"
+    },
+    {
+      "trial_id": "codex-held-explicit-archive-native-catalogue-r1",
+      "sequence": 73,
+      "harness_id": "codex",
+      "task_id": "held-explicit-archive",
+      "mode": "native-catalogue",
+      "repetition": 1,
+      "cache": "cold"
+    },
+    {
+      "trial_id": "codex-held-explicit-archive-lookup-direct-r1",
+      "sequence": 74,
+      "harness_id": "codex",
+      "task_id": "held-explicit-archive",
+      "mode": "lookup-direct",
+      "repetition": 1,
+      "cache": "cold"
+    },
+    {
+      "trial_id": "codex-held-explicit-archive-lookup-worker-r1",
+      "sequence": 75,
+      "harness_id": "codex",
+      "task_id": "held-explicit-archive",
+      "mode": "lookup-worker",
+      "repetition": 1,
+      "cache": "cold"
+    },
+    {
+      "trial_id": "codex-held-explicit-archive-lookup-worker-r2",
+      "sequence": 76,
+      "harness_id": "codex",
+      "task_id": "held-explicit-archive",
+      "mode": "lookup-worker",
+      "repetition": 2,
+      "cache": "warm"
+    },
+    {
+      "trial_id": "codex-held-explicit-archive-lookup-direct-r2",
+      "sequence": 77,
+      "harness_id": "codex",
+      "task_id": "held-explicit-archive",
+      "mode": "lookup-direct",
+      "repetition": 2,
+      "cache": "warm"
+    },
+    {
+      "trial_id": "codex-held-explicit-archive-native-catalogue-r2",
+      "sequence": 78,
+      "harness_id": "codex",
+      "task_id": "held-explicit-archive",
+      "mode": "native-catalogue",
+      "repetition": 2,
+      "cache": "warm"
+    },
+    {
+      "trial_id": "codex-held-paraphrase-duplicates-lookup-direct-r1",
+      "sequence": 79,
+      "harness_id": "codex",
+      "task_id": "held-paraphrase-duplicates",
+      "mode": "lookup-direct",
+      "repetition": 1,
+      "cache": "cold"
+    },
+    {
+      "trial_id": "codex-held-paraphrase-duplicates-lookup-worker-r1",
+      "sequence": 80,
+      "harness_id": "codex",
+      "task_id": "held-paraphrase-duplicates",
+      "mode": "lookup-worker",
+      "repetition": 1,
+      "cache": "cold"
+    },
+    {
+      "trial_id": "codex-held-paraphrase-duplicates-native-catalogue-r1",
+      "sequence": 81,
+      "harness_id": "codex",
+      "task_id": "held-paraphrase-duplicates",
+      "mode": "native-catalogue",
+      "repetition": 1,
+      "cache": "cold"
+    },
+    {
+      "trial_id": "codex-held-paraphrase-duplicates-native-catalogue-r2",
+      "sequence": 82,
+      "harness_id": "codex",
+      "task_id": "held-paraphrase-duplicates",
+      "mode": "native-catalogue",
+      "repetition": 2,
+      "cache": "warm"
+    },
+    {
+      "trial_id": "codex-held-paraphrase-duplicates-lookup-worker-r2",
+      "sequence": 83,
+      "harness_id": "codex",
+      "task_id": "held-paraphrase-duplicates",
+      "mode": "lookup-worker",
+      "repetition": 2,
+      "cache": "warm"
+    },
+    {
+      "trial_id": "codex-held-paraphrase-duplicates-lookup-direct-r2",
+      "sequence": 84,
+      "harness_id": "codex",
+      "task_id": "held-paraphrase-duplicates",
+      "mode": "lookup-direct",
+      "repetition": 2,
+      "cache": "warm"
+    },
+    {
+      "trial_id": "codex-held-ambiguous-dates-lookup-worker-r1",
+      "sequence": 85,
+      "harness_id": "codex",
+      "task_id": "held-ambiguous-dates",
+      "mode": "lookup-worker",
+      "repetition": 1,
+      "cache": "cold"
+    },
+    {
+      "trial_id": "codex-held-ambiguous-dates-native-catalogue-r1",
+      "sequence": 86,
+      "harness_id": "codex",
+      "task_id": "held-ambiguous-dates",
+      "mode": "native-catalogue",
+      "repetition": 1,
+      "cache": "cold"
+    },
+    {
+      "trial_id": "codex-held-ambiguous-dates-lookup-direct-r1",
+      "sequence": 87,
+      "harness_id": "codex",
+      "task_id": "held-ambiguous-dates",
+      "mode": "lookup-direct",
+      "repetition": 1,
+      "cache": "cold"
+    },
+    {
+      "trial_id": "codex-held-ambiguous-dates-lookup-direct-r2",
+      "sequence": 88,
+      "harness_id": "codex",
+      "task_id": "held-ambiguous-dates",
+      "mode": "lookup-direct",
+      "repetition": 2,
+      "cache": "warm"
+    },
+    {
+      "trial_id": "codex-held-ambiguous-dates-native-catalogue-r2",
+      "sequence": 89,
+      "harness_id": "codex",
+      "task_id": "held-ambiguous-dates",
+      "mode": "native-catalogue",
+      "repetition": 2,
+      "cache": "warm"
+    },
+    {
+      "trial_id": "codex-held-ambiguous-dates-lookup-worker-r2",
+      "sequence": 90,
+      "harness_id": "codex",
+      "task_id": "held-ambiguous-dates",
+      "mode": "lookup-worker",
+      "repetition": 2,
+      "cache": "warm"
+    },
+    {
+      "trial_id": "codex-held-no-match-map-native-catalogue-r1",
+      "sequence": 91,
+      "harness_id": "codex",
+      "task_id": "held-no-match-map",
+      "mode": "native-catalogue",
+      "repetition": 1,
+      "cache": "cold"
+    },
+    {
+      "trial_id": "codex-held-no-match-map-lookup-direct-r1",
+      "sequence": 92,
+      "harness_id": "codex",
+      "task_id": "held-no-match-map",
+      "mode": "lookup-direct",
+      "repetition": 1,
+      "cache": "cold"
+    },
+    {
+      "trial_id": "codex-held-no-match-map-lookup-worker-r1",
+      "sequence": 93,
+      "harness_id": "codex",
+      "task_id": "held-no-match-map",
+      "mode": "lookup-worker",
+      "repetition": 1,
+      "cache": "cold"
+    },
+    {
+      "trial_id": "codex-held-no-match-map-lookup-worker-r2",
+      "sequence": 94,
+      "harness_id": "codex",
+      "task_id": "held-no-match-map",
+      "mode": "lookup-worker",
+      "repetition": 2,
+      "cache": "warm"
+    },
+    {
+      "trial_id": "codex-held-no-match-map-lookup-direct-r2",
+      "sequence": 95,
+      "harness_id": "codex",
+      "task_id": "held-no-match-map",
+      "mode": "lookup-direct",
+      "repetition": 2,
+      "cache": "warm"
+    },
+    {
+      "trial_id": "codex-held-no-match-map-native-catalogue-r2",
+      "sequence": 96,
+      "harness_id": "codex",
+      "task_id": "held-no-match-map",
+      "mode": "native-catalogue",
+      "repetition": 2,
+      "cache": "warm"
+    },
+    {
+      "trial_id": "codex-held-dependency-chart-lookup-direct-r1",
+      "sequence": 97,
+      "harness_id": "codex",
+      "task_id": "held-dependency-chart",
+      "mode": "lookup-direct",
+      "repetition": 1,
+      "cache": "cold"
+    },
+    {
+      "trial_id": "codex-held-dependency-chart-lookup-worker-r1",
+      "sequence": 98,
+      "harness_id": "codex",
+      "task_id": "held-dependency-chart",
+      "mode": "lookup-worker",
+      "repetition": 1,
+      "cache": "cold"
+    },
+    {
+      "trial_id": "codex-held-dependency-chart-native-catalogue-r1",
+      "sequence": 99,
+      "harness_id": "codex",
+      "task_id": "held-dependency-chart",
+      "mode": "native-catalogue",
+      "repetition": 1,
+      "cache": "cold"
+    },
+    {
+      "trial_id": "codex-held-dependency-chart-native-catalogue-r2",
+      "sequence": 100,
+      "harness_id": "codex",
+      "task_id": "held-dependency-chart",
+      "mode": "native-catalogue",
+      "repetition": 2,
+      "cache": "warm"
+    },
+    {
+      "trial_id": "codex-held-dependency-chart-lookup-worker-r2",
+      "sequence": 101,
+      "harness_id": "codex",
+      "task_id": "held-dependency-chart",
+      "mode": "lookup-worker",
+      "repetition": 2,
+      "cache": "warm"
+    },
+    {
+      "trial_id": "codex-held-dependency-chart-lookup-direct-r2",
+      "sequence": 102,
+      "harness_id": "codex",
+      "task_id": "held-dependency-chart",
+      "mode": "lookup-direct",
+      "repetition": 2,
+      "cache": "warm"
+    },
+    {
+      "trial_id": "codex-held-stale-index-lookup-worker-r1",
+      "sequence": 103,
+      "harness_id": "codex",
+      "task_id": "held-stale-index",
+      "mode": "lookup-worker",
+      "repetition": 1,
+      "cache": "cold"
+    },
+    {
+      "trial_id": "codex-held-stale-index-native-catalogue-r1",
+      "sequence": 104,
+      "harness_id": "codex",
+      "task_id": "held-stale-index",
+      "mode": "native-catalogue",
+      "repetition": 1,
+      "cache": "cold"
+    },
+    {
+      "trial_id": "codex-held-stale-index-lookup-direct-r1",
+      "sequence": 105,
+      "harness_id": "codex",
+      "task_id": "held-stale-index",
+      "mode": "lookup-direct",
+      "repetition": 1,
+      "cache": "cold"
+    },
+    {
+      "trial_id": "codex-held-stale-index-lookup-direct-r2",
+      "sequence": 106,
+      "harness_id": "codex",
+      "task_id": "held-stale-index",
+      "mode": "lookup-direct",
+      "repetition": 2,
+      "cache": "warm"
+    },
+    {
+      "trial_id": "codex-held-stale-index-native-catalogue-r2",
+      "sequence": 107,
+      "harness_id": "codex",
+      "task_id": "held-stale-index",
+      "mode": "native-catalogue",
+      "repetition": 2,
+      "cache": "warm"
+    },
+    {
+      "trial_id": "codex-held-stale-index-lookup-worker-r2",
+      "sequence": 108,
+      "harness_id": "codex",
+      "task_id": "held-stale-index",
+      "mode": "lookup-worker",
+      "repetition": 2,
+      "cache": "warm"
+    },
+    {
+      "trial_id": "codex-held-unsupported-purchase-native-catalogue-r1",
+      "sequence": 109,
+      "harness_id": "codex",
+      "task_id": "held-unsupported-purchase",
+      "mode": "native-catalogue",
+      "repetition": 1,
+      "cache": "cold"
+    },
+    {
+      "trial_id": "codex-held-unsupported-purchase-lookup-direct-r1",
+      "sequence": 110,
+      "harness_id": "codex",
+      "task_id": "held-unsupported-purchase",
+      "mode": "lookup-direct",
+      "repetition": 1,
+      "cache": "cold"
+    },
+    {
+      "trial_id": "codex-held-unsupported-purchase-lookup-worker-r1",
+      "sequence": 111,
+      "harness_id": "codex",
+      "task_id": "held-unsupported-purchase",
+      "mode": "lookup-worker",
+      "repetition": 1,
+      "cache": "cold"
+    },
+    {
+      "trial_id": "codex-held-unsupported-purchase-lookup-worker-r2",
+      "sequence": 112,
+      "harness_id": "codex",
+      "task_id": "held-unsupported-purchase",
+      "mode": "lookup-worker",
+      "repetition": 2,
+      "cache": "warm"
+    },
+    {
+      "trial_id": "codex-held-unsupported-purchase-lookup-direct-r2",
+      "sequence": 113,
+      "harness_id": "codex",
+      "task_id": "held-unsupported-purchase",
+      "mode": "lookup-direct",
+      "repetition": 2,
+      "cache": "warm"
+    },
+    {
+      "trial_id": "codex-held-unsupported-purchase-native-catalogue-r2",
+      "sequence": 114,
+      "harness_id": "codex",
+      "task_id": "held-unsupported-purchase",
+      "mode": "native-catalogue",
+      "repetition": 2,
+      "cache": "warm"
+    },
+    {
+      "trial_id": "codex-held-conflicting-policy-lookup-direct-r1",
+      "sequence": 115,
+      "harness_id": "codex",
+      "task_id": "held-conflicting-policy",
+      "mode": "lookup-direct",
+      "repetition": 1,
+      "cache": "cold"
+    },
+    {
+      "trial_id": "codex-held-conflicting-policy-lookup-worker-r1",
+      "sequence": 116,
+      "harness_id": "codex",
+      "task_id": "held-conflicting-policy",
+      "mode": "lookup-worker",
+      "repetition": 1,
+      "cache": "cold"
+    },
+    {
+      "trial_id": "codex-held-conflicting-policy-native-catalogue-r1",
+      "sequence": 117,
+      "harness_id": "codex",
+      "task_id": "held-conflicting-policy",
+      "mode": "native-catalogue",
+      "repetition": 1,
+      "cache": "cold"
+    },
+    {
+      "trial_id": "codex-held-conflicting-policy-native-catalogue-r2",
+      "sequence": 118,
+      "harness_id": "codex",
+      "task_id": "held-conflicting-policy",
+      "mode": "native-catalogue",
+      "repetition": 2,
+      "cache": "warm"
+    },
+    {
+      "trial_id": "codex-held-conflicting-policy-lookup-worker-r2",
+      "sequence": 119,
+      "harness_id": "codex",
+      "task_id": "held-conflicting-policy",
+      "mode": "lookup-worker",
+      "repetition": 2,
+      "cache": "warm"
+    },
+    {
+      "trial_id": "codex-held-conflicting-policy-lookup-direct-r2",
+      "sequence": 120,
+      "harness_id": "codex",
+      "task_id": "held-conflicting-policy",
+      "mode": "lookup-direct",
+      "repetition": 2,
+      "cache": "warm"
+    },
+    {
+      "trial_id": "codex-held-permission-logs-lookup-worker-r1",
+      "sequence": 121,
+      "harness_id": "codex",
+      "task_id": "held-permission-logs",
+      "mode": "lookup-worker",
+      "repetition": 1,
+      "cache": "cold"
+    },
+    {
+      "trial_id": "codex-held-permission-logs-native-catalogue-r1",
+      "sequence": 122,
+      "harness_id": "codex",
+      "task_id": "held-permission-logs",
+      "mode": "native-catalogue",
+      "repetition": 1,
+      "cache": "cold"
+    },
+    {
+      "trial_id": "codex-held-permission-logs-lookup-direct-r1",
+      "sequence": 123,
+      "harness_id": "codex",
+      "task_id": "held-permission-logs",
+      "mode": "lookup-direct",
+      "repetition": 1,
+      "cache": "cold"
+    },
+    {
+      "trial_id": "codex-held-permission-logs-lookup-direct-r2",
+      "sequence": 124,
+      "harness_id": "codex",
+      "task_id": "held-permission-logs",
+      "mode": "lookup-direct",
+      "repetition": 2,
+      "cache": "warm"
+    },
+    {
+      "trial_id": "codex-held-permission-logs-native-catalogue-r2",
+      "sequence": 125,
+      "harness_id": "codex",
+      "task_id": "held-permission-logs",
+      "mode": "native-catalogue",
+      "repetition": 2,
+      "cache": "warm"
+    },
+    {
+      "trial_id": "codex-held-permission-logs-lookup-worker-r2",
+      "sequence": 126,
+      "harness_id": "codex",
+      "task_id": "held-permission-logs",
+      "mode": "lookup-worker",
+      "repetition": 2,
+      "cache": "warm"
+    },
+    {
+      "trial_id": "codex-held-short-locale-native-catalogue-r1",
+      "sequence": 127,
+      "harness_id": "codex",
+      "task_id": "held-short-locale",
+      "mode": "native-catalogue",
+      "repetition": 1,
+      "cache": "cold"
+    },
+    {
+      "trial_id": "codex-held-short-locale-lookup-direct-r1",
+      "sequence": 128,
+      "harness_id": "codex",
+      "task_id": "held-short-locale",
+      "mode": "lookup-direct",
+      "repetition": 1,
+      "cache": "cold"
+    },
+    {
+      "trial_id": "codex-held-short-locale-lookup-worker-r1",
+      "sequence": 129,
+      "harness_id": "codex",
+      "task_id": "held-short-locale",
+      "mode": "lookup-worker",
+      "repetition": 1,
+      "cache": "cold"
+    },
+    {
+      "trial_id": "codex-held-short-locale-lookup-worker-r2",
+      "sequence": 130,
+      "harness_id": "codex",
+      "task_id": "held-short-locale",
+      "mode": "lookup-worker",
+      "repetition": 2,
+      "cache": "warm"
+    },
+    {
+      "trial_id": "codex-held-short-locale-lookup-direct-r2",
+      "sequence": 131,
+      "harness_id": "codex",
+      "task_id": "held-short-locale",
+      "mode": "lookup-direct",
+      "repetition": 2,
+      "cache": "warm"
+    },
+    {
+      "trial_id": "codex-held-short-locale-native-catalogue-r2",
+      "sequence": 132,
+      "harness_id": "codex",
+      "task_id": "held-short-locale",
+      "mode": "native-catalogue",
+      "repetition": 2,
+      "cache": "warm"
+    },
+    {
+      "trial_id": "codex-held-complex-report-lookup-direct-r1",
+      "sequence": 133,
+      "harness_id": "codex",
+      "task_id": "held-complex-report",
+      "mode": "lookup-direct",
+      "repetition": 1,
+      "cache": "cold"
+    },
+    {
+      "trial_id": "codex-held-complex-report-lookup-worker-r1",
+      "sequence": 134,
+      "harness_id": "codex",
+      "task_id": "held-complex-report",
+      "mode": "lookup-worker",
+      "repetition": 1,
+      "cache": "cold"
+    },
+    {
+      "trial_id": "codex-held-complex-report-native-catalogue-r1",
+      "sequence": 135,
+      "harness_id": "codex",
+      "task_id": "held-complex-report",
+      "mode": "native-catalogue",
+      "repetition": 1,
+      "cache": "cold"
+    },
+    {
+      "trial_id": "codex-held-complex-report-native-catalogue-r2",
+      "sequence": 136,
+      "harness_id": "codex",
+      "task_id": "held-complex-report",
+      "mode": "native-catalogue",
+      "repetition": 2,
+      "cache": "warm"
+    },
+    {
+      "trial_id": "codex-held-complex-report-lookup-worker-r2",
+      "sequence": 137,
+      "harness_id": "codex",
+      "task_id": "held-complex-report",
+      "mode": "lookup-worker",
+      "repetition": 2,
+      "cache": "warm"
+    },
+    {
+      "trial_id": "codex-held-complex-report-lookup-direct-r2",
+      "sequence": 138,
+      "harness_id": "codex",
+      "task_id": "held-complex-report",
+      "mode": "lookup-direct",
+      "repetition": 2,
+      "cache": "warm"
+    },
+    {
+      "trial_id": "codex-held-summary-release-lookup-worker-r1",
+      "sequence": 139,
+      "harness_id": "codex",
+      "task_id": "held-summary-release",
+      "mode": "lookup-worker",
+      "repetition": 1,
+      "cache": "cold"
+    },
+    {
+      "trial_id": "codex-held-summary-release-native-catalogue-r1",
+      "sequence": 140,
+      "harness_id": "codex",
+      "task_id": "held-summary-release",
+      "mode": "native-catalogue",
+      "repetition": 1,
+      "cache": "cold"
+    },
+    {
+      "trial_id": "codex-held-summary-release-lookup-direct-r1",
+      "sequence": 141,
+      "harness_id": "codex",
+      "task_id": "held-summary-release",
+      "mode": "lookup-direct",
+      "repetition": 1,
+      "cache": "cold"
+    },
+    {
+      "trial_id": "codex-held-summary-release-lookup-direct-r2",
+      "sequence": 142,
+      "harness_id": "codex",
+      "task_id": "held-summary-release",
+      "mode": "lookup-direct",
+      "repetition": 2,
+      "cache": "warm"
+    },
+    {
+      "trial_id": "codex-held-summary-release-native-catalogue-r2",
+      "sequence": 143,
+      "harness_id": "codex",
+      "task_id": "held-summary-release",
+      "mode": "native-catalogue",
+      "repetition": 2,
+      "cache": "warm"
+    },
+    {
+      "trial_id": "codex-held-summary-release-lookup-worker-r2",
+      "sequence": 144,
+      "harness_id": "codex",
+      "task_id": "held-summary-release",
+      "mode": "lookup-worker",
+      "repetition": 2,
+      "cache": "warm"
+    },
+    {
+      "trial_id": "claude-dev-explicit-csv-native-catalogue-r1",
+      "sequence": 145,
+      "harness_id": "claude",
+      "task_id": "dev-explicit-csv",
+      "mode": "native-catalogue",
+      "repetition": 1,
+      "cache": "cold"
+    },
+    {
+      "trial_id": "claude-dev-explicit-csv-lookup-direct-r1",
+      "sequence": 146,
+      "harness_id": "claude",
+      "task_id": "dev-explicit-csv",
+      "mode": "lookup-direct",
+      "repetition": 1,
+      "cache": "cold"
+    },
+    {
+      "trial_id": "claude-dev-explicit-csv-lookup-worker-r1",
+      "sequence": 147,
+      "harness_id": "claude",
+      "task_id": "dev-explicit-csv",
+      "mode": "lookup-worker",
+      "repetition": 1,
+      "cache": "cold"
+    },
+    {
+      "trial_id": "claude-dev-explicit-csv-lookup-worker-r2",
+      "sequence": 148,
+      "harness_id": "claude",
+      "task_id": "dev-explicit-csv",
+      "mode": "lookup-worker",
+      "repetition": 2,
+      "cache": "warm"
+    },
+    {
+      "trial_id": "claude-dev-explicit-csv-lookup-direct-r2",
+      "sequence": 149,
+      "harness_id": "claude",
+      "task_id": "dev-explicit-csv",
+      "mode": "lookup-direct",
+      "repetition": 2,
+      "cache": "warm"
+    },
+    {
+      "trial_id": "claude-dev-explicit-csv-native-catalogue-r2",
+      "sequence": 150,
+      "harness_id": "claude",
+      "task_id": "dev-explicit-csv",
+      "mode": "native-catalogue",
+      "repetition": 2,
+      "cache": "warm"
+    },
+    {
+      "trial_id": "claude-dev-paraphrase-notes-lookup-direct-r1",
+      "sequence": 151,
+      "harness_id": "claude",
+      "task_id": "dev-paraphrase-notes",
+      "mode": "lookup-direct",
+      "repetition": 1,
+      "cache": "cold"
+    },
+    {
+      "trial_id": "claude-dev-paraphrase-notes-lookup-worker-r1",
+      "sequence": 152,
+      "harness_id": "claude",
+      "task_id": "dev-paraphrase-notes",
+      "mode": "lookup-worker",
+      "repetition": 1,
+      "cache": "cold"
+    },
+    {
+      "trial_id": "claude-dev-paraphrase-notes-native-catalogue-r1",
+      "sequence": 153,
+      "harness_id": "claude",
+      "task_id": "dev-paraphrase-notes",
+      "mode": "native-catalogue",
+      "repetition": 1,
+      "cache": "cold"
+    },
+    {
+      "trial_id": "claude-dev-paraphrase-notes-native-catalogue-r2",
+      "sequence": 154,
+      "harness_id": "claude",
+      "task_id": "dev-paraphrase-notes",
+      "mode": "native-catalogue",
+      "repetition": 2,
+      "cache": "warm"
+    },
+    {
+      "trial_id": "claude-dev-paraphrase-notes-lookup-worker-r2",
+      "sequence": 155,
+      "harness_id": "claude",
+      "task_id": "dev-paraphrase-notes",
+      "mode": "lookup-worker",
+      "repetition": 2,
+      "cache": "warm"
+    },
+    {
+      "trial_id": "claude-dev-paraphrase-notes-lookup-direct-r2",
+      "sequence": 156,
+      "harness_id": "claude",
+      "task_id": "dev-paraphrase-notes",
+      "mode": "lookup-direct",
+      "repetition": 2,
+      "cache": "warm"
+    },
+    {
+      "trial_id": "claude-dev-ambiguous-copy-lookup-worker-r1",
+      "sequence": 157,
+      "harness_id": "claude",
+      "task_id": "dev-ambiguous-copy",
+      "mode": "lookup-worker",
+      "repetition": 1,
+      "cache": "cold"
+    },
+    {
+      "trial_id": "claude-dev-ambiguous-copy-native-catalogue-r1",
+      "sequence": 158,
+      "harness_id": "claude",
+      "task_id": "dev-ambiguous-copy",
+      "mode": "native-catalogue",
+      "repetition": 1,
+      "cache": "cold"
+    },
+    {
+      "trial_id": "claude-dev-ambiguous-copy-lookup-direct-r1",
+      "sequence": 159,
+      "harness_id": "claude",
+      "task_id": "dev-ambiguous-copy",
+      "mode": "lookup-direct",
+      "repetition": 1,
+      "cache": "cold"
+    },
+    {
+      "trial_id": "claude-dev-ambiguous-copy-lookup-direct-r2",
+      "sequence": 160,
+      "harness_id": "claude",
+      "task_id": "dev-ambiguous-copy",
+      "mode": "lookup-direct",
+      "repetition": 2,
+      "cache": "warm"
+    },
+    {
+      "trial_id": "claude-dev-ambiguous-copy-native-catalogue-r2",
+      "sequence": 161,
+      "harness_id": "claude",
+      "task_id": "dev-ambiguous-copy",
+      "mode": "native-catalogue",
+      "repetition": 2,
+      "cache": "warm"
+    },
+    {
+      "trial_id": "claude-dev-ambiguous-copy-lookup-worker-r2",
+      "sequence": 162,
+      "harness_id": "claude",
+      "task_id": "dev-ambiguous-copy",
+      "mode": "lookup-worker",
+      "repetition": 2,
+      "cache": "warm"
+    },
+    {
+      "trial_id": "claude-dev-no-match-weather-native-catalogue-r1",
+      "sequence": 163,
+      "harness_id": "claude",
+      "task_id": "dev-no-match-weather",
+      "mode": "native-catalogue",
+      "repetition": 1,
+      "cache": "cold"
+    },
+    {
+      "trial_id": "claude-dev-no-match-weather-lookup-direct-r1",
+      "sequence": 164,
+      "harness_id": "claude",
+      "task_id": "dev-no-match-weather",
+      "mode": "lookup-direct",
+      "repetition": 1,
+      "cache": "cold"
+    },
+    {
+      "trial_id": "claude-dev-no-match-weather-lookup-worker-r1",
+      "sequence": 165,
+      "harness_id": "claude",
+      "task_id": "dev-no-match-weather",
+      "mode": "lookup-worker",
+      "repetition": 1,
+      "cache": "cold"
+    },
+    {
+      "trial_id": "claude-dev-no-match-weather-lookup-worker-r2",
+      "sequence": 166,
+      "harness_id": "claude",
+      "task_id": "dev-no-match-weather",
+      "mode": "lookup-worker",
+      "repetition": 2,
+      "cache": "warm"
+    },
+    {
+      "trial_id": "claude-dev-no-match-weather-lookup-direct-r2",
+      "sequence": 167,
+      "harness_id": "claude",
+      "task_id": "dev-no-match-weather",
+      "mode": "lookup-direct",
+      "repetition": 2,
+      "cache": "warm"
+    },
+    {
+      "trial_id": "claude-dev-no-match-weather-native-catalogue-r2",
+      "sequence": 168,
+      "harness_id": "claude",
+      "task_id": "dev-no-match-weather",
+      "mode": "native-catalogue",
+      "repetition": 2,
+      "cache": "warm"
+    },
+    {
+      "trial_id": "claude-dev-dependency-incident-lookup-direct-r1",
+      "sequence": 169,
+      "harness_id": "claude",
+      "task_id": "dev-dependency-incident",
+      "mode": "lookup-direct",
+      "repetition": 1,
+      "cache": "cold"
+    },
+    {
+      "trial_id": "claude-dev-dependency-incident-lookup-worker-r1",
+      "sequence": 170,
+      "harness_id": "claude",
+      "task_id": "dev-dependency-incident",
+      "mode": "lookup-worker",
+      "repetition": 1,
+      "cache": "cold"
+    },
+    {
+      "trial_id": "claude-dev-dependency-incident-native-catalogue-r1",
+      "sequence": 171,
+      "harness_id": "claude",
+      "task_id": "dev-dependency-incident",
+      "mode": "native-catalogue",
+      "repetition": 1,
+      "cache": "cold"
+    },
+    {
+      "trial_id": "claude-dev-dependency-incident-native-catalogue-r2",
+      "sequence": 172,
+      "harness_id": "claude",
+      "task_id": "dev-dependency-incident",
+      "mode": "native-catalogue",
+      "repetition": 2,
+      "cache": "warm"
+    },
+    {
+      "trial_id": "claude-dev-dependency-incident-lookup-worker-r2",
+      "sequence": 173,
+      "harness_id": "claude",
+      "task_id": "dev-dependency-incident",
+      "mode": "lookup-worker",
+      "repetition": 2,
+      "cache": "warm"
+    },
+    {
+      "trial_id": "claude-dev-dependency-incident-lookup-direct-r2",
+      "sequence": 174,
+      "harness_id": "claude",
+      "task_id": "dev-dependency-incident",
+      "mode": "lookup-direct",
+      "repetition": 2,
+      "cache": "warm"
+    },
+    {
+      "trial_id": "claude-dev-stale-index-lookup-worker-r1",
+      "sequence": 175,
+      "harness_id": "claude",
+      "task_id": "dev-stale-index",
+      "mode": "lookup-worker",
+      "repetition": 1,
+      "cache": "cold"
+    },
+    {
+      "trial_id": "claude-dev-stale-index-native-catalogue-r1",
+      "sequence": 176,
+      "harness_id": "claude",
+      "task_id": "dev-stale-index",
+      "mode": "native-catalogue",
+      "repetition": 1,
+      "cache": "cold"
+    },
+    {
+      "trial_id": "claude-dev-stale-index-lookup-direct-r1",
+      "sequence": 177,
+      "harness_id": "claude",
+      "task_id": "dev-stale-index",
+      "mode": "lookup-direct",
+      "repetition": 1,
+      "cache": "cold"
+    },
+    {
+      "trial_id": "claude-dev-stale-index-lookup-direct-r2",
+      "sequence": 178,
+      "harness_id": "claude",
+      "task_id": "dev-stale-index",
+      "mode": "lookup-direct",
+      "repetition": 2,
+      "cache": "warm"
+    },
+    {
+      "trial_id": "claude-dev-stale-index-native-catalogue-r2",
+      "sequence": 179,
+      "harness_id": "claude",
+      "task_id": "dev-stale-index",
+      "mode": "native-catalogue",
+      "repetition": 2,
+      "cache": "warm"
+    },
+    {
+      "trial_id": "claude-dev-stale-index-lookup-worker-r2",
+      "sequence": 180,
+      "harness_id": "claude",
+      "task_id": "dev-stale-index",
+      "mode": "lookup-worker",
+      "repetition": 2,
+      "cache": "warm"
+    },
+    {
+      "trial_id": "claude-dev-unsupported-email-native-catalogue-r1",
+      "sequence": 181,
+      "harness_id": "claude",
+      "task_id": "dev-unsupported-email",
+      "mode": "native-catalogue",
+      "repetition": 1,
+      "cache": "cold"
+    },
+    {
+      "trial_id": "claude-dev-unsupported-email-lookup-direct-r1",
+      "sequence": 182,
+      "harness_id": "claude",
+      "task_id": "dev-unsupported-email",
+      "mode": "lookup-direct",
+      "repetition": 1,
+      "cache": "cold"
+    },
+    {
+      "trial_id": "claude-dev-unsupported-email-lookup-worker-r1",
+      "sequence": 183,
+      "harness_id": "claude",
+      "task_id": "dev-unsupported-email",
+      "mode": "lookup-worker",
+      "repetition": 1,
+      "cache": "cold"
+    },
+    {
+      "trial_id": "claude-dev-unsupported-email-lookup-worker-r2",
+      "sequence": 184,
+      "harness_id": "claude",
+      "task_id": "dev-unsupported-email",
+      "mode": "lookup-worker",
+      "repetition": 2,
+      "cache": "warm"
+    },
+    {
+      "trial_id": "claude-dev-unsupported-email-lookup-direct-r2",
+      "sequence": 185,
+      "harness_id": "claude",
+      "task_id": "dev-unsupported-email",
+      "mode": "lookup-direct",
+      "repetition": 2,
+      "cache": "warm"
+    },
+    {
+      "trial_id": "claude-dev-unsupported-email-native-catalogue-r2",
+      "sequence": 186,
+      "harness_id": "claude",
+      "task_id": "dev-unsupported-email",
+      "mode": "native-catalogue",
+      "repetition": 2,
+      "cache": "warm"
+    },
+    {
+      "trial_id": "claude-dev-conflicting-labels-lookup-direct-r1",
+      "sequence": 187,
+      "harness_id": "claude",
+      "task_id": "dev-conflicting-labels",
+      "mode": "lookup-direct",
+      "repetition": 1,
+      "cache": "cold"
+    },
+    {
+      "trial_id": "claude-dev-conflicting-labels-lookup-worker-r1",
+      "sequence": 188,
+      "harness_id": "claude",
+      "task_id": "dev-conflicting-labels",
+      "mode": "lookup-worker",
+      "repetition": 1,
+      "cache": "cold"
+    },
+    {
+      "trial_id": "claude-dev-conflicting-labels-native-catalogue-r1",
+      "sequence": 189,
+      "harness_id": "claude",
+      "task_id": "dev-conflicting-labels",
+      "mode": "native-catalogue",
+      "repetition": 1,
+      "cache": "cold"
+    },
+    {
+      "trial_id": "claude-dev-conflicting-labels-native-catalogue-r2",
+      "sequence": 190,
+      "harness_id": "claude",
+      "task_id": "dev-conflicting-labels",
+      "mode": "native-catalogue",
+      "repetition": 2,
+      "cache": "warm"
+    },
+    {
+      "trial_id": "claude-dev-conflicting-labels-lookup-worker-r2",
+      "sequence": 191,
+      "harness_id": "claude",
+      "task_id": "dev-conflicting-labels",
+      "mode": "lookup-worker",
+      "repetition": 2,
+      "cache": "warm"
+    },
+    {
+      "trial_id": "claude-dev-conflicting-labels-lookup-direct-r2",
+      "sequence": 192,
+      "harness_id": "claude",
+      "task_id": "dev-conflicting-labels",
+      "mode": "lookup-direct",
+      "repetition": 2,
+      "cache": "warm"
+    },
+    {
+      "trial_id": "claude-dev-permission-private-lookup-worker-r1",
+      "sequence": 193,
+      "harness_id": "claude",
+      "task_id": "dev-permission-private",
+      "mode": "lookup-worker",
+      "repetition": 1,
+      "cache": "cold"
+    },
+    {
+      "trial_id": "claude-dev-permission-private-native-catalogue-r1",
+      "sequence": 194,
+      "harness_id": "claude",
+      "task_id": "dev-permission-private",
+      "mode": "native-catalogue",
+      "repetition": 1,
+      "cache": "cold"
+    },
+    {
+      "trial_id": "claude-dev-permission-private-lookup-direct-r1",
+      "sequence": 195,
+      "harness_id": "claude",
+      "task_id": "dev-permission-private",
+      "mode": "lookup-direct",
+      "repetition": 1,
+      "cache": "cold"
+    },
+    {
+      "trial_id": "claude-dev-permission-private-lookup-direct-r2",
+      "sequence": 196,
+      "harness_id": "claude",
+      "task_id": "dev-permission-private",
+      "mode": "lookup-direct",
+      "repetition": 2,
+      "cache": "warm"
+    },
+    {
+      "trial_id": "claude-dev-permission-private-native-catalogue-r2",
+      "sequence": 197,
+      "harness_id": "claude",
+      "task_id": "dev-permission-private",
+      "mode": "native-catalogue",
+      "repetition": 2,
+      "cache": "warm"
+    },
+    {
+      "trial_id": "claude-dev-permission-private-lookup-worker-r2",
+      "sequence": 198,
+      "harness_id": "claude",
+      "task_id": "dev-permission-private",
+      "mode": "lookup-worker",
+      "repetition": 2,
+      "cache": "warm"
+    },
+    {
+      "trial_id": "claude-dev-short-checksum-native-catalogue-r1",
+      "sequence": 199,
+      "harness_id": "claude",
+      "task_id": "dev-short-checksum",
+      "mode": "native-catalogue",
+      "repetition": 1,
+      "cache": "cold"
+    },
+    {
+      "trial_id": "claude-dev-short-checksum-lookup-direct-r1",
+      "sequence": 200,
+      "harness_id": "claude",
+      "task_id": "dev-short-checksum",
+      "mode": "lookup-direct",
+      "repetition": 1,
+      "cache": "cold"
+    },
+    {
+      "trial_id": "claude-dev-short-checksum-lookup-worker-r1",
+      "sequence": 201,
+      "harness_id": "claude",
+      "task_id": "dev-short-checksum",
+      "mode": "lookup-worker",
+      "repetition": 1,
+      "cache": "cold"
+    },
+    {
+      "trial_id": "claude-dev-short-checksum-lookup-worker-r2",
+      "sequence": 202,
+      "harness_id": "claude",
+      "task_id": "dev-short-checksum",
+      "mode": "lookup-worker",
+      "repetition": 2,
+      "cache": "warm"
+    },
+    {
+      "trial_id": "claude-dev-short-checksum-lookup-direct-r2",
+      "sequence": 203,
+      "harness_id": "claude",
+      "task_id": "dev-short-checksum",
+      "mode": "lookup-direct",
+      "repetition": 2,
+      "cache": "warm"
+    },
+    {
+      "trial_id": "claude-dev-short-checksum-native-catalogue-r2",
+      "sequence": 204,
+      "harness_id": "claude",
+      "task_id": "dev-short-checksum",
+      "mode": "native-catalogue",
+      "repetition": 2,
+      "cache": "warm"
+    },
+    {
+      "trial_id": "claude-dev-complex-research-lookup-direct-r1",
+      "sequence": 205,
+      "harness_id": "claude",
+      "task_id": "dev-complex-research",
+      "mode": "lookup-direct",
+      "repetition": 1,
+      "cache": "cold"
+    },
+    {
+      "trial_id": "claude-dev-complex-research-lookup-worker-r1",
+      "sequence": 206,
+      "harness_id": "claude",
+      "task_id": "dev-complex-research",
+      "mode": "lookup-worker",
+      "repetition": 1,
+      "cache": "cold"
+    },
+    {
+      "trial_id": "claude-dev-complex-research-native-catalogue-r1",
+      "sequence": 207,
+      "harness_id": "claude",
+      "task_id": "dev-complex-research",
+      "mode": "native-catalogue",
+      "repetition": 1,
+      "cache": "cold"
+    },
+    {
+      "trial_id": "claude-dev-complex-research-native-catalogue-r2",
+      "sequence": 208,
+      "harness_id": "claude",
+      "task_id": "dev-complex-research",
+      "mode": "native-catalogue",
+      "repetition": 2,
+      "cache": "warm"
+    },
+    {
+      "trial_id": "claude-dev-complex-research-lookup-worker-r2",
+      "sequence": 209,
+      "harness_id": "claude",
+      "task_id": "dev-complex-research",
+      "mode": "lookup-worker",
+      "repetition": 2,
+      "cache": "warm"
+    },
+    {
+      "trial_id": "claude-dev-complex-research-lookup-direct-r2",
+      "sequence": 210,
+      "harness_id": "claude",
+      "task_id": "dev-complex-research",
+      "mode": "lookup-direct",
+      "repetition": 2,
+      "cache": "warm"
+    },
+    {
+      "trial_id": "claude-dev-summary-handoff-lookup-worker-r1",
+      "sequence": 211,
+      "harness_id": "claude",
+      "task_id": "dev-summary-handoff",
+      "mode": "lookup-worker",
+      "repetition": 1,
+      "cache": "cold"
+    },
+    {
+      "trial_id": "claude-dev-summary-handoff-native-catalogue-r1",
+      "sequence": 212,
+      "harness_id": "claude",
+      "task_id": "dev-summary-handoff",
+      "mode": "native-catalogue",
+      "repetition": 1,
+      "cache": "cold"
+    },
+    {
+      "trial_id": "claude-dev-summary-handoff-lookup-direct-r1",
+      "sequence": 213,
+      "harness_id": "claude",
+      "task_id": "dev-summary-handoff",
+      "mode": "lookup-direct",
+      "repetition": 1,
+      "cache": "cold"
+    },
+    {
+      "trial_id": "claude-dev-summary-handoff-lookup-direct-r2",
+      "sequence": 214,
+      "harness_id": "claude",
+      "task_id": "dev-summary-handoff",
+      "mode": "lookup-direct",
+      "repetition": 2,
+      "cache": "warm"
+    },
+    {
+      "trial_id": "claude-dev-summary-handoff-native-catalogue-r2",
+      "sequence": 215,
+      "harness_id": "claude",
+      "task_id": "dev-summary-handoff",
+      "mode": "native-catalogue",
+      "repetition": 2,
+      "cache": "warm"
+    },
+    {
+      "trial_id": "claude-dev-summary-handoff-lookup-worker-r2",
+      "sequence": 216,
+      "harness_id": "claude",
+      "task_id": "dev-summary-handoff",
+      "mode": "lookup-worker",
+      "repetition": 2,
+      "cache": "warm"
+    },
+    {
+      "trial_id": "claude-held-explicit-archive-native-catalogue-r1",
+      "sequence": 217,
+      "harness_id": "claude",
+      "task_id": "held-explicit-archive",
+      "mode": "native-catalogue",
+      "repetition": 1,
+      "cache": "cold"
+    },
+    {
+      "trial_id": "claude-held-explicit-archive-lookup-direct-r1",
+      "sequence": 218,
+      "harness_id": "claude",
+      "task_id": "held-explicit-archive",
+      "mode": "lookup-direct",
+      "repetition": 1,
+      "cache": "cold"
+    },
+    {
+      "trial_id": "claude-held-explicit-archive-lookup-worker-r1",
+      "sequence": 219,
+      "harness_id": "claude",
+      "task_id": "held-explicit-archive",
+      "mode": "lookup-worker",
+      "repetition": 1,
+      "cache": "cold"
+    },
+    {
+      "trial_id": "claude-held-explicit-archive-lookup-worker-r2",
+      "sequence": 220,
+      "harness_id": "claude",
+      "task_id": "held-explicit-archive",
+      "mode": "lookup-worker",
+      "repetition": 2,
+      "cache": "warm"
+    },
+    {
+      "trial_id": "claude-held-explicit-archive-lookup-direct-r2",
+      "sequence": 221,
+      "harness_id": "claude",
+      "task_id": "held-explicit-archive",
+      "mode": "lookup-direct",
+      "repetition": 2,
+      "cache": "warm"
+    },
+    {
+      "trial_id": "claude-held-explicit-archive-native-catalogue-r2",
+      "sequence": 222,
+      "harness_id": "claude",
+      "task_id": "held-explicit-archive",
+      "mode": "native-catalogue",
+      "repetition": 2,
+      "cache": "warm"
+    },
+    {
+      "trial_id": "claude-held-paraphrase-duplicates-lookup-direct-r1",
+      "sequence": 223,
+      "harness_id": "claude",
+      "task_id": "held-paraphrase-duplicates",
+      "mode": "lookup-direct",
+      "repetition": 1,
+      "cache": "cold"
+    },
+    {
+      "trial_id": "claude-held-paraphrase-duplicates-lookup-worker-r1",
+      "sequence": 224,
+      "harness_id": "claude",
+      "task_id": "held-paraphrase-duplicates",
+      "mode": "lookup-worker",
+      "repetition": 1,
+      "cache": "cold"
+    },
+    {
+      "trial_id": "claude-held-paraphrase-duplicates-native-catalogue-r1",
+      "sequence": 225,
+      "harness_id": "claude",
+      "task_id": "held-paraphrase-duplicates",
+      "mode": "native-catalogue",
+      "repetition": 1,
+      "cache": "cold"
+    },
+    {
+      "trial_id": "claude-held-paraphrase-duplicates-native-catalogue-r2",
+      "sequence": 226,
+      "harness_id": "claude",
+      "task_id": "held-paraphrase-duplicates",
+      "mode": "native-catalogue",
+      "repetition": 2,
+      "cache": "warm"
+    },
+    {
+      "trial_id": "claude-held-paraphrase-duplicates-lookup-worker-r2",
+      "sequence": 227,
+      "harness_id": "claude",
+      "task_id": "held-paraphrase-duplicates",
+      "mode": "lookup-worker",
+      "repetition": 2,
+      "cache": "warm"
+    },
+    {
+      "trial_id": "claude-held-paraphrase-duplicates-lookup-direct-r2",
+      "sequence": 228,
+      "harness_id": "claude",
+      "task_id": "held-paraphrase-duplicates",
+      "mode": "lookup-direct",
+      "repetition": 2,
+      "cache": "warm"
+    },
+    {
+      "trial_id": "claude-held-ambiguous-dates-lookup-worker-r1",
+      "sequence": 229,
+      "harness_id": "claude",
+      "task_id": "held-ambiguous-dates",
+      "mode": "lookup-worker",
+      "repetition": 1,
+      "cache": "cold"
+    },
+    {
+      "trial_id": "claude-held-ambiguous-dates-native-catalogue-r1",
+      "sequence": 230,
+      "harness_id": "claude",
+      "task_id": "held-ambiguous-dates",
+      "mode": "native-catalogue",
+      "repetition": 1,
+      "cache": "cold"
+    },
+    {
+      "trial_id": "claude-held-ambiguous-dates-lookup-direct-r1",
+      "sequence": 231,
+      "harness_id": "claude",
+      "task_id": "held-ambiguous-dates",
+      "mode": "lookup-direct",
+      "repetition": 1,
+      "cache": "cold"
+    },
+    {
+      "trial_id": "claude-held-ambiguous-dates-lookup-direct-r2",
+      "sequence": 232,
+      "harness_id": "claude",
+      "task_id": "held-ambiguous-dates",
+      "mode": "lookup-direct",
+      "repetition": 2,
+      "cache": "warm"
+    },
+    {
+      "trial_id": "claude-held-ambiguous-dates-native-catalogue-r2",
+      "sequence": 233,
+      "harness_id": "claude",
+      "task_id": "held-ambiguous-dates",
+      "mode": "native-catalogue",
+      "repetition": 2,
+      "cache": "warm"
+    },
+    {
+      "trial_id": "claude-held-ambiguous-dates-lookup-worker-r2",
+      "sequence": 234,
+      "harness_id": "claude",
+      "task_id": "held-ambiguous-dates",
+      "mode": "lookup-worker",
+      "repetition": 2,
+      "cache": "warm"
+    },
+    {
+      "trial_id": "claude-held-no-match-map-native-catalogue-r1",
+      "sequence": 235,
+      "harness_id": "claude",
+      "task_id": "held-no-match-map",
+      "mode": "native-catalogue",
+      "repetition": 1,
+      "cache": "cold"
+    },
+    {
+      "trial_id": "claude-held-no-match-map-lookup-direct-r1",
+      "sequence": 236,
+      "harness_id": "claude",
+      "task_id": "held-no-match-map",
+      "mode": "lookup-direct",
+      "repetition": 1,
+      "cache": "cold"
+    },
+    {
+      "trial_id": "claude-held-no-match-map-lookup-worker-r1",
+      "sequence": 237,
+      "harness_id": "claude",
+      "task_id": "held-no-match-map",
+      "mode": "lookup-worker",
+      "repetition": 1,
+      "cache": "cold"
+    },
+    {
+      "trial_id": "claude-held-no-match-map-lookup-worker-r2",
+      "sequence": 238,
+      "harness_id": "claude",
+      "task_id": "held-no-match-map",
+      "mode": "lookup-worker",
+      "repetition": 2,
+      "cache": "warm"
+    },
+    {
+      "trial_id": "claude-held-no-match-map-lookup-direct-r2",
+      "sequence": 239,
+      "harness_id": "claude",
+      "task_id": "held-no-match-map",
+      "mode": "lookup-direct",
+      "repetition": 2,
+      "cache": "warm"
+    },
+    {
+      "trial_id": "claude-held-no-match-map-native-catalogue-r2",
+      "sequence": 240,
+      "harness_id": "claude",
+      "task_id": "held-no-match-map",
+      "mode": "native-catalogue",
+      "repetition": 2,
+      "cache": "warm"
+    },
+    {
+      "trial_id": "claude-held-dependency-chart-lookup-direct-r1",
+      "sequence": 241,
+      "harness_id": "claude",
+      "task_id": "held-dependency-chart",
+      "mode": "lookup-direct",
+      "repetition": 1,
+      "cache": "cold"
+    },
+    {
+      "trial_id": "claude-held-dependency-chart-lookup-worker-r1",
+      "sequence": 242,
+      "harness_id": "claude",
+      "task_id": "held-dependency-chart",
+      "mode": "lookup-worker",
+      "repetition": 1,
+      "cache": "cold"
+    },
+    {
+      "trial_id": "claude-held-dependency-chart-native-catalogue-r1",
+      "sequence": 243,
+      "harness_id": "claude",
+      "task_id": "held-dependency-chart",
+      "mode": "native-catalogue",
+      "repetition": 1,
+      "cache": "cold"
+    },
+    {
+      "trial_id": "claude-held-dependency-chart-native-catalogue-r2",
+      "sequence": 244,
+      "harness_id": "claude",
+      "task_id": "held-dependency-chart",
+      "mode": "native-catalogue",
+      "repetition": 2,
+      "cache": "warm"
+    },
+    {
+      "trial_id": "claude-held-dependency-chart-lookup-worker-r2",
+      "sequence": 245,
+      "harness_id": "claude",
+      "task_id": "held-dependency-chart",
+      "mode": "lookup-worker",
+      "repetition": 2,
+      "cache": "warm"
+    },
+    {
+      "trial_id": "claude-held-dependency-chart-lookup-direct-r2",
+      "sequence": 246,
+      "harness_id": "claude",
+      "task_id": "held-dependency-chart",
+      "mode": "lookup-direct",
+      "repetition": 2,
+      "cache": "warm"
+    },
+    {
+      "trial_id": "claude-held-stale-index-lookup-worker-r1",
+      "sequence": 247,
+      "harness_id": "claude",
+      "task_id": "held-stale-index",
+      "mode": "lookup-worker",
+      "repetition": 1,
+      "cache": "cold"
+    },
+    {
+      "trial_id": "claude-held-stale-index-native-catalogue-r1",
+      "sequence": 248,
+      "harness_id": "claude",
+      "task_id": "held-stale-index",
+      "mode": "native-catalogue",
+      "repetition": 1,
+      "cache": "cold"
+    },
+    {
+      "trial_id": "claude-held-stale-index-lookup-direct-r1",
+      "sequence": 249,
+      "harness_id": "claude",
+      "task_id": "held-stale-index",
+      "mode": "lookup-direct",
+      "repetition": 1,
+      "cache": "cold"
+    },
+    {
+      "trial_id": "claude-held-stale-index-lookup-direct-r2",
+      "sequence": 250,
+      "harness_id": "claude",
+      "task_id": "held-stale-index",
+      "mode": "lookup-direct",
+      "repetition": 2,
+      "cache": "warm"
+    },
+    {
+      "trial_id": "claude-held-stale-index-native-catalogue-r2",
+      "sequence": 251,
+      "harness_id": "claude",
+      "task_id": "held-stale-index",
+      "mode": "native-catalogue",
+      "repetition": 2,
+      "cache": "warm"
+    },
+    {
+      "trial_id": "claude-held-stale-index-lookup-worker-r2",
+      "sequence": 252,
+      "harness_id": "claude",
+      "task_id": "held-stale-index",
+      "mode": "lookup-worker",
+      "repetition": 2,
+      "cache": "warm"
+    },
+    {
+      "trial_id": "claude-held-unsupported-purchase-native-catalogue-r1",
+      "sequence": 253,
+      "harness_id": "claude",
+      "task_id": "held-unsupported-purchase",
+      "mode": "native-catalogue",
+      "repetition": 1,
+      "cache": "cold"
+    },
+    {
+      "trial_id": "claude-held-unsupported-purchase-lookup-direct-r1",
+      "sequence": 254,
+      "harness_id": "claude",
+      "task_id": "held-unsupported-purchase",
+      "mode": "lookup-direct",
+      "repetition": 1,
+      "cache": "cold"
+    },
+    {
+      "trial_id": "claude-held-unsupported-purchase-lookup-worker-r1",
+      "sequence": 255,
+      "harness_id": "claude",
+      "task_id": "held-unsupported-purchase",
+      "mode": "lookup-worker",
+      "repetition": 1,
+      "cache": "cold"
+    },
+    {
+      "trial_id": "claude-held-unsupported-purchase-lookup-worker-r2",
+      "sequence": 256,
+      "harness_id": "claude",
+      "task_id": "held-unsupported-purchase",
+      "mode": "lookup-worker",
+      "repetition": 2,
+      "cache": "warm"
+    },
+    {
+      "trial_id": "claude-held-unsupported-purchase-lookup-direct-r2",
+      "sequence": 257,
+      "harness_id": "claude",
+      "task_id": "held-unsupported-purchase",
+      "mode": "lookup-direct",
+      "repetition": 2,
+      "cache": "warm"
+    },
+    {
+      "trial_id": "claude-held-unsupported-purchase-native-catalogue-r2",
+      "sequence": 258,
+      "harness_id": "claude",
+      "task_id": "held-unsupported-purchase",
+      "mode": "native-catalogue",
+      "repetition": 2,
+      "cache": "warm"
+    },
+    {
+      "trial_id": "claude-held-conflicting-policy-lookup-direct-r1",
+      "sequence": 259,
+      "harness_id": "claude",
+      "task_id": "held-conflicting-policy",
+      "mode": "lookup-direct",
+      "repetition": 1,
+      "cache": "cold"
+    },
+    {
+      "trial_id": "claude-held-conflicting-policy-lookup-worker-r1",
+      "sequence": 260,
+      "harness_id": "claude",
+      "task_id": "held-conflicting-policy",
+      "mode": "lookup-worker",
+      "repetition": 1,
+      "cache": "cold"
+    },
+    {
+      "trial_id": "claude-held-conflicting-policy-native-catalogue-r1",
+      "sequence": 261,
+      "harness_id": "claude",
+      "task_id": "held-conflicting-policy",
+      "mode": "native-catalogue",
+      "repetition": 1,
+      "cache": "cold"
+    },
+    {
+      "trial_id": "claude-held-conflicting-policy-native-catalogue-r2",
+      "sequence": 262,
+      "harness_id": "claude",
+      "task_id": "held-conflicting-policy",
+      "mode": "native-catalogue",
+      "repetition": 2,
+      "cache": "warm"
+    },
+    {
+      "trial_id": "claude-held-conflicting-policy-lookup-worker-r2",
+      "sequence": 263,
+      "harness_id": "claude",
+      "task_id": "held-conflicting-policy",
+      "mode": "lookup-worker",
+      "repetition": 2,
+      "cache": "warm"
+    },
+    {
+      "trial_id": "claude-held-conflicting-policy-lookup-direct-r2",
+      "sequence": 264,
+      "harness_id": "claude",
+      "task_id": "held-conflicting-policy",
+      "mode": "lookup-direct",
+      "repetition": 2,
+      "cache": "warm"
+    },
+    {
+      "trial_id": "claude-held-permission-logs-lookup-worker-r1",
+      "sequence": 265,
+      "harness_id": "claude",
+      "task_id": "held-permission-logs",
+      "mode": "lookup-worker",
+      "repetition": 1,
+      "cache": "cold"
+    },
+    {
+      "trial_id": "claude-held-permission-logs-native-catalogue-r1",
+      "sequence": 266,
+      "harness_id": "claude",
+      "task_id": "held-permission-logs",
+      "mode": "native-catalogue",
+      "repetition": 1,
+      "cache": "cold"
+    },
+    {
+      "trial_id": "claude-held-permission-logs-lookup-direct-r1",
+      "sequence": 267,
+      "harness_id": "claude",
+      "task_id": "held-permission-logs",
+      "mode": "lookup-direct",
+      "repetition": 1,
+      "cache": "cold"
+    },
+    {
+      "trial_id": "claude-held-permission-logs-lookup-direct-r2",
+      "sequence": 268,
+      "harness_id": "claude",
+      "task_id": "held-permission-logs",
+      "mode": "lookup-direct",
+      "repetition": 2,
+      "cache": "warm"
+    },
+    {
+      "trial_id": "claude-held-permission-logs-native-catalogue-r2",
+      "sequence": 269,
+      "harness_id": "claude",
+      "task_id": "held-permission-logs",
+      "mode": "native-catalogue",
+      "repetition": 2,
+      "cache": "warm"
+    },
+    {
+      "trial_id": "claude-held-permission-logs-lookup-worker-r2",
+      "sequence": 270,
+      "harness_id": "claude",
+      "task_id": "held-permission-logs",
+      "mode": "lookup-worker",
+      "repetition": 2,
+      "cache": "warm"
+    },
+    {
+      "trial_id": "claude-held-short-locale-native-catalogue-r1",
+      "sequence": 271,
+      "harness_id": "claude",
+      "task_id": "held-short-locale",
+      "mode": "native-catalogue",
+      "repetition": 1,
+      "cache": "cold"
+    },
+    {
+      "trial_id": "claude-held-short-locale-lookup-direct-r1",
+      "sequence": 272,
+      "harness_id": "claude",
+      "task_id": "held-short-locale",
+      "mode": "lookup-direct",
+      "repetition": 1,
+      "cache": "cold"
+    },
+    {
+      "trial_id": "claude-held-short-locale-lookup-worker-r1",
+      "sequence": 273,
+      "harness_id": "claude",
+      "task_id": "held-short-locale",
+      "mode": "lookup-worker",
+      "repetition": 1,
+      "cache": "cold"
+    },
+    {
+      "trial_id": "claude-held-short-locale-lookup-worker-r2",
+      "sequence": 274,
+      "harness_id": "claude",
+      "task_id": "held-short-locale",
+      "mode": "lookup-worker",
+      "repetition": 2,
+      "cache": "warm"
+    },
+    {
+      "trial_id": "claude-held-short-locale-lookup-direct-r2",
+      "sequence": 275,
+      "harness_id": "claude",
+      "task_id": "held-short-locale",
+      "mode": "lookup-direct",
+      "repetition": 2,
+      "cache": "warm"
+    },
+    {
+      "trial_id": "claude-held-short-locale-native-catalogue-r2",
+      "sequence": 276,
+      "harness_id": "claude",
+      "task_id": "held-short-locale",
+      "mode": "native-catalogue",
+      "repetition": 2,
+      "cache": "warm"
+    },
+    {
+      "trial_id": "claude-held-complex-report-lookup-direct-r1",
+      "sequence": 277,
+      "harness_id": "claude",
+      "task_id": "held-complex-report",
+      "mode": "lookup-direct",
+      "repetition": 1,
+      "cache": "cold"
+    },
+    {
+      "trial_id": "claude-held-complex-report-lookup-worker-r1",
+      "sequence": 278,
+      "harness_id": "claude",
+      "task_id": "held-complex-report",
+      "mode": "lookup-worker",
+      "repetition": 1,
+      "cache": "cold"
+    },
+    {
+      "trial_id": "claude-held-complex-report-native-catalogue-r1",
+      "sequence": 279,
+      "harness_id": "claude",
+      "task_id": "held-complex-report",
+      "mode": "native-catalogue",
+      "repetition": 1,
+      "cache": "cold"
+    },
+    {
+      "trial_id": "claude-held-complex-report-native-catalogue-r2",
+      "sequence": 280,
+      "harness_id": "claude",
+      "task_id": "held-complex-report",
+      "mode": "native-catalogue",
+      "repetition": 2,
+      "cache": "warm"
+    },
+    {
+      "trial_id": "claude-held-complex-report-lookup-worker-r2",
+      "sequence": 281,
+      "harness_id": "claude",
+      "task_id": "held-complex-report",
+      "mode": "lookup-worker",
+      "repetition": 2,
+      "cache": "warm"
+    },
+    {
+      "trial_id": "claude-held-complex-report-lookup-direct-r2",
+      "sequence": 282,
+      "harness_id": "claude",
+      "task_id": "held-complex-report",
+      "mode": "lookup-direct",
+      "repetition": 2,
+      "cache": "warm"
+    },
+    {
+      "trial_id": "claude-held-summary-release-lookup-worker-r1",
+      "sequence": 283,
+      "harness_id": "claude",
+      "task_id": "held-summary-release",
+      "mode": "lookup-worker",
+      "repetition": 1,
+      "cache": "cold"
+    },
+    {
+      "trial_id": "claude-held-summary-release-native-catalogue-r1",
+      "sequence": 284,
+      "harness_id": "claude",
+      "task_id": "held-summary-release",
+      "mode": "native-catalogue",
+      "repetition": 1,
+      "cache": "cold"
+    },
+    {
+      "trial_id": "claude-held-summary-release-lookup-direct-r1",
+      "sequence": 285,
+      "harness_id": "claude",
+      "task_id": "held-summary-release",
+      "mode": "lookup-direct",
+      "repetition": 1,
+      "cache": "cold"
+    },
+    {
+      "trial_id": "claude-held-summary-release-lookup-direct-r2",
+      "sequence": 286,
+      "harness_id": "claude",
+      "task_id": "held-summary-release",
+      "mode": "lookup-direct",
+      "repetition": 2,
+      "cache": "warm"
+    },
+    {
+      "trial_id": "claude-held-summary-release-native-catalogue-r2",
+      "sequence": 287,
+      "harness_id": "claude",
+      "task_id": "held-summary-release",
+      "mode": "native-catalogue",
+      "repetition": 2,
+      "cache": "warm"
+    },
+    {
+      "trial_id": "claude-held-summary-release-lookup-worker-r2",
+      "sequence": 288,
+      "harness_id": "claude",
+      "task_id": "held-summary-release",
+      "mode": "lookup-worker",
+      "repetition": 2,
+      "cache": "warm"
+    }
+  ]
+}
