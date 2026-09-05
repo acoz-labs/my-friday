@@ -2,7 +2,7 @@
 
 - **Status:** Final
 - **Discovery issue:** #104
-- **Discovery PR:** pending
+- **Discovery PR:** #105
 - **Repository basis:** b7d8aa154a1f96b2406dc65fd41e23adb5a03ab7
 - **Recommended decision:** approve
 - **Gate 1:** awaiting-authority
@@ -46,6 +46,14 @@ harnesses. Operators must know when an installation cannot execute a capability.
 - Product authority selected on-demand discovery with selective delegation
   and authorized commencement on 2026-09-05. Performance and portability
   conclusions remain subject to the experiment below.
+- Sanitized observation `lexical-routing-spike-20260905`: a fixed metadata-only
+  BM25 probe over the 59-skill catalogue selected the expected top result for
+  10/10 explicit queries but 0/8 paraphrases and 0/2 ambiguous queries; top-three
+  inclusion was 3/8 and 2/2 respectively. Only 1/3 no-match queries abstained.
+  Two runs produced identical results. This small hand-authored suite tests
+  lexical retrieval only, not model reasoning, worker execution, token use,
+  latency, or general routing accuracy. It demonstrates why retrieval rank
+  alone must not authorize automatic dispatch.
 
 ## Assumptions
 
@@ -81,6 +89,11 @@ Search and execution must agree on package identity/revision, required
 dependencies, execution requirements, and supported semantics. A stale index
 must be refreshed or explicitly refused, never silently used for a different
 revision.
+
+Treat lexical retrieval as candidate generation. The agent must confirm scope
+against the selected capability before execution and use broader metadata or
+semantic retrieval when candidates are ambiguous, implausible, or absent. A
+confident-looking first result never substitutes for task/authority checks.
 
 Each harness receives essential governing instructions and a small capability
 access surface. Load only selected capability instructions and their required
