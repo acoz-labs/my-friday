@@ -54,12 +54,13 @@ func main() {
 			fatal(fmt.Errorf("candidate completed before source interruption: %w", err))
 		default:
 		}
+		membersBefore := groupSummary(pgid)
 		if err := syscall.Kill(-pgid, syscall.SIGSTOP); err != nil {
 			leaderErr := syscall.Kill(pgid, syscall.SIGSTOP)
 			if leaderErr == nil {
 				_ = syscall.Kill(pgid, syscall.SIGCONT)
 			}
-			fatal(fmt.Errorf("stop Expect process group %d as euid %d (leader stop: %v; members: %s): %w", pgid, os.Geteuid(), leaderErr, groupSummary(pgid), err))
+			fatal(fmt.Errorf("stop Expect process group %d as euid %d (leader stop: %v; members before: %s; members after: %s): %w", pgid, os.Geteuid(), leaderErr, membersBefore, groupSummary(pgid), err))
 		}
 		body, err := os.ReadFile(journalPath)
 		if err == nil && stable(body, *root, *slug) {
