@@ -2,7 +2,7 @@
 
 - **Status:** Final
 - **Discovery issue:** #108
-- **Discovery PR:** pending
+- **Discovery PR:** #109
 - **Repository basis:** f1e6f28fe2db6f4d3ec0e0292e3f03f87e7297f2
 - **Recommended decision:** approve
 - **Gate 1:** awaiting-authority
@@ -105,6 +105,12 @@ the owner to test. An explicitly unsupported required behavior fails readiness.
   reversible activation. Essential identity, policy, authority and memory
   triggers remain available to the main agent. Lookup failures, unsupported
   requirements, and subagent summaries cannot silently weaken task authority.
+  The laptop candidate must work on its chosen supported harness. Claims of
+  harness-independent execution require the same package to execute on a
+  second real harness, not compiler fixtures or an unavailable #106 run.
+  Missing second-harness proof remains an outstanding full-vision requirement,
+  never a silent Codex-only redefinition; #93 owns adapter extension while B1
+  retains its currently approved harness scope.
 - Governed memory captures observations and proposals, separates promotion,
   resolves/supersedes claims, and returns attributed current context in a fresh
   task. Shared-repository refresh and conflict behavior preserve governance.
