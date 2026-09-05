@@ -2,7 +2,7 @@
 
 - **Status:** Draft
 - **Discovery issue:** #99
-- **Discovery PR:** Pending
+- **Discovery PR:** #100
 - **Repository basis:** `616395439a953100c6c165ccf56ea314c2dd0307`
 - **Recommended decision:** approve
 - **Gate 1:** awaiting-authority
