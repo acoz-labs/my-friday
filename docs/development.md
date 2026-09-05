@@ -258,3 +258,26 @@ contract.
 This integration runs on the required Apple-silicon acceptance host and skips
 on portable CI hosts without `/usr/bin/expect`; the remaining contract and
 cross-platform runner tests still run there.
+
+## Capability routing experiment
+
+The developer-only comparison under `tools/capability-routing-experiment/`
+validates and stages a frozen 24-capability/24-task synthetic suite, records
+native driver preflight, scores immutable attempt rows, and emits sanitized JSON
+and Markdown. It is not part of the public `my-friday` command and does not
+install capabilities or change routing defaults.
+
+Run its offline checks with:
+
+```sh
+go test -race ./tools/capability-routing-experiment/...
+go run ./tools/capability-routing-experiment validate \
+  --data tools/capability-routing-experiment/testdata
+```
+
+`run` additionally requires explicit `--live`, an exact preregistered manifest,
+an owner-only fresh run root, existing authorized harness access, and every
+native isolation/control preflight. An unavailable driver records incomplete
+cells and null metrics; it never falls back to unsandboxed inference. See
+[`docs/experiments/capability-routing/README.md`](experiments/capability-routing/README.md)
+for the method, commands, control matrix, and current partial result.

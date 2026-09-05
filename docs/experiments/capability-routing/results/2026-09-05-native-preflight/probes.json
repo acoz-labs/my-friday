@@ -1,0 +1,68 @@
+[
+  {
+    "version": 1,
+    "harness": "codex",
+    "executable": "codex",
+    "cli_revision": "codex-cli 0.153.4",
+    "state": "unavailable",
+    "unavailable_reasons": [
+      "no OS-enforced fixture-only read boundary was demonstrated without exposing host authentication",
+      "native skill body reads were not proven constrained to the staged allowlist",
+      "native worker identity/inheritance and pre-launch depth/count enforcement were not demonstrated",
+      "enabled built-in tools lack an equivalent pre-dispatch eight-call rejection hook"
+    ],
+    "controls": {
+      "os_fixture_only_read_boundary": false,
+      "model_tool_network_denied": false,
+      "native_skill_visibility": false,
+      "native_body_read_constrained": false,
+      "native_worker_events": false,
+      "worker_prelaunch_limit": false,
+      "builtin_predispatch_limit": false,
+      "broker_predispatch_limit": false,
+      "output_limit_enforced": false,
+      "evidence": [
+        "version and help text inspected without inference or authentication commands",
+        "no broker or model process was activated because the native process boundary is unsupported",
+        "CLI advertises read-only/workspace-write sandbox modes; workspace-write is not restricted-read proof"
+      ]
+    },
+    "probed_commands": [
+      "codex --version",
+      "codex exec --help"
+    ]
+  },
+  {
+    "version": 1,
+    "harness": "claude",
+    "executable": "claude",
+    "cli_revision": "2.1.193 (Claude Code)",
+    "state": "unavailable",
+    "unavailable_reasons": [
+      "no OS-enforced fixture-only read boundary was demonstrated without exposing host authentication",
+      "native skill body reads were not proven constrained to the staged allowlist",
+      "native worker identity/inheritance and pre-launch depth/count enforcement were not demonstrated",
+      "enabled built-in tools lack an equivalent pre-dispatch eight-call rejection hook"
+    ],
+    "controls": {
+      "os_fixture_only_read_boundary": false,
+      "model_tool_network_denied": false,
+      "native_skill_visibility": false,
+      "native_body_read_constrained": false,
+      "native_worker_events": false,
+      "worker_prelaunch_limit": false,
+      "builtin_predispatch_limit": false,
+      "broker_predispatch_limit": false,
+      "output_limit_enforced": false,
+      "evidence": [
+        "version and help text inspected without inference or authentication commands",
+        "no broker or model process was activated because the native process boundary is unsupported",
+        "CLI advertises tool allowlists; flags are not an OS-backed read/network denial canary"
+      ]
+    },
+    "probed_commands": [
+      "claude --version",
+      "claude --help"
+    ]
+  }
+]
