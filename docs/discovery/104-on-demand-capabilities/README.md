@@ -36,8 +36,8 @@ harnesses. Operators must know when an installation cannot execute a capability.
 - Existing skills use progressive instruction loading. A startup catalogue is
   metadata, not evidence that every capability body is loaded initially.
 - Sanitized observation `capability-catalogue-baseline-20260905`: one mature
-  installation has 59 custom skills, 19,757 description characters, and 13
-  custom agents. This excludes plugin catalogues and is not a token count or
+  installation has 59 custom skills, 19,757 description-only characters
+  (20,219 name-plus-description characters), and 13 custom agents. This excludes plugin catalogues and is not a token count or
   evidence of degraded performance.
 - Sanitized observation `second-harness-access-20260905`: Codex CLI 0.153.4
   and Claude Code 2.1.193 are installed. Claude reports authentication, but a
@@ -54,6 +54,8 @@ harnesses. Operators must know when an installation cannot execute a capability.
   lexical retrieval only, not model reasoning, worker execution, token use,
   latency, or general routing accuracy. It demonstrates why retrieval rank
   alone must not authorize automatic dispatch.
+  [Sanitized method and limitations](evidence.md) preserve the observation's
+  scope; the private catalogue is not a reproducible public benchmark.
 
 ## Assumptions
 
@@ -174,7 +176,8 @@ not proof of universal agent independence.
 
 Use generic synthetic capability contents and tasks in tracked experiment data.
 Private instructions, paths, credentials, raw transcripts, and user records are
-excluded. The two opaque observations above carry only sanitized inventory and
+excluded. The three opaque observations above carry only sanitized inventory,
+retrieval, and
 availability facts. Experimental logs must be scrubbed before repository use.
 
 ## Decision Spotlight
