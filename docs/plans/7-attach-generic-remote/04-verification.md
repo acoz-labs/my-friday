@@ -261,7 +261,7 @@ against the nominated immutable Darwin/ARM64 artifact. The manifest records:
   exact cleanup receipt;
 - scenario/action/expected/result/verdict rows and openable transcript/manifest
   artifact links;
-- proof that Alfred's live Codex home, operator home, source checkout, global
+- proof that the product acceptor's live Codex home, operator home, source checkout, global
   Git config, and deployed runtime projections were outside candidate roots and
   unchanged; and
 - disposable identity marker/teardown proof and final approval or rejection.
@@ -279,7 +279,7 @@ proves child-inclusive network denial and zero candidate resolver/socket attempt
 2. From the exact successful main SHA, nomination builds one deterministic
    Darwin/ARM64 archive once, computes SHA-256, uploads a named Actions artifact,
    and records structured run/artifact/digest/commit/issue identity.
-3. Alfred downloads that artifact onto supported macOS, verifies the digest,
+3. The authorized product acceptor downloads that artifact onto supported macOS, verifies the digest,
    provisions or reuses the marker-bounded disposable non-admin acceptance
    identity, starts and positively verifies the marker-bound PF/DTrace
    supervisor, executes the fresh matrix without credentials, captures
