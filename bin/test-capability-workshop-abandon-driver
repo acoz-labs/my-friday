@@ -12,16 +12,18 @@ trap 'rm -rf "$tmp"' EXIT
 candidate="$tmp/candidate"
 instance="$tmp/instance"
 source="$instance/runtime/skills/daily-brief"
+journal="$instance/capabilities/.workshop-daily-brief.json"
 eof_marker="$tmp/clean-eof"
 mkdir -p "$instance/runtime/skills"
 printf '%s\n' \
   '#!/bin/sh' \
   "printf 'Display name'" \
   'case ${ABANDON_FIXTURE_BEHAVIOR:-expected} in' \
-  "  expected) trap 'exit 0' INT TERM; if ! IFS= read -r _; then : >\"\$ABANDON_EOF_MARKER\"; fi ;;" \
+  "  expected) trap 'exit 130' INT; trap 'exit 143' TERM; if ! IFS= read -r _; then : >\"\$ABANDON_EOF_MARKER\"; fi ;;" \
   '  exit7) IFS= read -r _ || true; exit 7 ;;' \
   '  hup) IFS= read -r _ || true; kill -HUP $$; sleep 1 ;;' \
   '  signal) IFS= read -r _ || true ;;' \
+  "  trap0) trap 'exit 0' INT TERM; IFS= read -r _ || true ;;" \
   '  *) exit 64 ;;' \
   'esac' \
   'exit 0' >"$candidate"
@@ -36,6 +38,26 @@ for mode in q eof int term; do
   fi
   [[ ! -e "$source" ]] || {
     echo "$mode abandon fixture wrote source" >&2
+    exit 1
+  }
+done
+
+for signal_case in int term; do
+  set +e
+  ABANDON_FIXTURE_BEHAVIOR=trap0 /usr/bin/expect "$root/config/acceptance/capability-workshop-abandon.exp" \
+    "$signal_case" "$candidate" "$instance" daily-brief
+  status=$?
+  set -e
+  [[ "$status" == 126 ]] || {
+    echo "trapped $signal_case zero became $status, want 126" >&2
+    exit 1
+  }
+  [[ ! -e "$source" ]] || {
+    echo "trapped $signal_case zero fixture wrote source" >&2
+    exit 1
+  }
+  [[ ! -e "$journal" ]] || {
+    echo "trapped $signal_case zero fixture wrote a journal" >&2
     exit 1
   }
 done

@@ -126,6 +126,12 @@ func Run(instance, source, slug string, in io.Reader, out io.Writer) error {
 }
 
 func RunPlan(plan SourcePlan, in io.Reader, out io.Writer) error {
+	return RunPlanWithConfirmation(plan, in, out, nil)
+}
+
+// RunPlanWithConfirmation invokes confirmed immediately after the exact source
+// confirmation is read and before the bounded source transaction begins.
+func RunPlanWithConfirmation(plan SourcePlan, in io.Reader, out io.Writer, confirmed func()) error {
 	instance, source, slug := plan.Instance, plan.Source, plan.Slug
 	status, inspectErr := capability.Inspect(instance, source)
 	if status.State == capability.StateInterrupted {
@@ -208,7 +214,7 @@ func RunPlan(plan SourcePlan, in io.Reader, out io.Writer) error {
 			}
 			v, stop, e := prompt(r, out, fields[i].label, fields[i].max, *fields[i].dst != "")
 			if e != nil {
-				if errors.Is(e, io.EOF) || errors.Is(e, io.ErrUnexpectedEOF) {
+				if errors.Is(e, io.EOF) || errors.Is(e, io.ErrUnexpectedEOF) || workshopInterrupted(e) {
 					return finishNoChange(out, e)
 				}
 				fmt.Fprintf(out, "Invalid: %v. Try again.\n", e)
@@ -262,7 +268,7 @@ func RunPlan(plan SourcePlan, in io.Reader, out io.Writer) error {
 			}
 			v, stop, e := prompt(r, out, f.label+" (1-16; separate entries with |"+map[bool]string{true: "; 'none' allowed", false: ""}[f.none]+")", 4096, answered)
 			if e != nil {
-				if errors.Is(e, io.EOF) || errors.Is(e, io.ErrUnexpectedEOF) {
+				if errors.Is(e, io.EOF) || errors.Is(e, io.ErrUnexpectedEOF) || workshopInterrupted(e) {
 					return finishNoChange(out, e)
 				}
 				fmt.Fprintf(out, "Invalid: %v. Try again.\n", e)
@@ -426,6 +432,9 @@ examplesSection:
 	if line != token+"\n" {
 		return finishNoChange(out, nil)
 	}
+	if confirmed != nil {
+		confirmed()
+	}
 	if err = commitPlan(plan, status, files, action, previewSnapshot); err != nil {
 		return err
 	}
@@ -467,6 +476,12 @@ func finishNoChange(out io.Writer, err error) error {
 		return nil
 	}
 	return err
+}
+
+func workshopInterrupted(err error) bool {
+	type interruption interface{ WorkshopInterrupted() }
+	var interrupted interruption
+	return errors.As(err, &interrupted)
 }
 func prompt(r *bufio.Reader, out io.Writer, label string, max int, retain bool) (string, bool, error) {
 	if retain {

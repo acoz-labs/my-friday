@@ -1,0 +1,20 @@
+#!/usr/bin/expect -f
+if {$argc != 3} { exit 64 }
+lassign $argv mode candidate instance
+set timeout 3
+spawn -noecho {*}[list $candidate -test.run=TestWorkshopSignalHelper]
+expect "Display name"
+set pid [exp_pid]
+switch -- $mode {
+  int { exec kill -INT $pid; set expected 130 }
+  term { exec kill -TERM $pid; set expected 143 }
+  default { exit 64 }
+}
+expect {
+  eof {}
+  timeout { exit 124 }
+}
+if {[catch wait result]} { exit 125 }
+if {[llength $result] != 4 || [lindex $result 2] != 0} { exit 125 }
+if {[lindex $result 3] != $expected} { exit 126 }
+exit 0
