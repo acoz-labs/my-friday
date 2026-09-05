@@ -19,7 +19,7 @@ expect "Non-triggers"; if {$mode eq "create"} {send -- "chat casually\r"} else {
 expect "Inputs"; if {$mode eq "create"} {send -- "topics\r"} else {send -- "\r"}
 expect "Outputs"; if {$mode eq "create"} {send -- "brief\r"} else {send -- "\r"}
 expect "Required facts"; if {$mode eq "create"} {send -- "explicit invocation only\r"} else {send -- "\r"}
-expect "Example input"; if {$mode eq "create"} {send -- "prepare my daily brief\r"} else {send -- "\r"}
+expect "Example 1 input"; if {$mode eq "create"} {send -- "prepare my daily brief\r"} else {send -- "\r"}
 expect "Expected output fragments"; if {$mode eq "create"} {send -- "DAILY_BRIEF_READY\r"} else {send -- "DAILY_BRIEF_UPDATED\r"}
 expect "Add another example?"; send -- "\r"
 if {$mode eq "create"} {
