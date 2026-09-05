@@ -4,11 +4,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os/exec"
+	"os"
 	"path/filepath"
 	"strings"
 	"time"
 )
+
+var credentialFreeProbeTimeout = 10 * time.Second
+var credentialFreeProbeExtraEnv []string
 
 type HarnessName string
 
@@ -107,18 +110,11 @@ func (probe DriverProbe) LiveEligible(mode string) bool {
 }
 
 func credentialFreeProbe(ctx context.Context, path string, args ...string) (string, error) {
-	probeCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
-	defer cancel()
-	command := exec.CommandContext(probeCtx, path, args...)
-	command.Env = []string{"PATH=/usr/bin:/bin:/usr/sbin:/sbin"}
-	body, err := command.CombinedOutput()
-	if probeCtx.Err() != nil {
-		return "", fmt.Errorf("probe %s timed out", filepath.Base(path))
-	}
+	result, err := Supervise(ctx, Command{Path: path, Args: args, Env: append([]string{"PATH=/usr/bin:/bin:/usr/sbin:/sbin"}, credentialFreeProbeExtraEnv...), WorkDir: os.TempDir(), Timeout: credentialFreeProbeTimeout})
 	if err != nil {
 		return "", fmt.Errorf("probe %s: %w", filepath.Base(path), err)
 	}
-	return string(body), nil
+	return result.Stdout + result.Stderr, nil
 }
 
 func firstLine(value string) string {

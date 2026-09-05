@@ -72,11 +72,10 @@ func prepareCommand(args []string) error {
 	if err != nil {
 		return err
 	}
-	harnesses := []HarnessSpec{
-		{ID: "codex", ExecutableVersion: "codex-cli 0.153.4", Model: "gpt-5.3-codex", Config: "experiment-v1-unavailable-until-control-preflight"},
-		{ID: "claude", ExecutableVersion: "2.1.193 (Claude Code)", Model: "claude-sonnet-4-6", Config: "experiment-v1-unavailable-until-control-preflight"},
+	if *sourceCommit != TrustedSourceCommit {
+		return fmt.Errorf("--source-commit must equal trusted preregistration %s", TrustedSourceCommit)
 	}
-	manifest, err := PrepareManifest(bundle, *sourceCommit, harnesses)
+	manifest, err := PrepareManifest(bundle, *sourceCommit, TrustedHarnesses())
 	if err != nil {
 		return err
 	}
@@ -160,7 +159,7 @@ func runCommand(args []string) error {
 		if probe.LiveEligible(cell.Mode) {
 			return errors.New("supported live driver execution is intentionally absent until native boundary implementation is independently reviewed")
 		}
-		attempts.Attempts = append(attempts.Attempts, Attempt{TrialID: cell.TrialID, AttemptID: cell.TrialID + "-a1", Primary: true, State: "unavailable", Reason: reason, SelectedCapabilities: []string{}, ResultFacts: []string{}, AttemptedEffects: []string{}, ActualEffects: []string{}, FixtureDiff: []FixtureEffect{}, Telemetry: unavailableTelemetry("native driver unavailable; no model trial executed")})
+		attempts.Attempts = append(attempts.Attempts, Attempt{TrialID: cell.TrialID, AttemptID: cell.TrialID + "-a1", Primary: true, State: "unavailable", Reason: reason, SelectedCapabilities: []string{}, ResultFacts: []string{}, AttemptedEffects: []string{}, ActualEffects: []string{}, FixtureSnapshot: []FixtureSnapshot{}, Telemetry: unavailableTelemetry("native driver unavailable; no model trial executed")})
 	}
 	if err = WriteOrVerifyJSON(filepath.Join(*runRoot, "probes.json"), probes); err != nil {
 		return err
@@ -192,6 +191,7 @@ func scoreCommand(args []string) error {
 
 func reportCommand(args []string) error {
 	set := flag.NewFlagSet("report", flag.ContinueOnError)
+	data := set.String("data", "testdata", "corpus directory")
 	runRoot := set.String("run-root", "", "owned evidence directory")
 	if err := set.Parse(args); err != nil {
 		return err
@@ -202,6 +202,17 @@ func reportCommand(args []string) error {
 	}
 	var probes []DriverProbe
 	if err := ReadJSON(filepath.Join(*runRoot, "probes.json"), &probes); err != nil {
+		return err
+	}
+	bundle, err := LoadBundle(*data)
+	if err != nil {
+		return err
+	}
+	var attempts AttemptSet
+	if err = ReadJSON(filepath.Join(*runRoot, "attempts.json"), &attempts); err != nil {
+		return err
+	}
+	if err = ValidateReportInputs(bundle, attempts, comparison, probes); err != nil {
 		return err
 	}
 	body, err := MarshalReport(comparison, probes)
@@ -216,7 +227,10 @@ func reportCommand(args []string) error {
 
 func validateManifest(bundle Bundle) error {
 	manifest := bundle.Manifest
-	expected, err := PrepareManifest(bundle, manifest.SourceCommit, manifest.Harnesses)
+	if err := validateTrustedIdentity(manifest); err != nil {
+		return err
+	}
+	expected, err := PrepareManifest(bundle, TrustedSourceCommit, TrustedHarnesses())
 	if err != nil {
 		return err
 	}

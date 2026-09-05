@@ -150,7 +150,7 @@ func ValidateBundle(bundle Bundle) error {
 		}
 		for _, effect := range label.RequiredEffects {
 			parts := strings.SplitN(effect, ":", 2)
-			if len(parts) != 2 || parts[0] != "write" || !safeFixturePath(parts[1]) {
+			if len(parts) != 2 || parts[0] != "write" || !safeFixturePath(parts[1]) || !contains(tasks[label.TaskID].WritePaths, parts[1]) {
 				return fmt.Errorf("label %s has invalid required effect %q", label.TaskID, effect)
 			}
 		}

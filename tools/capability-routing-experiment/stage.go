@@ -14,6 +14,14 @@ var ErrStaleIndex = errors.New("stale index revision")
 
 type CapabilityMetadata struct{ ID, Name, Summary, Revision string }
 
+type TransportInstructions struct {
+	Revision   string   `json:"revision"`
+	Operations []string `json:"operations"`
+	CallLimit  int      `json:"call_limit"`
+	Fallbacks  int      `json:"broader_metadata_fallbacks"`
+	Notice     string   `json:"notice"`
+}
+
 type StagedTask struct {
 	TaskID            string   `json:"task_id"`
 	Prompt            string   `json:"prompt"`
@@ -124,12 +132,9 @@ func StageTrial(modelRoot string, bundle Bundle, cell ManifestCell) error {
 			}
 		}
 	} else {
-		metadata := make([]CapabilityMetadata, 0, len(bundle.Capabilities.Capabilities))
-		for _, capability := range bundle.Capabilities.Capabilities {
-			metadata = append(metadata, CapabilityMetadata{capability.ID, capability.Name, capability.Summary, capability.Revision})
-		}
-		body, _ := json.MarshalIndent(metadata, "", "  ")
-		if err = createFile(filepath.Join(modelRoot, "index.json"), append(body, '\n')); err != nil {
+		instructions := TransportInstructions{Revision: bundle.Capabilities.Revision, Operations: []string{"lookup", "load", "fallback", "read_fixture", "write_fixture"}, CallLimit: 8, Fallbacks: 1, Notice: "Capability metadata and bodies arrive only through counted controller transport results; this file contains no catalogue metadata."}
+		body, _ := json.MarshalIndent(instructions, "", "  ")
+		if err = createFile(filepath.Join(modelRoot, "transport.json"), append(body, '\n')); err != nil {
 			return err
 		}
 	}

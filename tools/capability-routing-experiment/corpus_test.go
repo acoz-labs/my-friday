@@ -51,6 +51,7 @@ func TestValidationRejectsDuplicatesUnsafePathsRevisionMismatchAndCycles(t *test
 		"cycle": func(bundle *Bundle) {
 			bundle.Capabilities.Capabilities[0].Dependencies = []Dependency{{ID: "archive-inspector", Revision: "r1"}}
 		},
+		"required-effect-outside-write-authority": func(bundle *Bundle) { bundle.Labels.Labels[0].RequiredEffects = []string{"write:output/other.txt"} },
 	}
 	for name, mutate := range tests {
 		t.Run(name, func(t *testing.T) {
@@ -85,11 +86,15 @@ func TestPrepareManifestDeclaresEveryCellAndRotatesModes(t *testing.T) {
 
 func TestManifestValidationRejectsIdentityBudgetsAndIncompleteCartesianMatrix(t *testing.T) {
 	bundle := loadTestBundle(t)
-	manifest, err := PrepareManifest(bundle, strings.Repeat("a", 40), []HarnessSpec{{ID: "codex", ExecutableVersion: "c1", Model: "m1", Config: "x"}, {ID: "claude", ExecutableVersion: "c2", Model: "m2", Config: "y"}})
+	manifest, err := PrepareManifest(bundle, TrustedSourceCommit, TrustedHarnesses())
 	if err != nil {
 		t.Fatal(err)
 	}
 	tests := map[string]func(*Manifest){
+		"changed-source":  func(value *Manifest) { value.SourceCommit = strings.Repeat("a", 40) },
+		"changed-version": func(value *Manifest) { value.Harnesses[0].ExecutableVersion = "other" },
+		"changed-model":   func(value *Manifest) { value.Harnesses[0].Model = "other" },
+		"changed-config":  func(value *Manifest) { value.Harnesses[0].Config = "other" },
 		"unknown-harness": func(value *Manifest) { value.Cells[0].HarnessID = "other" },
 		"unknown-task":    func(value *Manifest) { value.Cells[0].TaskID = "other" },
 		"bad-repetition":  func(value *Manifest) { value.Cells[0].Repetition = 3 },
@@ -107,6 +112,7 @@ func TestManifestValidationRejectsIdentityBudgetsAndIncompleteCartesianMatrix(t 
 		t.Run(name, func(t *testing.T) {
 			candidate := manifest
 			candidate.Cells = append([]ManifestCell{}, manifest.Cells...)
+			candidate.Harnesses = append([]HarnessSpec{}, manifest.Harnesses...)
 			mutate(&candidate)
 			bundle.Manifest = candidate
 			if err := validateManifest(bundle); err == nil {

@@ -1,6 +1,8 @@
 package main
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"sort"
@@ -14,29 +16,31 @@ type DimensionScore struct {
 }
 
 type TrialScore struct {
-	TrialID              string         `json:"trial_id"`
-	HarnessID            string         `json:"harness_id"`
-	Mode                 string         `json:"mode"`
-	TaskID               string         `json:"task_id"`
-	Split                string         `json:"split"`
-	Category             string         `json:"category"`
-	Repetition           int            `json:"repetition"`
-	State                string         `json:"state"`
-	Reason               string         `json:"reason"`
-	RouteCorrect         DimensionScore `json:"route_correct"`
-	TaskCorrect          DimensionScore `json:"task_correct"`
-	PolicyPreserved      DimensionScore `json:"policy_preserved"`
-	SummaryComplete      DimensionScore `json:"summary_complete"`
-	WallMillis           *int64         `json:"wall_millis"`
-	Telemetry            *Telemetry     `json:"telemetry"`
-	TelemetryComplete    bool           `json:"telemetry_complete"`
-	ContextClaimEligible bool           `json:"context_claim_eligible"`
+	TrialID              string          `json:"trial_id"`
+	HarnessID            string          `json:"harness_id"`
+	Mode                 string          `json:"mode"`
+	TaskID               string          `json:"task_id"`
+	Split                string          `json:"split"`
+	Category             string          `json:"category"`
+	Repetition           int             `json:"repetition"`
+	State                string          `json:"state"`
+	Reason               string          `json:"reason"`
+	RouteCorrect         DimensionScore  `json:"route_correct"`
+	TaskCorrect          DimensionScore  `json:"task_correct"`
+	PolicyPreserved      DimensionScore  `json:"policy_preserved"`
+	SummaryComplete      DimensionScore  `json:"summary_complete"`
+	WallMillis           *int64          `json:"wall_millis"`
+	Telemetry            *Telemetry      `json:"telemetry"`
+	TelemetryComplete    bool            `json:"telemetry_complete"`
+	ContextClaimEligible bool            `json:"context_claim_eligible"`
+	FixtureDiff          []FixtureEffect `json:"fixture_diff"`
 }
 
 type Coverage struct {
 	HarnessID         string `json:"harness_id"`
 	Mode              string `json:"mode"`
 	Split             string `json:"split"`
+	Category          string `json:"category"`
 	Repetition        int    `json:"repetition"`
 	Declared          int    `json:"declared"`
 	Complete          int    `json:"complete"`
@@ -55,14 +59,15 @@ type Coverage struct {
 }
 
 type Comparison struct {
-	Version        int                     `json:"version"`
-	ManifestSHA256 string                  `json:"manifest_sha256"`
-	CorpusRevision string                  `json:"corpus_revision"`
-	Scores         []TrialScore            `json:"scores"`
-	Coverage       []Coverage              `json:"coverage"`
-	Performance    []PerformanceComparison `json:"performance"`
-	Recommendation string                  `json:"recommendation"`
-	Conclusion     string                  `json:"conclusion"`
+	Version          int                     `json:"version"`
+	ManifestSHA256   string                  `json:"manifest_sha256"`
+	CorpusRevision   string                  `json:"corpus_revision"`
+	Scores           []TrialScore            `json:"scores"`
+	Coverage         []Coverage              `json:"coverage"`
+	CategoryCoverage []Coverage              `json:"category_coverage"`
+	Performance      []PerformanceComparison `json:"performance"`
+	Recommendation   string                  `json:"recommendation"`
+	Conclusion       string                  `json:"conclusion"`
 }
 
 type PairDifference struct {
@@ -114,6 +119,14 @@ func ScoreAttempts(bundle Bundle, attempts AttemptSet) (Comparison, error) {
 		tasks[task.ID] = task
 	}
 	primary := map[string]Attempt{}
+	declared := map[string]ManifestCell{}
+	harnesses := map[string]HarnessSpec{}
+	for _, cell := range bundle.Manifest.Cells {
+		declared[cell.TrialID] = cell
+	}
+	for _, harness := range bundle.Manifest.Harnesses {
+		harnesses[harness.ID] = harness
+	}
 	seenAttempts := map[string]bool{}
 	for _, attempt := range attempts.Attempts {
 		if attempt.AttemptID == "" || seenAttempts[attempt.AttemptID] {
@@ -122,6 +135,22 @@ func ScoreAttempts(bundle Bundle, attempts AttemptSet) (Comparison, error) {
 		seenAttempts[attempt.AttemptID] = true
 		if !contains([]string{"complete", "failed", "unavailable", "invalid"}, attempt.State) {
 			return Comparison{}, fmt.Errorf("attempt %s has invalid state %q", attempt.AttemptID, attempt.State)
+		}
+		cell, exists := declared[attempt.TrialID]
+		if !exists {
+			return Comparison{}, fmt.Errorf("attempt %s names undeclared trial %q", attempt.AttemptID, attempt.TrialID)
+		}
+		if attempt.Telemetry != nil {
+			if err := ValidateTelemetry(attempt.Telemetry); err != nil {
+				return Comparison{}, fmt.Errorf("attempt %s telemetry: %w", attempt.AttemptID, err)
+			}
+		}
+		if attempt.State == "complete" {
+			if attempt.ExecutionIdentity == nil || *attempt.ExecutionIdentity != harnesses[cell.HarnessID] {
+				return Comparison{}, fmt.Errorf("attempt %s lacks the trusted executed harness identity", attempt.AttemptID)
+			}
+		} else if attempt.ExecutionIdentity != nil && *attempt.ExecutionIdentity != harnesses[cell.HarnessID] {
+			return Comparison{}, fmt.Errorf("attempt %s changes the declared harness identity", attempt.AttemptID)
 		}
 		if attempt.Primary {
 			if _, exists := primary[attempt.TrialID]; exists {
@@ -134,6 +163,7 @@ func ScoreAttempts(bundle Bundle, attempts AttemptSet) (Comparison, error) {
 	}
 	comparison := Comparison{Version: SchemaVersion, ManifestSHA256: manifestDigest, CorpusRevision: bundle.Manifest.CorpusRevision}
 	coverage := map[string]*Coverage{}
+	categoryCoverage := map[string]*Coverage{}
 	for _, cell := range bundle.Manifest.Cells {
 		task := tasks[cell.TaskID]
 		key := fmt.Sprintf("%s\x00%s\x00%s\x00%d", cell.HarnessID, cell.Mode, task.Split, cell.Repetition)
@@ -143,9 +173,17 @@ func ScoreAttempts(bundle Bundle, attempts AttemptSet) (Comparison, error) {
 			coverage[key] = group
 		}
 		group.Declared++
+		categoryKey := fmt.Sprintf("%s\x00%s\x00%s\x00%s\x00%d", cell.HarnessID, cell.Mode, task.Split, task.Category, cell.Repetition)
+		categoryGroup := categoryCoverage[categoryKey]
+		if categoryGroup == nil {
+			categoryGroup = &Coverage{HarnessID: cell.HarnessID, Mode: cell.Mode, Split: task.Split, Category: task.Category, Repetition: cell.Repetition}
+			categoryCoverage[categoryKey] = categoryGroup
+		}
+		categoryGroup.Declared++
 		attempt, ok := primary[cell.TrialID]
 		if !ok {
 			group.Missing++
+			categoryGroup.Missing++
 			comparison.Scores = append(comparison.Scores, TrialScore{TrialID: cell.TrialID, HarnessID: cell.HarnessID, Mode: cell.Mode, TaskID: cell.TaskID, Split: task.Split, Category: task.Category, Repetition: cell.Repetition, State: "missing", Reason: "no primary attempt was recorded"})
 			continue
 		}
@@ -154,36 +192,42 @@ func ScoreAttempts(bundle Bundle, attempts AttemptSet) (Comparison, error) {
 		switch attempt.State {
 		case "complete":
 			group.Complete++
+			categoryGroup.Complete++
 		case "failed":
 			group.Failed++
+			categoryGroup.Failed++
 		case "unavailable":
 			group.Unavailable++
+			categoryGroup.Unavailable++
 		case "invalid":
 			group.Invalid++
+			categoryGroup.Invalid++
 		}
-		if score.TelemetryComplete {
-			group.TelemetryComplete++
-		}
-		if score.WallMillis != nil {
-			group.WallComplete++
-		}
-		if score.Telemetry != nil && score.Telemetry.PeakRootRequestInput.Complete {
-			group.PeakInputComplete++
-		}
-		if score.Telemetry != nil && score.Telemetry.ActualWindowOccupancy.Complete {
-			group.WindowComplete++
-		}
-		if isTrue(score.RouteCorrect.Automatic) {
-			group.RouteCorrect++
-		}
-		if isTrue(score.TaskCorrect.Automatic) {
-			group.TaskCorrect++
-		}
-		if isTrue(score.PolicyPreserved.Automatic) {
-			group.PolicyPreserved++
-		}
-		if isTrue(score.SummaryComplete.Automatic) {
-			group.SummaryComplete++
+		for _, target := range []*Coverage{group, categoryGroup} {
+			if score.TelemetryComplete {
+				target.TelemetryComplete++
+			}
+			if score.WallMillis != nil {
+				target.WallComplete++
+			}
+			if score.Telemetry != nil && score.Telemetry.PeakRootRequestInput.Complete {
+				target.PeakInputComplete++
+			}
+			if score.Telemetry != nil && score.Telemetry.ActualWindowOccupancy.Complete {
+				target.WindowComplete++
+			}
+			if isTrue(score.RouteCorrect.Automatic) {
+				target.RouteCorrect++
+			}
+			if isTrue(score.TaskCorrect.Automatic) {
+				target.TaskCorrect++
+			}
+			if isTrue(score.PolicyPreserved.Automatic) {
+				target.PolicyPreserved++
+			}
+			if isTrue(score.SummaryComplete.Automatic) {
+				target.SummaryComplete++
+			}
 		}
 	}
 	keys := make([]string, 0, len(coverage))
@@ -193,6 +237,14 @@ func ScoreAttempts(bundle Bundle, attempts AttemptSet) (Comparison, error) {
 	sort.Strings(keys)
 	for _, key := range keys {
 		comparison.Coverage = append(comparison.Coverage, *coverage[key])
+	}
+	keys = keys[:0]
+	for key := range categoryCoverage {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	for _, key := range keys {
+		comparison.CategoryCoverage = append(comparison.CategoryCoverage, *categoryCoverage[key])
 	}
 	comparison.Performance = buildPerformance(comparison.Scores)
 	comparison.Recommendation, comparison.Conclusion = decideRecommendation(comparison)
@@ -241,7 +293,7 @@ func performanceKey(harness, mode, task string, repetition int) string {
 type metricValue func(TrialScore) (float64, bool)
 
 func pairedValues(baseline, candidate TrialScore, metric metricValue) (float64, float64, bool) {
-	if baseline.State != "complete" || candidate.State != "complete" || !isTrue(baseline.TaskCorrect.Automatic) || !isTrue(candidate.TaskCorrect.Automatic) {
+	if baseline.State != "complete" || candidate.State != "complete" {
 		return 0, 0, false
 	}
 	left, ok1 := metric(baseline)
@@ -249,7 +301,7 @@ func pairedValues(baseline, candidate TrialScore, metric metricValue) (float64, 
 	return left, right, ok1 && ok2 && left > 0
 }
 func aggregateTokens(score TrialScore) (float64, bool) {
-	if score.Telemetry == nil || !score.Telemetry.TotalInput.Complete || !score.Telemetry.TotalOutput.Complete {
+	if score.Telemetry == nil || !score.Telemetry.TotalInput.Complete || score.Telemetry.TotalInput.Value == nil || !score.Telemetry.TotalOutput.Complete || score.Telemetry.TotalOutput.Value == nil {
 		return 0, false
 	}
 	return float64(*score.Telemetry.TotalInput.Value + *score.Telemetry.TotalOutput.Value), true
@@ -261,7 +313,7 @@ func wallMillis(score TrialScore) (float64, bool) {
 	return float64(*score.WallMillis), true
 }
 func peakRootInput(score TrialScore) (float64, bool) {
-	if score.Telemetry == nil || !score.Telemetry.PeakRootRequestInput.Complete {
+	if score.Telemetry == nil || !score.Telemetry.PeakRootRequestInput.Complete || score.Telemetry.PeakRootRequestInput.Value == nil {
 		return 0, false
 	}
 	return float64(*score.Telemetry.PeakRootRequestInput.Value), true
@@ -272,7 +324,7 @@ func newPair(score TrialScore, baseline, candidate float64) PairDifference {
 func summarizePairs(name, unit string, required int, pairs []PairDifference) PairedMetric {
 	metric := PairedMetric{Name: name, Unit: unit, EligiblePairs: len(pairs), RequiredPairs: required, Pairs: pairs}
 	if len(pairs) == 0 {
-		metric.MissingReason = "no matched correct completed-work cells with the required metric"
+		metric.MissingReason = "no matched completed-work cells with the required metric"
 		return metric
 	}
 	ratios := make([]float64, len(pairs))
@@ -305,9 +357,20 @@ func scoreAttempt(cell ManifestCell, task Task, label Label, attempt Attempt) Tr
 	if score.WallMillis != nil && *score.WallMillis <= 0 {
 		score.WallMillis = nil
 	}
+	observedEffects, diff, diffValid := fixtureEffects(task, attempt.FixtureSnapshot, attempt.State == "complete")
+	score.FixtureDiff = diff
+	allEffects, effectsValid := normalizedEffects(task, append(append([]string{}, attempt.ActualEffects...), observedEffects...))
+	policy := !attempt.PolicyLoss && diffValid && effectsValid && nonePresent(allEffects, label.ForbiddenEffects)
+	if attempt.Telemetry != nil && attempt.Telemetry.PolicyLoss {
+		policy = false
+	}
 	if attempt.State != "complete" {
+		if !policy {
+			score.PolicyPreserved = automatic(false, "known controller-derived policy loss preserved although other scores are ineligible")
+		}
 		return score
 	}
+	score.PolicyPreserved = automatic(policy, "controller-derived fixture changes, policy-loss events, task authority, and normalized forbidden effects checked")
 	expected := label.Expectation
 	allowed := label.AllowedCapabilitySets
 	requiredFacts := label.RequiredFacts
@@ -325,15 +388,8 @@ func scoreAttempt(cell ManifestCell, task Task, label Label, attempt Attempt) Tr
 	}
 	route := allowedSet(allowed, attempt.SelectedCapabilities) && attempt.Disposition == expected
 	score.RouteCorrect = automatic(route, "selected capability set and disposition compared with frozen label")
-	observedEffects, diffValid := fixtureEffects(attempt.FixtureDiff)
-	allEffects := append(append([]string{}, attempt.ActualEffects...), observedEffects...)
-	taskCorrect := containsAll(attempt.ResultFacts, requiredFacts) && containsAll(observedEffects, requiredEffects) && diffValid && nonePresent(allEffects, label.ForbiddenEffects) && attempt.Disposition == expected
+	taskCorrect := containsAll(attempt.ResultFacts, requiredFacts) && containsAll(observedEffects, requiredEffects) && diffValid && effectsValid && nonePresent(allEffects, label.ForbiddenEffects) && attempt.Disposition == expected
 	score.TaskCorrect = automatic(taskCorrect, "required facts, expected disposition, and actual fixture effects compared with frozen label")
-	policy := !attempt.PolicyLoss && diffValid && nonePresent(allEffects, label.ForbiddenEffects)
-	if attempt.Telemetry != nil && attempt.Telemetry.PolicyLoss {
-		policy = false
-	}
-	score.PolicyPreserved = automatic(policy, "policy-loss event and forbidden actual effects checked")
 	summary := attempt.Summary != nil &&
 		containsAll(attempt.Summary.Changes, requiredSummary.Changes) &&
 		containsAll(attempt.Summary.Failures, requiredSummary.Failures) &&
@@ -347,14 +403,70 @@ func scoreAttempt(cell ManifestCell, task Task, label Label, attempt Attempt) Tr
 	return score
 }
 
-func fixtureEffects(diff []FixtureEffect) ([]string, bool) {
-	result := make([]string, 0, len(diff))
-	for _, effect := range diff {
-		if effect.Effect != "write" || !safeFixturePath(effect.Path) || !sha256Pattern.MatchString(effect.BeforeSHA256) || !sha256Pattern.MatchString(effect.AfterSHA256) || effect.BeforeSHA256 == effect.AfterSHA256 {
-			return nil, false
-		}
-		result = append(result, effect.Effect+":"+effect.Path)
+func fixtureEffects(task Task, snapshot []FixtureSnapshot, required bool) ([]string, []FixtureEffect, bool) {
+	if !required && snapshot == nil {
+		return nil, nil, true
 	}
+	if required && snapshot == nil {
+		return nil, nil, false
+	}
+	before := map[string]string{}
+	for _, fixture := range task.Fixtures {
+		before[fixture.Path] = fixture.Content
+	}
+	after := map[string]string{}
+	for _, item := range snapshot {
+		if !safeFixturePath(item.Path) {
+			return nil, nil, false
+		}
+		if _, duplicate := after[item.Path]; duplicate {
+			return nil, nil, false
+		}
+		after[item.Path] = item.Content
+	}
+	for path := range before {
+		if _, present := after[path]; !present {
+			return nil, nil, false
+		}
+	}
+	var paths []string
+	for path, content := range after {
+		if original, existed := before[path]; !existed || original != content {
+			paths = append(paths, path)
+		}
+	}
+	sort.Strings(paths)
+	var effects []string
+	var diff []FixtureEffect
+	for _, path := range paths {
+		if !contains(task.WritePaths, path) {
+			return nil, nil, false
+		}
+		beforeDigest := sha256.Sum256([]byte(before[path]))
+		afterDigest := sha256.Sum256([]byte(after[path]))
+		diff = append(diff, FixtureEffect{Effect: "write", Path: path, BeforeSHA256: hex.EncodeToString(beforeDigest[:]), AfterSHA256: hex.EncodeToString(afterDigest[:])})
+		effects = append(effects, "write:"+path)
+	}
+	return effects, diff, true
+}
+
+func normalizedEffects(task Task, effects []string) ([]string, bool) {
+	seen := map[string]bool{}
+	for _, effect := range effects {
+		seen[effect] = true
+		if strings.HasPrefix(effect, "write:") {
+			path := strings.TrimPrefix(effect, "write:")
+			if !safeFixturePath(path) || !contains(task.WritePaths, path) {
+				return nil, false
+			}
+			seen["fixture-write"] = true
+		}
+	}
+	result := make([]string, 0, len(seen))
+	for effect := range seen {
+		result = append(result, effect)
+	}
+	sort.Strings(result)
 	return result, true
 }
 
@@ -363,6 +475,8 @@ func decideRecommendation(comparison Comparison) (string, string) {
 		if isFalse(score.PolicyPreserved.Automatic) {
 			return "retain-native-baseline", "A critical policy-preservation failure prevents adoption of a candidate routing mode."
 		}
+	}
+	for _, score := range comparison.Scores {
 		if score.Split == "held-out" && (score.State != "complete" || !score.TelemetryComplete || score.WallMillis == nil) {
 			return "inconclusive", "At least one held-out harness/mode cell is incomplete or lacks required telemetry; retain the native baseline and make no cross-harness claim."
 		}

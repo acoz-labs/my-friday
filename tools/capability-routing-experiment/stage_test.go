@@ -39,8 +39,8 @@ func TestStageTrialKeepsLabelsAndOtherTasksOutsideModelRoot(t *testing.T) {
 func TestStageTrialProjectsNativeBodiesOnlyInNativeMode(t *testing.T) {
 	bundle := loadTestBundle(t)
 	for _, test := range []struct {
-		mode          string
-		skills, index bool
+		mode              string
+		skills, transport bool
 	}{{"native-catalogue", true, false}, {"lookup-direct", false, true}, {"lookup-worker", false, true}} {
 		t.Run(test.mode, func(t *testing.T) {
 			root := filepath.Join(t.TempDir(), "model")
@@ -49,10 +49,59 @@ func TestStageTrialProjectsNativeBodiesOnlyInNativeMode(t *testing.T) {
 			}
 			_, skillErr := os.Stat(filepath.Join(root, "skills", "checksum-verifier", "SKILL.md"))
 			_, indexErr := os.Stat(filepath.Join(root, "index.json"))
-			if (skillErr == nil) != test.skills || (indexErr == nil) != test.index {
-				t.Fatalf("unexpected projection skills=%v index=%v", skillErr, indexErr)
+			_, transportErr := os.Stat(filepath.Join(root, "transport.json"))
+			if indexErr == nil || (skillErr == nil) != test.skills || (transportErr == nil) != test.transport {
+				t.Fatalf("unexpected projection skills=%v index=%v transport=%v", skillErr, indexErr, transportErr)
 			}
 		})
+	}
+}
+
+func TestCountedTransportLooksUpLoadsAndFallsBackWithoutPreloading(t *testing.T) {
+	bundle := loadTestBundle(t)
+	task, _ := findTaskLabel(t, bundle, "dev-explicit-csv")
+	transport, err := NewCountedTransport(bundle, task)
+	if err != nil {
+		t.Fatal(err)
+	}
+	metadata, err := transport.Lookup("normalize CSV headers")
+	if err != nil || len(metadata) == 0 || len(metadata) > 3 {
+		t.Fatalf("metadata=%#v err=%v", metadata, err)
+	}
+	loaded, err := transport.Load([]string{metadata[0].ID})
+	if err != nil || len(loaded) == 0 || loaded[0].Body == "" {
+		t.Fatalf("loaded=%#v err=%v", loaded, err)
+	}
+	all, err := transport.Fallback()
+	if err != nil || len(all) != 24 {
+		t.Fatalf("fallback=%d err=%v", len(all), err)
+	}
+	if _, err = transport.Fallback(); err == nil {
+		t.Fatal("second broader-metadata fallback accepted")
+	}
+	if transport.Calls() != 4 {
+		t.Fatalf("calls=%d; rejected call must be counted before dispatch", transport.Calls())
+	}
+}
+
+func TestCountedTransportEnforcesAuthorityAndCallCeiling(t *testing.T) {
+	bundle := loadTestBundle(t)
+	task, _ := findTaskLabel(t, bundle, "dev-explicit-csv")
+	transport, err := NewCountedTransport(bundle, task)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = transport.ReadFixture("../labels.json"); err == nil {
+		t.Fatal("unsafe read accepted")
+	}
+	if err = transport.WriteFixture("output/not-authorized.txt", "no"); err == nil {
+		t.Fatal("unauthorized write accepted")
+	}
+	for transport.Calls() < 8 {
+		_, _ = transport.Lookup("csv")
+	}
+	if _, err = transport.Lookup("csv"); err == nil {
+		t.Fatal("ninth call accepted")
 	}
 }
 

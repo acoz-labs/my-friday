@@ -18,17 +18,25 @@ type UsageMetric struct {
 }
 
 type Telemetry struct {
-	RootInputCumulative   UsageMetric `json:"root_input_cumulative"`
-	WorkerInputCumulative UsageMetric `json:"worker_input_cumulative"`
-	TotalInput            UsageMetric `json:"total_input"`
-	TotalOutput           UsageMetric `json:"total_output"`
-	CachedInput           UsageMetric `json:"cached_input"`
-	PeakRootRequestInput  UsageMetric `json:"peak_root_request_input"`
-	ActualWindowOccupancy UsageMetric `json:"actual_window_occupancy"`
-	ToolCalls             int         `json:"tool_calls"`
-	WorkerStarts          int         `json:"worker_starts"`
-	WorkerReturns         int         `json:"worker_returns"`
-	PolicyLoss            bool        `json:"policy_loss"`
+	RootInputCumulative   UsageMetric       `json:"root_input_cumulative"`
+	WorkerInputCumulative UsageMetric       `json:"worker_input_cumulative"`
+	TotalInput            UsageMetric       `json:"total_input"`
+	TotalOutput           UsageMetric       `json:"total_output"`
+	CachedInput           UsageMetric       `json:"cached_input"`
+	PeakRootRequestInput  UsageMetric       `json:"peak_root_request_input"`
+	ActualWindowOccupancy UsageMetric       `json:"actual_window_occupancy"`
+	ToolCalls             int               `json:"tool_calls"`
+	WorkerStarts          int               `json:"worker_starts"`
+	WorkerReturns         int               `json:"worker_returns"`
+	WorkerLifecycles      []WorkerLifecycle `json:"worker_lifecycles"`
+	PolicyLoss            bool              `json:"policy_loss"`
+}
+
+type WorkerLifecycle struct {
+	AgentID       string   `json:"agent_id"`
+	StartEventID  string   `json:"start_event_id"`
+	UsageEventIDs []string `json:"usage_event_ids"`
+	ReturnEventID string   `json:"return_event_id"`
 }
 
 type telemetryEvent struct {
@@ -55,6 +63,8 @@ func ParseTelemetry(reader io.Reader) (Telemetry, error) {
 	var occupancy *int64
 	telemetry := Telemetry{}
 	rootUsage, workerUsage := 0, 0
+	workerID := ""
+	workerReturned := false
 	allCacheReported, allRootRequestReported, allWindowReported := true, true, true
 	for scanner.Scan() {
 		var event telemetryEvent
@@ -92,7 +102,11 @@ func ParseTelemetry(reader io.Reader) (Telemetry, error) {
 						occupancy = &value
 					}
 				} else {
+					if workerID == "" || workerReturned || event.AgentID != workerID {
+						return Telemetry{}, errors.New("worker usage lacks a matching active worker identity")
+					}
 					workerUsage++
+					telemetry.WorkerLifecycles[0].UsageEventIDs = append(telemetry.WorkerLifecycles[0].UsageEventIDs, event.EventID)
 					workerInput += *event.InputTokens
 				}
 				output += *event.OutputTokens
@@ -109,14 +123,18 @@ func ParseTelemetry(reader io.Reader) (Telemetry, error) {
 			}
 		case "worker_start":
 			telemetry.WorkerStarts++
-			if event.WorkerDepth == nil || *event.WorkerDepth != 1 || telemetry.WorkerStarts > 1 {
+			if event.AgentID == "" || event.WorkerDepth == nil || *event.WorkerDepth != 1 || telemetry.WorkerStarts > 1 {
 				return Telemetry{}, errors.New("observed worker count/depth ceiling exceeded")
 			}
+			workerID = event.AgentID
+			telemetry.WorkerLifecycles = append(telemetry.WorkerLifecycles, WorkerLifecycle{AgentID: event.AgentID, StartEventID: event.EventID, UsageEventIDs: []string{}})
 		case "worker_return":
 			telemetry.WorkerReturns++
-			if telemetry.WorkerReturns > telemetry.WorkerStarts {
+			if event.AgentID == "" || event.AgentID != workerID || workerReturned || telemetry.WorkerReturns > telemetry.WorkerStarts {
 				return Telemetry{}, errors.New("worker return lacks matching start")
 			}
+			workerReturned = true
+			telemetry.WorkerLifecycles[0].ReturnEventID = event.EventID
 		case "policy_loss":
 			telemetry.PolicyLoss = true
 			return telemetry, ErrCriticalPolicyLoss
@@ -181,7 +199,77 @@ func ParseTelemetry(reader io.Reader) (Telemetry, error) {
 	if telemetry.TotalInput.Complete && telemetry.TotalOutput.Complete && *telemetry.TotalInput.Value+*telemetry.TotalOutput.Value > 30000 {
 		return telemetry, errors.New("observed aggregate token stop threshold exceeded")
 	}
+	if err := ValidateTelemetry(&telemetry); err != nil {
+		return telemetry, err
+	}
 	return telemetry, nil
+}
+
+func ValidateTelemetry(telemetry *Telemetry) error {
+	if telemetry == nil {
+		return errors.New("telemetry is nil")
+	}
+	metrics := map[string]UsageMetric{
+		"root input": telemetry.RootInputCumulative, "worker input": telemetry.WorkerInputCumulative,
+		"total input": telemetry.TotalInput, "total output": telemetry.TotalOutput,
+		"cached input": telemetry.CachedInput, "peak root input": telemetry.PeakRootRequestInput,
+		"window occupancy": telemetry.ActualWindowOccupancy,
+	}
+	for name, metric := range metrics {
+		if metric.Provenance == "" {
+			return fmt.Errorf("%s metric lacks provenance", name)
+		}
+		if metric.Complete {
+			if metric.Value == nil || *metric.Value < 0 || metric.MissingReason != "" {
+				return fmt.Errorf("complete %s metric has invalid value or missing reason", name)
+			}
+		} else if metric.Value != nil || metric.MissingReason == "" {
+			return fmt.Errorf("incomplete %s metric must be null with a reason", name)
+		}
+	}
+	if telemetry.ToolCalls < 0 || telemetry.ToolCalls > 8 || telemetry.WorkerStarts < 0 || telemetry.WorkerStarts > 1 || telemetry.WorkerReturns != telemetry.WorkerStarts {
+		return errors.New("telemetry count invariants failed")
+	}
+	if len(telemetry.WorkerLifecycles) != telemetry.WorkerStarts {
+		return errors.New("worker lifecycle evidence does not match worker counts")
+	}
+	if telemetry.WorkerStarts == 1 {
+		worker := telemetry.WorkerLifecycles[0]
+		if worker.AgentID == "" || worker.StartEventID == "" || worker.ReturnEventID == "" || worker.StartEventID == worker.ReturnEventID {
+			return errors.New("worker lifecycle identity or events are incomplete")
+		}
+		seenEvents := map[string]bool{worker.StartEventID: true, worker.ReturnEventID: true}
+		for _, eventID := range worker.UsageEventIDs {
+			if eventID == "" || seenEvents[eventID] {
+				return errors.New("worker lifecycle contains missing or duplicate event identity")
+			}
+			seenEvents[eventID] = true
+		}
+		if telemetry.WorkerInputCumulative.Complete && len(worker.UsageEventIDs) == 0 {
+			return errors.New("complete worker usage lacks identity-bound events")
+		}
+	}
+	if telemetry.TotalInput.Complete {
+		if !telemetry.RootInputCumulative.Complete || !telemetry.WorkerInputCumulative.Complete || *telemetry.TotalInput.Value != *telemetry.RootInputCumulative.Value+*telemetry.WorkerInputCumulative.Value {
+			return errors.New("total input does not match complete root and worker accounting")
+		}
+		if telemetry.CachedInput.Complete && *telemetry.CachedInput.Value > *telemetry.TotalInput.Value {
+			return errors.New("cached input exceeds total input")
+		}
+	}
+	if telemetry.WorkerStarts == 0 && telemetry.WorkerInputCumulative.Complete && *telemetry.WorkerInputCumulative.Value != 0 {
+		return errors.New("worker input reported without a worker lifecycle")
+	}
+	if telemetry.WorkerStarts == 1 && telemetry.TotalInput.Complete && !telemetry.WorkerInputCumulative.Complete {
+		return errors.New("complete total lacks launched worker accounting")
+	}
+	if telemetry.PeakRootRequestInput.Complete && (!telemetry.RootInputCumulative.Complete || *telemetry.PeakRootRequestInput.Value > *telemetry.RootInputCumulative.Value) {
+		return errors.New("peak root input is inconsistent with cumulative root input")
+	}
+	if telemetry.TotalInput.Complete && telemetry.TotalOutput.Complete && *telemetry.TotalInput.Value+*telemetry.TotalOutput.Value > 30000 {
+		return errors.New("aggregate token stop threshold exceeded")
+	}
+	return nil
 }
 
 func measuredMetric(value int64, source string, complete bool, reason string) UsageMetric {
@@ -209,7 +297,7 @@ func unavailableTelemetry(reason string) *Telemetry {
 	return &Telemetry{
 		RootInputCumulative: metric("root cumulative input"), WorkerInputCumulative: metric("worker cumulative input"),
 		TotalInput: metric("aggregate input"), TotalOutput: metric("aggregate output"), CachedInput: metric("cached input"),
-		PeakRootRequestInput: metric("peak root per-request input"), ActualWindowOccupancy: metric("actual context-window occupancy"),
+		PeakRootRequestInput: metric("peak root per-request input"), ActualWindowOccupancy: metric("actual context-window occupancy"), WorkerLifecycles: []WorkerLifecycle{},
 	}
 }
 

@@ -2,10 +2,60 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
 )
+
+func ValidateReportInputs(bundle Bundle, attempts AttemptSet, comparison Comparison, probes []DriverProbe) error {
+	recomputed, err := ScoreAttempts(bundle, attempts)
+	if err != nil {
+		return err
+	}
+	if digestJSON(recomputed) != digestJSON(comparison) {
+		return errors.New("scores differ from deterministic rescoring of the frozen attempts")
+	}
+	if len(probes) != len(bundle.Manifest.Harnesses) {
+		return errors.New("driver probe count does not match the preregistration")
+	}
+	expected := map[string]HarnessSpec{}
+	for _, harness := range bundle.Manifest.Harnesses {
+		expected[harness.ID] = harness
+	}
+	seen := map[string]bool{}
+	for _, probe := range probes {
+		id := string(probe.Harness)
+		spec, ok := expected[id]
+		if probe.Version != SchemaVersion || !ok || seen[id] || probe.Executable != id || (probe.CLIRevision != spec.ExecutableVersion && !(probe.State == "unavailable" && probe.CLIRevision == "")) {
+			return fmt.Errorf("driver probe %q is stale, duplicate, or not bound to the trusted executable", id)
+		}
+		seen[id] = true
+		if probe.State != "unavailable" && probe.State != "supported" {
+			return fmt.Errorf("driver probe %q has invalid state", id)
+		}
+		if probe.State == "unavailable" && len(probe.Unavailable) == 0 {
+			return fmt.Errorf("driver probe %q omits unavailability reasons", id)
+		}
+		if probe.CLIRevision != "" {
+			expectedCommands := []string{id + " --version", id + " --help"}
+			if id == "codex" {
+				expectedCommands[1] = "codex exec --help"
+			}
+			if strings.Join(probe.ProbedCommands, "\x00") != strings.Join(expectedCommands, "\x00") {
+				return fmt.Errorf("driver probe %q command evidence is incomplete or changed", id)
+			}
+		}
+		if probe.State == "supported" {
+			for _, mode := range RoutingModes {
+				if !probe.LiveEligible(mode) {
+					return fmt.Errorf("driver probe %q claims support without %s controls", id, mode)
+				}
+			}
+		}
+	}
+	return nil
+}
 
 func RenderMarkdown(comparison Comparison, probes []DriverProbe) string {
 	var output strings.Builder
@@ -25,6 +75,12 @@ func RenderMarkdown(comparison Comparison, probes []DriverProbe) string {
 	output.WriteString("| --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |\n")
 	for _, row := range comparison.Coverage {
 		fmt.Fprintf(&output, "| %s | %s | %s | %d | %d | %d | %d | %d | %d | %d | %d | %d | %d | %d | %d | %d | %d | %d |\n", row.HarnessID, row.Mode, row.Split, row.Repetition, row.Declared, row.Complete, row.Failed, row.Unavailable, row.Invalid, row.Missing, row.TelemetryComplete, row.WallComplete, row.PeakInputComplete, row.WindowComplete, row.RouteCorrect, row.TaskCorrect, row.PolicyPreserved, row.SummaryComplete)
+	}
+	output.WriteString("\n## Category denominators\n\n")
+	output.WriteString("| Harness | Mode | Split | Category | Rep | Declared | Complete | Failed | Unavailable | Invalid | Missing | Route | Task | Policy | Summary |\n")
+	output.WriteString("| --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |\n")
+	for _, row := range comparison.CategoryCoverage {
+		fmt.Fprintf(&output, "| %s | %s | %s | %s | %d | %d | %d | %d | %d | %d | %d | %d | %d | %d | %d |\n", row.HarnessID, row.Mode, row.Split, row.Category, row.Repetition, row.Declared, row.Complete, row.Failed, row.Unavailable, row.Invalid, row.Missing, row.RouteCorrect, row.TaskCorrect, row.PolicyPreserved, row.SummaryComplete)
 	}
 	output.WriteString("\n## Paired performance\n\n")
 	output.WriteString("| Harness | Candidate | Metric | Coverage | Median ratio | Difference range | Missing reason |\n| --- | --- | --- | --- | ---: | --- | --- |\n")

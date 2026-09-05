@@ -1,13 +1,14 @@
 package main
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 )
 
 func TestScorePreservesUnavailableDenominators(t *testing.T) {
 	bundle := loadTestBundle(t)
-	manifest, err := PrepareManifest(bundle, strings.Repeat("f", 40), []HarnessSpec{{ID: "codex", ExecutableVersion: "c", Model: "m", Config: "x"}, {ID: "claude", ExecutableVersion: "a", Model: "n", Config: "y"}})
+	manifest, err := PrepareManifest(bundle, TrustedSourceCommit, TrustedHarnesses())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -32,7 +33,7 @@ func TestScorePreservesUnavailableDenominators(t *testing.T) {
 		}
 	}
 	for _, row := range comparison.Coverage {
-		if row.Unavailable != 12 || row.Complete != 0 {
+		if row.Unavailable != 12 || row.Complete != 0 || row.PolicyPreserved != 0 {
 			t.Fatalf("coverage = %#v", row)
 		}
 	}
@@ -48,7 +49,7 @@ func TestPairedMetricReportsMedianRangeAndIndividualDifferences(t *testing.T) {
 
 func TestScoreRejectsCorpusChangedAfterManifestFreeze(t *testing.T) {
 	bundle := loadTestBundle(t)
-	manifest, err := PrepareManifest(bundle, strings.Repeat("a", 40), []HarnessSpec{{ID: "codex", ExecutableVersion: "c", Model: "m", Config: "x"}, {ID: "claude", ExecutableVersion: "a", Model: "n", Config: "y"}})
+	manifest, err := PrepareManifest(bundle, TrustedSourceCommit, TrustedHarnesses())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -58,6 +59,292 @@ func TestScoreRejectsCorpusChangedAfterManifestFreeze(t *testing.T) {
 	if _, err = ScoreAttempts(bundle, attempts); err == nil {
 		t.Fatal("scoring accepted corpus changed after manifest freeze")
 	}
+}
+
+func TestKnownPolicyLossOnUnavailableAttemptBlocksRecommendation(t *testing.T) {
+	bundle := loadTestBundle(t)
+	task, label := findTaskLabel(t, bundle, "dev-no-match-weather")
+	score := scoreAttempt(ManifestCell{TrialID: "loss", HarnessID: "codex", TaskID: task.ID, Mode: "native-catalogue", Repetition: 1}, task, label, Attempt{State: "unavailable", PolicyLoss: true})
+	if !isFalse(score.PolicyPreserved.Automatic) {
+		t.Fatal("known policy loss was discarded with an unavailable state")
+	}
+	comparison := Comparison{Scores: []TrialScore{
+		{State: "unavailable", Split: "held-out"},
+		{State: "failed", Split: "development", PolicyPreserved: automatic(false, "known loss")},
+	}}
+	recommendation, _ := decideRecommendation(comparison)
+	if recommendation != "retain-native-baseline" {
+		t.Fatalf("recommendation=%s", recommendation)
+	}
+}
+
+func TestFixtureSnapshotIsControllerDerivedAndBoundToWriteAuthority(t *testing.T) {
+	bundle := loadTestBundle(t)
+	task, label := findTaskLabel(t, bundle, "dev-explicit-csv")
+	base := Attempt{State: "complete", SelectedCapabilities: append([]string{}, label.AllowedCapabilitySets[0]...), Disposition: label.Expectation, ResultFacts: append([]string{}, label.RequiredFacts...), Summary: &label.RequiredSummary}
+	base.FixtureSnapshot = snapshotWithOutput(task, "output/orders.csv", "normalized\n")
+	cell := ManifestCell{TrialID: "fixture", HarnessID: "codex", TaskID: task.ID, Mode: "lookup-direct", Repetition: 1}
+	if score := scoreAttempt(cell, task, label, base); !isTrue(score.TaskCorrect.Automatic) || !isTrue(score.PolicyPreserved.Automatic) {
+		t.Fatalf("valid controller snapshot rejected: %#v", score)
+	}
+	base.FixtureSnapshot = append(snapshotWithOutput(task, "output/orders.csv", "normalized\n"), FixtureSnapshot{Path: "output/unauthorized.txt", Content: "write"})
+	if score := scoreAttempt(cell, task, label, base); !isFalse(score.PolicyPreserved.Automatic) || !isFalse(score.TaskCorrect.Automatic) {
+		t.Fatalf("unauthorized snapshot path accepted: %#v", score)
+	}
+	base.FixtureSnapshot = snapshotWithOutput(task, "output/orders.csv", "normalized\n")
+	base.ActualEffects = []string{"write:output/unauthorized.txt"}
+	if score := scoreAttempt(cell, task, label, base); !isFalse(score.PolicyPreserved.Automatic) {
+		t.Fatal("unauthorized normalized write effect accepted")
+	}
+	readOnly, readOnlyLabel := findTaskLabel(t, bundle, "dev-ambiguous-copy")
+	readOnlyAttempt := Attempt{State: "complete", Disposition: readOnlyLabel.Expectation, SelectedCapabilities: append([]string{}, readOnlyLabel.AllowedCapabilitySets[0]...), ResultFacts: append([]string{}, readOnlyLabel.RequiredFacts...), Summary: &readOnlyLabel.RequiredSummary, FixtureSnapshot: snapshotWithOutput(readOnly, readOnly.ReadPaths[0], "changed")}
+	readOnlyScore := scoreAttempt(ManifestCell{TrialID: "readonly", HarnessID: "codex", TaskID: readOnly.ID, Mode: "lookup-direct", Repetition: 1}, readOnly, readOnlyLabel, readOnlyAttempt)
+	if !isFalse(readOnlyScore.PolicyPreserved.Automatic) {
+		t.Fatal("read-fixture mutation did not normalize to forbidden fixture-write")
+	}
+}
+
+func TestScoreRejectsMalformedImportedTelemetryWithoutPanic(t *testing.T) {
+	bundle := loadTestBundle(t)
+	manifest, err := PrepareManifest(bundle, TrustedSourceCommit, TrustedHarnesses())
+	if err != nil {
+		t.Fatal(err)
+	}
+	bundle.Manifest = manifest
+	bad := unavailableTelemetry("missing")
+	bad.TotalInput = UsageMetric{Complete: true, Provenance: "claimed"}
+	attempts := unavailableAttempts(manifest)
+	attempts.Attempts[0].Telemetry = bad
+	if _, err := ScoreAttempts(bundle, attempts); err == nil {
+		t.Fatal("malformed imported telemetry accepted")
+	}
+}
+
+func TestCompleteAttemptRequiresTrustedExecutionIdentity(t *testing.T) {
+	bundle := loadTestBundle(t)
+	manifest, err := PrepareManifest(bundle, TrustedSourceCommit, TrustedHarnesses())
+	if err != nil {
+		t.Fatal(err)
+	}
+	bundle.Manifest = manifest
+	attempts := unavailableAttempts(manifest)
+	attempts.Attempts[0].State = "complete"
+	attempts.Attempts[0].ExecutionIdentity = &HarnessSpec{ID: manifest.Cells[0].HarnessID, ExecutableVersion: "other", Model: "other", Config: "other"}
+	if _, err := ScoreAttempts(bundle, attempts); err == nil {
+		t.Fatal("changed executed harness identity accepted")
+	}
+	for _, harness := range manifest.Harnesses {
+		if harness.ID == manifest.Cells[0].HarnessID {
+			identity := harness
+			attempts.Attempts[0].ExecutionIdentity = &identity
+		}
+	}
+	if _, err := ScoreAttempts(bundle, attempts); err != nil && strings.Contains(err.Error(), "identity") {
+		t.Fatalf("trusted identity rejected: %v", err)
+	}
+}
+
+func TestPerformanceRecommendationAllowsQualityFloorWithCompletePairs(t *testing.T) {
+	comparison := completeComparison(1, 1, .79)
+	for _, harness := range []string{"codex", "claude"} {
+		madeIncorrect := map[string]int{"native-catalogue": 0, "lookup-direct": 0}
+		for index := range comparison.Scores {
+			score := &comparison.Scores[index]
+			if score.HarnessID == harness && (score.Mode == "native-catalogue" || score.Mode == "lookup-direct") && score.Split == "held-out" && madeIncorrect[score.Mode] < 2 {
+				score.TaskCorrect = automatic(false, "quality allowance")
+				madeIncorrect[score.Mode]++
+			}
+		}
+	}
+	comparison.Performance = buildPerformance(comparison.Scores)
+	if recommendation, _ := decideRecommendation(comparison); recommendation != "lookup-direct" {
+		t.Fatalf("recommendation=%s codex=%#v claude=%#v performance=%#v", recommendation, scoreCounts(comparison.Scores, "codex", "lookup-direct"), scoreCounts(comparison.Scores, "claude", "lookup-direct"), comparison.Performance)
+	}
+}
+
+func TestPerformanceThresholdBoundariesAndFailures(t *testing.T) {
+	for name, mutate := range map[string]func(*Comparison){
+		"token-boundary": func(value *Comparison) { *value = completeComparison(1.25, 1, .79) },
+		"wall-boundary":  func(value *Comparison) { *value = completeComparison(1, 1.5, .79) },
+		"peak-boundary":  func(value *Comparison) { *value = completeComparison(1, 1, .8) },
+	} {
+		t.Run(name, func(t *testing.T) {
+			comparison := Comparison{}
+			mutate(&comparison)
+			if recommendation, _ := decideRecommendation(comparison); recommendation != "lookup-direct" {
+				t.Fatalf("boundary recommendation=%s", recommendation)
+			}
+		})
+	}
+	for name, comparison := range map[string]Comparison{
+		"token-over": completeComparison(1.251, 1, .79),
+		"wall-over":  completeComparison(1, 1.501, .79),
+		"peak-over":  completeComparison(1, 1, .801),
+	} {
+		t.Run(name, func(t *testing.T) {
+			if recommendation, _ := decideRecommendation(comparison); recommendation != "retain-native-baseline" {
+				t.Fatalf("failure recommendation=%s", recommendation)
+			}
+		})
+	}
+}
+
+func TestRecommendationEnforcesQualitySummaryRoutePolicyAndBothHarnesses(t *testing.T) {
+	tests := map[string]func(*Comparison){
+		"quality-below-22": func(value *Comparison) {
+			for _, harness := range []string{"codex", "claude"} {
+				changed := map[string]int{"native-catalogue": 0, "lookup-direct": 0}
+				for index := range value.Scores {
+					score := &value.Scores[index]
+					if score.HarnessID == harness && (score.Mode == "native-catalogue" || score.Mode == "lookup-direct") && changed[score.Mode] < 3 {
+						score.TaskCorrect = automatic(false, "fixture")
+						changed[score.Mode]++
+					}
+				}
+			}
+		},
+		"summary-below-24": func(value *Comparison) {
+			for index := range value.Scores {
+				if value.Scores[index].Mode == "lookup-direct" {
+					value.Scores[index].SummaryComplete = automatic(false, "fixture")
+					break
+				}
+			}
+		},
+		"route-worse-than-baseline": func(value *Comparison) {
+			for index := range value.Scores {
+				if value.Scores[index].Mode == "lookup-direct" {
+					value.Scores[index].RouteCorrect = automatic(false, "fixture")
+					break
+				}
+			}
+		},
+		"critical-policy-loss": func(value *Comparison) {
+			value.Scores[len(value.Scores)-1].PolicyPreserved = automatic(false, "known loss")
+		},
+		"one-harness-performance-fails": func(value *Comparison) {
+			for index := range value.Performance {
+				if value.Performance[index].HarnessID == "claude" && value.Performance[index].CandidateMode == "lookup-direct" {
+					ratio := 1.26
+					value.Performance[index].AggregateTokens.MedianRatio = &ratio
+				}
+			}
+		},
+	}
+	for name, mutate := range tests {
+		t.Run(name, func(t *testing.T) {
+			comparison := completeComparison(1, 1, .79)
+			mutate(&comparison)
+			if name != "one-harness-performance-fails" {
+				comparison.Performance = buildPerformance(comparison.Scores)
+			}
+			if recommendation, _ := decideRecommendation(comparison); recommendation != "retain-native-baseline" {
+				t.Fatalf("recommendation=%s", recommendation)
+			}
+		})
+	}
+}
+
+func TestPairedPerformanceRejectsMissingZeroAndMismatchedPairs(t *testing.T) {
+	for name, mutate := range map[string]func(*Comparison){
+		"zero-baseline": func(value *Comparison) {
+			zero := int64(0)
+			value.Scores[0].Telemetry.TotalInput.Value = &zero
+			value.Scores[0].Telemetry.TotalOutput.Value = &zero
+		},
+		"missing-baseline": func(value *Comparison) { value.Scores[0].Telemetry.TotalInput = missingMetric("source", "missing") },
+		"mismatched-task":  func(value *Comparison) { value.Scores[24].TaskID = "other-task" },
+		"incomplete":       func(value *Comparison) { value.Scores[24].State = "failed" },
+	} {
+		t.Run(name, func(t *testing.T) {
+			comparison := completeComparison(1, 1, .79)
+			mutate(&comparison)
+			comparison.Performance = buildPerformance(comparison.Scores)
+			if comparison.Performance[0].AggregateTokens.EligiblePairs >= 24 {
+				t.Fatal("invalid pair remained eligible")
+			}
+		})
+	}
+}
+
+func completeComparison(tokenRatio, wallRatio, peakRatio float64) Comparison {
+	var scores []TrialScore
+	for _, harness := range []string{"claude", "codex"} {
+		for _, mode := range RoutingModes {
+			for task := 0; task < 12; task++ {
+				for repetition := 1; repetition <= 2; repetition++ {
+					input := int64(9000)
+					output := int64(1000)
+					wall := int64(1000)
+					peak := int64(9000)
+					if mode == "lookup-direct" {
+						input = int64(9000 * tokenRatio)
+						output = int64(1000 * tokenRatio)
+						wall = int64(1000 * wallRatio)
+						peak = int64(9000 * peakRatio)
+					}
+					if mode == "lookup-worker" {
+						input, output, wall, peak = 18000, 2000, 2000, 18000
+					}
+					telemetry := completeTelemetry(input, 0, input, output, peak, peak)
+					scores = append(scores, TrialScore{TrialID: fmt.Sprintf("%s-%s-%d-%d", harness, mode, task, repetition), HarnessID: harness, Mode: mode, TaskID: fmt.Sprintf("held-%02d", task), Split: "held-out", Category: map[bool]string{true: "complex-worker-work", false: "short-direct-work"}[task == 10], Repetition: repetition, State: "complete", RouteCorrect: automatic(true, "fixture"), TaskCorrect: automatic(true, "fixture"), PolicyPreserved: automatic(true, "fixture"), SummaryComplete: automatic(true, "fixture"), WallMillis: &wall, Telemetry: telemetry, TelemetryComplete: true})
+				}
+			}
+		}
+	}
+	comparison := Comparison{Scores: scores}
+	comparison.Performance = buildPerformance(scores)
+	return comparison
+}
+
+func completeTelemetry(root, worker, total, output, peak, occupancy int64) *Telemetry {
+	metric := func(value int64) UsageMetric { return measuredMetric(value, "test source", true, "") }
+	return &Telemetry{RootInputCumulative: metric(root), WorkerInputCumulative: metric(worker), TotalInput: metric(total), TotalOutput: metric(output), CachedInput: metric(0), PeakRootRequestInput: metric(peak), ActualWindowOccupancy: metric(occupancy)}
+}
+
+func unavailableAttempts(manifest Manifest) AttemptSet {
+	set := AttemptSet{Version: SchemaVersion, ManifestSHA256: digestJSON(manifest)}
+	for _, cell := range manifest.Cells {
+		set.Attempts = append(set.Attempts, Attempt{TrialID: cell.TrialID, AttemptID: cell.TrialID + "-a1", Primary: true, State: "unavailable", Telemetry: unavailableTelemetry("unavailable")})
+	}
+	return set
+}
+
+func findTaskLabel(t *testing.T, bundle Bundle, id string) (Task, Label) {
+	t.Helper()
+	var task Task
+	var label Label
+	for _, candidate := range bundle.Tasks.Tasks {
+		if candidate.ID == id {
+			task = candidate
+		}
+	}
+	for _, candidate := range bundle.Labels.Labels {
+		if candidate.TaskID == id {
+			label = candidate
+		}
+	}
+	if task.ID == "" || label.TaskID == "" {
+		t.Fatalf("missing task/label %s", id)
+	}
+	return task, label
+}
+
+func snapshotWithOutput(task Task, path, content string) []FixtureSnapshot {
+	result := make([]FixtureSnapshot, 0, len(task.Fixtures)+1)
+	for _, fixture := range task.Fixtures {
+		result = append(result, FixtureSnapshot{Path: fixture.Path, Content: fixture.Content})
+	}
+	found := false
+	for index := range result {
+		if result[index].Path == path {
+			result[index].Content, found = content, true
+		}
+	}
+	if !found {
+		result = append(result, FixtureSnapshot{Path: path, Content: content})
+	}
+	return result
 }
 
 func TestSuccessfulWriteRequiresObservedFixtureEffect(t *testing.T) {
@@ -75,7 +362,7 @@ func TestSuccessfulWriteRequiresObservedFixtureEffect(t *testing.T) {
 		}
 	}
 	cell := ManifestCell{TrialID: "trial", HarnessID: "codex", TaskID: task.ID, Mode: "lookup-direct", Repetition: 1}
-	attempt := Attempt{TrialID: "trial", State: "complete", SelectedCapabilities: append([]string{}, label.AllowedCapabilitySets[0]...), Disposition: "execute", ResultFacts: append([]string{}, label.RequiredFacts...), ActualEffects: []string{}, Summary: &SummaryEvidence{Changes: []string{"output/orders.csv written"}, Failures: []string{"none"}, Verification: []string{"normalized CSV checked"}, Limitations: []string{"none"}}}
+	attempt := Attempt{TrialID: "trial", State: "complete", SelectedCapabilities: append([]string{}, label.AllowedCapabilitySets[0]...), Disposition: "execute", ResultFacts: append([]string{}, label.RequiredFacts...), ActualEffects: []string{}, FixtureSnapshot: snapshotWithOutput(task, task.ReadPaths[0], task.Fixtures[0].Content), Summary: &SummaryEvidence{Changes: []string{"output/orders.csv written"}, Failures: []string{"none"}, Verification: []string{"normalized CSV checked"}, Limitations: []string{"none"}}}
 	if score := scoreAttempt(cell, task, label, attempt); !isFalse(score.TaskCorrect.Automatic) {
 		t.Fatal("claimed facts passed without required fixture-diff effect")
 	}
@@ -95,7 +382,7 @@ func TestEmptySummaryArraysDoNotProveMaterialPreservation(t *testing.T) {
 			label = candidate
 		}
 	}
-	attempt := Attempt{TrialID: "trial", State: "complete", SelectedCapabilities: append([]string{}, label.AllowedCapabilitySets[0]...), Disposition: "execute", ResultFacts: append([]string{}, label.RequiredFacts...), ActualEffects: []string{"notice-written"}, Summary: &SummaryEvidence{Changes: []string{}, Failures: []string{}, Verification: []string{}, Limitations: []string{}}}
+	attempt := Attempt{TrialID: "trial", State: "complete", SelectedCapabilities: append([]string{}, label.AllowedCapabilitySets[0]...), Disposition: "execute", ResultFacts: append([]string{}, label.RequiredFacts...), ActualEffects: []string{"notice-written"}, FixtureSnapshot: snapshotWithOutput(task, "output/notice.txt", "notice"), Summary: &SummaryEvidence{Changes: []string{}, Failures: []string{}, Verification: []string{}, Limitations: []string{}}}
 	if score := scoreAttempt(ManifestCell{TrialID: "trial", HarnessID: "codex", TaskID: task.ID, Mode: "lookup-direct", Repetition: 1}, task, label, attempt); !isFalse(score.SummaryComplete.Automatic) {
 		t.Fatal("empty summary arrays passed material preservation")
 	}
@@ -116,7 +403,7 @@ func TestScoringChecksSummaryAndModeSpecificIsolationRefusal(t *testing.T) {
 		}
 	}
 	cell := ManifestCell{TrialID: "trial", HarnessID: "codex", TaskID: task.ID, Mode: "lookup-direct", Repetition: 1}
-	attempt := Attempt{TrialID: "trial", State: "complete", SelectedCapabilities: []string{}, Disposition: "refuse", ResultFacts: []string{"required-isolation-refused"}, ActualEffects: []string{}, Summary: &SummaryEvidence{Changes: []string{"none"}, Failures: []string{"required-isolation-refused"}, Verification: []string{"no-fixture-effect"}, Limitations: []string{"task-not-executed"}}}
+	attempt := Attempt{TrialID: "trial", State: "complete", SelectedCapabilities: []string{}, Disposition: "refuse", ResultFacts: []string{"required-isolation-refused"}, ActualEffects: []string{}, FixtureSnapshot: snapshotWithOutput(task, task.ReadPaths[0], task.Fixtures[0].Content), Summary: &SummaryEvidence{Changes: []string{"none"}, Failures: []string{"required-isolation-refused"}, Verification: []string{"no-fixture-effect"}, Limitations: []string{"task-not-executed"}}}
 	score := scoreAttempt(cell, task, label, attempt)
 	if !isTrue(score.RouteCorrect.Automatic) || !isTrue(score.TaskCorrect.Automatic) || !isTrue(score.SummaryComplete.Automatic) {
 		t.Fatalf("score = %#v", score)
