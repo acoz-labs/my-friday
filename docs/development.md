@@ -262,10 +262,13 @@ cross-platform runner tests still run there.
 ## Capability routing experiment
 
 The developer-only comparison under `tools/capability-routing-experiment/`
-validates and stages a frozen 24-capability/24-task synthetic suite, records
-native driver preflight, scores immutable attempt rows, and emits sanitized JSON
-and Markdown. It is not part of the public `my-friday` command and does not
-install capabilities or change routing defaults.
+validates and stages a frozen 24-capability/24-task synthetic suite, supplies
+lookup modes through a counted in-memory transport without preloading catalogue
+metadata, records supervised native-driver preflight, scores immutable attempt
+rows, and emits sanitized JSON and Markdown. Reporting revalidates the frozen
+manifest, recomputes scores, and cross-binds both native probes. It is not part
+of the public `my-friday` command and does not install capabilities or change
+routing defaults.
 
 Run its offline checks with:
 

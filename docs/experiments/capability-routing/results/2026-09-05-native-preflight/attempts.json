@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "manifest_sha256": "4f0256b20c8e03ca3913286ceadec85f89b150ca97a791ecbd08f5526f160890",
+  "manifest_sha256": "c87d185281be47be6e2ec07978803dfb736f06b5adcfa4bd964f72a3834f0ee8",
   "attempts": [
     {
       "trial_id": "codex-dev-explicit-csv-native-catalogue-r1",
@@ -14,7 +14,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -64,6 +66,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -79,7 +82,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -129,6 +134,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -144,7 +150,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -194,6 +202,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -209,7 +218,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -259,6 +270,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -274,7 +286,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -324,6 +338,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -339,7 +354,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -389,6 +406,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -404,7 +422,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -454,6 +474,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -469,7 +490,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -519,6 +542,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -534,7 +558,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -584,6 +610,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -599,7 +626,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -649,6 +678,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -664,7 +694,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -714,6 +746,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -729,7 +762,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -779,6 +814,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -794,7 +830,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -844,6 +882,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -859,7 +898,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -909,6 +950,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -924,7 +966,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -974,6 +1018,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -989,7 +1034,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -1039,6 +1086,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -1054,7 +1102,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -1104,6 +1154,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -1119,7 +1170,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -1169,6 +1222,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -1184,7 +1238,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -1234,6 +1290,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -1249,7 +1306,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -1299,6 +1358,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -1314,7 +1374,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -1364,6 +1426,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -1379,7 +1442,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -1429,6 +1494,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -1444,7 +1510,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -1494,6 +1562,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -1509,7 +1578,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -1559,6 +1630,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -1574,7 +1646,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -1624,6 +1698,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -1639,7 +1714,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -1689,6 +1766,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -1704,7 +1782,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -1754,6 +1834,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -1769,7 +1850,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -1819,6 +1902,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -1834,7 +1918,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -1884,6 +1970,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -1899,7 +1986,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -1949,6 +2038,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -1964,7 +2054,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -2014,6 +2106,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -2029,7 +2122,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -2079,6 +2174,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -2094,7 +2190,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -2144,6 +2242,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -2159,7 +2258,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -2209,6 +2310,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -2224,7 +2326,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -2274,6 +2378,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -2289,7 +2394,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -2339,6 +2446,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -2354,7 +2462,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -2404,6 +2514,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -2419,7 +2530,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -2469,6 +2582,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -2484,7 +2598,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -2534,6 +2650,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -2549,7 +2666,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -2599,6 +2718,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -2614,7 +2734,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -2664,6 +2786,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -2679,7 +2802,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -2729,6 +2854,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -2744,7 +2870,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -2794,6 +2922,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -2809,7 +2938,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -2859,6 +2990,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -2874,7 +3006,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -2924,6 +3058,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -2939,7 +3074,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -2989,6 +3126,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -3004,7 +3142,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -3054,6 +3194,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -3069,7 +3210,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -3119,6 +3262,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -3134,7 +3278,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -3184,6 +3330,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -3199,7 +3346,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -3249,6 +3398,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -3264,7 +3414,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -3314,6 +3466,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -3329,7 +3482,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -3379,6 +3534,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -3394,7 +3550,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -3444,6 +3602,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -3459,7 +3618,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -3509,6 +3670,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -3524,7 +3686,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -3574,6 +3738,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -3589,7 +3754,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -3639,6 +3806,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -3654,7 +3822,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -3704,6 +3874,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -3719,7 +3890,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -3769,6 +3942,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -3784,7 +3958,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -3834,6 +4010,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -3849,7 +4026,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -3899,6 +4078,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -3914,7 +4094,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -3964,6 +4146,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -3979,7 +4162,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -4029,6 +4214,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -4044,7 +4230,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -4094,6 +4282,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -4109,7 +4298,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -4159,6 +4350,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -4174,7 +4366,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -4224,6 +4418,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -4239,7 +4434,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -4289,6 +4486,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -4304,7 +4502,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -4354,6 +4554,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -4369,7 +4570,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -4419,6 +4622,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -4434,7 +4638,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -4484,6 +4690,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -4499,7 +4706,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -4549,6 +4758,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -4564,7 +4774,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -4614,6 +4826,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -4629,7 +4842,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -4679,6 +4894,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -4694,7 +4910,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -4744,6 +4962,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -4759,7 +4978,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -4809,6 +5030,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -4824,7 +5046,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -4874,6 +5098,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -4889,7 +5114,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -4939,6 +5166,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -4954,7 +5182,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -5004,6 +5234,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -5019,7 +5250,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -5069,6 +5302,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -5084,7 +5318,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -5134,6 +5370,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -5149,7 +5386,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -5199,6 +5438,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -5214,7 +5454,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -5264,6 +5506,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -5279,7 +5522,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -5329,6 +5574,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -5344,7 +5590,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -5394,6 +5642,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -5409,7 +5658,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -5459,6 +5710,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -5474,7 +5726,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -5524,6 +5778,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -5539,7 +5794,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -5589,6 +5846,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -5604,7 +5862,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -5654,6 +5914,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -5669,7 +5930,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -5719,6 +5982,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -5734,7 +5998,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -5784,6 +6050,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -5799,7 +6066,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -5849,6 +6118,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -5864,7 +6134,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -5914,6 +6186,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -5929,7 +6202,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -5979,6 +6254,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -5994,7 +6270,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -6044,6 +6322,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -6059,7 +6338,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -6109,6 +6390,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -6124,7 +6406,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -6174,6 +6458,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -6189,7 +6474,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -6239,6 +6526,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -6254,7 +6542,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -6304,6 +6594,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -6319,7 +6610,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -6369,6 +6662,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -6384,7 +6678,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -6434,6 +6730,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -6449,7 +6746,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -6499,6 +6798,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -6514,7 +6814,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -6564,6 +6866,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -6579,7 +6882,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -6629,6 +6934,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -6644,7 +6950,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -6694,6 +7002,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -6709,7 +7018,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -6759,6 +7070,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -6774,7 +7086,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -6824,6 +7138,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -6839,7 +7154,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -6889,6 +7206,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -6904,7 +7222,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -6954,6 +7274,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -6969,7 +7290,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -7019,6 +7342,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -7034,7 +7358,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -7084,6 +7410,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -7099,7 +7426,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -7149,6 +7478,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -7164,7 +7494,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -7214,6 +7546,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -7229,7 +7562,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -7279,6 +7614,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -7294,7 +7630,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -7344,6 +7682,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -7359,7 +7698,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -7409,6 +7750,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -7424,7 +7766,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -7474,6 +7818,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -7489,7 +7834,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -7539,6 +7886,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -7554,7 +7902,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -7604,6 +7954,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -7619,7 +7970,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -7669,6 +8022,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -7684,7 +8038,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -7734,6 +8090,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -7749,7 +8106,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -7799,6 +8158,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -7814,7 +8174,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -7864,6 +8226,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -7879,7 +8242,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -7929,6 +8294,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -7944,7 +8310,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -7994,6 +8362,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -8009,7 +8378,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -8059,6 +8430,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -8074,7 +8446,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -8124,6 +8498,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -8139,7 +8514,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -8189,6 +8566,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -8204,7 +8582,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -8254,6 +8634,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -8269,7 +8650,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -8319,6 +8702,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -8334,7 +8718,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -8384,6 +8770,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -8399,7 +8786,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -8449,6 +8838,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -8464,7 +8854,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -8514,6 +8906,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -8529,7 +8922,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -8579,6 +8974,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -8594,7 +8990,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -8644,6 +9042,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -8659,7 +9058,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -8709,6 +9110,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -8724,7 +9126,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -8774,6 +9178,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -8789,7 +9194,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -8839,6 +9246,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -8854,7 +9262,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -8904,6 +9314,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -8919,7 +9330,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -8969,6 +9382,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -8984,7 +9398,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -9034,6 +9450,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -9049,7 +9466,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -9099,6 +9518,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -9114,7 +9534,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -9164,6 +9586,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -9179,7 +9602,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -9229,6 +9654,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -9244,7 +9670,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -9294,6 +9722,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -9309,7 +9738,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -9359,6 +9790,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -9374,7 +9806,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -9424,6 +9858,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -9439,7 +9874,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -9489,6 +9926,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -9504,7 +9942,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -9554,6 +9994,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -9569,7 +10010,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -9619,6 +10062,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -9634,7 +10078,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -9684,6 +10130,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -9699,7 +10146,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -9749,6 +10198,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -9764,7 +10214,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -9814,6 +10266,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -9829,7 +10282,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -9879,6 +10334,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -9894,7 +10350,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -9944,6 +10402,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -9959,7 +10418,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -10009,6 +10470,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -10024,7 +10486,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -10074,6 +10538,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -10089,7 +10554,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -10139,6 +10606,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -10154,7 +10622,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -10204,6 +10674,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -10219,7 +10690,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -10269,6 +10742,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -10284,7 +10758,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -10334,6 +10810,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -10349,7 +10826,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -10399,6 +10878,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -10414,7 +10894,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -10464,6 +10946,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -10479,7 +10962,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -10529,6 +11014,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -10544,7 +11030,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -10594,6 +11082,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -10609,7 +11098,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -10659,6 +11150,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -10674,7 +11166,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -10724,6 +11218,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -10739,7 +11234,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -10789,6 +11286,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -10804,7 +11302,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -10854,6 +11354,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -10869,7 +11370,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -10919,6 +11422,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -10934,7 +11438,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -10984,6 +11490,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -10999,7 +11506,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -11049,6 +11558,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -11064,7 +11574,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -11114,6 +11626,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -11129,7 +11642,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -11179,6 +11694,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -11194,7 +11710,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -11244,6 +11762,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -11259,7 +11778,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -11309,6 +11830,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -11324,7 +11846,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -11374,6 +11898,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -11389,7 +11914,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -11439,6 +11966,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -11454,7 +11982,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -11504,6 +12034,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -11519,7 +12050,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -11569,6 +12102,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -11584,7 +12118,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -11634,6 +12170,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -11649,7 +12186,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -11699,6 +12238,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -11714,7 +12254,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -11764,6 +12306,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -11779,7 +12322,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -11829,6 +12374,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -11844,7 +12390,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -11894,6 +12442,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -11909,7 +12458,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -11959,6 +12510,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -11974,7 +12526,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -12024,6 +12578,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -12039,7 +12594,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -12089,6 +12646,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -12104,7 +12662,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -12154,6 +12714,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -12169,7 +12730,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -12219,6 +12782,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -12234,7 +12798,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -12284,6 +12850,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -12299,7 +12866,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -12349,6 +12918,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -12364,7 +12934,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -12414,6 +12986,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -12429,7 +13002,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -12479,6 +13054,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -12494,7 +13070,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -12544,6 +13122,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -12559,7 +13138,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -12609,6 +13190,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -12624,7 +13206,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -12674,6 +13258,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -12689,7 +13274,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -12739,6 +13326,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -12754,7 +13342,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -12804,6 +13394,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -12819,7 +13410,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -12869,6 +13462,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -12884,7 +13478,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -12934,6 +13530,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -12949,7 +13546,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -12999,6 +13598,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -13014,7 +13614,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -13064,6 +13666,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -13079,7 +13682,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -13129,6 +13734,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -13144,7 +13750,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -13194,6 +13802,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -13209,7 +13818,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -13259,6 +13870,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -13274,7 +13886,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -13324,6 +13938,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -13339,7 +13954,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -13389,6 +14006,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -13404,7 +14022,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -13454,6 +14074,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -13469,7 +14090,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -13519,6 +14142,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -13534,7 +14158,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -13584,6 +14210,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -13599,7 +14226,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -13649,6 +14278,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -13664,7 +14294,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -13714,6 +14346,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -13729,7 +14362,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -13779,6 +14414,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -13794,7 +14430,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -13844,6 +14482,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -13859,7 +14498,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -13909,6 +14550,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -13924,7 +14566,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -13974,6 +14618,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -13989,7 +14634,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -14039,6 +14686,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -14054,7 +14702,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -14104,6 +14754,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -14119,7 +14770,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -14169,6 +14822,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -14184,7 +14838,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -14234,6 +14890,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -14249,7 +14906,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -14299,6 +14958,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -14314,7 +14974,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -14364,6 +15026,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -14379,7 +15042,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -14429,6 +15094,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -14444,7 +15110,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -14494,6 +15162,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -14509,7 +15178,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -14559,6 +15230,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -14574,7 +15246,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -14624,6 +15298,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -14639,7 +15314,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -14689,6 +15366,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -14704,7 +15382,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -14754,6 +15434,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -14769,7 +15450,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -14819,6 +15502,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -14834,7 +15518,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -14884,6 +15570,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -14899,7 +15586,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -14949,6 +15638,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -14964,7 +15654,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -15014,6 +15706,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -15029,7 +15722,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -15079,6 +15774,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -15094,7 +15790,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -15144,6 +15842,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -15159,7 +15858,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -15209,6 +15910,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -15224,7 +15926,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -15274,6 +15978,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -15289,7 +15994,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -15339,6 +16046,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -15354,7 +16062,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -15404,6 +16114,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -15419,7 +16130,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -15469,6 +16182,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -15484,7 +16198,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -15534,6 +16250,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -15549,7 +16266,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -15599,6 +16318,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -15614,7 +16334,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -15664,6 +16386,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -15679,7 +16402,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -15729,6 +16454,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -15744,7 +16470,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -15794,6 +16522,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -15809,7 +16538,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -15859,6 +16590,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -15874,7 +16606,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -15924,6 +16658,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -15939,7 +16674,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -15989,6 +16726,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -16004,7 +16742,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -16054,6 +16794,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -16069,7 +16810,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -16119,6 +16862,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -16134,7 +16878,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -16184,6 +16930,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -16199,7 +16946,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -16249,6 +16998,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -16264,7 +17014,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -16314,6 +17066,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -16329,7 +17082,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -16379,6 +17134,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -16394,7 +17150,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -16444,6 +17202,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -16459,7 +17218,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -16509,6 +17270,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -16524,7 +17286,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -16574,6 +17338,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -16589,7 +17354,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -16639,6 +17406,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -16654,7 +17422,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -16704,6 +17474,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -16719,7 +17490,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -16769,6 +17542,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -16784,7 +17558,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -16834,6 +17610,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -16849,7 +17626,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -16899,6 +17678,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -16914,7 +17694,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -16964,6 +17746,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -16979,7 +17762,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -17029,6 +17814,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -17044,7 +17830,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -17094,6 +17882,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -17109,7 +17898,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -17159,6 +17950,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -17174,7 +17966,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -17224,6 +18018,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -17239,7 +18034,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -17289,6 +18086,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -17304,7 +18102,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -17354,6 +18154,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -17369,7 +18170,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -17419,6 +18222,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -17434,7 +18238,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -17484,6 +18290,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -17499,7 +18306,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -17549,6 +18358,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -17564,7 +18374,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -17614,6 +18426,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -17629,7 +18442,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -17679,6 +18494,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -17694,7 +18510,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -17744,6 +18562,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -17759,7 +18578,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -17809,6 +18630,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -17824,7 +18646,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -17874,6 +18698,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -17889,7 +18714,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -17939,6 +18766,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -17954,7 +18782,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -18004,6 +18834,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -18019,7 +18850,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -18069,6 +18902,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -18084,7 +18918,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -18134,6 +18970,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -18149,7 +18986,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -18199,6 +19038,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -18214,7 +19054,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -18264,6 +19106,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -18279,7 +19122,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -18329,6 +19174,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -18344,7 +19190,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -18394,6 +19242,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -18409,7 +19258,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -18459,6 +19310,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -18474,7 +19326,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -18524,6 +19378,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -18539,7 +19394,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -18589,6 +19446,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -18604,7 +19462,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -18654,6 +19514,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     },
@@ -18669,7 +19530,9 @@
       "result_facts": [],
       "attempted_effects": [],
       "actual_effects": [],
-      "fixture_diff": [],
+      "fixture_snapshot_captured": false,
+      "fixture_snapshot": [],
+      "execution_identity": null,
       "policy_loss": false,
       "wall_millis": null,
       "summary": null,
@@ -18719,6 +19582,7 @@
         "tool_calls": 0,
         "worker_starts": 0,
         "worker_returns": 0,
+        "worker_lifecycles": [],
         "policy_loss": false
       }
     }
