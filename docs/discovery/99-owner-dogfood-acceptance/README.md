@@ -3,7 +3,7 @@
 - **Status:** Draft
 - **Discovery issue:** #99
 - **Discovery PR:** #100
-- **Repository basis:** `616395439a953100c6c165ccf56ea314c2dd0307`
+- **Repository basis:** 616395439a953100c6c165ccf56ea314c2dd0307
 - **Recommended decision:** approve
 - **Gate 1:** awaiting-authority
 - **Confidence:** High
@@ -11,7 +11,7 @@
 
 ## Decision sought
 
-What evidence should authorize My Friday's first owner-operated Alfred dogfood
+What evidence should authorize My Friday's first owner-operated assistant dogfood
 release without blocking the migration on recruiting unrelated design partners?
 
 The decision concerns product validation, not artifact integrity. The release
@@ -20,7 +20,7 @@ immutable bytes through the existing release machinery.
 
 ## Audience and critical tasks
 
-The immediate user is the product owner operating and migrating his own Alfred
+The immediate user is the product owner operating and migrating an existing assistant
 installation. He needs a stable released instruction-only capability contract
 before the repository-first portable assistant kernel in #92 can migrate real
 state onto it.
@@ -38,7 +38,7 @@ Critical tasks are:
    exact result;
 4. have an authorized acceptor, separate from implementation and the product
    owner, record and verify the release decision;
-5. release the stable F0 contract so #92 can migrate Alfred and collect real
+5. release the stable F0 contract so #92 can migrate an existing assistant and collect real
    operational dogfood evidence; and
 6. avoid claiming that owner dogfooding proves independent usability.
 
@@ -68,7 +68,7 @@ Critical tasks are:
 
 ## Assumptions
 
-- The product owner's immediate purpose is to migrate and operate Alfred, not
+- The product owner's immediate purpose is to migrate and operate an existing assistant, not
   to assert broad market validation.
 - An allowlisted product-owner identity can remain repository configuration
   rather than a personal identity hardcoded in product source.
@@ -136,7 +136,7 @@ or policy added after its SHA.
 The resulting GitHub Release remains public and stable. Product copy and
 release notes must label the evidence accurately as owner dogfooding, not
 independent-user validation. External design-partner use becomes a later
-validation signal and claim gate, not a prerequisite for Anthony's migration.
+validation signal and claim gate, not a prerequisite for the owner's migration.
 
 The #92 migration records operational evidence after F0 release. That evidence
 can guide changes or external validation, but it is not required to release the
@@ -153,7 +153,7 @@ Continue when:
   chain; and
 - F0 is published with claims limited to owner dogfooding.
 
-Change direction when the real Alfred migration exposes repeated recovery,
+Change direction when the real assistant migration exposes repeated recovery,
 comprehension, or maintenance failures.
 
 Pause when product-owner configuration is absent or ambiguous, owner and
@@ -169,7 +169,7 @@ evidence has not yet been collected.
 ### O1 — Versioned owner-dogfood acceptance contract
 
 - Disposition: selected
-- Outcome: F0 can be accepted and released for owner-operated Alfred
+- Outcome: F0 can be accepted and released for owner-operated assistant
   dogfooding using fresh automated evidence, an allowlisted owner decision,
   and a separate authorized acceptor.
 - Acceptance: tests prove exact binding, identity separation, configuration
@@ -188,7 +188,7 @@ evidence has not yet been collected.
 - Acceptance: separately shaped participant, comprehension, correction,
   retention-interval, and evidence criteria; controlled accounts never count
   as independent users.
-- Dependencies: stable owner-dogfood release and findings from the real Alfred
+- Dependencies: stable owner-dogfood release and findings from the real assistant
   migration.
 - Sequence: after O1 and initial #92 dogfooding; it must not block them.
 
