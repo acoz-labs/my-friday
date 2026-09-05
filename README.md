@@ -37,10 +37,10 @@ Create a private named instance from a validated runtime/memory pair. The
 launcher directory must already exist as `$HOME/.local/bin`:
 
 ```sh
-./my-friday assistant create alfred --runtime /path/to/runtime --memory /path/to/memory
-$HOME/.local/bin/alfred
-./my-friday assistant verify alfred
-./my-friday assistant remove alfred
+./my-friday assistant create friday --runtime /path/to/runtime --memory /path/to/memory
+$HOME/.local/bin/friday
+./my-friday assistant verify friday
+./my-friday assistant remove friday
 ```
 
 Mutations print a plan and require the exact action word. Each instance owns
@@ -82,15 +82,15 @@ files and their complete source diff before exact source-only confirmation; it
 then inspects, validates, and tests the result without activating it:
 
 ```sh
-my-friday capability workshop alfred daily-brief
-my-friday capability inspect alfred daily-brief --plain
-my-friday capability validate alfred daily-brief
-my-friday capability test alfred daily-brief
-my-friday capability install alfred daily-brief
-my-friday capability verify alfred daily-brief
-my-friday capability disable alfred daily-brief
-my-friday capability enable alfred daily-brief
-my-friday capability remove alfred daily-brief
+my-friday capability workshop friday daily-brief
+my-friday capability inspect friday daily-brief --plain
+my-friday capability validate friday daily-brief
+my-friday capability test friday daily-brief
+my-friday capability install friday daily-brief
+my-friday capability verify friday daily-brief
+my-friday capability disable friday daily-brief
+my-friday capability enable friday daily-brief
+my-friday capability remove friday daily-brief
 ```
 
 Mutations preview exact digests and paths, require an interactive terminal and

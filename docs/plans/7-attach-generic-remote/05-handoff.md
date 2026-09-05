@@ -112,7 +112,7 @@ leaves draft.
   promoted, this plan is removed, and all transcript/config/observer/PF/DTrace
   evidence is openable and sanitized.
 - Continue after reviewed merge through deterministic nomination, independent
-  Alfred-run disposable-macOS acceptance, same-byte GitHub Release publication,
+  authorized disposable-macOS acceptance, same-byte GitHub Release publication,
   verification, and issue closure under the `through-production` envelope.
 
 ## Explicit Non-Goals And YAGNI Boundary
