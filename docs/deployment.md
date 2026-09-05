@@ -119,7 +119,8 @@ configuration or secrets are used at runtime.
 Named-instance acceptance must exercise create, verify, launch, two-instance
 coexistence, collision refusal, interrupted-remove recovery, and reversal as
 the current non-root user. The accepted `my-friday` bytes become the launcher;
-Codex is copied into the instance dependency directory. The instance-private
+Codex and its same-package Code Mode host are copied and independently bound in
+the instance dependency directory. The instance-private
 `codex/AGENTS.md` is rendered from the validated copied runtime profile, binds
 its exact path and bytes in the instance manifest, and contains the non-secret
 identity and purpose directly rather than an unresolved relative profile
@@ -169,8 +170,8 @@ copy is removed with the instance. The
 same file-backed OAuth credential is deliberately not routed through
 `codex login --with-api-key`.
 
-The instance config disables the separately packaged Code Mode host and hides
-the rate-limit model-switch nudge before the PTY starts. Codex may still record
+The instance carries the separately packaged, same-version Code Mode host and
+hides the rate-limit model-switch nudge before the PTY starts. Codex may still record
 only its model-availability counters in a narrowly parsed TUI suffix; the
 acceptor and ordinary instance verification reject all other config drift.
 

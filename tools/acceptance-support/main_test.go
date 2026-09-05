@@ -57,6 +57,14 @@ func managedNamedFixtureWithCodex(t *testing.T, codex string) (string, assistant
 			t.Fatal(err)
 		}
 	}
+	host := filepath.Join(filepath.Dir(codex), "codex-code-mode-host")
+	if _, statErr := os.Lstat(host); errors.Is(statErr, os.ErrNotExist) {
+		if err = os.WriteFile(host, []byte("host"), 0o700); err != nil {
+			t.Fatal(err)
+		}
+	} else if statErr != nil {
+		t.Fatal(statErr)
+	}
 	instance, err := assistantinstance.PlanCreate(home, "primary", executable, codex)
 	if err != nil {
 		t.Fatal(err)
@@ -964,7 +972,7 @@ func TestCleanupNamedCoversEveryPostCreatePhase(t *testing.T) {
 				t.Fatal(err)
 			}
 			exe, codex := filepath.Join(home, "candidate"), filepath.Join(home, "codex")
-			for _, path := range []string{exe, codex} {
+			for _, path := range []string{exe, codex, filepath.Join(home, "codex-code-mode-host")} {
 				if err := os.WriteFile(path, []byte(path), 0o700); err != nil {
 					t.Fatal(err)
 				}
@@ -1072,7 +1080,7 @@ func TestCleanupNamedPreservesDriftedLeafButRemovesInstanceAndCredential(t *test
 		t.Fatal(err)
 	}
 	exe, codex := filepath.Join(home, "candidate"), filepath.Join(home, "codex")
-	for _, path := range []string{exe, codex} {
+	for _, path := range []string{exe, codex, filepath.Join(home, "codex-code-mode-host")} {
 		if err := os.WriteFile(path, []byte(path), 0o700); err != nil {
 			t.Fatal(err)
 		}

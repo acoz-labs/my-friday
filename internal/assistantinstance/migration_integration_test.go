@@ -54,6 +54,9 @@ func TestMigrationCreatesVerifiedInstanceBeforeManifestProvenLegacyUninstall(t *
 	if err = os.WriteFile(codex, []byte("#!/bin/sh\nexit 0\n"), 0700); err != nil {
 		t.Fatal(err)
 	}
+	if err = os.WriteFile(filepath.Join(home, "codex-code-mode-host"), []byte("host"), 0700); err != nil {
+		t.Fatal(err)
+	}
 	instancePlan, err := assistantinstance.PlanCreate(home, "alfred", executable, codex)
 	if err != nil {
 		t.Fatal(err)

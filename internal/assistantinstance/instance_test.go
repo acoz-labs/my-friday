@@ -24,12 +24,38 @@ func fixture(t *testing.T) (string, string, string) {
 	}
 	exe := filepath.Join(home, "my-friday")
 	codex := filepath.Join(home, "codex")
-	for path, body := range map[string]string{exe: "launcher", codex: "codex"} {
+	host := filepath.Join(home, "codex-code-mode-host")
+	for path, body := range map[string]string{exe: "launcher", codex: "codex", host: "code mode host"} {
 		if err := os.WriteFile(path, []byte(body), 0700); err != nil {
 			t.Fatal(err)
 		}
 	}
+	t.Setenv("PATH", home+string(os.PathListSeparator)+os.Getenv("PATH"))
 	return home, exe, codex
+}
+
+func TestPlanCreateRequiresSamePackageCodeModeHost(t *testing.T) {
+	home, exe, codex := fixture(t)
+	if err := os.Remove(filepath.Join(home, "codex-code-mode-host")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := PlanCreate(home, "alfred", exe, codex); err == nil || !strings.Contains(err.Error(), "Code Mode host required beside Codex") {
+		t.Fatalf("missing same-package Code Mode host accepted: %v", err)
+	}
+}
+
+func TestCreateRefusesCodeModeHostChangedAfterPreview(t *testing.T) {
+	home, exe, codex := fixture(t)
+	p, err := PlanCreate(home, "alfred", exe, codex)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = os.WriteFile(filepath.Join(home, "codex-code-mode-host"), []byte("changed"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err = Create(p, exe, codex); err == nil || !strings.Contains(err.Error(), "host changed after preview") {
+		t.Fatalf("changed Code Mode host accepted: %v", err)
+	}
 }
 
 func downgradeFixtureToV1(t *testing.T, p Paths) {
@@ -53,6 +79,8 @@ func downgradeFixtureToV1(t *testing.T, p Paths) {
 	m.CapabilityPolicySHA256 = ""
 	m.MyFridayExecutable = ""
 	m.MyFridaySHA256 = ""
+	m.CodexCodeModeHost = ""
+	m.CodexCodeModeHostSHA256 = ""
 	config, err := managedCodexConfig(p, 0)
 	if err != nil {
 		t.Fatal(err)
@@ -66,6 +94,9 @@ func downgradeFixtureToV1(t *testing.T, p Paths) {
 		t.Fatal(err)
 	}
 	if err = os.Remove(filepath.Join(p.Root, "dependencies", "my-friday")); err != nil {
+		t.Fatal(err)
+	}
+	if err = os.Remove(filepath.Join(p.Root, "dependencies", "codex-code-mode-host")); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -86,6 +117,8 @@ func downgradeFixtureToLegacyV2(t *testing.T, p Paths) {
 	m.RollbackCapabilityRevision = 0
 	m.MyFridayExecutable = ""
 	m.MyFridaySHA256 = ""
+	m.CodexCodeModeHost = ""
+	m.CodexCodeModeHostSHA256 = ""
 	m.CapabilityBuilderSHA256 = digest([]byte(legacyBuilderSkill))
 	m.CapabilityPolicySHA256 = digest([]byte(builderPolicy))
 	config, err := managedCodexConfig(p, 0)
@@ -106,6 +139,9 @@ func downgradeFixtureToLegacyV2(t *testing.T, p Paths) {
 	if err = os.Remove(filepath.Join(p.Root, "dependencies", "my-friday")); err != nil {
 		t.Fatal(err)
 	}
+	if err = os.Remove(filepath.Join(p.Root, "dependencies", "codex-code-mode-host")); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func downgradeFixtureToRevision2(t *testing.T, p Paths) {
@@ -120,6 +156,8 @@ func downgradeFixtureToRevision2(t *testing.T, p Paths) {
 		t.Fatal(err)
 	}
 	m.CapabilityRevision = 2
+	m.CodexCodeModeHost = ""
+	m.CodexCodeModeHostSHA256 = ""
 	m.CapabilityBuilderSHA256 = digest(capabilityRevision2Builder(p))
 	config, err := managedCodexConfig(p, 2)
 	if err != nil {
@@ -134,6 +172,9 @@ func downgradeFixtureToRevision2(t *testing.T, p Paths) {
 		t.Fatal(err)
 	}
 	if err = os.WriteFile(filepath.Join(m.CapabilityBuilder, "SKILL.md"), capabilityRevision2Builder(p), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err = os.Remove(filepath.Join(p.Root, "dependencies", "codex-code-mode-host")); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -220,6 +261,9 @@ func TestActualRevision2UpgradeRecoveryAndRollback(t *testing.T) {
 	m, err = Verify(home, "alfred")
 	if err != nil || m.CapabilityRevision != 2 {
 		t.Fatalf("rollback=%#v err=%v", m, err)
+	}
+	if _, err = os.Lstat(filepath.Join(p.Paths.Root, "dependencies", "codex-code-mode-host")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("rollback retained current Code Mode host: %v", err)
 	}
 }
 
@@ -792,6 +836,7 @@ func TestRollbackRecoveryRefusesQuarantineByteSubstitution(t *testing.T) {
 		}},
 		{"capabilities", func(p Paths) string { return filepath.Join(p.Root, "capabilities.rollback", "foreign") }},
 		{"executable", func(p Paths) string { return filepath.Join(p.Root, "dependencies", "my-friday.rollback") }},
+		{"code-mode-host", func(p Paths) string { return filepath.Join(p.Root, "dependencies", "codex-code-mode-host.rollback") }},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			home, exe, codex := fixture(t)
@@ -1107,7 +1152,7 @@ func TestCreateTrustsOnlyExactInstanceWorkspaceWithTOMLEscaping(t *testing.T) {
 		t.Fatal(err)
 	}
 	exe, codex := filepath.Join(home, "my-friday"), filepath.Join(home, "codex")
-	for path, body := range map[string]string{exe: "launcher", codex: "codex"} {
+	for path, body := range map[string]string{exe: "launcher", codex: "codex", filepath.Join(home, "codex-code-mode-host"): "code mode host"} {
 		if err := os.WriteFile(path, []byte(body), 0700); err != nil {
 			t.Fatal(err)
 		}
@@ -1125,7 +1170,7 @@ func TestCreateTrustsOnlyExactInstanceWorkspaceWithTOMLEscaping(t *testing.T) {
 	}
 	escapedWorkspace := strings.NewReplacer(`\`, `\\`, `"`, `\"`).Replace(filepath.Join(p.Paths.Root, "workspace"))
 	escapedRuntime := strings.NewReplacer(`\`, `\\`, `"`, `\"`).Replace(filepath.Join(p.Paths.Root, "runtime"))
-	want := "approval_policy = \"never\"\nsandbox_mode = \"workspace-write\"\n\n[features]\ncode_mode_host = false\n\n[notice]\nhide_rate_limit_model_nudge = true\n\n[sandbox_workspace_write]\nnetwork_access = false\nwritable_roots = [\"" + escapedRuntime + "\"]\n\n[projects.\"" + escapedWorkspace + "\"]\ntrust_level = \"trusted\"\n"
+	want := "approval_policy = \"never\"\nsandbox_mode = \"workspace-write\"\n\n[notice]\nhide_rate_limit_model_nudge = true\n\n[sandbox_workspace_write]\nnetwork_access = false\nwritable_roots = [\"" + escapedRuntime + "\"]\n\n[projects.\"" + escapedWorkspace + "\"]\ntrust_level = \"trusted\"\n"
 	if string(config) != want {
 		t.Fatalf("unexpected instance trust config\nwant: %q\n got: %q", want, config)
 	}
@@ -1185,6 +1230,10 @@ func TestCreateBindsInstanceSpecificBuilderAndMyFridayExecutable(t *testing.T) {
 		if m.MyFridayExecutable != wantExecutable || m.MyFridaySHA256 != digest([]byte("launcher")) {
 			t.Fatalf("managed executable is not manifest-bound: %#v", m)
 		}
+		wantHost := filepath.Join(p.Paths.Root, "dependencies", "codex-code-mode-host")
+		if m.CodexCodeModeHost != wantHost || m.CodexCodeModeHostSHA256 != digest([]byte("code mode host")) {
+			t.Fatalf("managed Codex Code Mode host is not manifest-bound: %#v", m)
+		}
 		body, err := os.ReadFile(filepath.Join(m.CapabilityBuilder, "SKILL.md"))
 		if err != nil {
 			t.Fatal(err)
@@ -1203,6 +1252,24 @@ func TestCreateBindsInstanceSpecificBuilderAndMyFridayExecutable(t *testing.T) {
 	}
 	if string(builders["alfred"]) == string(builders["robin"]) || strings.Contains(string(builders["alfred"]), paths["robin"].Root) {
 		t.Fatal("builder bytes are not instance-specific")
+	}
+}
+
+func TestManagedCodeModeHostDriftRefusesVerification(t *testing.T) {
+	home, exe, codex := fixture(t)
+	p, err := PlanCreate(home, "alfred", exe, codex)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = Create(p, exe, codex); err != nil {
+		t.Fatal(err)
+	}
+	host := filepath.Join(p.Paths.Root, "dependencies", "codex-code-mode-host")
+	if err = os.WriteFile(host, []byte("drift"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = Verify(home, "alfred"); err == nil || !strings.Contains(err.Error(), "Code Mode host drift") {
+		t.Fatalf("managed Code Mode host drift accepted: %v", err)
 	}
 }
 
@@ -1421,6 +1488,9 @@ func TestLauncherEnvironmentAndArguments(t *testing.T) {
 	codex := filepath.Join(home, "codex-stub")
 	stub := "#!/bin/sh\nprintf '%s\\n' \"$HOME\" \"$CODEX_HOME\" \"$@\" > \"$MY_FRIDAY_CAPTURE\"\n"
 	if err = os.WriteFile(codex, []byte(stub), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err = os.WriteFile(filepath.Join(home, "codex-code-mode-host"), []byte("host"), 0700); err != nil {
 		t.Fatal(err)
 	}
 	p, err := PlanCreate(home, "alfred", exe, codex)

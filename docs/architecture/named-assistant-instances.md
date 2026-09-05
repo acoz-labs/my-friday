@@ -22,18 +22,17 @@ Friday executable to `dependencies/my-friday` for private builder checks.
 Creation renders `codex/config.toml` with the exact absolute workspace trusted,
 `sandbox_mode = "workspace-write"`, `approval_policy = "never"`, network
 disabled, and only the exact private `runtime/` added to
-`sandbox_workspace_write.writable_roots`. It explicitly disables
-`features.code_mode_host`: a named instance copies the standalone Codex
-executable, not its separately shipped host companion, while Codex's stable
-shell/unified execution path remains available for the instruction-only
-contract. It also suppresses the disposable rate-limit model-switch nudge so
+`sandbox_workspace_write.writable_roots`. A named instance copies and
+manifest-binds the same-package `codex-code-mode-host` beside the standalone
+Codex executable so modern Codex tool execution does not depend on an ambient
+installation. It also suppresses the disposable rate-limit model-switch nudge so
 an account-state reminder cannot seize an acceptance PTY. Paths are
 TOML-escaped as data; no
 ancestor, wildcard, caller workspace, sibling instance, or other writable root
 is configured. The manifest fixes the schema, name, root,
 owned children, launcher path/digest, the exact
-`<root>/dependencies/codex` and `<root>/dependencies/my-friday` paths and
-digests, the exact private config path and
+`<root>/dependencies/codex`, `<root>/dependencies/codex-code-mode-host`, and
+`<root>/dependencies/my-friday` paths and digests, the exact private config path and
 rendered base digest, the exact private instructions path and rendered digest, and
 assistant ID. PATH discovery
 may traverse a symlink, but creation resolves it first and copies only the
@@ -41,7 +40,7 @@ resolved current-user regular executable into managed state.
 
 Create verifies the existing current-user-owned `$HOME/.local/bin`, refuses
 collisions, stages the root, then uses a no-replace launcher projection. Verify
-re-derives paths and checks the layout, launcher bytes, both managed
+re-derives paths and checks the layout, launcher bytes, all three managed
 executables, exact private sandbox/trust config, and instructions re-rendered from the validated copied
 profile. Codex may append only its bounded
 `[tui.model_availability_nux]` counters to the generated config; verification

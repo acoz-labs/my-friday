@@ -30,6 +30,9 @@ func TestForgedManagedInstructionsManifestIsDenied(t *testing.T) {
 		if err = os.WriteFile(codex, []byte("codex"), 0o700); err != nil {
 			t.Fatal(err)
 		}
+		if err = os.WriteFile(filepath.Join(home, "codex-code-mode-host"), []byte("host"), 0o700); err != nil {
+			t.Fatal(err)
+		}
 		paths := createNamedWithProfile(t, home, "alfred", executable, codex, filepath.Join(home, "source"), "PURPOSE_BOUND")
 		manifestPath := filepath.Join(paths.Root, "manifest.json")
 		body, err := os.ReadFile(manifestPath)
@@ -107,6 +110,9 @@ func TestManagedInstructionsProjectValidatedPurposeAndRemainManifestBound(t *tes
 	}
 	codex := filepath.Join(home, "codex-stub")
 	if err = os.WriteFile(codex, []byte("#!/bin/sh\nexit 0\n"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err = os.WriteFile(filepath.Join(home, "codex-code-mode-host"), []byte("host"), 0o700); err != nil {
 		t.Fatal(err)
 	}
 
