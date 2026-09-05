@@ -165,6 +165,8 @@ or runtime secret exists.
 - **Build/injection:** the candidate is built once; owner configuration is
   injected only into control verification, never into the artifact.
 - **Activation:** explicit product acceptance followed by artifact release.
+- **Deployment:** publishing the accepted immutable GitHub Release is the only
+  production deployment; there is no service rollout or mutable runtime.
 - **Verification:** exact SHA/artifact, checks, implementation set, evidence,
   owner receipt, actor separation, statuses, archive/executable digests, tag,
   Release, assets, and ledger are all executable checks.
