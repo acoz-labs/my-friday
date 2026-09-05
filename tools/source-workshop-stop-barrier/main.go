@@ -11,8 +11,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strconv"
-	"strings"
 	"syscall"
 	"time"
 )
@@ -48,19 +46,27 @@ func main() {
 	go func() { done <- cmd.Wait() }()
 	journalPath := filepath.Join(*root, "capabilities", ".workshop-"+*slug+".json")
 	deadline := time.Now().Add(20 * time.Second)
+	armed := false
 	for time.Now().Before(deadline) {
 		select {
 		case err := <-done:
 			fatal(fmt.Errorf("candidate completed before source interruption: %w", err))
 		default:
 		}
-		membersBefore := groupSummary(pgid)
-		if err := syscall.Kill(-pgid, syscall.SIGSTOP); err != nil {
-			leaderErr := syscall.Kill(pgid, syscall.SIGSTOP)
-			if leaderErr == nil {
-				_ = syscall.Kill(pgid, syscall.SIGCONT)
+		if !armed {
+			armed = confirmationSent(*transcript)
+			if !armed {
+				time.Sleep(100 * time.Microsecond)
+				continue
 			}
-			fatal(fmt.Errorf("stop Expect process group %d as euid %d (leader stop: %v; members before: %s; members after: %s): %w", pgid, os.Geteuid(), leaderErr, membersBefore, groupSummary(pgid), err))
+		}
+		if err := syscall.Kill(-pgid, syscall.SIGSTOP); err != nil {
+			select {
+			case completed := <-done:
+				fatal(fmt.Errorf("candidate completed during source interruption race: %w", completed))
+			default:
+				fatal(fmt.Errorf("stop armed Expect process group: %w", err))
+			}
 		}
 		body, err := os.ReadFile(journalPath)
 		if err == nil && stable(body, *root, *slug) {
@@ -81,23 +87,9 @@ func main() {
 	fatal(errors.New("no stable source-workshop interruption captured"))
 }
 
-func groupSummary(pgid int) string {
-	body, err := exec.Command("/bin/ps", "-axo", "pid=,ppid=,pgid=,uid=,stat=,comm=").Output()
-	if err != nil {
-		return "unavailable"
-	}
-	var members []string
-	for _, line := range strings.Split(string(body), "\n") {
-		fields := strings.Fields(line)
-		if len(fields) < 6 || fields[2] != strconv.Itoa(pgid) {
-			continue
-		}
-		members = append(members, strings.Join(fields[:5], ":")+":"+filepath.Base(strings.Join(fields[5:], " ")))
-	}
-	if len(members) == 0 {
-		return "none"
-	}
-	return strings.Join(members, ",")
+func confirmationSent(transcript string) bool {
+	body, err := os.ReadFile(transcript)
+	return err == nil && bytes.Contains(body, []byte("Type Update source to continue; Return exits: Update source"))
 }
 
 func stable(body []byte, root, slug string) bool {

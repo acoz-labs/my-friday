@@ -33,3 +33,19 @@ func TestCanStopOwnedExpectProcessGroup(t *testing.T) {
 		t.Fatalf("stop owned Expect process group %d: %v", pgid, err)
 	}
 }
+
+func TestConfirmationSentRequiresEchoedSourceConfirmation(t *testing.T) {
+	transcript := filepath.Join(t.TempDir(), "workshop.private")
+	if err := os.WriteFile(transcript, []byte("Type Update source to continue; Return exits: "), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if confirmationSent(transcript) {
+		t.Fatal("armed before confirmation was echoed")
+	}
+	if err := os.WriteFile(transcript, []byte("Type Update source to continue; Return exits: Update source\r\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if !confirmationSent(transcript) {
+		t.Fatal("did not arm after confirmation echo")
+	}
+}
