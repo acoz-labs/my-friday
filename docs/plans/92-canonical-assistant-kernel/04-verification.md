@@ -152,7 +152,8 @@ The tool never recommends force/reset as recovery.
 ## Production Readiness Preflight
 
 This artifact has no service deployment or runtime secret slot. Production is
-the immutable GitHub Release artifact. Preflight must verify:
+the immutable GitHub Release artifact, and publishing that already accepted
+artifact is the only production activation. Preflight must verify:
 
 - exact accepted commit and artifact digest;
 - CI and native acceptance receipts, including private-remote Git and
