@@ -103,4 +103,8 @@ grep -Fq 'elif [[ "$issue_number" == 51 ]]' "$root/bin/record-product-acceptance
 grep -Fq 'elif [[ "$issue_number" == 51 ]]' "$root/bin/finalize-release"
 grep -Fq '(subpath @@VOLUME@@)' "$root/config/acceptance/lifecycle.sb.in"
 if grep -Eq 'rm -rf.*(run_root|evidence_root|run_parent|evidence_parent)' "$supervisor"; then exit 1; fi
+if grep -Eq '[^[:space:]]<\(' "$workshop"; then
+  echo "Process substitution is concatenated with the preceding argument" >&2
+  exit 1
+fi
 echo "acceptance contract tests passed."
