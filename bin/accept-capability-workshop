@@ -57,7 +57,8 @@ phase=install;run_clean /usr/bin/expect "$root/config/acceptance/capability-exit
 phase=upgrade;mkdir "$source/skill/references";printf 'opaque-reference\n'>"$source/skill/references/acceptance.txt";opaque_before="$(shasum -a 256 "$source/skill/references/acceptance.txt"|awk '{print $1}')";run_clean /usr/bin/expect "$root/config/acceptance/capability-workshop.exp" enhance "$candidate" "$instance" daily-brief "$evidence_root/workshop-update.private";[[ "$(shasum -a 256 "$source/skill/references/acceptance.txt"|awk '{print $1}')" == "$opaque_before" ]]||refuse "opaque source changed";grep -Fq 'Source action: update' "$evidence_root/workshop-update.private";grep -Fq 'Post-write state: source-changed' "$evidence_root/workshop-update.private";grep -Fq 'State: source-changed' <("$candidate" capability inspect "$instance" daily-brief --plain);"$candidate" capability test "$instance" daily-brief>/dev/null;confirm Upgrade "$candidate" capability upgrade "$instance" daily-brief
 phase=source-interruption
 interrupt_canary="$source/skill/references/interruption-canary";mkdir "$interrupt_canary"
-for ((i=0;i<512;i++));do printf -v leaf '%03d' "$i";printf 'opaque-%s\n' "$leaf">"$interrupt_canary/$leaf";done
+interrupt_padding="$(printf '%08192d' 0)"
+for ((i=0;i<48;i++));do printf -v leaf '%03d' "$i";printf 'opaque-%s-%s\n' "$leaf" "$interrupt_padding">"$interrupt_canary/$leaf";done
 interrupt_canary_before="$(tree_digest "$interrupt_canary")"
 "$run_root/source-workshop-stop-barrier" --expect "$root/config/acceptance/capability-workshop.exp" --candidate "$candidate" --instance "$instance" --instance-root "$instance_root" --slug daily-brief --transcript "$evidence_root/workshop-interrupted.private"
 [[ "$(tree_digest "$interrupt_canary")" == "$interrupt_canary_before" ]]||refuse "source interruption changed opaque canary tree"
