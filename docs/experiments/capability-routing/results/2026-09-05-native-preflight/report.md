@@ -340,15 +340,15 @@
 
 | Harness | Candidate | Metric | Coverage | Median ratio | Difference range | Missing reason |
 | --- | --- | --- | --- | ---: | --- | --- |
-| claude | lookup-direct | aggregate input plus output | 0/24 | null | null | no matched completed-work cells with the required metric |
-| claude | lookup-direct | wall latency | 0/24 | null | null | no matched completed-work cells with the required metric |
-| claude | lookup-direct | peak root per-request input on complex tasks | 0/2 | null | null | no matched completed-work cells with the required metric |
+| claude | lookup-direct | aggregate input plus output | 0/22 | null | null | no matched completed-work cells with the required metric |
+| claude | lookup-direct | wall latency | 0/22 | null | null | no matched completed-work cells with the required metric |
+| claude | lookup-direct | peak root per-request input on complex tasks | 0/0 | null | null | frozen expectations define no comparable completed-work cells |
 | claude | lookup-worker | aggregate input plus output | 0/24 | null | null | no matched completed-work cells with the required metric |
 | claude | lookup-worker | wall latency | 0/24 | null | null | no matched completed-work cells with the required metric |
 | claude | lookup-worker | peak root per-request input on complex tasks | 0/2 | null | null | no matched completed-work cells with the required metric |
-| codex | lookup-direct | aggregate input plus output | 0/24 | null | null | no matched completed-work cells with the required metric |
-| codex | lookup-direct | wall latency | 0/24 | null | null | no matched completed-work cells with the required metric |
-| codex | lookup-direct | peak root per-request input on complex tasks | 0/2 | null | null | no matched completed-work cells with the required metric |
+| codex | lookup-direct | aggregate input plus output | 0/22 | null | null | no matched completed-work cells with the required metric |
+| codex | lookup-direct | wall latency | 0/22 | null | null | no matched completed-work cells with the required metric |
+| codex | lookup-direct | peak root per-request input on complex tasks | 0/0 | null | null | frozen expectations define no comparable completed-work cells |
 | codex | lookup-worker | aggregate input plus output | 0/24 | null | null | no matched completed-work cells with the required metric |
 | codex | lookup-worker | wall latency | 0/24 | null | null | no matched completed-work cells with the required metric |
 | codex | lookup-worker | peak root per-request input on complex tasks | 0/2 | null | null | no matched completed-work cells with the required metric |

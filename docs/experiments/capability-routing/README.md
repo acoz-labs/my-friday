@@ -99,10 +99,18 @@ Unavailable, failed, invalid, retry, and missing rows stay visible and are not
 treated as cheaper completed work. Only primary attempts enter automatic
 scores. The recommendation thresholds approved in #107 remain the decision
 rule; missing held-out cells or telemetry make the result `inconclusive`.
-Correctly refusing isolation-required work in `lookup-direct` can pass routing
-and summary checks, but does not count as completed task work and cannot enter a
-performance pair. Performance pairing is based on matched executed work, not a
-24/24 correctness requirement; the separate task-quality floor remains 22/24.
+Each score records its frozen expected disposition and whether that task/mode
+belongs in the performance denominator. Matching expected execution,
+clarification, and refusal outcomes can be paired; an observed disposition must
+match that expectation in both cells. Correctly refusing isolation-required
+work in `lookup-direct` can pass routing and summary checks, but its native
+baseline expects execution, so the frozen task/mode contract excludes that cell
+from performance rather than treating refusal as cheaper completed work. The
+denominators therefore come from frozen expectations, never observed outcomes.
+Performance eligibility is independent of the 22/24 task-quality floor and the
+24/24 summary requirement. Recommendation completeness is evaluated across all
+required metrics in both harnesses before a quality or threshold failure can be
+reported; missing or nonpositive baselines remain `inconclusive`.
 
 ## Driver boundary and current evidence
 
@@ -124,6 +132,11 @@ prove an immediately detached child cannot escape between process-table samples
 and therefore do not themselves prove a harness boundary. A supported driver still needs the native
 canaries and pre-dispatch controls above; flags or simulated workers are
 insufficient.
+
+A `supported` probe must report the exact preregistered executable version.
+Only an `unavailable` probe may preserve an observed missing or different
+version with an explicit reason; that exception can never authorize completed
+attempts.
 
 ## Commands
 

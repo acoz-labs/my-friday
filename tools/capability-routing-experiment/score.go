@@ -16,25 +16,27 @@ type DimensionScore struct {
 }
 
 type TrialScore struct {
-	TrialID              string          `json:"trial_id"`
-	HarnessID            string          `json:"harness_id"`
-	Mode                 string          `json:"mode"`
-	TaskID               string          `json:"task_id"`
-	Split                string          `json:"split"`
-	Category             string          `json:"category"`
-	Repetition           int             `json:"repetition"`
-	State                string          `json:"state"`
-	Reason               string          `json:"reason"`
-	Disposition          string          `json:"disposition"`
-	RouteCorrect         DimensionScore  `json:"route_correct"`
-	TaskCorrect          DimensionScore  `json:"task_correct"`
-	PolicyPreserved      DimensionScore  `json:"policy_preserved"`
-	SummaryComplete      DimensionScore  `json:"summary_complete"`
-	WallMillis           *int64          `json:"wall_millis"`
-	Telemetry            *Telemetry      `json:"telemetry"`
-	TelemetryComplete    bool            `json:"telemetry_complete"`
-	ContextClaimEligible bool            `json:"context_claim_eligible"`
-	FixtureDiff          []FixtureEffect `json:"fixture_diff"`
+	TrialID                 string          `json:"trial_id"`
+	HarnessID               string          `json:"harness_id"`
+	Mode                    string          `json:"mode"`
+	TaskID                  string          `json:"task_id"`
+	Split                   string          `json:"split"`
+	Category                string          `json:"category"`
+	Repetition              int             `json:"repetition"`
+	State                   string          `json:"state"`
+	Reason                  string          `json:"reason"`
+	Disposition             string          `json:"disposition"`
+	ExpectedDisposition     string          `json:"expected_disposition"`
+	PerformancePairRequired bool            `json:"performance_pair_required"`
+	RouteCorrect            DimensionScore  `json:"route_correct"`
+	TaskCorrect             DimensionScore  `json:"task_correct"`
+	PolicyPreserved         DimensionScore  `json:"policy_preserved"`
+	SummaryComplete         DimensionScore  `json:"summary_complete"`
+	WallMillis              *int64          `json:"wall_millis"`
+	Telemetry               *Telemetry      `json:"telemetry"`
+	TelemetryComplete       bool            `json:"telemetry_complete"`
+	ContextClaimEligible    bool            `json:"context_claim_eligible"`
+	FixtureDiff             []FixtureEffect `json:"fixture_diff"`
 }
 
 type Coverage struct {
@@ -194,7 +196,8 @@ func ScoreAttempts(bundle Bundle, attempts AttemptSet) (Comparison, error) {
 		if !ok {
 			group.Missing++
 			categoryGroup.Missing++
-			comparison.Scores = append(comparison.Scores, TrialScore{TrialID: cell.TrialID, HarnessID: cell.HarnessID, Mode: cell.Mode, TaskID: cell.TaskID, Split: task.Split, Category: task.Category, Repetition: cell.Repetition, State: "missing", Reason: "no primary attempt was recorded"})
+			expected, pairRequired := performanceExpectation(task, labels[cell.TaskID], cell.Mode)
+			comparison.Scores = append(comparison.Scores, TrialScore{TrialID: cell.TrialID, HarnessID: cell.HarnessID, Mode: cell.Mode, TaskID: cell.TaskID, Split: task.Split, Category: task.Category, Repetition: cell.Repetition, State: "missing", Reason: "no primary attempt was recorded", ExpectedDisposition: expected, PerformancePairRequired: pairRequired})
 			continue
 		}
 		score := scoreAttempt(cell, task, labels[cell.TaskID], attempt)
@@ -270,9 +273,16 @@ func buildPerformance(scores []TrialScore) []PerformanceComparison {
 	for _, harness := range []string{"claude", "codex"} {
 		for _, candidateMode := range []string{"lookup-direct", "lookup-worker"} {
 			var tokens, wall, peak []PairDifference
+			required, requiredPeak := 0, 0
 			for _, candidate := range scores {
 				if candidate.HarnessID != harness || candidate.Mode != candidateMode || candidate.Split != "held-out" {
 					continue
+				}
+				if candidate.PerformancePairRequired {
+					required++
+					if candidate.Category == "complex-worker-work" {
+						requiredPeak++
+					}
 				}
 				baseline, ok := byKey[performanceKey(harness, "native-catalogue", candidate.TaskID, candidate.Repetition)]
 				if !ok {
@@ -290,7 +300,7 @@ func buildPerformance(scores []TrialScore) []PerformanceComparison {
 					}
 				}
 			}
-			result = append(result, PerformanceComparison{HarnessID: harness, CandidateMode: candidateMode, AggregateTokens: summarizePairs("aggregate input plus output", "tokens", 24, tokens), WallLatency: summarizePairs("wall latency", "milliseconds", 24, wall), PeakRootInput: summarizePairs("peak root per-request input on complex tasks", "tokens", 2, peak)})
+			result = append(result, PerformanceComparison{HarnessID: harness, CandidateMode: candidateMode, AggregateTokens: summarizePairs("aggregate input plus output", "tokens", required, tokens), WallLatency: summarizePairs("wall latency", "milliseconds", required, wall), PeakRootInput: summarizePairs("peak root per-request input on complex tasks", "tokens", requiredPeak, peak)})
 		}
 	}
 	return result
@@ -303,7 +313,10 @@ func performanceKey(harness, mode, task string, repetition int) string {
 type metricValue func(TrialScore) (float64, bool)
 
 func pairedValues(baseline, candidate TrialScore, metric metricValue) (float64, float64, bool) {
-	if baseline.State != "complete" || candidate.State != "complete" || baseline.Disposition != "execute" || candidate.Disposition != "execute" {
+	if baseline.State != "complete" || candidate.State != "complete" ||
+		!baseline.PerformancePairRequired || !candidate.PerformancePairRequired ||
+		baseline.ExpectedDisposition == "" || baseline.ExpectedDisposition != candidate.ExpectedDisposition ||
+		baseline.Disposition != baseline.ExpectedDisposition || candidate.Disposition != candidate.ExpectedDisposition {
 		return 0, 0, false
 	}
 	left, ok1 := metric(baseline)
@@ -333,6 +346,10 @@ func newPair(score TrialScore, baseline, candidate float64) PairDifference {
 }
 func summarizePairs(name, unit string, required int, pairs []PairDifference) PairedMetric {
 	metric := PairedMetric{Name: name, Unit: unit, EligiblePairs: len(pairs), RequiredPairs: required, Pairs: pairs}
+	if required == 0 {
+		metric.MissingReason = "frozen expectations define no comparable completed-work cells"
+		return metric
+	}
 	if len(pairs) == 0 {
 		metric.MissingReason = "no matched completed-work cells with the required metric"
 		return metric
@@ -363,7 +380,8 @@ func summarizePairs(name, unit string, required int, pairs []PairDifference) Pai
 }
 
 func scoreAttempt(cell ManifestCell, task Task, label Label, attempt Attempt) TrialScore {
-	score := TrialScore{TrialID: cell.TrialID, HarnessID: cell.HarnessID, Mode: cell.Mode, TaskID: cell.TaskID, Split: task.Split, Category: task.Category, Repetition: cell.Repetition, State: attempt.State, Reason: attempt.Reason, Disposition: attempt.Disposition, WallMillis: attempt.WallMillis, Telemetry: attempt.Telemetry}
+	expectedDisposition, pairRequired := performanceExpectation(task, label, cell.Mode)
+	score := TrialScore{TrialID: cell.TrialID, HarnessID: cell.HarnessID, Mode: cell.Mode, TaskID: cell.TaskID, Split: task.Split, Category: task.Category, Repetition: cell.Repetition, State: attempt.State, Reason: attempt.Reason, Disposition: attempt.Disposition, ExpectedDisposition: expectedDisposition, PerformancePairRequired: pairRequired, WallMillis: attempt.WallMillis, Telemetry: attempt.Telemetry}
 	if score.WallMillis != nil && *score.WallMillis <= 0 {
 		score.WallMillis = nil
 	}
@@ -413,6 +431,16 @@ func scoreAttempt(cell ManifestCell, task Task, label Label, attempt Attempt) Tr
 		score.ContextClaimEligible = score.TelemetryComplete && attempt.Telemetry.ActualWindowOccupancy.Complete
 	}
 	return score
+}
+
+func performanceExpectation(task Task, label Label, mode string) (string, bool) {
+	// The denominator is frozen by task/mode intent. Ordinary negative and
+	// clarification outcomes remain comparable; lookup-direct isolation does
+	// not, because its required refusal substitutes for native execution.
+	if task.RequiresIsolation && mode == "lookup-direct" {
+		return "refuse", false
+	}
+	return label.Expectation, true
 }
 
 func fixtureEffects(task Task, snapshot []FixtureSnapshot, captured, required bool) ([]string, []FixtureEffect, bool) {
@@ -520,20 +548,26 @@ func candidateStatus(comparison Comparison, mode string) (bool, bool) {
 			performance[item.HarnessID] = item
 		}
 	}
+	passes, complete := true, true
 	for _, harness := range []string{"claude", "codex"} {
 		candidate, baseline := scoreCounts(comparison.Scores, harness, mode), scoreCounts(comparison.Scores, harness, "native-catalogue")
-		if candidate.total != 24 || baseline.total != 24 || candidate.task < 22 || candidate.summary != 24 || candidate.route < baseline.route || candidate.task < baseline.task || candidate.summary < baseline.summary {
-			return false, true
+		if candidate.total != 24 || baseline.total != 24 {
+			complete = false
+			passes = false
+		}
+		if candidate.task < 22 || candidate.summary != 24 || candidate.route < baseline.route || candidate.task < baseline.task || candidate.summary < baseline.summary {
+			passes = false
 		}
 		item, ok := performance[harness]
 		if !ok || !metricComplete(item.AggregateTokens) || !metricComplete(item.WallLatency) || !metricComplete(item.PeakRootInput) {
-			return false, false
+			complete = false
+			passes = false
 		}
-		if !metricAtMost(item.AggregateTokens, 1.25) || !metricAtMost(item.WallLatency, 1.5) || !metricAtMost(item.PeakRootInput, .8) {
-			return false, true
+		if ok && (!metricAtMost(item.AggregateTokens, 1.25) || !metricAtMost(item.WallLatency, 1.5) || !metricAtMost(item.PeakRootInput, .8)) {
+			passes = false
 		}
 	}
-	return true, true
+	return passes && complete, complete
 }
 
 type dimensionCounts struct{ total, route, task, summary int }

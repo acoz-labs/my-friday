@@ -47,6 +47,16 @@ func TestReportInputsAreRecomputedAndCrossBound(t *testing.T) {
 			t.Fatalf("accurate mismatch rejected: %v", err)
 		}
 	})
+	t.Run("supported-version-mismatch", func(t *testing.T) {
+		candidate := append([]DriverProbe{}, probes...)
+		candidate[0].CLIRevision = "other"
+		candidate[0].State = "supported"
+		candidate[0].Unavailable = append(candidate[0].Unavailable, "installed CLI revision differs from the preregistered harness revision")
+		candidate[0].Controls = fullySupportedControls()
+		if err := ValidateReportInputs(bundle, attempts, comparison, candidate); err == nil {
+			t.Fatal("supported probe with a mismatched executable version was accepted")
+		}
+	})
 }
 
 func TestReportRejectsCompletedAttemptWithUnavailableProbe(t *testing.T) {
@@ -104,4 +114,24 @@ func unavailableProbes(manifest Manifest) []DriverProbe {
 		result = append(result, DriverProbe{Version: SchemaVersion, Harness: HarnessName(harness.ID), Executable: harness.ID, CLIRevision: harness.ExecutableVersion, State: "unavailable", Unavailable: []string{"controls unproven"}, ProbedCommands: commands})
 	}
 	return result
+}
+
+func supportedProbes(manifest Manifest) []DriverProbe {
+	result := unavailableProbes(manifest)
+	for index := range result {
+		result[index].State = "supported"
+		result[index].Unavailable = nil
+		result[index].Controls = fullySupportedControls()
+	}
+	return result
+}
+
+func fullySupportedControls() DriverControl {
+	return DriverControl{
+		OSFixtureOnlyReadBoundary: true, ModelToolNetworkDenied: true,
+		NativeSkillVisibility: true, NativeBodyReadConstrained: true,
+		NativeWorkerEvents: true, WorkerPrelaunchLimit: true,
+		BuiltinPredispatchLimit: true, BrokerPredispatchLimit: true,
+		OutputLimitEnforced: true, Evidence: []string{"synthetic test receipt"},
+	}
 }

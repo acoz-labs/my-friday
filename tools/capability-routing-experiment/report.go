@@ -28,17 +28,15 @@ func ValidateReportInputs(bundle Bundle, attempts AttemptSet, comparison Compari
 	for _, probe := range probes {
 		id := string(probe.Harness)
 		spec, ok := expected[id]
+		validState := probe.State == "unavailable" || probe.State == "supported"
 		versionMismatch := probe.CLIRevision != spec.ExecutableVersion
-		mismatchRecorded := contains(probe.Unavailable, "installed CLI revision differs from the preregistered harness revision")
+		mismatchRecorded := probe.State == "unavailable" && contains(probe.Unavailable, "installed CLI revision differs from the preregistered harness revision")
 		missingRecorded := probe.CLIRevision == "" && probe.State == "unavailable"
-		if probe.Version != SchemaVersion || !ok || seen[id] || probe.Executable != id || (versionMismatch && !mismatchRecorded && !missingRecorded) {
+		if probe.Version != SchemaVersion || !ok || seen[id] || probe.Executable != id || !validState || (versionMismatch && !mismatchRecorded && !missingRecorded) {
 			return fmt.Errorf("driver probe %q is stale, duplicate, or not bound to the trusted executable", id)
 		}
 		seen[id] = true
 		probeByHarness[id] = probe
-		if probe.State != "unavailable" && probe.State != "supported" {
-			return fmt.Errorf("driver probe %q has invalid state", id)
-		}
 		if probe.State == "unavailable" && len(probe.Unavailable) == 0 {
 			return fmt.Errorf("driver probe %q omits unavailability reasons", id)
 		}

@@ -288,10 +288,112 @@ func TestRequiredIsolationRefusalIsNotCompletedWorkOrPerformancePair(t *testing.
 		t.Fatalf("score=%#v", score)
 	}
 	wall := int64(10)
-	baseline := TrialScore{State: "complete", Disposition: "execute", WallMillis: &wall}
-	candidate := TrialScore{State: "complete", Disposition: "refuse", WallMillis: &wall}
+	baseline := TrialScore{State: "complete", Disposition: "execute", ExpectedDisposition: "execute", PerformancePairRequired: true, WallMillis: &wall}
+	candidate := TrialScore{State: "complete", Disposition: "refuse", ExpectedDisposition: "refuse", PerformancePairRequired: true, WallMillis: &wall}
 	if _, _, ok := pairedValues(baseline, candidate, wallMillis); ok {
 		t.Fatal("refusal was paired as executed work")
+	}
+	baseline.Disposition = "refuse"
+	baseline.ExpectedDisposition = "refuse"
+	if _, _, ok := pairedValues(baseline, candidate, wallMillis); !ok {
+		t.Fatal("matching frozen refusal outcomes were excluded from the paired comparison")
+	}
+}
+
+func TestActualCorpusQualifyingLookupWorkerCanBeRecommended(t *testing.T) {
+	bundle := loadTestBundle(t)
+	manifest, err := PrepareManifest(bundle, PreregistrationBasisCommit, TrustedHarnesses())
+	if err != nil {
+		t.Fatal(err)
+	}
+	bundle.Manifest = manifest
+	attempts := qualifyingActualCorpusAttempts(bundle)
+	comparison, err := ScoreAttempts(bundle, attempts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	probes := supportedProbes(manifest)
+	if err := ValidateReportInputs(bundle, attempts, comparison, probes); err != nil {
+		t.Fatal(err)
+	}
+	if comparison.Recommendation != "lookup-worker" {
+		t.Fatalf("recommendation=%s performance=%#v", comparison.Recommendation, comparison.Performance)
+	}
+	for _, harness := range []string{"claude", "codex"} {
+		for _, mode := range []string{"native-catalogue", "lookup-worker"} {
+			counts := scoreCounts(comparison.Scores, harness, mode)
+			if counts.total != 24 || counts.route != 24 || counts.task != 24 || counts.summary != 24 {
+				t.Fatalf("%s/%s actual-corpus scores=%#v", harness, mode, counts)
+			}
+		}
+	}
+	for _, item := range comparison.Performance {
+		switch item.CandidateMode {
+		case "lookup-worker":
+			if item.AggregateTokens.EligiblePairs != 24 || item.AggregateTokens.RequiredPairs != 24 || item.WallLatency.EligiblePairs != 24 || item.WallLatency.RequiredPairs != 24 || item.PeakRootInput.EligiblePairs != 2 || item.PeakRootInput.RequiredPairs != 2 {
+				t.Fatalf("actual-corpus worker paired coverage=%#v", item)
+			}
+		case "lookup-direct":
+			if item.AggregateTokens.EligiblePairs != 22 || item.AggregateTokens.RequiredPairs != 22 || item.WallLatency.EligiblePairs != 22 || item.WallLatency.RequiredPairs != 22 || item.PeakRootInput.EligiblePairs != 0 || item.PeakRootInput.RequiredPairs != 0 {
+				t.Fatalf("actual-corpus direct paired coverage=%#v", item)
+			}
+		}
+	}
+	report, err := MarshalReport(comparison, probes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(report), `"recommendation": "lookup-worker"`) || !strings.Contains(RenderMarkdown(comparison, probes), "Recommendation: **lookup-worker**") {
+		t.Fatal("score/report output did not preserve the attainable actual-corpus recommendation")
+	}
+}
+
+func TestCandidateCompletenessIsIndependentOfQualityAndThresholdFailure(t *testing.T) {
+	tests := map[string]func(*Comparison){
+		"threshold-failure-with-zero-baseline": func(value *Comparison) {
+			zero := int64(0)
+			for index := range value.Scores {
+				score := &value.Scores[index]
+				if score.HarnessID == "codex" && score.Mode == "native-catalogue" && score.Split == "held-out" {
+					score.Telemetry.TotalInput.Value = &zero
+					score.Telemetry.TotalOutput.Value = &zero
+					break
+				}
+			}
+			value.Performance = buildPerformance(value.Scores)
+			for index := range value.Performance {
+				item := &value.Performance[index]
+				if item.HarnessID == "claude" && item.CandidateMode == "lookup-direct" {
+					ratio := 1.26
+					item.AggregateTokens.MedianRatio = &ratio
+				}
+			}
+		},
+		"quality-failure-with-incomplete-pairs": func(value *Comparison) {
+			changed := 0
+			for index := range value.Scores {
+				score := &value.Scores[index]
+				if score.HarnessID == "claude" && score.Mode == "lookup-direct" && score.Split == "held-out" && changed < 3 {
+					score.TaskCorrect = automatic(false, "quality failure")
+					changed++
+				}
+				if score.HarnessID == "codex" && score.Mode == "lookup-direct" && score.Split == "held-out" {
+					score.State = "failed"
+					break
+				}
+			}
+			value.Performance = buildPerformance(value.Scores)
+		},
+	}
+	for name, mutate := range tests {
+		t.Run(name, func(t *testing.T) {
+			comparison := completeComparison(1, 1, .79)
+			mutate(&comparison)
+			passes, complete := candidateStatus(comparison, "lookup-direct")
+			if passes || complete {
+				t.Fatalf("passes=%t complete=%t", passes, complete)
+			}
+		})
 	}
 }
 
@@ -315,7 +417,7 @@ func completeComparison(tokenRatio, wallRatio, peakRatio float64) Comparison {
 						input, output, wall, peak = 18000, 2000, 2000, 18000
 					}
 					telemetry := completeTelemetry(input, 0, input, output, peak, peak)
-					scores = append(scores, TrialScore{TrialID: fmt.Sprintf("%s-%s-%d-%d", harness, mode, task, repetition), HarnessID: harness, Mode: mode, TaskID: fmt.Sprintf("held-%02d", task), Split: "held-out", Category: map[bool]string{true: "complex-worker-work", false: "short-direct-work"}[task == 10], Repetition: repetition, State: "complete", Disposition: "execute", RouteCorrect: automatic(true, "fixture"), TaskCorrect: automatic(true, "fixture"), PolicyPreserved: automatic(true, "fixture"), SummaryComplete: automatic(true, "fixture"), WallMillis: &wall, Telemetry: telemetry, TelemetryComplete: true})
+					scores = append(scores, TrialScore{TrialID: fmt.Sprintf("%s-%s-%d-%d", harness, mode, task, repetition), HarnessID: harness, Mode: mode, TaskID: fmt.Sprintf("held-%02d", task), Split: "held-out", Category: map[bool]string{true: "complex-worker-work", false: "short-direct-work"}[task == 10], Repetition: repetition, State: "complete", Disposition: "execute", ExpectedDisposition: "execute", PerformancePairRequired: true, RouteCorrect: automatic(true, "fixture"), TaskCorrect: automatic(true, "fixture"), PolicyPreserved: automatic(true, "fixture"), SummaryComplete: automatic(true, "fixture"), WallMillis: &wall, Telemetry: telemetry, TelemetryComplete: true})
 				}
 			}
 		}
@@ -328,6 +430,65 @@ func completeComparison(tokenRatio, wallRatio, peakRatio float64) Comparison {
 func completeTelemetry(root, worker, total, output, peak, occupancy int64) *Telemetry {
 	metric := func(value int64) UsageMetric { return measuredMetric(value, "test source", true, "") }
 	return &Telemetry{RootInputCumulative: metric(root), WorkerInputCumulative: metric(worker), TotalInput: metric(total), TotalOutput: metric(output), CachedInput: metric(0), PeakRootRequestInput: metric(peak), ActualWindowOccupancy: metric(occupancy)}
+}
+
+func qualifyingActualCorpusAttempts(bundle Bundle) AttemptSet {
+	tasks := map[string]Task{}
+	labels := map[string]Label{}
+	harnesses := map[string]HarnessSpec{}
+	for _, task := range bundle.Tasks.Tasks {
+		tasks[task.ID] = task
+	}
+	for _, label := range bundle.Labels.Labels {
+		labels[label.TaskID] = label
+	}
+	for _, harness := range bundle.Manifest.Harnesses {
+		harnesses[harness.ID] = harness
+	}
+	set := AttemptSet{Version: SchemaVersion, ManifestSHA256: digestJSON(bundle.Manifest), Runner: cleanTestRunner()}
+	for _, cell := range bundle.Manifest.Cells {
+		task, label := tasks[cell.TaskID], labels[cell.TaskID]
+		disposition := label.Expectation
+		selected := append([]string{}, label.AllowedCapabilitySets[0]...)
+		facts := append([]string{}, label.RequiredFacts...)
+		summary := label.RequiredSummary
+		snapshot := make([]FixtureSnapshot, 0, len(task.Fixtures))
+		for _, fixture := range task.Fixtures {
+			snapshot = append(snapshot, FixtureSnapshot{Path: fixture.Path, Content: fixture.Content})
+		}
+		if task.RequiresIsolation && cell.Mode == "lookup-direct" {
+			disposition = "refuse"
+			selected = []string{}
+			facts = []string{"required-isolation-refused"}
+			summary = SummaryEvidence{Changes: []string{"none"}, Failures: []string{"required-isolation-refused"}, Verification: []string{"no-fixture-effect"}, Limitations: []string{"task-not-executed"}}
+		} else {
+			for _, effect := range label.RequiredEffects {
+				if strings.HasPrefix(effect, "write:") {
+					snapshot = snapshotWithOutput(task, strings.TrimPrefix(effect, "write:"), "controller-observed output")
+				}
+			}
+		}
+		root, worker, total, output, peak, wall := int64(9000), int64(0), int64(9000), int64(1000), int64(8000), int64(1000)
+		telemetry := completeTelemetry(root, worker, total, output, peak, peak)
+		if cell.Mode == "lookup-worker" {
+			root, total, output, peak, wall = 7000, 7000, 1000, 6000, 1000
+			telemetry = completeTelemetry(root, 0, total, output, peak, peak)
+			if task.RequiresIsolation {
+				root, worker, total = 6000, 1000, 7000
+				telemetry = completeTelemetry(root, worker, total, output, peak, peak)
+				telemetry.WorkerStarts, telemetry.WorkerReturns = 1, 1
+				telemetry.WorkerLifecycles = []WorkerLifecycle{{AgentID: "worker-1", StartEventID: "worker-start", UsageEventIDs: []string{"worker-usage"}, ReturnEventID: "worker-return"}}
+			}
+		}
+		identity := harnesses[cell.HarnessID]
+		set.Attempts = append(set.Attempts, Attempt{
+			TrialID: cell.TrialID, AttemptID: cell.TrialID + "-a1", Primary: true, State: "complete",
+			SelectedCapabilities: selected, Disposition: disposition, ResultFacts: facts,
+			FixtureSnapshotCaptured: true, FixtureSnapshot: snapshot, ExecutionIdentity: &identity,
+			WallMillis: &wall, Summary: &summary, Telemetry: telemetry,
+		})
+	}
+	return set
 }
 
 func unavailableAttempts(manifest Manifest) AttemptSet {
