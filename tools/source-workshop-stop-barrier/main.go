@@ -11,6 +11,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"syscall"
 	"time"
 )
@@ -57,7 +59,7 @@ func main() {
 			if leaderErr == nil {
 				_ = syscall.Kill(pgid, syscall.SIGCONT)
 			}
-			fatal(fmt.Errorf("stop Expect process group %d as euid %d (leader stop: %v): %w", pgid, os.Geteuid(), leaderErr, err))
+			fatal(fmt.Errorf("stop Expect process group %d as euid %d (leader stop: %v; members: %s): %w", pgid, os.Geteuid(), leaderErr, groupSummary(pgid), err))
 		}
 		body, err := os.ReadFile(journalPath)
 		if err == nil && stable(body, *root, *slug) {
@@ -76,6 +78,25 @@ func main() {
 	_ = syscall.Kill(-pgid, syscall.SIGKILL)
 	<-done
 	fatal(errors.New("no stable source-workshop interruption captured"))
+}
+
+func groupSummary(pgid int) string {
+	body, err := exec.Command("/bin/ps", "-axo", "pid=,ppid=,pgid=,uid=,stat=,comm=").Output()
+	if err != nil {
+		return "unavailable"
+	}
+	var members []string
+	for _, line := range strings.Split(string(body), "\n") {
+		fields := strings.Fields(line)
+		if len(fields) < 6 || fields[2] != strconv.Itoa(pgid) {
+			continue
+		}
+		members = append(members, strings.Join(fields[:5], ":")+":"+filepath.Base(strings.Join(fields[5:], " ")))
+	}
+	if len(members) == 0 {
+		return "none"
+	}
+	return strings.Join(members, ",")
 }
 
 func stable(body []byte, root, slug string) bool {
