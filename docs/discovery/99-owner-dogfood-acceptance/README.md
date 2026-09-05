@@ -1,6 +1,6 @@
 # Discovery: owner-operated dogfood acceptance authority
 
-- **Status:** Draft
+- **Status:** Final
 - **Discovery issue:** #99
 - **Discovery PR:** #100
 - **Repository basis:** 616395439a953100c6c165ccf56ea314c2dd0307
