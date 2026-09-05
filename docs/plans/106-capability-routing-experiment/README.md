@@ -1,6 +1,6 @@
 # Solution Design: comparative capability-routing experiment
 
-- **Status:** Draft
+- **Status:** Final
 - **Issue:** #106
 - **Planning PR:** #107
 - **Repository basis:** 1277b7924f22dcd55128dfa006d0ec0ae3e841e1
@@ -23,6 +23,9 @@ invalidates affected claims rather than inviting a simulated substitute.
 
 ## Decision Spotlight
 
+- First prove a bounded native-driver control matrix. The first engineering
+  result may be an unsupported live driver; that is useful evidence, not a
+  completed comparison. No alternate framework or authentication path is implied.
 - Offline operation is the default. Each live batch requires explicit opt-in,
   existing authorized access, and a declared bounded run manifest; no login,
   credential copying, account changes, new subscription, or spending commitment.
@@ -47,6 +50,7 @@ invalidates affected claims rather than inviting a simulated substitute.
 
 ## Final Gate
 
-Independent maintainer review precedes Final status and the one product-authority
-approval of this plan and its implementation envelope. Implementation remains
+Independent maintainer review resolved the driver-fidelity and enforceable-limit
+findings on this planning PR. The one product-authority approval of this Final
+plan and its implementation envelope remains required. Implementation remains
 separate from this planning-only PR.

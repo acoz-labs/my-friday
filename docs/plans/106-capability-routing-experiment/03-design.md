@@ -73,6 +73,8 @@ control matrix for each installed CLI version. The probe reads help/config
 schemas and launches only credential-free synthetic process/tool tests. Limit
 investigation to these two native harnesses; if no enforceable route is
 established, emit `unavailable` and implement the offline comparison/report path.
+Inspect at most one installed version/configuration matrix per named harness;
+no alternate frameworks, authentication paths or repeated upgrade experiments.
 Do not build a sandbox framework to force a pass. This checkpoint resolves live-
 driver implementability, not an unbounded implementation assumption or new gate.
 
