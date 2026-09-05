@@ -26,6 +26,13 @@ func RenderMarkdown(comparison Comparison, probes []DriverProbe) string {
 	for _, row := range comparison.Coverage {
 		fmt.Fprintf(&output, "| %s | %s | %s | %d | %d | %d | %d | %d | %d | %d | %d | %d | %d | %d | %d | %d | %d | %d |\n", row.HarnessID, row.Mode, row.Split, row.Repetition, row.Declared, row.Complete, row.Failed, row.Unavailable, row.Invalid, row.Missing, row.TelemetryComplete, row.WallComplete, row.PeakInputComplete, row.WindowComplete, row.RouteCorrect, row.TaskCorrect, row.PolicyPreserved, row.SummaryComplete)
 	}
+	output.WriteString("\n## Paired performance\n\n")
+	output.WriteString("| Harness | Candidate | Metric | Coverage | Median ratio | Difference range | Missing reason |\n| --- | --- | --- | --- | ---: | --- | --- |\n")
+	for _, item := range comparison.Performance {
+		for _, metric := range []PairedMetric{item.AggregateTokens, item.WallLatency, item.PeakRootInput} {
+			fmt.Fprintf(&output, "| %s | %s | %s | %d/%d | %s | %s | %s |\n", item.HarnessID, item.CandidateMode, metric.Name, metric.EligiblePairs, metric.RequiredPairs, formatFloat(metric.MedianRatio), formatRange(metric.MinDifference, metric.MaxDifference, metric.Unit), escapeCell(metric.MissingReason))
+		}
+	}
 	output.WriteString("\nToken, wall-latency, peak-root-input, and actual-window columns are completeness counts over the declared denominator. Their per-trial values and missing reasons are in `report.json`; no missing value is represented as zero. Unavailable, failed, invalid, and missing cells are never treated as cheaper completed work. Null score values mean the cell was not eligible for scoring. Peak root request input is not described as actual context occupancy unless the harness reports that stronger metric separately.\n")
 	return output.String()
 }
@@ -40,3 +47,15 @@ func MarshalReport(comparison Comparison, probes []DriverProbe) ([]byte, error) 
 }
 
 func escapeCell(value string) string { return strings.ReplaceAll(value, "|", "\\|") }
+func formatFloat(value *float64) string {
+	if value == nil {
+		return "null"
+	}
+	return fmt.Sprintf("%.3f", *value)
+}
+func formatRange(min, max *float64, unit string) string {
+	if min == nil || max == nil {
+		return "null"
+	}
+	return fmt.Sprintf("%.0f to %.0f %s", *min, *max, unit)
+}

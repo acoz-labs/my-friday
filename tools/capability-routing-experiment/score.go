@@ -55,13 +55,43 @@ type Coverage struct {
 }
 
 type Comparison struct {
-	Version        int          `json:"version"`
-	ManifestSHA256 string       `json:"manifest_sha256"`
-	CorpusRevision string       `json:"corpus_revision"`
-	Scores         []TrialScore `json:"scores"`
-	Coverage       []Coverage   `json:"coverage"`
-	Recommendation string       `json:"recommendation"`
-	Conclusion     string       `json:"conclusion"`
+	Version        int                     `json:"version"`
+	ManifestSHA256 string                  `json:"manifest_sha256"`
+	CorpusRevision string                  `json:"corpus_revision"`
+	Scores         []TrialScore            `json:"scores"`
+	Coverage       []Coverage              `json:"coverage"`
+	Performance    []PerformanceComparison `json:"performance"`
+	Recommendation string                  `json:"recommendation"`
+	Conclusion     string                  `json:"conclusion"`
+}
+
+type PairDifference struct {
+	TaskID     string  `json:"task_id"`
+	Repetition int     `json:"repetition"`
+	Baseline   float64 `json:"baseline"`
+	Candidate  float64 `json:"candidate"`
+	Difference float64 `json:"difference"`
+	Ratio      float64 `json:"ratio"`
+}
+
+type PairedMetric struct {
+	Name          string           `json:"name"`
+	Unit          string           `json:"unit"`
+	EligiblePairs int              `json:"eligible_pairs"`
+	RequiredPairs int              `json:"required_pairs"`
+	MedianRatio   *float64         `json:"median_ratio"`
+	MinDifference *float64         `json:"min_difference"`
+	MaxDifference *float64         `json:"max_difference"`
+	MissingReason string           `json:"missing_reason"`
+	Pairs         []PairDifference `json:"pairs"`
+}
+
+type PerformanceComparison struct {
+	HarnessID       string       `json:"harness_id"`
+	CandidateMode   string       `json:"candidate_mode"`
+	AggregateTokens PairedMetric `json:"aggregate_tokens"`
+	WallLatency     PairedMetric `json:"wall_latency"`
+	PeakRootInput   PairedMetric `json:"peak_root_request_input_complex_tasks"`
 }
 
 func ScoreAttempts(bundle Bundle, attempts AttemptSet) (Comparison, error) {
@@ -164,8 +194,110 @@ func ScoreAttempts(bundle Bundle, attempts AttemptSet) (Comparison, error) {
 	for _, key := range keys {
 		comparison.Coverage = append(comparison.Coverage, *coverage[key])
 	}
+	comparison.Performance = buildPerformance(comparison.Scores)
 	comparison.Recommendation, comparison.Conclusion = decideRecommendation(comparison)
 	return comparison, nil
+}
+
+func buildPerformance(scores []TrialScore) []PerformanceComparison {
+	byKey := map[string]TrialScore{}
+	for _, score := range scores {
+		byKey[performanceKey(score.HarnessID, score.Mode, score.TaskID, score.Repetition)] = score
+	}
+	var result []PerformanceComparison
+	for _, harness := range []string{"claude", "codex"} {
+		for _, candidateMode := range []string{"lookup-direct", "lookup-worker"} {
+			var tokens, wall, peak []PairDifference
+			for _, candidate := range scores {
+				if candidate.HarnessID != harness || candidate.Mode != candidateMode || candidate.Split != "held-out" {
+					continue
+				}
+				baseline, ok := byKey[performanceKey(harness, "native-catalogue", candidate.TaskID, candidate.Repetition)]
+				if !ok {
+					continue
+				}
+				if left, right, ok := pairedValues(baseline, candidate, aggregateTokens); ok {
+					tokens = append(tokens, newPair(candidate, left, right))
+				}
+				if left, right, ok := pairedValues(baseline, candidate, wallMillis); ok {
+					wall = append(wall, newPair(candidate, left, right))
+				}
+				if candidate.Category == "complex-worker-work" {
+					if left, right, ok := pairedValues(baseline, candidate, peakRootInput); ok {
+						peak = append(peak, newPair(candidate, left, right))
+					}
+				}
+			}
+			result = append(result, PerformanceComparison{HarnessID: harness, CandidateMode: candidateMode, AggregateTokens: summarizePairs("aggregate input plus output", "tokens", 24, tokens), WallLatency: summarizePairs("wall latency", "milliseconds", 24, wall), PeakRootInput: summarizePairs("peak root per-request input on complex tasks", "tokens", 2, peak)})
+		}
+	}
+	return result
+}
+
+func performanceKey(harness, mode, task string, repetition int) string {
+	return fmt.Sprintf("%s\x00%s\x00%s\x00%d", harness, mode, task, repetition)
+}
+
+type metricValue func(TrialScore) (float64, bool)
+
+func pairedValues(baseline, candidate TrialScore, metric metricValue) (float64, float64, bool) {
+	if baseline.State != "complete" || candidate.State != "complete" || !isTrue(baseline.TaskCorrect.Automatic) || !isTrue(candidate.TaskCorrect.Automatic) {
+		return 0, 0, false
+	}
+	left, ok1 := metric(baseline)
+	right, ok2 := metric(candidate)
+	return left, right, ok1 && ok2 && left > 0
+}
+func aggregateTokens(score TrialScore) (float64, bool) {
+	if score.Telemetry == nil || !score.Telemetry.TotalInput.Complete || !score.Telemetry.TotalOutput.Complete {
+		return 0, false
+	}
+	return float64(*score.Telemetry.TotalInput.Value + *score.Telemetry.TotalOutput.Value), true
+}
+func wallMillis(score TrialScore) (float64, bool) {
+	if score.WallMillis == nil || *score.WallMillis <= 0 {
+		return 0, false
+	}
+	return float64(*score.WallMillis), true
+}
+func peakRootInput(score TrialScore) (float64, bool) {
+	if score.Telemetry == nil || !score.Telemetry.PeakRootRequestInput.Complete {
+		return 0, false
+	}
+	return float64(*score.Telemetry.PeakRootRequestInput.Value), true
+}
+func newPair(score TrialScore, baseline, candidate float64) PairDifference {
+	return PairDifference{TaskID: score.TaskID, Repetition: score.Repetition, Baseline: baseline, Candidate: candidate, Difference: candidate - baseline, Ratio: candidate / baseline}
+}
+func summarizePairs(name, unit string, required int, pairs []PairDifference) PairedMetric {
+	metric := PairedMetric{Name: name, Unit: unit, EligiblePairs: len(pairs), RequiredPairs: required, Pairs: pairs}
+	if len(pairs) == 0 {
+		metric.MissingReason = "no matched correct completed-work cells with the required metric"
+		return metric
+	}
+	ratios := make([]float64, len(pairs))
+	min, max := pairs[0].Difference, pairs[0].Difference
+	for index, pair := range pairs {
+		ratios[index] = pair.Ratio
+		if pair.Difference < min {
+			min = pair.Difference
+		}
+		if pair.Difference > max {
+			max = pair.Difference
+		}
+	}
+	sort.Float64s(ratios)
+	median := ratios[len(ratios)/2]
+	if len(ratios)%2 == 0 {
+		median = (ratios[len(ratios)/2-1] + median) / 2
+	}
+	metric.MedianRatio = &median
+	metric.MinDifference = &min
+	metric.MaxDifference = &max
+	if len(pairs) < required {
+		metric.MissingReason = "paired coverage is incomplete"
+	}
+	return metric
 }
 
 func scoreAttempt(cell ManifestCell, task Task, label Label, attempt Attempt) TrialScore {
@@ -228,14 +360,67 @@ func fixtureEffects(diff []FixtureEffect) ([]string, bool) {
 
 func decideRecommendation(comparison Comparison) (string, string) {
 	for _, score := range comparison.Scores {
-		if score.Split == "held-out" && (score.State != "complete" || !score.TelemetryComplete) {
-			return "inconclusive", "At least one held-out harness/mode cell is incomplete or lacks required telemetry; retain the native baseline and make no cross-harness claim."
-		}
 		if isFalse(score.PolicyPreserved.Automatic) {
 			return "retain-native-baseline", "A critical policy-preservation failure prevents adoption of a candidate routing mode."
 		}
+		if score.Split == "held-out" && (score.State != "complete" || !score.TelemetryComplete || score.WallMillis == nil) {
+			return "inconclusive", "At least one held-out harness/mode cell is incomplete or lacks required telemetry; retain the native baseline and make no cross-harness claim."
+		}
 	}
-	return "inconclusive", "All cells are present, but bounded performance thresholds require paired metric evaluation and independent review before any recommendation."
+	var passing []string
+	for _, mode := range []string{"lookup-direct", "lookup-worker"} {
+		if candidatePasses(comparison, mode) {
+			passing = append(passing, mode)
+		}
+	}
+	if len(passing) == 0 {
+		return "retain-native-baseline", "All required cells completed, but no candidate met the frozen correctness, summary, token, peak-root-input, and wall-latency thresholds in both harnesses."
+	}
+	return strings.Join(passing, "+"), "The named candidate mode(s) met the frozen bounded thresholds in both harnesses; independent maintainer adjudication remains required before using this directional result in later solution design."
+}
+
+func candidatePasses(comparison Comparison, mode string) bool {
+	performance := map[string]PerformanceComparison{}
+	for _, item := range comparison.Performance {
+		if item.CandidateMode == mode {
+			performance[item.HarnessID] = item
+		}
+	}
+	for _, harness := range []string{"claude", "codex"} {
+		candidate, baseline := scoreCounts(comparison.Scores, harness, mode), scoreCounts(comparison.Scores, harness, "native-catalogue")
+		if candidate.total != 24 || baseline.total != 24 || candidate.task < 22 || candidate.summary != 24 || candidate.route < baseline.route || candidate.task < baseline.task || candidate.summary < baseline.summary {
+			return false
+		}
+		item, ok := performance[harness]
+		if !ok || !metricAtMost(item.AggregateTokens, 24, 1.25) || !metricAtMost(item.WallLatency, 24, 1.5) || !metricAtMost(item.PeakRootInput, 2, .8) {
+			return false
+		}
+	}
+	return true
+}
+
+type dimensionCounts struct{ total, route, task, summary int }
+
+func scoreCounts(scores []TrialScore, harness, mode string) dimensionCounts {
+	var result dimensionCounts
+	for _, score := range scores {
+		if score.HarnessID == harness && score.Mode == mode && score.Split == "held-out" {
+			result.total++
+			if isTrue(score.RouteCorrect.Automatic) {
+				result.route++
+			}
+			if isTrue(score.TaskCorrect.Automatic) {
+				result.task++
+			}
+			if isTrue(score.SummaryComplete.Automatic) {
+				result.summary++
+			}
+		}
+	}
+	return result
+}
+func metricAtMost(metric PairedMetric, required int, threshold float64) bool {
+	return metric.EligiblePairs == required && metric.MedianRatio != nil && *metric.MedianRatio <= threshold
 }
 
 func automatic(value bool, reason string) DimensionScore {

@@ -23,10 +23,26 @@ func TestScorePreservesUnavailableDenominators(t *testing.T) {
 	if comparison.Recommendation != "inconclusive" || len(comparison.Scores) != 288 {
 		t.Fatalf("comparison = %#v", comparison)
 	}
+	if len(comparison.Performance) != 4 {
+		t.Fatalf("performance comparisons=%d", len(comparison.Performance))
+	}
+	for _, metric := range comparison.Performance {
+		if metric.AggregateTokens.EligiblePairs != 0 || metric.AggregateTokens.MedianRatio != nil || metric.AggregateTokens.MissingReason == "" {
+			t.Fatalf("unavailable performance=%#v", metric)
+		}
+	}
 	for _, row := range comparison.Coverage {
 		if row.Unavailable != 12 || row.Complete != 0 {
 			t.Fatalf("coverage = %#v", row)
 		}
+	}
+}
+
+func TestPairedMetricReportsMedianRangeAndIndividualDifferences(t *testing.T) {
+	pairs := []PairDifference{{TaskID: "a", Baseline: 100, Candidate: 80, Difference: -20, Ratio: .8}, {TaskID: "b", Baseline: 100, Candidate: 120, Difference: 20, Ratio: 1.2}}
+	metric := summarizePairs("tokens", "tokens", 2, pairs)
+	if metric.EligiblePairs != 2 || metric.MedianRatio == nil || *metric.MedianRatio != 1 || *metric.MinDifference != -20 || *metric.MaxDifference != 20 || len(metric.Pairs) != 2 {
+		t.Fatalf("metric=%#v", metric)
 	}
 }
 
