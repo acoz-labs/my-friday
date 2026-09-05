@@ -31,6 +31,9 @@ grep -Fq 'source interruption changed opaque canary tree' bin/accept-capability-
 grep -Fq 'MY_FRIDAY_CAPABILITY_BARRIER_MARKER' config/acceptance/capability-confirm.exp
 grep -Fq 'mkdir -m 0700 "$mountpoint/home"' bin/accept-capability-workshop
 grep -Fq 'rmdir "$mountpoint/home"' bin/accept-capability-workshop
+grep -Fq 'ambient_codex_stable_subset_equal' bin/accept-capability-workshop
+grep -Fq 'ambient_codex_metadata_excluded' bin/accept-capability-workshop
+if grep -Fq 'global_codex_equal' bin/accept-capability-workshop;then exit 1;fi
 grep -Fq 'run_private "$evidence_root/invocation.private" DAILY_BRIEF_READY "$launcher" '\''Explicitly invoke daily-brief and return its exact declared token.'\''' bin/accept-capability-workshop
 grep -Fq 'run_private "$evidence_root/disabled.private" DAILY_BRIEF_ABSENT "$launcher" '\''Start a fresh task. If daily-brief is not available, reply with exactly one line formed by concatenating DAILY, underscore, BRIEF, underscore, and ABSENT. Do not simulate the capability.'\''' bin/accept-capability-workshop
 grep -Fq 'config/acceptance/launcher-capture.exp' bin/accept-capability-workshop

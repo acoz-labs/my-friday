@@ -29,7 +29,11 @@ source-only confirmation, deterministic checks, fresh-task install/use/disabled 
 upgrade, collision and drift refusal, complete lifecycle reversal, a real
 stopped-and-reaped candidate interruption, and v1 migrations. A valid sibling
 assistant is a protected content/identity canary. It compares
-protected ambient state and removes manifest-owned disposable state before
+the durable ambient Codex subset and protected state, while explicitly
+excluding only sessions, numbered logs/state/thread-history/goals SQLite files
+and sidecars, `models_cache.json`, and `tmp/**` as Codex-owned volatile
+metadata. Config, credentials, agents, and every unlisted path remain covered.
+It removes manifest-owned disposable state before
 publishing final authority. Public evidence contains only digests, state names,
 and boolean results—not instruction bodies, full diffs, prompts, model
 transcripts, private paths, foreign bytes, or credentials.

@@ -224,10 +224,19 @@ after exact confirmation, a phase hook defers signal completion until the
 bounded transaction returns so transaction and recovery errors remain primary.
 Native workshop acceptance separately stops built candidate bytes at the
 durable source-journal boundary, re-enters `capability workshop` for source-only
-recovery, and proves journal quiescence. Its typed evidence is distinct from
+recovery, and proves journal quiescence. The native Expect drivers stop the
+exact spawned candidate PID before confirmation, hand that same-UID descendant
+to the barrier, and let the barrier advance it in bounded slices; this avoids
+platform-dependent process-group stop races without adding a candidate hook.
+Its typed evidence is distinct from
 the lifecycle projection stop/recover scenario. The checked-in enhancement
 Expect journey also runs as a native package integration test against a spawned
 candidate process, including partial example retention.
+Ambient preservation hashes all durable Codex-home metadata while excluding
+only the evidence-declared volatile classes: sessions, numbered logs/state/
+thread-history/goals SQLite files and sidecars, the model cache, and Codex's
+temporary command-wrapper tree. Config, credentials, agent definitions, and
+every unlisted path remain in the stable subset.
 The managed `capability-builder` points users to the manifest-owned
 deterministic workshop and has no direct source-write or lifecycle authority.
 The retired model prompt-input validator and its live Codex debug invocation
