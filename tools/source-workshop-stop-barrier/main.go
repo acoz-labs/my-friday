@@ -58,7 +58,7 @@ func main() {
 	for time.Now().Before(deadline) {
 		select {
 		case err := <-done:
-			fatal(fmt.Errorf("candidate completed before source interruption: %w", err))
+			fatal(fmt.Errorf("candidate completed before source interruption: %v", err))
 		default:
 		}
 		if stoppedPID == 0 {
