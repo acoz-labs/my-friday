@@ -47,18 +47,20 @@ installation targets; this amendment does not introduce a VM requirement.
 - The current requested outcome is complete implementation followed by owner
   laptop testing, not sequential owner tests of each unfinished foundation.
 
-## Assumptions and unknowns
+## Assumptions
 
 Assumptions: reviewed, immutable candidate inputs with recorded compatibility
 checks can support engineering integration without being publicly released;
 the current release machinery remains the authority for final publication.
 
-Unknowns: complete migration compatibility, personal-account integration,
+## Unknowns
+
+Complete migration compatibility, personal-account integration,
 cross-host behavior, and owner retention are not yet proven. Engineering must
 verify feasibility and exact candidate handling in the affected solution plans.
 No claim of external-user validation or automatic migration safety is made.
 
-## Options and decision
+## Competing options
 
 1. Retain a separate owner-approved F0 release before any B1 implementation.
    Preserves the old sequence but prevents the requested integrated-first test.
@@ -68,7 +70,9 @@ No claim of external-user validation or automatic migration safety is made.
    integrated candidate for personal-account testing. Preserve all subsequent
    acceptance and public-release gates.
 
-Option 3 is not an untracked local build. Each dependency and integrated
+## Decision
+
+Select option 3. It is not an untracked local build. Each dependency and integrated
 candidate records its commit, artifact identity/digest, checks, compatibility
 evidence, and rollback source. Candidate artifacts are not labelled released,
 accepted, or independently validated. No production tag, GitHub Release, or
@@ -174,7 +178,7 @@ reviewed changes before dispatching work that contradicts their old sequence.
 - Dependencies: Existing approved discovery and plans; technical review of compatibility and candidate handling; no dependency on recruiting independent users.
 - Sequence: Now; one bounded authority/documentation reconciliation before otherwise-blocked dependent implementation, while #106 continues independently.
 
-## Success, change, pause and stop signals
+## Success and stop signals
 
 Continue when dependencies are pinned and verified and each outcome advances
 toward the complete checklist. Change the engineering plan when compatibility
@@ -184,13 +188,21 @@ and release until real owner judgment and required evidence exist. Stop any
 attempt to call a partial implementation laptop-ready, invent receipts, copy
 private state into public artifacts, or overwrite original state.
 
-## Privacy and promotion
+## Privacy and evidence handling
 
 This pack contains public-safe product constraints only, no private evidence.
 After authority, promote the sequence and checklist into the existing product,
 development and deployment documentation through reviewed reconciliation, then
 retire this temporary discovery pack under the ordinary lifecycle. This PR
 changes no code, account permissions, installed runtime, acceptance, or release.
+
+## Decision Spotlight
+
+- Engineering integration may precede owner testing; acceptance does not.
+- Exact pinned inputs replace released inputs only for unreleased development.
+- Existing outcomes retain scope, portability duties and independent review.
+- Personal-account judgment and public-release integrity remain mandatory.
+- Second-harness evidence is a real outstanding obligation, not simulated proof.
 
 ## Gate 1
 
