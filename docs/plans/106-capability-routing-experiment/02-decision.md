@@ -20,6 +20,12 @@ tokenization, ranking, tie-breaking and fallback in preregistration. Avoid an
 embedding service and its model/cost variables. This compares the complete
 declared routing policies, not lexical ranking in isolation.
 
+The lexical policy is BM25 with k1=1.2, b=0.75 over capability name and summary,
+Unicode lowercasing and contiguous letter/digit tokens, no stemming, aliases,
+stop words or query expansion. Use IDF log(1+(N-df+0.5)/(df+0.5)); equal scores
+sort by capability ID ascending. Zero positive scores returns no candidate.
+One model-requested fallback exposes the full metadata inventory.
+
 Attacks already supported by evidence: the discovery spike's paraphrase failures
 invalidate blind first-hit dispatch; native progressive loading invalidates full
 body-size startup claims; Claude inference denial invalidates login-only proof.

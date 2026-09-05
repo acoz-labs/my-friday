@@ -49,6 +49,10 @@ held-out cells. Denominator-zero or missing telemetry means inconclusive. These
 thresholds concern the named metric, not proven window occupancy; only report
 actual context reduction when that stronger telemetry is established.
 
+Median ratios require strictly positive baseline measurements and the same valid
+paired cells in numerator and denominator. Refusal/unavailable cells cannot be
+used as cheaper equivalents of completed work. Report coverage before ratios.
+
 This is a deliberately small directional gate, not a safety guarantee. Failure
 means retain the baseline and report the observed tradeoff. An incomplete second
 harness means partial evidence, not production portability. No recommendation

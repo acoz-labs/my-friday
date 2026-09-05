@@ -60,6 +60,49 @@ no hidden expected label chooses the worker. At most one worker, depth one,
 two capabilities plus one dependency, one broader-metadata fallback, and eight
 tool invocations total per trial. Broader fallback exposes at most 24 metadata
 entries and its full overhead is counted. A follows the same tool/effect limits.
+For A, native workers are available under the same complex-task rule as C, but
+selection uses the full native catalogue rather than lookup. Required isolation
+must refuse in B because B intentionally does not delegate. This expected refusal
+is distinct from failing an achievable task; the rubric records both fidelity
+and task completion so modes are not credited with equivalent work on refusals.
+
+## Bounded driver-fidelity checkpoint
+
+Before writing a live runner, implement an offline driver probe and a documented
+control matrix for each installed CLI version. The probe reads help/config
+schemas and launches only credential-free synthetic process/tool tests. Limit
+investigation to these two native harnesses; if no enforceable route is
+established, emit `unavailable` and implement the offline comparison/report path.
+Do not build a sandbox framework to force a pass. This checkpoint resolves live-
+driver implementability, not an unbounded implementation assumption or new gate.
+
+The proposed minimal tool channel is a local stdio MCP broker owned by the
+controller, exposing only `lookup`, `load`, `read_fixture`, and `write_fixture`.
+The broker serves immutable in-memory capabilities and descriptor-bound fixture
+files, validates task authority/revision and counts calls BEFORE dispatch. B/C
+lookup and selected bodies travel as native tool results, not injected answers.
+No broker call accepts arbitrary filesystem paths or executable strings. The
+controller generates native configuration pointing at this exact broker, with
+other MCP servers and model shell/network tools disabled. Root and worker broker
+calls share one task-scoped counter and policy. Confirm native workers inherit
+this exact tool surface and cannot add tools; otherwise C is unavailable.
+
+A requires native skill directories and native body reads. Record exactly which
+native reader reads bodies, how it is constrained to the staged allowlist and
+how catalogue visibility is observed. If disabling broad filesystem tools also
+disables native skill loading, do not replace A with broker-fed instructions.
+Codex JSON events and Claude structured noninteractive output are transports,
+not proof of tool confinement. Claude safe mode is ineligible for A/C. Worker
+launch/return identities must come from native events, not a controller-created
+subprocess. Satisfy these requirements before marking a live driver supported.
+
+An OS-backed reader/tool boundary is required in addition to broker allowlists.
+Name the installed native sandbox configuration and demonstrate read/network
+denial canaries for every enabled built-in tool, including native skill reads
+and workers, without exposing host auth to those tools. Until verified, the
+driver stays unavailable. Default workspace-write is not restricted-read proof;
+acceptance-runner isolation has a distinct process model. No credential
+relocation or new OS account is an implicit workaround.
 
 Essential root instructions carry task intent, read/change authority, deny-by-
 default external effects and required reporting. Workers receive the same
@@ -109,8 +152,22 @@ required before any metered API route with incremental charges; absent that,
 that route is unavailable. This plan makes no paid-service commitment. Existing
 subscription access still requires operator opt-in and the time/call limits.
 
+The broker independently enforces its eight-call ceiling before executing an
+operation. Native built-in calls outside the broker require a native pre-dispatch
+limit/hook with equivalent rejection; otherwise call ceilings are only observed
+abort thresholds and the cell is ineligible for supported live execution. Worker
+count/depth similarly requires a native pre-launch maximum of one/depth one, or
+worker cells are unavailable. Output ceilings lacking an enforceable setting
+are requested limits only; report their status and rely on the hard wall-clock
+supervisor, not fabricated token prevention. Usage stopping may overshoot by an
+in-flight response.
+
 Supervisor kills and reaps process groups on timeout/cancel, preserving failure
-receipts. Cleanup removes only manifest-owned disposable roots after proving
+receipts. Ownership must bind the exact spawned child and its descendants;
+the existing acceptance runner's same-executable discovery and blanket descendant
+failure policy is not a safe drop-in for native workers or concurrent host tasks.
+Tests prove unrelated harness processes survive. Cleanup removes only
+manifest-owned disposable roots after proving
 their identity; ambiguous ownership is preserved and reported. Raw logs stay
 owner-only locally, excluded from Git. Export only allowlisted synthetic facts
 and metrics after sanitization; never raw transcript text, environment, auth

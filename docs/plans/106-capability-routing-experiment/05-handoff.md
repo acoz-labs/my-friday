@@ -17,7 +17,9 @@ capability schemas, installed instances, public CLI, #101/#103 plans or #92 work
 1. Red tests for corpus/manifest/score contracts; implement offline preparation,
    deterministic revision-bound retrieval and reporting. Maintainer reviews
    synthetic labels and preregistration before any live data collection.
-2. Credential-free subprocess/telemetry fixtures and red isolation/timeout/
+2. First perform the bounded driver-fidelity checkpoint in the design; publish
+   the per-version native configuration/control matrix or unavailable reasons.
+   Then credential-free subprocess/telemetry fixtures and red isolation/timeout/
    accounting tests; implement only the two named experiment drivers and native
    preflight. Reuse repository primitives where suitable without refactoring
    unrelated acceptance infrastructure.
