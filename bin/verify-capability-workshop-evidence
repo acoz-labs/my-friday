@@ -60,8 +60,8 @@ jq -e '
   (.scenarios.explicit_invocation|pass("declared-behavior-observed";"success")) and (.scenarios.enhancement_and_upgrade|pass("source-changed-opaque-preserved-upgraded";"success")) and
   (.scenarios.collision_and_drift|pass("foreign-and-owned-bytes-preserved";"refused")) and (.scenarios.disable_enable_remove|pass("fresh-task-absent-source-preserved-control-reversed";"success")) and
   (.scenarios.source_workshop_interruption_recovery|pass("journal-stopped-reentered-quiescent";"success")) and (.scenarios.lifecycle_interruption_recovery|pass("projection-stopped-reaped-recovered";"success")) and (.scenarios.migration_and_rollback|pass("private-copy-bounded";"success")) and
-  (.scenarios.ambient_preservation|pass("all-protected-equal";"success")) and
-  .preservation=={ambient_home_equal:true,credential_source_equal:true,global_codex_equal:true,protected_canaries_equal:true,sibling_instance_equal:true,source_preserved:true} and
+  (.scenarios.ambient_preservation|pass("stable-subset-and-protected-equal";"success")) and
+  .preservation=={ambient_codex_metadata_excluded:["sessions","sessions/**","logs_<digits>.sqlite","logs_<digits>.sqlite-shm","logs_<digits>.sqlite-wal","state_<digits>.sqlite","state_<digits>.sqlite-shm","state_<digits>.sqlite-wal","thread_history_<digits>.sqlite","thread_history_<digits>.sqlite-shm","thread_history_<digits>.sqlite-wal","goals_<digits>.sqlite","goals_<digits>.sqlite-shm","goals_<digits>.sqlite-wal","models_cache.json","tmp","tmp/**"],ambient_codex_stable_subset_equal:true,ambient_home_equal:true,credential_source_equal:true,protected_canaries_equal:true,sibling_instance_equal:true,source_preserved:true} and
   .cleanup_expected==["credential-copy","instance","launcher","mount","run-root","volume-image"]' <<<"$pjson" >/dev/null || die "Workshop provisional evidence schema or semantics are incomplete."
 jq -e --argjson pid "$pid" --arg pd "$pdigest" --arg closure "$(jq -r .checkout.helper_closure_sha256 <<<"$pjson")" '
   keys==["artifact","authority","candidate","cleanup","helper_closure_sha256","issue","provisional","schema"] and

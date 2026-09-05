@@ -50,3 +50,13 @@ func TestStablePostMutationRequiresOwnedCanonicalJournalAndAbsentProjection(t *t
 		t.Fatal("noncanonical journal accepted")
 	}
 }
+
+func TestReadStoppedPIDRejectsInvalidMarker(t *testing.T) {
+	marker := filepath.Join(t.TempDir(), "candidate-stopped")
+	if err := os.WriteFile(marker, []byte("not-a-pid\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := readStoppedPID(marker, os.Getpid()); err == nil {
+		t.Fatal("accepted invalid stopped-capability marker")
+	}
+}

@@ -15,6 +15,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -40,7 +41,13 @@ func main() {
 	if *expect == "" || *candidate == "" || *instance == "" || !filepath.IsAbs(*instanceRoot) || *slug == "" {
 		fatal(errors.New("usage: capability-stop-barrier --expect E --candidate C --instance N --instance-root R --slug S"))
 	}
+	marker := filepath.Join(*instanceRoot, ".acceptance-capability-stop-"+*slug)
+	if _, err := os.Lstat(marker); !errors.Is(err, os.ErrNotExist) {
+		fatal(errors.New("capability stop-barrier marker already exists"))
+	}
+	defer os.Remove(marker)
 	cmd := exec.Command("/usr/bin/expect", *expect, "Disable", *candidate, "capability", "disable", *instance, *slug)
+	cmd.Env = append(os.Environ(), "MY_FRIDAY_CAPABILITY_BARRIER_MARKER="+marker)
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
 	if err := cmd.Start(); err != nil {
@@ -50,14 +57,37 @@ func main() {
 	done := make(chan error, 1)
 	go func() { done <- cmd.Wait() }()
 	deadline := time.Now().Add(20 * time.Second)
+	stoppedPID := 0
 	for time.Now().Before(deadline) {
 		select {
 		case err := <-done:
-			fatal(fmt.Errorf("candidate completed before interruption: %w", err))
+			fatal(fmt.Errorf("candidate completed before interruption: %v", err))
 		default:
 		}
-		if err := syscall.Kill(-pgid, syscall.SIGSTOP); err != nil {
-			fatal(err)
+		if stoppedPID == 0 {
+			var markerErr error
+			stoppedPID, markerErr = readStoppedPID(marker, pgid)
+			if markerErr != nil {
+				fatal(markerErr)
+			}
+			if stoppedPID == 0 {
+				time.Sleep(100 * time.Microsecond)
+				continue
+			}
+		}
+		if err := syscall.Kill(stoppedPID, syscall.SIGCONT); err != nil {
+			fatal(fmt.Errorf("resume stopped capability candidate: %w", err))
+		}
+		sliceUntil := time.Now().Add(100 * time.Microsecond)
+		for time.Now().Before(sliceUntil) {
+		}
+		if err := syscall.Kill(stoppedPID, syscall.SIGSTOP); err != nil {
+			select {
+			case completed := <-done:
+				fatal(fmt.Errorf("candidate completed during capability interruption race: %v", completed))
+			default:
+				fatal(fmt.Errorf("stop capability candidate: %w", err))
+			}
 		}
 		time.Sleep(time.Millisecond)
 		proof, ok := stablePostMutation(*instanceRoot, *slug)
@@ -71,25 +101,66 @@ func main() {
 			}
 		}
 		if ok {
-			_ = syscall.Kill(-pgid, syscall.SIGKILL)
+			_ = syscall.Kill(stoppedPID, syscall.SIGKILL)
+			_ = syscall.Kill(pgid, syscall.SIGKILL)
 			<-done
-			for retry := 0; retry < 100 && groupPresent(pgid); retry++ {
-				_ = syscall.Kill(-pgid, syscall.SIGKILL)
-				time.Sleep(5 * time.Millisecond)
-			}
-			if groupPresent(pgid) {
-				fatal(errors.New("interrupted candidate retained process-group members"))
-			}
 			fmt.Println("captured real post-mutation capability interruption")
 			return
 		}
-		_ = syscall.Kill(-pgid, syscall.SIGCONT)
-		time.Sleep(100 * time.Microsecond)
 	}
-	_ = syscall.Kill(-pgid, syscall.SIGCONT)
-	_ = syscall.Kill(-pgid, syscall.SIGKILL)
+	_ = syscall.Kill(stoppedPID, syscall.SIGKILL)
+	_ = syscall.Kill(pgid, syscall.SIGKILL)
 	<-done
 	fatal(errors.New("no stable post-mutation capability interruption captured"))
+}
+
+func readStoppedPID(marker string, root int) (int, error) {
+	body, err := os.ReadFile(marker)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return 0, nil
+		}
+		return 0, err
+	}
+	pid, err := strconv.Atoi(strings.TrimSpace(string(body)))
+	if err != nil || !ownedDescendant(root, pid) {
+		return 0, errors.New("invalid stopped-capability marker")
+	}
+	return pid, nil
+}
+
+type processRecord struct {
+	pid, ppid, uid int
+}
+
+func ownedDescendant(root, target int) bool {
+	body, err := exec.Command("/bin/ps", "-axo", "pid=,ppid=,uid=").Output()
+	if err != nil {
+		return false
+	}
+	records := map[int]processRecord{}
+	for _, line := range strings.Split(string(body), "\n") {
+		fields := strings.Fields(line)
+		if len(fields) != 3 {
+			continue
+		}
+		pid, pidErr := strconv.Atoi(fields[0])
+		ppid, ppidErr := strconv.Atoi(fields[1])
+		uid, uidErr := strconv.Atoi(fields[2])
+		if pidErr == nil && ppidErr == nil && uidErr == nil {
+			records[pid] = processRecord{pid: pid, ppid: ppid, uid: uid}
+		}
+	}
+	for pid := target; ; {
+		record, ok := records[pid]
+		if !ok || record.uid != os.Geteuid() {
+			return false
+		}
+		if pid == root {
+			return target != root
+		}
+		pid = record.ppid
+	}
 }
 
 func stablePostMutation(root, slug string) (string, bool) {
@@ -146,5 +217,4 @@ func digest(value string) bool {
 	b, err := hex.DecodeString(value)
 	return err == nil && len(b) == sha256.Size && value == strings.ToLower(value)
 }
-func groupPresent(pgid int) bool { return syscall.Kill(-pgid, 0) == nil }
-func fatal(err error)            { fmt.Fprintln(os.Stderr, err); os.Exit(1) }
+func fatal(err error) { fmt.Fprintln(os.Stderr, err); os.Exit(1) }

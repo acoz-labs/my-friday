@@ -7,7 +7,16 @@ set args [lrange $argv 2 end]
 set stty_init "rows 30 columns 120"
 spawn -noecho $executable {*}$args
 expect {
-  -exact "Type $token to continue: " { send -- "$token\r" }
+  -exact "Type $token to continue: " {
+    if {[info exists env(MY_FRIDAY_CAPABILITY_BARRIER_MARKER)]} {
+      set candidate_pid [exp_pid]
+      if {[catch {exec /bin/kill -STOP $candidate_pid}]} { exit 126 }
+      set marker [open $env(MY_FRIDAY_CAPABILITY_BARRIER_MARKER) {WRONLY CREAT EXCL} 0600]
+      puts $marker $candidate_pid
+      close $marker
+    }
+    send -- "$token\r"
+  }
   timeout { exit 1 }
   eof { exit 1 }
 }
