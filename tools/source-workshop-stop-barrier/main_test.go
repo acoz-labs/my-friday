@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-func TestCanStopOwnedExpectProcessTree(t *testing.T) {
+func TestCanStopOwnedExpectCandidate(t *testing.T) {
 	if _, err := os.Stat("/usr/bin/expect"); err != nil {
 		t.Skip("native Expect unavailable")
 	}
@@ -28,29 +28,34 @@ func TestCanStopOwnedExpectProcessTree(t *testing.T) {
 		_ = syscall.Kill(-pgid, syscall.SIGKILL)
 		_, _ = cmd.Process.Wait()
 	})
-	time.Sleep(50 * time.Millisecond)
-	stopped, err := stopOwnedTree(pgid)
-	if err != nil {
-		t.Fatalf("stop owned Expect process tree %d: %v", pgid, err)
+	var candidatePID int
+	for deadline := time.Now().Add(time.Second); time.Now().Before(deadline); {
+		for pid, record := range processTable() {
+			if record.ppid == pgid {
+				candidatePID = pid
+				break
+			}
+		}
+		if candidatePID != 0 {
+			break
+		}
+		time.Sleep(time.Millisecond)
 	}
-	if len(stopped) < 2 {
-		t.Fatalf("stopped %d processes, want Expect and child", len(stopped))
+	if candidatePID == 0 || !ownedDescendant(pgid, candidatePID) || ownedDescendant(pgid, pgid) {
+		t.Fatalf("candidate=%d ownership validation failed", candidatePID)
 	}
-	signalPIDs(stopped, syscall.SIGCONT)
+	if err := syscall.Kill(candidatePID, syscall.SIGSTOP); err != nil {
+		t.Fatal(err)
+	}
+	_ = syscall.Kill(candidatePID, syscall.SIGCONT)
 }
 
-func TestConfirmationSentRequiresEchoedSourceConfirmation(t *testing.T) {
-	transcript := filepath.Join(t.TempDir(), "workshop.private")
-	if err := os.WriteFile(transcript, []byte("Type Update source to continue; Return exits: "), 0600); err != nil {
+func TestReadStoppedPIDRequiresOwnedNumericCandidate(t *testing.T) {
+	marker := filepath.Join(t.TempDir(), "candidate-stopped")
+	if err := os.WriteFile(marker, []byte("not-a-pid\n"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	if confirmationSent(transcript) {
-		t.Fatal("armed before confirmation was echoed")
-	}
-	if err := os.WriteFile(transcript, []byte("Type Update source to continue; Return exits: Update source\r\n"), 0600); err != nil {
-		t.Fatal(err)
-	}
-	if !confirmationSent(transcript) {
-		t.Fatal("did not arm after confirmation echo")
+	if _, err := readStoppedPID(marker, os.Getpid()); err == nil {
+		t.Fatal("accepted invalid marker")
 	}
 }

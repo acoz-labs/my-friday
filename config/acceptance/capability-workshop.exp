@@ -26,7 +26,15 @@ expect "Add another example?"; send -- "\r"
 if {$mode eq "create"} {
   expect "Type Create source to continue"; send -- "Create source\r"
 } else {
-  expect "Type Update source to continue"; send -- "Update source\r"
+  expect "Type Update source to continue"
+  if {[info exists env(MY_FRIDAY_SOURCE_BARRIER_MARKER)]} {
+    set candidate_pid [exp_pid]
+    if {[catch {exec /bin/kill -STOP $candidate_pid}]} { exit 126 }
+    set marker [open $env(MY_FRIDAY_SOURCE_BARRIER_MARKER) {WRONLY CREAT EXCL} 0600]
+    puts $marker $candidate_pid
+    close $marker
+  }
+  send -- "Update source\r"
 }
 expect "Source written"
 expect eof

@@ -11,7 +11,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"sort"
 	"strconv"
 	"strings"
 	"syscall"
@@ -38,7 +37,13 @@ func main() {
 	if *expect == "" || *candidate == "" || *instance == "" || !filepath.IsAbs(*root) || *slug == "" || !filepath.IsAbs(*transcript) {
 		fatal(errors.New("invalid source-workshop stop-barrier arguments"))
 	}
+	marker := *transcript + ".candidate-stopped"
+	if _, err := os.Lstat(marker); !errors.Is(err, os.ErrNotExist) {
+		fatal(errors.New("source-workshop barrier marker already exists"))
+	}
+	defer os.Remove(marker)
 	cmd := exec.Command("/usr/bin/expect", *expect, "enhance", *candidate, *instance, *slug, *transcript)
+	cmd.Env = append(os.Environ(), "MY_FRIDAY_SOURCE_BARRIER_MARKER="+marker)
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
 	cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
 	if err := cmd.Start(); err != nil {
@@ -49,61 +54,95 @@ func main() {
 	go func() { done <- cmd.Wait() }()
 	journalPath := filepath.Join(*root, "capabilities", ".workshop-"+*slug+".json")
 	deadline := time.Now().Add(20 * time.Second)
-	armed := false
+	stoppedPID := 0
 	for time.Now().Before(deadline) {
 		select {
 		case err := <-done:
 			fatal(fmt.Errorf("candidate completed before source interruption: %w", err))
 		default:
 		}
-		if !armed {
-			armed = confirmationSent(*transcript)
-			if !armed {
+		if stoppedPID == 0 {
+			var markerErr error
+			stoppedPID, markerErr = readStoppedPID(marker, pgid)
+			if markerErr != nil {
+				fatal(markerErr)
+			}
+			if stoppedPID == 0 {
 				time.Sleep(100 * time.Microsecond)
 				continue
 			}
 		}
-		stopped, err := stopOwnedTree(pgid)
-		if err != nil {
+		if err := syscall.Kill(stoppedPID, syscall.SIGCONT); err != nil {
+			fatal(fmt.Errorf("resume stopped candidate: %w", err))
+		}
+		sliceUntil := time.Now().Add(100 * time.Microsecond)
+		for time.Now().Before(sliceUntil) {
+		}
+		if err := syscall.Kill(stoppedPID, syscall.SIGSTOP); err != nil {
 			select {
 			case completed := <-done:
-				fatal(fmt.Errorf("candidate completed during source interruption race: %w", completed))
+				fatal(fmt.Errorf("candidate completed during source interruption race: %v", completed))
 			default:
-				fatal(fmt.Errorf("stop armed Expect process tree: %w", err))
+				fatal(fmt.Errorf("stop armed candidate: %w", err))
 			}
 		}
+		time.Sleep(time.Millisecond)
 		body, err := os.ReadFile(journalPath)
 		if err == nil && stable(body, *root, *slug) {
 			time.Sleep(5 * time.Millisecond)
 			next, nextErr := os.ReadFile(journalPath)
 			if nextErr == nil && bytes.Equal(body, next) && stable(next, *root, *slug) {
-				signalPIDs(stopped, syscall.SIGKILL)
+				_ = syscall.Kill(stoppedPID, syscall.SIGKILL)
+				_ = syscall.Kill(pgid, syscall.SIGKILL)
 				<-done
 				fmt.Println("captured real source-workshop journal interruption")
 				return
 			}
 		}
-		signalPIDs(stopped, syscall.SIGCONT)
-		time.Sleep(100 * time.Microsecond)
 	}
-	_ = syscall.Kill(-pgid, syscall.SIGKILL)
+	_ = syscall.Kill(stoppedPID, syscall.SIGKILL)
+	_ = syscall.Kill(pgid, syscall.SIGKILL)
 	<-done
 	fatal(errors.New("no stable source-workshop interruption captured"))
 }
 
-func confirmationSent(transcript string) bool {
-	body, err := os.ReadFile(transcript)
-	return err == nil && bytes.Contains(body, []byte("Type Update source to continue; Return exits: Update source"))
+func readStoppedPID(marker string, root int) (int, error) {
+	body, err := os.ReadFile(marker)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return 0, nil
+		}
+		return 0, err
+	}
+	pid, err := strconv.Atoi(strings.TrimSpace(string(body)))
+	if err != nil || !ownedDescendant(root, pid) {
+		return 0, errors.New("invalid stopped-candidate marker")
+	}
+	return pid, nil
 }
 
 type processRecord struct {
 	pid, ppid, uid int
 }
 
-func stopOwnedTree(root int) ([]int, error) {
+func ownedDescendant(root, target int) bool {
+	records := processTable()
+	for pid := target; ; {
+		record, ok := records[pid]
+		if !ok || record.uid != os.Geteuid() {
+			return false
+		}
+		if pid == root {
+			return target != root
+		}
+		pid = record.ppid
+	}
+}
+
+func processTable() map[int]processRecord {
 	body, err := exec.Command("/bin/ps", "-axo", "pid=,ppid=,uid=").Output()
 	if err != nil {
-		return nil, err
+		return nil
 	}
 	records := map[int]processRecord{}
 	for _, line := range strings.Split(string(body), "\n") {
@@ -118,44 +157,7 @@ func stopOwnedTree(root int) ([]int, error) {
 			records[pid] = processRecord{pid: pid, ppid: ppid, uid: uid}
 		}
 	}
-	if _, ok := records[root]; !ok {
-		return nil, os.ErrProcessDone
-	}
-	depth := map[int]int{root: 0}
-	for changed := true; changed; {
-		changed = false
-		for pid, record := range records {
-			parentDepth, parentOwned := depth[record.ppid]
-			if !parentOwned {
-				continue
-			}
-			if _, known := depth[pid]; !known {
-				depth[pid] = parentDepth + 1
-				changed = true
-			}
-		}
-	}
-	pids := make([]int, 0, len(depth))
-	for pid := range depth {
-		if records[pid].uid != os.Geteuid() {
-			return nil, fmt.Errorf("owned process tree contains uid %d", records[pid].uid)
-		}
-		pids = append(pids, pid)
-	}
-	sort.Slice(pids, func(i, j int) bool { return depth[pids[i]] > depth[pids[j]] })
-	for _, pid := range pids {
-		if err := syscall.Kill(pid, syscall.SIGSTOP); err != nil {
-			signalPIDs(pids, syscall.SIGCONT)
-			return nil, err
-		}
-	}
-	return pids, nil
-}
-
-func signalPIDs(pids []int, signal syscall.Signal) {
-	for _, pid := range pids {
-		_ = syscall.Kill(pid, signal)
-	}
+	return records
 }
 
 func stable(body []byte, root, slug string) bool {
