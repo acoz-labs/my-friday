@@ -12,6 +12,24 @@ If container support is not ready for this repo yet:
 bin/ci
 ```
 
+## Known validation limitations
+
+- The development container currently lacks `jq`, so `bin/container bin/ci`
+  stops in `bin/release-assets` with exit 127 after solution-plan validation.
+  [Issue #112](https://github.com/acoz-labs/my-friday/issues/112) tracks the
+  container/toolchain correction. Record this deviation and run the native
+  fallback; do not report the container check as passing.
+- Native `bin/ci` can exceed the 10-second outer bound in
+  `TestRunnerTimesOutProcessGroup`. The reproduced source matched `main`, and
+  hosted CI passed, but neither fact makes the local safety failure harmless;
+  no host-load cause has been established. Record the native check as failed
+  until [issue #111](https://github.com/acoz-labs/my-friday/issues/111) resolves
+  the timeout reliability gap without weakening descendant cleanup.
+
+Both follow-ups are Inbox items requiring their own planning and authority;
+their existence does not authorize dependency, container, runtime, or timeout
+changes in unrelated work.
+
 My Friday uses Go 1.26.4, pinned by `mise.toml`; `go.mod` declares the module's
 language baseline. Install the exact host toolchain with `mise install`.
 
