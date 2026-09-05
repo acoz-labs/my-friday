@@ -54,6 +54,11 @@ provenance.
 - `lookup-worker` uses the same counted lookup/load/fallback transport, but complex or
   isolation-required work requires one real native worker at depth one.
 
+The counted transport is an offline controller primitive and staging contract;
+it is not wired to either native harness as a live MCP tool while the required
+sandbox, tool, worker, and process controls remain unproven. No live metadata or
+capability body delivery is claimed by the current evidence.
+
 Limits are two selected capabilities plus one dependency, one broader-metadata
 fallback, eight tool calls, one worker, 120 seconds, 30,000 observed aggregate
 input/output tokens, and a requested 2,000 output-token ceiling per agent. A
