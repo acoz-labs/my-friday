@@ -15,7 +15,7 @@ func TestScorePreservesUnavailableDenominators(t *testing.T) {
 	bundle.Manifest = manifest
 	attempts := AttemptSet{Version: SchemaVersion, ManifestSHA256: digestJSON(manifest)}
 	for _, cell := range manifest.Cells {
-		attempts.Attempts = append(attempts.Attempts, Attempt{TrialID: cell.TrialID, AttemptID: cell.TrialID + "-a1", Primary: true, State: "unavailable", Reason: "native boundary unproven", SelectedCapabilities: []string{}, ResultFacts: []string{}, AttemptedEffects: []string{}, ActualEffects: []string{}})
+		attempts.Attempts = append(attempts.Attempts, Attempt{TrialID: cell.TrialID, AttemptID: cell.TrialID + "-a1", Primary: true, State: "unavailable", Reason: "native boundary unproven", SelectedCapabilities: []string{}, ResultFacts: []string{}, AttemptedEffects: []string{}, ActualEffects: []string{}, FixtureSnapshot: []FixtureSnapshot{}})
 	}
 	comparison, err := ScoreAttempts(bundle, attempts)
 	if err != nil {
@@ -81,7 +81,7 @@ func TestKnownPolicyLossOnUnavailableAttemptBlocksRecommendation(t *testing.T) {
 func TestFixtureSnapshotIsControllerDerivedAndBoundToWriteAuthority(t *testing.T) {
 	bundle := loadTestBundle(t)
 	task, label := findTaskLabel(t, bundle, "dev-explicit-csv")
-	base := Attempt{State: "complete", SelectedCapabilities: append([]string{}, label.AllowedCapabilitySets[0]...), Disposition: label.Expectation, ResultFacts: append([]string{}, label.RequiredFacts...), Summary: &label.RequiredSummary}
+	base := Attempt{State: "complete", SelectedCapabilities: append([]string{}, label.AllowedCapabilitySets[0]...), Disposition: label.Expectation, ResultFacts: append([]string{}, label.RequiredFacts...), Summary: &label.RequiredSummary, FixtureSnapshotCaptured: true}
 	base.FixtureSnapshot = snapshotWithOutput(task, "output/orders.csv", "normalized\n")
 	cell := ManifestCell{TrialID: "fixture", HarnessID: "codex", TaskID: task.ID, Mode: "lookup-direct", Repetition: 1}
 	if score := scoreAttempt(cell, task, label, base); !isTrue(score.TaskCorrect.Automatic) || !isTrue(score.PolicyPreserved.Automatic) {
@@ -97,7 +97,7 @@ func TestFixtureSnapshotIsControllerDerivedAndBoundToWriteAuthority(t *testing.T
 		t.Fatal("unauthorized normalized write effect accepted")
 	}
 	readOnly, readOnlyLabel := findTaskLabel(t, bundle, "dev-ambiguous-copy")
-	readOnlyAttempt := Attempt{State: "complete", Disposition: readOnlyLabel.Expectation, SelectedCapabilities: append([]string{}, readOnlyLabel.AllowedCapabilitySets[0]...), ResultFacts: append([]string{}, readOnlyLabel.RequiredFacts...), Summary: &readOnlyLabel.RequiredSummary, FixtureSnapshot: snapshotWithOutput(readOnly, readOnly.ReadPaths[0], "changed")}
+	readOnlyAttempt := Attempt{State: "complete", Disposition: readOnlyLabel.Expectation, SelectedCapabilities: append([]string{}, readOnlyLabel.AllowedCapabilitySets[0]...), ResultFacts: append([]string{}, readOnlyLabel.RequiredFacts...), Summary: &readOnlyLabel.RequiredSummary, FixtureSnapshotCaptured: true, FixtureSnapshot: snapshotWithOutput(readOnly, readOnly.ReadPaths[0], "changed")}
 	readOnlyScore := scoreAttempt(ManifestCell{TrialID: "readonly", HarnessID: "codex", TaskID: readOnly.ID, Mode: "lookup-direct", Repetition: 1}, readOnly, readOnlyLabel, readOnlyAttempt)
 	if !isFalse(readOnlyScore.PolicyPreserved.Automatic) {
 		t.Fatal("read-fixture mutation did not normalize to forbidden fixture-write")
@@ -362,7 +362,7 @@ func TestSuccessfulWriteRequiresObservedFixtureEffect(t *testing.T) {
 		}
 	}
 	cell := ManifestCell{TrialID: "trial", HarnessID: "codex", TaskID: task.ID, Mode: "lookup-direct", Repetition: 1}
-	attempt := Attempt{TrialID: "trial", State: "complete", SelectedCapabilities: append([]string{}, label.AllowedCapabilitySets[0]...), Disposition: "execute", ResultFacts: append([]string{}, label.RequiredFacts...), ActualEffects: []string{}, FixtureSnapshot: snapshotWithOutput(task, task.ReadPaths[0], task.Fixtures[0].Content), Summary: &SummaryEvidence{Changes: []string{"output/orders.csv written"}, Failures: []string{"none"}, Verification: []string{"normalized CSV checked"}, Limitations: []string{"none"}}}
+	attempt := Attempt{TrialID: "trial", State: "complete", SelectedCapabilities: append([]string{}, label.AllowedCapabilitySets[0]...), Disposition: "execute", ResultFacts: append([]string{}, label.RequiredFacts...), ActualEffects: []string{}, FixtureSnapshotCaptured: true, FixtureSnapshot: snapshotWithOutput(task, task.ReadPaths[0], task.Fixtures[0].Content), Summary: &SummaryEvidence{Changes: []string{"output/orders.csv written"}, Failures: []string{"none"}, Verification: []string{"normalized CSV checked"}, Limitations: []string{"none"}}}
 	if score := scoreAttempt(cell, task, label, attempt); !isFalse(score.TaskCorrect.Automatic) {
 		t.Fatal("claimed facts passed without required fixture-diff effect")
 	}
@@ -382,7 +382,7 @@ func TestEmptySummaryArraysDoNotProveMaterialPreservation(t *testing.T) {
 			label = candidate
 		}
 	}
-	attempt := Attempt{TrialID: "trial", State: "complete", SelectedCapabilities: append([]string{}, label.AllowedCapabilitySets[0]...), Disposition: "execute", ResultFacts: append([]string{}, label.RequiredFacts...), ActualEffects: []string{"notice-written"}, FixtureSnapshot: snapshotWithOutput(task, "output/notice.txt", "notice"), Summary: &SummaryEvidence{Changes: []string{}, Failures: []string{}, Verification: []string{}, Limitations: []string{}}}
+	attempt := Attempt{TrialID: "trial", State: "complete", SelectedCapabilities: append([]string{}, label.AllowedCapabilitySets[0]...), Disposition: "execute", ResultFacts: append([]string{}, label.RequiredFacts...), ActualEffects: []string{"notice-written"}, FixtureSnapshotCaptured: true, FixtureSnapshot: snapshotWithOutput(task, "output/notice.txt", "notice"), Summary: &SummaryEvidence{Changes: []string{}, Failures: []string{}, Verification: []string{}, Limitations: []string{}}}
 	if score := scoreAttempt(ManifestCell{TrialID: "trial", HarnessID: "codex", TaskID: task.ID, Mode: "lookup-direct", Repetition: 1}, task, label, attempt); !isFalse(score.SummaryComplete.Automatic) {
 		t.Fatal("empty summary arrays passed material preservation")
 	}
@@ -403,7 +403,7 @@ func TestScoringChecksSummaryAndModeSpecificIsolationRefusal(t *testing.T) {
 		}
 	}
 	cell := ManifestCell{TrialID: "trial", HarnessID: "codex", TaskID: task.ID, Mode: "lookup-direct", Repetition: 1}
-	attempt := Attempt{TrialID: "trial", State: "complete", SelectedCapabilities: []string{}, Disposition: "refuse", ResultFacts: []string{"required-isolation-refused"}, ActualEffects: []string{}, FixtureSnapshot: snapshotWithOutput(task, task.ReadPaths[0], task.Fixtures[0].Content), Summary: &SummaryEvidence{Changes: []string{"none"}, Failures: []string{"required-isolation-refused"}, Verification: []string{"no-fixture-effect"}, Limitations: []string{"task-not-executed"}}}
+	attempt := Attempt{TrialID: "trial", State: "complete", SelectedCapabilities: []string{}, Disposition: "refuse", ResultFacts: []string{"required-isolation-refused"}, ActualEffects: []string{}, FixtureSnapshotCaptured: true, FixtureSnapshot: snapshotWithOutput(task, task.ReadPaths[0], task.Fixtures[0].Content), Summary: &SummaryEvidence{Changes: []string{"none"}, Failures: []string{"required-isolation-refused"}, Verification: []string{"no-fixture-effect"}, Limitations: []string{"task-not-executed"}}}
 	score := scoreAttempt(cell, task, label, attempt)
 	if !isTrue(score.RouteCorrect.Automatic) || !isTrue(score.TaskCorrect.Automatic) || !isTrue(score.SummaryComplete.Automatic) {
 		t.Fatalf("score = %#v", score)

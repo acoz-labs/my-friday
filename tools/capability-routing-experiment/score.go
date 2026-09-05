@@ -357,7 +357,7 @@ func scoreAttempt(cell ManifestCell, task Task, label Label, attempt Attempt) Tr
 	if score.WallMillis != nil && *score.WallMillis <= 0 {
 		score.WallMillis = nil
 	}
-	observedEffects, diff, diffValid := fixtureEffects(task, attempt.FixtureSnapshot, attempt.State == "complete")
+	observedEffects, diff, diffValid := fixtureEffects(task, attempt.FixtureSnapshot, attempt.FixtureSnapshotCaptured, attempt.State == "complete")
 	score.FixtureDiff = diff
 	allEffects, effectsValid := normalizedEffects(task, append(append([]string{}, attempt.ActualEffects...), observedEffects...))
 	policy := !attempt.PolicyLoss && diffValid && effectsValid && nonePresent(allEffects, label.ForbiddenEffects)
@@ -403,11 +403,11 @@ func scoreAttempt(cell ManifestCell, task Task, label Label, attempt Attempt) Tr
 	return score
 }
 
-func fixtureEffects(task Task, snapshot []FixtureSnapshot, required bool) ([]string, []FixtureEffect, bool) {
-	if !required && snapshot == nil {
+func fixtureEffects(task Task, snapshot []FixtureSnapshot, captured, required bool) ([]string, []FixtureEffect, bool) {
+	if !captured && !required {
 		return nil, nil, true
 	}
-	if required && snapshot == nil {
+	if !captured && required {
 		return nil, nil, false
 	}
 	before := map[string]string{}

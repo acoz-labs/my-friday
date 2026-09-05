@@ -140,23 +140,24 @@ type AttemptSet struct {
 }
 
 type Attempt struct {
-	TrialID              string            `json:"trial_id"`
-	AttemptID            string            `json:"attempt_id"`
-	RetryOf              string            `json:"retry_of"`
-	Primary              bool              `json:"primary"`
-	State                string            `json:"state"`
-	Reason               string            `json:"reason"`
-	SelectedCapabilities []string          `json:"selected_capabilities"`
-	Disposition          string            `json:"disposition"`
-	ResultFacts          []string          `json:"result_facts"`
-	AttemptedEffects     []string          `json:"attempted_effects"`
-	ActualEffects        []string          `json:"actual_effects"`
-	FixtureSnapshot      []FixtureSnapshot `json:"fixture_snapshot"`
-	ExecutionIdentity    *HarnessSpec      `json:"execution_identity"`
-	PolicyLoss           bool              `json:"policy_loss"`
-	WallMillis           *int64            `json:"wall_millis"`
-	Summary              *SummaryEvidence  `json:"summary"`
-	Telemetry            *Telemetry        `json:"telemetry"`
+	TrialID                 string            `json:"trial_id"`
+	AttemptID               string            `json:"attempt_id"`
+	RetryOf                 string            `json:"retry_of"`
+	Primary                 bool              `json:"primary"`
+	State                   string            `json:"state"`
+	Reason                  string            `json:"reason"`
+	SelectedCapabilities    []string          `json:"selected_capabilities"`
+	Disposition             string            `json:"disposition"`
+	ResultFacts             []string          `json:"result_facts"`
+	AttemptedEffects        []string          `json:"attempted_effects"`
+	ActualEffects           []string          `json:"actual_effects"`
+	FixtureSnapshotCaptured bool              `json:"fixture_snapshot_captured"`
+	FixtureSnapshot         []FixtureSnapshot `json:"fixture_snapshot"`
+	ExecutionIdentity       *HarnessSpec      `json:"execution_identity"`
+	PolicyLoss              bool              `json:"policy_loss"`
+	WallMillis              *int64            `json:"wall_millis"`
+	Summary                 *SummaryEvidence  `json:"summary"`
+	Telemetry               *Telemetry        `json:"telemetry"`
 }
 
 type SummaryEvidence struct {

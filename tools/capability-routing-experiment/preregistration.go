@@ -4,7 +4,7 @@ import "reflect"
 
 // TrustedSourceCommit is the reviewed runner/corpus freeze. It is compiled into
 // the validator so a manifest cannot redefine its own identity.
-const TrustedSourceCommit = "c8954e9b8a9f620c7349f4d63a236a9c0ac64c77"
+const TrustedSourceCommit = "b52c204aaea35dd309424840d19b618ae7e5a686"
 
 func TrustedHarnesses() []HarnessSpec {
 	return []HarnessSpec{
