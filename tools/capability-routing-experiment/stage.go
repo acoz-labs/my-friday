@@ -14,6 +14,16 @@ var ErrStaleIndex = errors.New("stale index revision")
 
 type CapabilityMetadata struct{ ID, Name, Summary, Revision string }
 
+type StagedTask struct {
+	TaskID            string   `json:"task_id"`
+	Prompt            string   `json:"prompt"`
+	IndexRevision     string   `json:"index_revision"`
+	ReadPaths         []string `json:"read_paths"`
+	WritePaths        []string `json:"write_paths"`
+	RequiredSemantics []string `json:"required_semantics"`
+	RequiresIsolation bool     `json:"requires_isolation"`
+}
+
 func SelectCapabilitySet(bundle Bundle, task Task, selected []string) ([]Capability, error) {
 	if task.IndexRevision != bundle.Capabilities.Revision {
 		return nil, ErrStaleIndex
@@ -96,7 +106,8 @@ func StageTrial(modelRoot string, bundle Bundle, cell ManifestCell) error {
 	if err = createFile(filepath.Join(modelRoot, "policy.txt"), []byte(policy)); err != nil {
 		return err
 	}
-	taskBody, _ := json.MarshalIndent(task, "", "  ")
+	stagedTask := StagedTask{TaskID: task.ID, Prompt: task.Prompt, IndexRevision: task.IndexRevision, ReadPaths: task.ReadPaths, WritePaths: task.WritePaths, RequiredSemantics: task.RequiredSemantics, RequiresIsolation: task.RequiresIsolation}
+	taskBody, _ := json.MarshalIndent(stagedTask, "", "  ")
 	if err = createFile(filepath.Join(modelRoot, "task.json"), append(taskBody, '\n')); err != nil {
 		return err
 	}
@@ -107,7 +118,8 @@ func StageTrial(modelRoot string, bundle Bundle, cell ManifestCell) error {
 	}
 	if cell.Mode == "native-catalogue" {
 		for _, capability := range bundle.Capabilities.Capabilities {
-			if err = createFile(filepath.Join(modelRoot, "skills", capability.ID, "SKILL.md"), []byte(capability.Body+"\n")); err != nil {
+			body := fmt.Sprintf("---\nname: %s\ndescription: %s\n---\n\n# %s\n\nRevision: `%s`\n\n%s\n", capability.ID, capability.Summary, capability.Name, capability.Revision, capability.Body)
+			if err = createFile(filepath.Join(modelRoot, "skills", capability.ID, "SKILL.md"), []byte(body)); err != nil {
 				return err
 			}
 		}

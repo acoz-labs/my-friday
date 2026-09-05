@@ -22,7 +22,7 @@ func TestStageTrialKeepsLabelsAndOtherTasksOutsideModelRoot(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.Contains(string(body), "held-paraphrase-duplicates") || strings.Contains(string(body), "required_facts") {
+	if strings.Contains(string(body), "held-paraphrase-duplicates") || strings.Contains(string(body), "required_facts") || strings.Contains(string(body), "held-out") || strings.Contains(string(body), "explicit-selection") {
 		t.Fatal("other tasks or rubric leaked into staged task")
 	}
 	policy, err := os.ReadFile(filepath.Join(root, "policy.txt"))
