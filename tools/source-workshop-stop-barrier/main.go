@@ -39,7 +39,7 @@ func main() {
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
 	cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
 	if err := cmd.Start(); err != nil {
-		fatal(err)
+		fatal(fmt.Errorf("start isolated Expect process: %w", err))
 	}
 	pgid := cmd.Process.Pid
 	done := make(chan error, 1)
@@ -53,7 +53,11 @@ func main() {
 		default:
 		}
 		if err := syscall.Kill(-pgid, syscall.SIGSTOP); err != nil {
-			fatal(err)
+			leaderErr := syscall.Kill(pgid, syscall.SIGSTOP)
+			if leaderErr == nil {
+				_ = syscall.Kill(pgid, syscall.SIGCONT)
+			}
+			fatal(fmt.Errorf("stop Expect process group %d as euid %d (leader stop: %v): %w", pgid, os.Geteuid(), leaderErr, err))
 		}
 		body, err := os.ReadFile(journalPath)
 		if err == nil && stable(body, *root, *slug) {
