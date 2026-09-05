@@ -89,11 +89,31 @@ Codex instance.
 ### Return-use and diagnosis flow
 
 `assistant inspect NAME` gives a stable, read-only state summary even when the
-assistant is unhealthy. `assistant verify NAME` is strict and nonzero unless
-repository contracts, Git synchronization, host binding, dependencies, and
-projection all agree. `assistant diagnose NAME` adds exact refusal reasons and
-the one safe next command: reconcile, repair, recover, restore, migrate, or
-resolve a remote divergence manually.
+assistant is unhealthy. It names the installation, local and last-verified
+remote commits, freshness time, operating role, platform capability inventory,
+and whether the next launch would be current or stale. `assistant verify NAME`
+is strict and nonzero unless repository contracts, Git synchronization, host
+binding, dependencies, and projection all agree. `assistant diagnose NAME`
+adds exact refusal reasons and the one safe next command: sync, reconcile,
+repair, recover, restore, migrate, or resolve a remote divergence manually.
+
+### Multi-installation fresh-task flow
+
+1. Each restore creates a random installation ID and local binding; neither is
+   canonical assistant identity or committed source.
+2. The launcher runs `assistant prepare NAME` before every fresh harness task.
+   Prepare fetches `origin/main`, refuses a dirty, interrupted, ahead, or
+   diverged managed checkout, fast-forwards a clean behind checkout, validates
+   the new complete baseline, and reconciles the generated projection.
+3. A successful prepare reports the exact canonical commit used by the task and
+   refresh time. B3 recall later binds its packet to that commit.
+4. If the remote is unreachable, an interactive user may explicitly type
+   `Launch stale` after seeing the last verified commit and age. Noninteractive
+   launch fails closed. A reachable but advanced or invalid remote is never an
+   offline condition and cannot be bypassed as stale.
+5. Independent installations may run interactive tasks concurrently. Their
+   local credentials, sessions, workspaces, and capability availability do not
+   enter the canonical repository.
 
 ### Clean-host restore flow
 
@@ -114,6 +134,18 @@ interruption leaves one authenticated journal; rerunning an ordinary mutation
 refuses and names `assistant recover NAME`. Recovery reconstructs the observed
 phase and either completes the already-authorized operation or restores the
 proven predecessor without creating a second commit.
+
+Every mutation fetches immediately before planning and pushes normally, making
+the designated remote ref the compare-and-swap arbiter across installations.
+If another installation advances the ref, ordinary semantic mutation stops and
+preserves its exact local receipt. The only automatic retry class is creation
+of a new immutable content-addressed file whose path and bytes did not exist in
+the new head: the kernel discards its unpublished candidate commit, replans the
+same append against the new head, validates the complete repository again, and
+attempts one bounded push. It never replays replacement, deletion, migration,
+configuration, capability, or durable-memory promotion automatically. B3 may
+use this primitive for observations and quarantined handoffs without weakening
+governed-memory authority.
 
 ### Migration flow
 
@@ -136,13 +168,15 @@ refused. B1 provides no flag that recursively deletes canonical data.
 
 ## Acceptance And Non-Goals
 
-The issue acceptance is designable through four groups:
+The issue acceptance is designable through five groups:
 
 1. one repository and independently governed module manifests;
 2. full baseline/host lifecycle with explicit inspect, diagnose, and recovery;
 3. exact-path, private-remote Git commit/push and idempotent reconciliation; and
 4. denial of divergence, ambiguity, force, rewrite, publication, collision, or
-   unrelated-state mutation.
+   unrelated-state mutation; and
+5. identified multi-host restore, pre-task freshness, clean fast-forward,
+   explicit stale/offline behavior, and safe competing-writer refusal.
 
 Non-goals:
 
@@ -151,11 +185,15 @@ Non-goals:
 - B3 memory record schemas, sensitivity authorization, retrieval, or promotion;
 - creating a GitHub/GitLab/provider repository, determining remote visibility,
   logging into a provider, or managing credentials;
-- multi-writer or distributed locking beyond fail-closed Git ref comparison;
-- automatic conflict resolution, pull/rebase, force push, branch management,
-  submodules, Git LFS, signed commits, or public distribution;
-- a background daemon, VM/container runtime, second harness, or non-Apple-
-  silicon production support; and
+- general automatic conflict resolution, pull/merge/rebase, force push,
+  user-managed branch integration, submodules, Git LFS, signed commits, or
+  public distribution;
+- automatic replay of replacements, deletions, migrations, configuration,
+  capabilities, or durable-memory governance transitions after a competing
+  remote write;
+- distributed locks, leader election, singleton-effect leasing, a background
+  daemon, VM/container runtime, second harness, or native Windows integration;
+  and
 - deletion of canonical source, durable memory, remote state, or retained
   legacy repositories.
 
@@ -163,9 +201,12 @@ Non-goals:
 
 - F0/#74 must be accepted and released so migration imports a stable existing
   lifecycle contract.
-- B1 continues the Apple-silicon macOS and native Go boundary. Portable tests
-  run in the development container, but APFS, terminal, process, and exact
-  candidate evidence remain native requirements.
+- B1 makes the native Go kernel and repository contract portable across macOS
+  arm64 and supported Linux amd64/arm64 filesystems. Windows uses the supported
+  Linux/CLI path through WSL for this outcome; native Windows installation is a
+  later adapter. Filesystem ownership, no-follow replacement, terminal, signal,
+  process, and exact-candidate evidence must run natively on both macOS and
+  Linux rather than assuming APFS behavior generalizes.
 - Git network and credential helpers are external effects. Commands must use
   fixed argument forms, sanitized errors, bounded timeouts, and no URL-embedded
   credentials. The kernel does not suppress legitimate SSH or credential-
@@ -177,6 +218,10 @@ Non-goals:
 - Atomic filesystem promotion and Git remote publication cannot be one atomic
   transaction. The operation journal and phase-specific reconciliation are
   therefore part of correctness, not cleanup detail.
+- Fetch/fast-forward, projection reconciliation, and harness launch cannot be
+  one atomic operation. Prepare binds the launched task to the verified commit;
+  later remote changes become visible at the next preparation or explicit sync,
+  not silently inside an already-running model context.
 - Canonical memory can grow. B1 should avoid whole-history rewrites and
   byte-for-byte copies of prior histories; performance thresholds and large-
   object policy need deterministic tests before release.
@@ -206,6 +251,9 @@ Non-goals:
   credentials before running setup.
 - One designated `origin/main` is sufficient for the MVP; other branches and
   remotes are user-owned but cannot participate in automatic stewardship.
+- Multiple installations may read and run concurrently. The normal remote ref
+  update serializes canonical writes; B1 provides no promise that singleton
+  background effects may run on more than one host.
 - Regular files and directories cover B1-owned paths. Symlinks, submodules,
   special files, and external filters are unnecessary for the baseline modules.
 - Preserving legacy repositories rather than combining their histories is an
@@ -222,5 +270,8 @@ Non-goals:
   `inspect` plus actionable failures sufficient. Keep both for acceptance and
   measure comprehension; removing a redundant read-only alias would not alter
   the trust boundary.
+- The first real Linux desktop/server combinations on which users retain the
+  core after the native acceptance period. The release supports the tested
+  distribution/kernel/filesystem matrix rather than claiming every Linux host.
 
 None of these unknowns changes the approved outcome or prevents implementation.

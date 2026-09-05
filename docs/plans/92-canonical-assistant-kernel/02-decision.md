@@ -14,6 +14,12 @@
    user without requiring knowledge of internal manifests.
 7. Implementation must reuse proven Go, manifest, no-follow, journal, and
    immutable-artifact patterns and add no runtime service or dependency.
+8. The same assistant identity and governed memory must be recoverable on, and
+   safely usable from, more than one installation without copying a machine.
+9. A fresh task must disclose which canonical commit it uses and must not
+   silently start from stale state when the remote is reachable.
+10. The first portable release must cover native macOS and Linux execution;
+    Windows may use WSL until a native Windows contract is separately proven.
 
 ## Competing Approaches
 
@@ -43,6 +49,11 @@ while a superproject binds versions.
 Require a clean checkout, write files, validate, commit, and push; use Git to
 restore on failure.
 
+### F. Make a complete VM image the portable assistant
+
+Package the runtime, memory, secrets, browser, and desktop into one VM and move
+or replicate that image between hosts.
+
 ## Adversarial Comparison
 
 | Approach | Strongest benefit | Failure under B1 pressure |
@@ -52,6 +63,7 @@ restore on failure.
 | C | Fewest visible roots | Generated removal or projection drift could threaten canonical memory/source; violates source/projection separation |
 | D | Maximum module independence | Multiplies synchronization, authentication, migration, and failure modes before B2/B3 prove a need; submodule state is poor first-use UX |
 | E | Simple happy path | A crash exposes partial canonical files; rollback risks discarding unrelated work; Git push failure lacks an authenticated semantic-write receipt |
+| F | Strong whole-machine isolation and a familiar backup unit | Makes a large mutable disk image the identity, couples portability to a hypervisor and guest OS, complicates concurrent use, and risks stale memory forks; useful as an optional installation profile, not the source of truth |
 
 A pure clone-and-swap transaction was also considered. Swapping the complete
 repository gives strong local atomicity but scales poorly with growing memory
@@ -63,13 +75,25 @@ recoverable.
 
 ## Selected Approach
 
-Use a contract-v1 canonical assistant repository and a contract-v3 named host
+Use a contract-v1 canonical assistant repository and an updated named-host
 binding. The repository owns baseline/module manifests, configuration,
 capability source, governed-memory data, migrations, and canonical lifecycle
-receipts. The host binding owns only endpoint hash/ref, canonical path identity,
-current source commit, generated Codex state, copied executable dependencies,
-and the launcher. A separately derivable local operation area exists before
-either repository or binding and owns the one active journal.
+receipts. Each host binding owns a random stable installation ID, operating
+role, platform profile, local capability availability, secret-slot bindings,
+endpoint hash/ref, canonical path identity, current source commit, last remote
+freshness proof, generated Codex state, copied executable dependencies, and the
+launcher. It never stores secret values in canonical source. A separately
+derivable local operation area exists before either repository or binding and
+owns the one active journal.
+
+Before a fresh task, the launcher runs the same `prepare` contract exposed by
+`assistant sync`: validate the managed checkout, fetch `origin/main`,
+fast-forward only from an exact clean predecessor, validate the resulting
+repository, reconcile the generated projection, and bind the task to that
+exact commit. This verified remote fast-forward is a deterministic local
+refresh, not a semantic mutation, and therefore does not prompt. An unreachable
+remote produces a stale-state summary with commit and age; only an interactive
+user may enter exact `Launch stale`. Noninteractive launch fails closed.
 
 The Git adapter creates candidate blobs/tree with filters and hooks disabled,
 validates the complete candidate through a read-only staged view, writes the
@@ -89,12 +113,19 @@ Existing-repository mutation uses `prepared`, `source-index-promoted`,
 Recovery validates the same plan, predecessor proofs, candidate commit, remote
 ref, active index, and host binding. It completes the unique safe next
 transition or stops without mutation. A remote that advanced to an unknown
-commit is divergence even when the semantic files appear equal.
+commit is competition or divergence even when the semantic files appear equal.
+Ordinary semantic changes are never rebased or merged automatically. The only
+bounded retry reconstructs a newly created immutable content-addressed file on
+the new head, proves its path was absent and its meaning unchanged, revalidates
+the complete repository, and attempts one new non-force push. B3 may use that
+primitive for observations and handoffs; replacements, promotions, migrations,
+and other judgment-bearing transitions remain serialized and refuse.
 
-Confidence is medium-high. Existing components prove the hardest local
+Confidence is medium. Existing components prove the hardest local
 ownership/recovery primitives; new risk is concentrated in Git candidate/ref
-construction and cross-boundary recovery, for which the plan requires
-adversarial fixtures and real private-remote acceptance.
+construction, two-installation freshness, cross-platform filesystem behavior,
+and cross-boundary recovery. The plan therefore requires adversarial fixtures,
+macOS/Linux CI, and a real two-host private-remote acceptance journey.
 
 ## Decisions Ledger
 
@@ -108,5 +139,11 @@ adversarial fixtures and real private-remote acceptance.
 | Preserve legacy repositories after migration | Gives reversible cutover without multi-history surgery or destructive cleanup | Current split contract and migration risk |
 | Stable read-only `inspect`, strict `verify`, actionable `diagnose` | Supports healthy return use and degraded recovery without hiding state | B1 critical tasks and terminal experience gate |
 | Exact English confirmation only for mutations | Reuses released safety contract; cancellation is any other input | Existing CLI and capability workshop evidence |
+| Automatic verified refresh before fresh tasks | Shared-brain continuity requires a task to start from the newest fetched canonical commit without a prompt on every launch | Approved repository-first multi-installation flow |
+| Remote non-force push is the writer arbiter | Avoids distributed locks while ensuring only one semantic successor wins | Git ref compare-and-swap semantics and bounded transaction design |
+| Retry only immutable content-addressed appends | Preserves concurrent observations without inventing a general merge engine or replaying judgment | B3 append-only port and YAGNI boundary |
+| Unique host installation identity; no canonical host registry | Diagnostics and effect policy need a stable local actor, while transient hosts must not become canonical assistant state | Replaceable-projection model |
+| macOS arm64 plus Linux amd64/arm64; Windows through WSL | Covers personal machines, servers, cloud, containers, and VMs with one native contract while avoiding an unproven native-Windows filesystem/process port | Portability goal and current Go CLI architecture |
+| VM is an optional installation profile | Isolation may be valuable for browser/desktop workloads, but the VM must remain replaceable and must not own identity or memory | Repository-first decision and failure-recovery goal |
 | No submodules, LFS, symlinks, special files, hooks, or filters in B1-owned paths | Avoids executable/indirect mutation and ambiguous ownership | Narrow-kernel and no arbitrary dependency boundary |
 | Through-production envelope | Repository already has immutable artifact, native acceptance, rollback, and release gates; no service staging applies | Existing release tooling and repository instructions |
