@@ -25,6 +25,7 @@ type TrialScore struct {
 	Repetition           int             `json:"repetition"`
 	State                string          `json:"state"`
 	Reason               string          `json:"reason"`
+	Disposition          string          `json:"disposition"`
 	RouteCorrect         DimensionScore  `json:"route_correct"`
 	TaskCorrect          DimensionScore  `json:"task_correct"`
 	PolicyPreserved      DimensionScore  `json:"policy_preserved"`
@@ -62,6 +63,7 @@ type Comparison struct {
 	Version          int                     `json:"version"`
 	ManifestSHA256   string                  `json:"manifest_sha256"`
 	CorpusRevision   string                  `json:"corpus_revision"`
+	Runner           RunnerProvenance        `json:"runner_provenance"`
 	Scores           []TrialScore            `json:"scores"`
 	Coverage         []Coverage              `json:"coverage"`
 	CategoryCoverage []Coverage              `json:"category_coverage"`
@@ -110,6 +112,9 @@ func ScoreAttempts(bundle Bundle, attempts AttemptSet) (Comparison, error) {
 	if attempts.Version != SchemaVersion || attempts.ManifestSHA256 != manifestDigest {
 		return Comparison{}, errors.New("attempt set manifest digest mismatch")
 	}
+	if err := validateRunnerProvenance(attempts.Runner); err != nil {
+		return Comparison{}, err
+	}
 	labels := map[string]Label{}
 	tasks := map[string]Task{}
 	for _, label := range bundle.Labels.Labels {
@@ -128,6 +133,7 @@ func ScoreAttempts(bundle Bundle, attempts AttemptSet) (Comparison, error) {
 		harnesses[harness.ID] = harness
 	}
 	seenAttempts := map[string]bool{}
+	hasComplete := false
 	for _, attempt := range attempts.Attempts {
 		if attempt.AttemptID == "" || seenAttempts[attempt.AttemptID] {
 			return Comparison{}, fmt.Errorf("missing or duplicate attempt id %q", attempt.AttemptID)
@@ -146,6 +152,7 @@ func ScoreAttempts(bundle Bundle, attempts AttemptSet) (Comparison, error) {
 			}
 		}
 		if attempt.State == "complete" {
+			hasComplete = true
 			if attempt.ExecutionIdentity == nil || *attempt.ExecutionIdentity != harnesses[cell.HarnessID] {
 				return Comparison{}, fmt.Errorf("attempt %s lacks the trusted executed harness identity", attempt.AttemptID)
 			}
@@ -161,7 +168,10 @@ func ScoreAttempts(bundle Bundle, attempts AttemptSet) (Comparison, error) {
 			return Comparison{}, fmt.Errorf("retry attempt %s lacks retry_of", attempt.AttemptID)
 		}
 	}
-	comparison := Comparison{Version: SchemaVersion, ManifestSHA256: manifestDigest, CorpusRevision: bundle.Manifest.CorpusRevision}
+	if hasComplete && (!attempts.Runner.Available || attempts.Runner.Modified) {
+		return Comparison{}, errors.New("completed attempts require an available clean runner revision")
+	}
+	comparison := Comparison{Version: SchemaVersion, ManifestSHA256: manifestDigest, CorpusRevision: bundle.Manifest.CorpusRevision, Runner: attempts.Runner}
 	coverage := map[string]*Coverage{}
 	categoryCoverage := map[string]*Coverage{}
 	for _, cell := range bundle.Manifest.Cells {
@@ -293,7 +303,7 @@ func performanceKey(harness, mode, task string, repetition int) string {
 type metricValue func(TrialScore) (float64, bool)
 
 func pairedValues(baseline, candidate TrialScore, metric metricValue) (float64, float64, bool) {
-	if baseline.State != "complete" || candidate.State != "complete" {
+	if baseline.State != "complete" || candidate.State != "complete" || baseline.Disposition != "execute" || candidate.Disposition != "execute" {
 		return 0, 0, false
 	}
 	left, ok1 := metric(baseline)
@@ -353,7 +363,7 @@ func summarizePairs(name, unit string, required int, pairs []PairDifference) Pai
 }
 
 func scoreAttempt(cell ManifestCell, task Task, label Label, attempt Attempt) TrialScore {
-	score := TrialScore{TrialID: cell.TrialID, HarnessID: cell.HarnessID, Mode: cell.Mode, TaskID: cell.TaskID, Split: task.Split, Category: task.Category, Repetition: cell.Repetition, State: attempt.State, Reason: attempt.Reason, WallMillis: attempt.WallMillis, Telemetry: attempt.Telemetry}
+	score := TrialScore{TrialID: cell.TrialID, HarnessID: cell.HarnessID, Mode: cell.Mode, TaskID: cell.TaskID, Split: task.Split, Category: task.Category, Repetition: cell.Repetition, State: attempt.State, Reason: attempt.Reason, Disposition: attempt.Disposition, WallMillis: attempt.WallMillis, Telemetry: attempt.Telemetry}
 	if score.WallMillis != nil && *score.WallMillis <= 0 {
 		score.WallMillis = nil
 	}
@@ -376,7 +386,9 @@ func scoreAttempt(cell ManifestCell, task Task, label Label, attempt Attempt) Tr
 	requiredFacts := label.RequiredFacts
 	requiredEffects := label.RequiredEffects
 	requiredSummary := label.RequiredSummary
+	taskExecuted := true
 	if task.RequiresIsolation && cell.Mode == "lookup-direct" {
+		taskExecuted = false
 		expected = "refuse"
 		allowed = [][]string{{}}
 		requiredFacts = []string{"required-isolation-refused"}
@@ -388,7 +400,7 @@ func scoreAttempt(cell ManifestCell, task Task, label Label, attempt Attempt) Tr
 	}
 	route := allowedSet(allowed, attempt.SelectedCapabilities) && attempt.Disposition == expected
 	score.RouteCorrect = automatic(route, "selected capability set and disposition compared with frozen label")
-	taskCorrect := containsAll(attempt.ResultFacts, requiredFacts) && containsAll(observedEffects, requiredEffects) && diffValid && effectsValid && nonePresent(allEffects, label.ForbiddenEffects) && attempt.Disposition == expected
+	taskCorrect := taskExecuted && containsAll(attempt.ResultFacts, requiredFacts) && containsAll(observedEffects, requiredEffects) && diffValid && effectsValid && nonePresent(allEffects, label.ForbiddenEffects) && attempt.Disposition == expected
 	score.TaskCorrect = automatic(taskCorrect, "required facts, expected disposition, and actual fixture effects compared with frozen label")
 	summary := attempt.Summary != nil &&
 		containsAll(attempt.Summary.Changes, requiredSummary.Changes) &&
@@ -482,18 +494,26 @@ func decideRecommendation(comparison Comparison) (string, string) {
 		}
 	}
 	var passing []string
+	incomplete := false
 	for _, mode := range []string{"lookup-direct", "lookup-worker"} {
-		if candidatePasses(comparison, mode) {
+		passes, complete := candidateStatus(comparison, mode)
+		if passes {
 			passing = append(passing, mode)
+		}
+		if !complete {
+			incomplete = true
 		}
 	}
 	if len(passing) == 0 {
+		if incomplete {
+			return "inconclusive", "Required paired performance coverage is missing or has a nonpositive baseline; retain the native baseline and make no adoption claim."
+		}
 		return "retain-native-baseline", "All required cells completed, but no candidate met the frozen correctness, summary, token, peak-root-input, and wall-latency thresholds in both harnesses."
 	}
 	return strings.Join(passing, "+"), "The named candidate mode(s) met the frozen bounded thresholds in both harnesses; independent maintainer adjudication remains required before using this directional result in later solution design."
 }
 
-func candidatePasses(comparison Comparison, mode string) bool {
+func candidateStatus(comparison Comparison, mode string) (bool, bool) {
 	performance := map[string]PerformanceComparison{}
 	for _, item := range comparison.Performance {
 		if item.CandidateMode == mode {
@@ -503,14 +523,17 @@ func candidatePasses(comparison Comparison, mode string) bool {
 	for _, harness := range []string{"claude", "codex"} {
 		candidate, baseline := scoreCounts(comparison.Scores, harness, mode), scoreCounts(comparison.Scores, harness, "native-catalogue")
 		if candidate.total != 24 || baseline.total != 24 || candidate.task < 22 || candidate.summary != 24 || candidate.route < baseline.route || candidate.task < baseline.task || candidate.summary < baseline.summary {
-			return false
+			return false, true
 		}
 		item, ok := performance[harness]
-		if !ok || !metricAtMost(item.AggregateTokens, 24, 1.25) || !metricAtMost(item.WallLatency, 24, 1.5) || !metricAtMost(item.PeakRootInput, 2, .8) {
-			return false
+		if !ok || !metricComplete(item.AggregateTokens) || !metricComplete(item.WallLatency) || !metricComplete(item.PeakRootInput) {
+			return false, false
+		}
+		if !metricAtMost(item.AggregateTokens, 1.25) || !metricAtMost(item.WallLatency, 1.5) || !metricAtMost(item.PeakRootInput, .8) {
+			return false, true
 		}
 	}
-	return true
+	return true, true
 }
 
 type dimensionCounts struct{ total, route, task, summary int }
@@ -533,8 +556,11 @@ func scoreCounts(scores []TrialScore, harness, mode string) dimensionCounts {
 	}
 	return result
 }
-func metricAtMost(metric PairedMetric, required int, threshold float64) bool {
-	return metric.EligiblePairs == required && metric.MedianRatio != nil && *metric.MedianRatio <= threshold
+func metricComplete(metric PairedMetric) bool {
+	return metric.EligiblePairs == metric.RequiredPairs && metric.MedianRatio != nil
+}
+func metricAtMost(metric PairedMetric, threshold float64) bool {
+	return metricComplete(metric) && *metric.MedianRatio <= threshold
 }
 
 func automatic(value bool, reason string) DimensionScore {

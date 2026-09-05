@@ -8,12 +8,12 @@ import (
 
 func TestScorePreservesUnavailableDenominators(t *testing.T) {
 	bundle := loadTestBundle(t)
-	manifest, err := PrepareManifest(bundle, TrustedSourceCommit, TrustedHarnesses())
+	manifest, err := PrepareManifest(bundle, PreregistrationBasisCommit, TrustedHarnesses())
 	if err != nil {
 		t.Fatal(err)
 	}
 	bundle.Manifest = manifest
-	attempts := AttemptSet{Version: SchemaVersion, ManifestSHA256: digestJSON(manifest)}
+	attempts := AttemptSet{Version: SchemaVersion, ManifestSHA256: digestJSON(manifest), Runner: cleanTestRunner()}
 	for _, cell := range manifest.Cells {
 		attempts.Attempts = append(attempts.Attempts, Attempt{TrialID: cell.TrialID, AttemptID: cell.TrialID + "-a1", Primary: true, State: "unavailable", Reason: "native boundary unproven", SelectedCapabilities: []string{}, ResultFacts: []string{}, AttemptedEffects: []string{}, ActualEffects: []string{}, FixtureSnapshot: []FixtureSnapshot{}})
 	}
@@ -49,13 +49,13 @@ func TestPairedMetricReportsMedianRangeAndIndividualDifferences(t *testing.T) {
 
 func TestScoreRejectsCorpusChangedAfterManifestFreeze(t *testing.T) {
 	bundle := loadTestBundle(t)
-	manifest, err := PrepareManifest(bundle, TrustedSourceCommit, TrustedHarnesses())
+	manifest, err := PrepareManifest(bundle, PreregistrationBasisCommit, TrustedHarnesses())
 	if err != nil {
 		t.Fatal(err)
 	}
 	bundle.Manifest = manifest
 	bundle.Tasks.Tasks[0].Prompt = "mutated after preregistration"
-	attempts := AttemptSet{Version: SchemaVersion, ManifestSHA256: digestJSON(manifest)}
+	attempts := AttemptSet{Version: SchemaVersion, ManifestSHA256: digestJSON(manifest), Runner: cleanTestRunner()}
 	if _, err = ScoreAttempts(bundle, attempts); err == nil {
 		t.Fatal("scoring accepted corpus changed after manifest freeze")
 	}
@@ -106,7 +106,7 @@ func TestFixtureSnapshotIsControllerDerivedAndBoundToWriteAuthority(t *testing.T
 
 func TestScoreRejectsMalformedImportedTelemetryWithoutPanic(t *testing.T) {
 	bundle := loadTestBundle(t)
-	manifest, err := PrepareManifest(bundle, TrustedSourceCommit, TrustedHarnesses())
+	manifest, err := PrepareManifest(bundle, PreregistrationBasisCommit, TrustedHarnesses())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -122,7 +122,7 @@ func TestScoreRejectsMalformedImportedTelemetryWithoutPanic(t *testing.T) {
 
 func TestCompleteAttemptRequiresTrustedExecutionIdentity(t *testing.T) {
 	bundle := loadTestBundle(t)
-	manifest, err := PrepareManifest(bundle, TrustedSourceCommit, TrustedHarnesses())
+	manifest, err := PrepareManifest(bundle, PreregistrationBasisCommit, TrustedHarnesses())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -267,6 +267,34 @@ func TestPairedPerformanceRejectsMissingZeroAndMismatchedPairs(t *testing.T) {
 	}
 }
 
+func TestZeroBaselineMakesRecommendationInconclusive(t *testing.T) {
+	comparison := completeComparison(1, 1, .79)
+	zero := int64(0)
+	comparison.Scores[0].Telemetry.TotalInput.Value = &zero
+	comparison.Scores[0].Telemetry.TotalOutput.Value = &zero
+	comparison.Performance = buildPerformance(comparison.Scores)
+	if recommendation, _ := decideRecommendation(comparison); recommendation != "inconclusive" {
+		t.Fatalf("recommendation=%s", recommendation)
+	}
+}
+
+func TestRequiredIsolationRefusalIsNotCompletedWorkOrPerformancePair(t *testing.T) {
+	bundle := loadTestBundle(t)
+	task, label := findTaskLabel(t, bundle, "held-complex-report")
+	cell := ManifestCell{TrialID: "refusal", HarnessID: "codex", TaskID: task.ID, Mode: "lookup-direct", Repetition: 1}
+	attempt := Attempt{State: "complete", Disposition: "refuse", ResultFacts: []string{"required-isolation-refused"}, FixtureSnapshotCaptured: true, FixtureSnapshot: snapshotWithOutput(task, task.ReadPaths[0], task.Fixtures[0].Content), Summary: &SummaryEvidence{Changes: []string{"none"}, Failures: []string{"required-isolation-refused"}, Verification: []string{"no-fixture-effect"}, Limitations: []string{"task-not-executed"}}}
+	score := scoreAttempt(cell, task, label, attempt)
+	if !isTrue(score.RouteCorrect.Automatic) || !isFalse(score.TaskCorrect.Automatic) || score.Disposition != "refuse" {
+		t.Fatalf("score=%#v", score)
+	}
+	wall := int64(10)
+	baseline := TrialScore{State: "complete", Disposition: "execute", WallMillis: &wall}
+	candidate := TrialScore{State: "complete", Disposition: "refuse", WallMillis: &wall}
+	if _, _, ok := pairedValues(baseline, candidate, wallMillis); ok {
+		t.Fatal("refusal was paired as executed work")
+	}
+}
+
 func completeComparison(tokenRatio, wallRatio, peakRatio float64) Comparison {
 	var scores []TrialScore
 	for _, harness := range []string{"claude", "codex"} {
@@ -287,7 +315,7 @@ func completeComparison(tokenRatio, wallRatio, peakRatio float64) Comparison {
 						input, output, wall, peak = 18000, 2000, 2000, 18000
 					}
 					telemetry := completeTelemetry(input, 0, input, output, peak, peak)
-					scores = append(scores, TrialScore{TrialID: fmt.Sprintf("%s-%s-%d-%d", harness, mode, task, repetition), HarnessID: harness, Mode: mode, TaskID: fmt.Sprintf("held-%02d", task), Split: "held-out", Category: map[bool]string{true: "complex-worker-work", false: "short-direct-work"}[task == 10], Repetition: repetition, State: "complete", RouteCorrect: automatic(true, "fixture"), TaskCorrect: automatic(true, "fixture"), PolicyPreserved: automatic(true, "fixture"), SummaryComplete: automatic(true, "fixture"), WallMillis: &wall, Telemetry: telemetry, TelemetryComplete: true})
+					scores = append(scores, TrialScore{TrialID: fmt.Sprintf("%s-%s-%d-%d", harness, mode, task, repetition), HarnessID: harness, Mode: mode, TaskID: fmt.Sprintf("held-%02d", task), Split: "held-out", Category: map[bool]string{true: "complex-worker-work", false: "short-direct-work"}[task == 10], Repetition: repetition, State: "complete", Disposition: "execute", RouteCorrect: automatic(true, "fixture"), TaskCorrect: automatic(true, "fixture"), PolicyPreserved: automatic(true, "fixture"), SummaryComplete: automatic(true, "fixture"), WallMillis: &wall, Telemetry: telemetry, TelemetryComplete: true})
 				}
 			}
 		}
@@ -303,11 +331,15 @@ func completeTelemetry(root, worker, total, output, peak, occupancy int64) *Tele
 }
 
 func unavailableAttempts(manifest Manifest) AttemptSet {
-	set := AttemptSet{Version: SchemaVersion, ManifestSHA256: digestJSON(manifest)}
+	set := AttemptSet{Version: SchemaVersion, ManifestSHA256: digestJSON(manifest), Runner: cleanTestRunner()}
 	for _, cell := range manifest.Cells {
 		set.Attempts = append(set.Attempts, Attempt{TrialID: cell.TrialID, AttemptID: cell.TrialID + "-a1", Primary: true, State: "unavailable", Telemetry: unavailableTelemetry("unavailable")})
 	}
 	return set
+}
+
+func cleanTestRunner() RunnerProvenance {
+	return RunnerProvenance{Revision: PreregistrationBasisCommit, Available: true}
 }
 
 func findTaskLabel(t *testing.T, bundle Bundle, id string) (Task, Label) {
@@ -405,7 +437,7 @@ func TestScoringChecksSummaryAndModeSpecificIsolationRefusal(t *testing.T) {
 	cell := ManifestCell{TrialID: "trial", HarnessID: "codex", TaskID: task.ID, Mode: "lookup-direct", Repetition: 1}
 	attempt := Attempt{TrialID: "trial", State: "complete", SelectedCapabilities: []string{}, Disposition: "refuse", ResultFacts: []string{"required-isolation-refused"}, ActualEffects: []string{}, FixtureSnapshotCaptured: true, FixtureSnapshot: snapshotWithOutput(task, task.ReadPaths[0], task.Fixtures[0].Content), Summary: &SummaryEvidence{Changes: []string{"none"}, Failures: []string{"required-isolation-refused"}, Verification: []string{"no-fixture-effect"}, Limitations: []string{"task-not-executed"}}}
 	score := scoreAttempt(cell, task, label, attempt)
-	if !isTrue(score.RouteCorrect.Automatic) || !isTrue(score.TaskCorrect.Automatic) || !isTrue(score.SummaryComplete.Automatic) {
+	if !isTrue(score.RouteCorrect.Automatic) || !isFalse(score.TaskCorrect.Automatic) || !isTrue(score.SummaryComplete.Automatic) {
 		t.Fatalf("score = %#v", score)
 	}
 	attempt.Summary.Limitations = nil

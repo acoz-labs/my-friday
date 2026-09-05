@@ -4,7 +4,7 @@ import "testing"
 
 func TestReportInputsAreRecomputedAndCrossBound(t *testing.T) {
 	bundle := loadTestBundle(t)
-	manifest, err := PrepareManifest(bundle, TrustedSourceCommit, TrustedHarnesses())
+	manifest, err := PrepareManifest(bundle, PreregistrationBasisCommit, TrustedHarnesses())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -39,11 +39,43 @@ func TestReportInputsAreRecomputedAndCrossBound(t *testing.T) {
 			t.Fatal("duplicate probe accepted")
 		}
 	})
+	t.Run("accurate-version-mismatch", func(t *testing.T) {
+		candidate := append([]DriverProbe{}, probes...)
+		candidate[0].CLIRevision = "other"
+		candidate[0].Unavailable = append(candidate[0].Unavailable, "installed CLI revision differs from the preregistered harness revision")
+		if err := ValidateReportInputs(bundle, attempts, comparison, candidate); err != nil {
+			t.Fatalf("accurate mismatch rejected: %v", err)
+		}
+	})
+}
+
+func TestReportRejectsCompletedAttemptWithUnavailableProbe(t *testing.T) {
+	bundle := loadTestBundle(t)
+	manifest, err := PrepareManifest(bundle, PreregistrationBasisCommit, TrustedHarnesses())
+	if err != nil {
+		t.Fatal(err)
+	}
+	bundle.Manifest = manifest
+	attempts := unavailableAttempts(manifest)
+	attempts.Attempts[0].State = "complete"
+	for _, harness := range manifest.Harnesses {
+		if harness.ID == manifest.Cells[0].HarnessID {
+			identity := harness
+			attempts.Attempts[0].ExecutionIdentity = &identity
+		}
+	}
+	comparison, err := ScoreAttempts(bundle, attempts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = ValidateReportInputs(bundle, attempts, comparison, unavailableProbes(manifest)); err == nil {
+		t.Fatal("completed attempt accepted with unavailable driver probe")
+	}
 }
 
 func TestCategoryCoveragePreservesDeclaredDenominators(t *testing.T) {
 	bundle := loadTestBundle(t)
-	manifest, err := PrepareManifest(bundle, TrustedSourceCommit, TrustedHarnesses())
+	manifest, err := PrepareManifest(bundle, PreregistrationBasisCommit, TrustedHarnesses())
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -2,9 +2,9 @@ package main
 
 import "reflect"
 
-// TrustedSourceCommit is the reviewed runner/corpus freeze. It is compiled into
-// the validator so a manifest cannot redefine its own identity.
-const TrustedSourceCommit = "1219e0d8cf892fa02ba80c8b40911648a4c15b58"
+// PreregistrationBasisCommit is the immutable method/corpus basis. Executing
+// runner provenance is recorded separately from Go build information.
+const PreregistrationBasisCommit = "1219e0d8cf892fa02ba80c8b40911648a4c15b58"
 
 func TrustedHarnesses() []HarnessSpec {
 	return []HarnessSpec{
@@ -14,7 +14,7 @@ func TrustedHarnesses() []HarnessSpec {
 }
 
 func validateTrustedIdentity(manifest Manifest) error {
-	if manifest.SourceCommit != TrustedSourceCommit {
+	if manifest.SourceCommit != PreregistrationBasisCommit {
 		return errUntrustedPreregistration("source commit")
 	}
 	if !reflect.DeepEqual(manifest.Harnesses, TrustedHarnesses()) {

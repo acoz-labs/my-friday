@@ -86,7 +86,7 @@ func TestPrepareManifestDeclaresEveryCellAndRotatesModes(t *testing.T) {
 
 func TestManifestValidationRejectsIdentityBudgetsAndIncompleteCartesianMatrix(t *testing.T) {
 	bundle := loadTestBundle(t)
-	manifest, err := PrepareManifest(bundle, TrustedSourceCommit, TrustedHarnesses())
+	manifest, err := PrepareManifest(bundle, PreregistrationBasisCommit, TrustedHarnesses())
 	if err != nil {
 		t.Fatal(err)
 	}

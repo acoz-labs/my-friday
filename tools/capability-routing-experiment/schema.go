@@ -134,9 +134,17 @@ type ManifestCell struct {
 }
 
 type AttemptSet struct {
-	Version        int       `json:"version"`
-	ManifestSHA256 string    `json:"manifest_sha256"`
-	Attempts       []Attempt `json:"attempts"`
+	Version        int              `json:"version"`
+	ManifestSHA256 string           `json:"manifest_sha256"`
+	Runner         RunnerProvenance `json:"runner_provenance"`
+	Attempts       []Attempt        `json:"attempts"`
+}
+
+type RunnerProvenance struct {
+	Revision  string `json:"revision"`
+	Modified  bool   `json:"modified"`
+	Available bool   `json:"available"`
+	Reason    string `json:"reason"`
 }
 
 type Attempt struct {

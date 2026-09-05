@@ -21,6 +21,34 @@ func TestUnavailableProbeNeverBecomesLiveEligible(t *testing.T) {
 	}
 }
 
+func TestRunAndScoreAllUnavailableEvidenceIsInconclusive(t *testing.T) {
+	bin := t.TempDir()
+	writeHarness := func(name, version string) {
+		t.Helper()
+		body := "#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then echo '" + version + "'; else echo 'credential-free help'; fi\n"
+		if err := os.WriteFile(filepath.Join(bin, name), []byte(body), 0o700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	writeHarness("codex", "codex-cli 0.153.4")
+	writeHarness("claude", "2.1.193 (Claude Code)")
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+	runRoot := t.TempDir()
+	if err := runCommand([]string{"--live", "--data", "testdata", "--run-root", runRoot}); err != nil {
+		t.Fatal(err)
+	}
+	if err := scoreCommand([]string{"--data", "testdata", "--run-root", runRoot}); err != nil {
+		t.Fatal(err)
+	}
+	var comparison Comparison
+	if err := ReadJSON(filepath.Join(runRoot, "scores.json"), &comparison); err != nil {
+		t.Fatal(err)
+	}
+	if comparison.Recommendation != "inconclusive" {
+		t.Fatalf("recommendation=%s", comparison.Recommendation)
+	}
+}
+
 func TestCredentialFreeProbeSupervisesEscapedDescendants(t *testing.T) {
 	if os.Getenv("GO_WANT_PROBE_HELPER") != "" {
 		if os.Getenv("GO_WANT_PROBE_HELPER") == "child" {

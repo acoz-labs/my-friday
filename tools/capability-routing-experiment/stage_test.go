@@ -105,6 +105,30 @@ func TestCountedTransportEnforcesAuthorityAndCallCeiling(t *testing.T) {
 	}
 }
 
+func TestCountedTransportEnforcesCumulativeLoadBudget(t *testing.T) {
+	bundle := loadTestBundle(t)
+	task, _ := findTaskLabel(t, bundle, "dev-explicit-csv")
+	transport, err := NewCountedTransport(bundle, task)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var ids []string
+	for _, capability := range bundle.Capabilities.Capabilities {
+		if len(capability.Dependencies) == 0 {
+			ids = append(ids, capability.ID)
+		}
+	}
+	if len(ids) < 4 {
+		t.Fatal("fixture lacks four dependency-free capabilities")
+	}
+	if _, err = transport.Load(ids[:2]); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = transport.Load(ids[2:4]); err == nil {
+		t.Fatal("cumulative four-body load accepted")
+	}
+}
+
 func TestSelectionRefusesStaleRevisionAndBudgetsDependencies(t *testing.T) {
 	bundle := loadTestBundle(t)
 	var stale Task

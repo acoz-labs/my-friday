@@ -9,11 +9,12 @@ import (
 var ErrTransportCallLimit = errors.New("transport call limit exceeded")
 
 type CountedTransport struct {
-	bundle       Bundle
-	task         Task
-	calls        int
-	fallbackUsed bool
-	fixtures     map[string]string
+	bundle        Bundle
+	task          Task
+	calls         int
+	fallbackUsed  bool
+	fixtures      map[string]string
+	primaryLoaded map[string]bool
 }
 
 func NewCountedTransport(bundle Bundle, task Task) (*CountedTransport, error) {
@@ -37,7 +38,7 @@ func NewCountedTransport(bundle Bundle, task Task) (*CountedTransport, error) {
 	for _, fixture := range task.Fixtures {
 		fixtures[fixture.Path] = fixture.Content
 	}
-	return &CountedTransport{bundle: bundle, task: task, fixtures: fixtures}, nil
+	return &CountedTransport{bundle: bundle, task: task, fixtures: fixtures, primaryLoaded: map[string]bool{}}, nil
 }
 
 func (transport *CountedTransport) count() error {
@@ -71,7 +72,26 @@ func (transport *CountedTransport) Load(ids []string) ([]Capability, error) {
 	if err := transport.count(); err != nil {
 		return nil, err
 	}
-	return SelectCapabilitySet(transport.bundle, transport.task, ids)
+	primary := map[string]bool{}
+	for id := range transport.primaryLoaded {
+		primary[id] = true
+	}
+	for _, id := range ids {
+		primary[id] = true
+	}
+	requested := make([]string, 0, len(primary))
+	for id := range primary {
+		requested = append(requested, id)
+	}
+	if len(requested) > 2 {
+		return nil, errors.New("cumulative primary capability limit exceeded")
+	}
+	loaded, err := SelectCapabilitySet(transport.bundle, transport.task, requested)
+	if err != nil {
+		return nil, err
+	}
+	transport.primaryLoaded = primary
+	return loaded, nil
 }
 
 func (transport *CountedTransport) Fallback() ([]CapabilityMetadata, error) {

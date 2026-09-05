@@ -80,6 +80,7 @@ func ProbeHarness(ctx context.Context, harness HarnessName, path string) (Driver
 		"native skill body reads were not proven constrained to the staged allowlist",
 		"native worker identity/inheritance and pre-launch depth/count enforcement were not demonstrated",
 		"enabled built-in tools lack an equivalent pre-dispatch eight-call rejection hook",
+		"immediately detached descendants cannot be proven contained between process-table samples",
 	}
 	return DriverProbe{
 		Version: SchemaVersion, Harness: harness, Executable: filepath.Base(path), CLIRevision: firstLine(version),

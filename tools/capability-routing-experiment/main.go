@@ -72,8 +72,8 @@ func prepareCommand(args []string) error {
 	if err != nil {
 		return err
 	}
-	if *sourceCommit != TrustedSourceCommit {
-		return fmt.Errorf("--source-commit must equal trusted preregistration %s", TrustedSourceCommit)
+	if *sourceCommit != PreregistrationBasisCommit {
+		return fmt.Errorf("--source-commit must equal preregistration basis %s", PreregistrationBasisCommit)
 	}
 	manifest, err := PrepareManifest(bundle, *sourceCommit, TrustedHarnesses())
 	if err != nil {
@@ -152,7 +152,7 @@ func runCommand(args []string) error {
 	for _, probe := range probes {
 		probeByHarness[string(probe.Harness)] = probe
 	}
-	attempts := AttemptSet{Version: SchemaVersion, ManifestSHA256: digestJSON(bundle.Manifest)}
+	attempts := AttemptSet{Version: SchemaVersion, ManifestSHA256: digestJSON(bundle.Manifest), Runner: currentRunnerProvenance()}
 	for _, cell := range bundle.Manifest.Cells {
 		probe := probeByHarness[cell.HarnessID]
 		reason := strings.Join(probe.Unavailable, "; ")
@@ -230,7 +230,7 @@ func validateManifest(bundle Bundle) error {
 	if err := validateTrustedIdentity(manifest); err != nil {
 		return err
 	}
-	expected, err := PrepareManifest(bundle, TrustedSourceCommit, TrustedHarnesses())
+	expected, err := PrepareManifest(bundle, PreregistrationBasisCommit, TrustedHarnesses())
 	if err != nil {
 		return err
 	}

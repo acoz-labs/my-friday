@@ -24,13 +24,18 @@ func ValidateReportInputs(bundle Bundle, attempts AttemptSet, comparison Compari
 		expected[harness.ID] = harness
 	}
 	seen := map[string]bool{}
+	probeByHarness := map[string]DriverProbe{}
 	for _, probe := range probes {
 		id := string(probe.Harness)
 		spec, ok := expected[id]
-		if probe.Version != SchemaVersion || !ok || seen[id] || probe.Executable != id || (probe.CLIRevision != spec.ExecutableVersion && !(probe.State == "unavailable" && probe.CLIRevision == "")) {
+		versionMismatch := probe.CLIRevision != spec.ExecutableVersion
+		mismatchRecorded := contains(probe.Unavailable, "installed CLI revision differs from the preregistered harness revision")
+		missingRecorded := probe.CLIRevision == "" && probe.State == "unavailable"
+		if probe.Version != SchemaVersion || !ok || seen[id] || probe.Executable != id || (versionMismatch && !mismatchRecorded && !missingRecorded) {
 			return fmt.Errorf("driver probe %q is stale, duplicate, or not bound to the trusted executable", id)
 		}
 		seen[id] = true
+		probeByHarness[id] = probe
 		if probe.State != "unavailable" && probe.State != "supported" {
 			return fmt.Errorf("driver probe %q has invalid state", id)
 		}
@@ -54,6 +59,20 @@ func ValidateReportInputs(bundle Bundle, attempts AttemptSet, comparison Compari
 			}
 		}
 	}
+	cellByTrial := map[string]ManifestCell{}
+	for _, cell := range bundle.Manifest.Cells {
+		cellByTrial[cell.TrialID] = cell
+	}
+	for _, attempt := range attempts.Attempts {
+		if !attempt.Primary || attempt.State != "complete" {
+			continue
+		}
+		cell := cellByTrial[attempt.TrialID]
+		probe := probeByHarness[cell.HarnessID]
+		if probe.State != "supported" || !probe.LiveEligible(cell.Mode) {
+			return fmt.Errorf("completed attempt %s is not backed by a supported eligible driver probe", attempt.AttemptID)
+		}
+	}
 	return nil
 }
 
@@ -62,6 +81,10 @@ func RenderMarkdown(comparison Comparison, probes []DriverProbe) string {
 	fmt.Fprintf(&output, "# Capability routing comparison\n\n")
 	fmt.Fprintf(&output, "- Corpus revision: `%s`\n", comparison.CorpusRevision)
 	fmt.Fprintf(&output, "- Manifest SHA-256: `%s`\n", comparison.ManifestSHA256)
+	fmt.Fprintf(&output, "- Executing runner revision: `%s` (available: %t, modified: %t)\n", comparison.Runner.Revision, comparison.Runner.Available, comparison.Runner.Modified)
+	if comparison.Runner.Reason != "" {
+		fmt.Fprintf(&output, "- Runner provenance limitation: %s\n", comparison.Runner.Reason)
+	}
 	fmt.Fprintf(&output, "- Recommendation: **%s**\n", comparison.Recommendation)
 	fmt.Fprintf(&output, "- Conclusion: %s\n\n", comparison.Conclusion)
 	output.WriteString("## Native-driver fidelity\n\n")
