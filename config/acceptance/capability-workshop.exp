@@ -7,7 +7,7 @@ log_file -noappend $transcript
 spawn -noecho {*}[list $candidate capability workshop $instance $slug]
 expect "Mode: $mode"
 if {$mode eq "enhance"} {
-  expect -exact -- {Instruction body [retain/regenerate]}; send -- "retain\r"
+  expect -exact {Instruction body [retain/regenerate]}; send -- "retain\r"
 }
 expect "Display name"; if {$mode eq "create"} {send -- "Daily brief\r"} else {send -- "\r"}
 expect "Summary"; if {$mode eq "create"} {send -- "Prepare a concise daily brief\r"} else {send -- "\r"}

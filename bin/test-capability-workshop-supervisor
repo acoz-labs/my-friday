@@ -44,7 +44,7 @@ grep -Fq 'if {[string first $marker $prompt] >= 0} { exit 65 }' config/acceptanc
 grep -Fq 'Type Create source to continue' config/acceptance/capability-workshop.exp
 grep -Fq 'Type Update source to continue' config/acceptance/capability-workshop.exp
 grep -Fq 'expect_before timeout { exit 124 }' config/acceptance/capability-workshop.exp
-grep -Fq 'expect -exact -- {Instruction body [retain/regenerate]}' config/acceptance/capability-workshop.exp
+grep -Fq 'expect -exact {Instruction body [retain/regenerate]}' config/acceptance/capability-workshop.exp
 if grep -Eq 'builder_prompt|validate-builder-prompt-input|BUILDER_SOURCE_READY' bin/accept-capability-workshop; then
   echo "Model builder authority remains in deterministic workshop acceptance" >&2
   exit 1
