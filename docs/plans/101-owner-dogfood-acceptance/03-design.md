@@ -154,7 +154,8 @@ For issue 51:
   evidence equality; and
 - `ACCEPTANCE_ACTORS` continues to authorize the workflow actor.
 
-The workflow adds `PRODUCT_OWNER_ACTORS: ${{ vars.PRODUCT_OWNER_ACTORS }}`.
+The workflow injects `PRODUCT_OWNER_ACTORS` from the repository Actions
+variable of the same name.
 The product summary must state owner-operated dogfood scope and may not state
 independent-user validation.
 
