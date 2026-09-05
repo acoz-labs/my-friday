@@ -2,6 +2,8 @@
 
 - Corpus revision: `routing-corpus-v1`
 - Manifest SHA-256: `c87d185281be47be6e2ec07978803dfb736f06b5adcfa4bd964f72a3834f0ee8`
+- Executing runner revision: `` (available: false, modified: false)
+- Runner provenance limitation: Go build information did not provide a VCS revision
 - Recommendation: **inconclusive**
 - Conclusion: At least one held-out harness/mode cell is incomplete or lacks required telemetry; retain the native baseline and make no cross-harness claim.
 
@@ -9,8 +11,8 @@
 
 | Harness | Version | State | Missing controls |
 | --- | --- | --- | --- |
-| claude | 2.1.193 (Claude Code) | unavailable | no OS-enforced fixture-only read boundary was demonstrated without exposing host authentication; native skill body reads were not proven constrained to the staged allowlist; native worker identity/inheritance and pre-launch depth/count enforcement were not demonstrated; enabled built-in tools lack an equivalent pre-dispatch eight-call rejection hook |
-| codex | codex-cli 0.153.4 | unavailable | no OS-enforced fixture-only read boundary was demonstrated without exposing host authentication; native skill body reads were not proven constrained to the staged allowlist; native worker identity/inheritance and pre-launch depth/count enforcement were not demonstrated; enabled built-in tools lack an equivalent pre-dispatch eight-call rejection hook |
+| claude | 2.1.193 (Claude Code) | unavailable | no OS-enforced fixture-only read boundary was demonstrated without exposing host authentication; native skill body reads were not proven constrained to the staged allowlist; native worker identity/inheritance and pre-launch depth/count enforcement were not demonstrated; enabled built-in tools lack an equivalent pre-dispatch eight-call rejection hook; immediately detached descendants cannot be proven contained between process-table samples |
+| codex | codex-cli 0.153.4 | unavailable | no OS-enforced fixture-only read boundary was demonstrated without exposing host authentication; native skill body reads were not proven constrained to the staged allowlist; native worker identity/inheritance and pre-launch depth/count enforcement were not demonstrated; enabled built-in tools lack an equivalent pre-dispatch eight-call rejection hook; immediately detached descendants cannot be proven contained between process-table samples |
 
 ## Coverage and scores
 

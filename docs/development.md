@@ -284,3 +284,9 @@ native isolation/control preflight. An unavailable driver records incomplete
 cells and null metrics; it never falls back to unsandboxed inference. See
 [`docs/experiments/capability-routing/README.md`](experiments/capability-routing/README.md)
 for the method, commands, control matrix, and current partial result.
+Executing-runner VCS revision/modified state is independent of the
+preregistration-basis commit and is captured from Go build information. Missing
+or dirty build provenance cannot support a completed trial. Process-table
+sampling supervises the credential-free probes but is not claimed to contain an
+immediately detached descendant between samples; that unresolved native control
+keeps both drivers unavailable.

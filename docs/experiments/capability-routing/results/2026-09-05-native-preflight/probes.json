@@ -9,7 +9,8 @@
       "no OS-enforced fixture-only read boundary was demonstrated without exposing host authentication",
       "native skill body reads were not proven constrained to the staged allowlist",
       "native worker identity/inheritance and pre-launch depth/count enforcement were not demonstrated",
-      "enabled built-in tools lack an equivalent pre-dispatch eight-call rejection hook"
+      "enabled built-in tools lack an equivalent pre-dispatch eight-call rejection hook",
+      "immediately detached descendants cannot be proven contained between process-table samples"
     ],
     "controls": {
       "os_fixture_only_read_boundary": false,
@@ -42,7 +43,8 @@
       "no OS-enforced fixture-only read boundary was demonstrated without exposing host authentication",
       "native skill body reads were not proven constrained to the staged allowlist",
       "native worker identity/inheritance and pre-launch depth/count enforcement were not demonstrated",
-      "enabled built-in tools lack an equivalent pre-dispatch eight-call rejection hook"
+      "enabled built-in tools lack an equivalent pre-dispatch eight-call rejection hook",
+      "immediately detached descendants cannot be proven contained between process-table samples"
     ],
     "controls": {
       "os_fixture_only_read_boundary": false,

@@ -24,7 +24,7 @@ effects, forbidden effects, and required summary material.
 
 The 288 primary cells cover two harnesses, three modes, 24 tasks, and two
 repetitions with rotated mode order and cold/warm fixture-cache labels. The
-manifest binds runner/corpus source commit
+manifest binds the preregistration method/corpus basis commit
 `1219e0d8cf892fa02ba80c8b40911648a4c15b58`, corpus revision
 `routing-corpus-v1`, exact corpus/rubric hashes, harness versions and models,
 budgets, and every cell. The attempt/result binding uses the compact canonical
@@ -94,6 +94,10 @@ Unavailable, failed, invalid, retry, and missing rows stay visible and are not
 treated as cheaper completed work. Only primary attempts enter automatic
 scores. The recommendation thresholds approved in #107 remain the decision
 rule; missing held-out cells or telemetry make the result `inconclusive`.
+Correctly refusing isolation-required work in `lookup-direct` can pass routing
+and summary checks, but does not count as completed task work and cannot enter a
+performance pair. Performance pairing is based on matched executed work, not a
+24/24 correctness requirement; the separate task-quality floor remains 22/24.
 
 ## Driver boundary and current evidence
 
@@ -104,14 +108,15 @@ It does not start inference.
 
 | Harness | Version | Current state | Why live cells are unavailable |
 | --- | --- | --- | --- |
-| Codex | `codex-cli 0.153.4` | `unavailable` | No demonstrated OS-enforced fixture-only read boundary, constrained native body reader, native worker inheritance/pre-launch limit, or built-in pre-dispatch rejection. Workspace-write is not restricted-read proof. |
-| Claude Code | `2.1.193` | `unavailable` | The same controls are unproven. Tool allowlist flags are not OS-backed read/network denial, and disabling native skills/agents is not an eligible A/C baseline. |
+| Codex | `codex-cli 0.153.4` | `unavailable` | No demonstrated OS-enforced fixture-only read boundary, constrained native body reader, native worker inheritance/pre-launch limit, built-in pre-dispatch rejection, or guaranteed immediately-detached-descendant containment. Workspace-write is not restricted-read proof. |
+| Claude Code | `2.1.193` | `unavailable` | The same controls are unproven, including guaranteed immediately-detached-descendant containment. Tool allowlist flags are not OS-backed read/network denial, and disabling native skills/agents is not an eligible A/C baseline. |
 
 The controller includes a stable PID/start-time supervisor for both trials and
 credential-free version/help probes, timeout/cancel
-cleanup, escaped-descendant tracking, unrelated-process canaries, strict
+cleanup, sampled escaped-descendant tracking, unrelated-process canaries, strict
 telemetry parsing, and immutable exact-match resume. These primitives do not
-themselves prove a harness boundary. A supported driver still needs the native
+prove an immediately detached child cannot escape between process-table samples
+and therefore do not themselves prove a harness boundary. A supported driver still needs the native
 canaries and pre-dispatch controls above; flags or simulated workers are
 insufficient.
 
@@ -150,8 +155,11 @@ jq -cj . tools/capability-routing-experiment/testdata/manifest.json | shasum -a 
 shasum -a 256 tools/capability-routing-experiment/testdata/manifest.json
 ```
 
-`prepare` accepts only the compiled trusted source commit and harness identity.
-Evidence writes are create-or-verify: exact immutable resumes are
+`prepare` accepts only the compiled preregistration-basis commit and trusted
+harness identity. Attempt evidence separately records the executing runner's Go
+VCS revision and modified state. Missing or dirty provenance is explicit and
+cannot support a completed live trial. Evidence writes are create-or-verify:
+exact immutable resumes are
 idempotent, while changed content refuses. Use a fresh owner-only model/run root.
 Raw model streams, environment data, authentication paths, session identifiers,
 and private paths are not allowlisted report fields and must not be committed.
@@ -170,6 +178,12 @@ The frozen preflight lives in
 `report` reloads the frozen bundle and attempts, deterministically recomputes
 the scores, and validates the exact two probe identities before freezing either
 format. Coverage includes aggregate and per-category denominators.
+
+This preflight was invoked from clean source-control head
+`22bb6a6d01d691460d7d496ab90258aa181343a4`, but the `go run` build did not
+expose a VCS revision through Go build information. The attempt receipt records
+that limitation rather than inferring the revision, which also makes it
+ineligible for completed live evidence. No live trial was attempted.
 
 All 288 rows are unavailable, including the second harness. There are no model
 task, route, policy, summary, token, latency, or context observations. This is
