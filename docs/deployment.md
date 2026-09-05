@@ -169,6 +169,11 @@ copy is removed with the instance. The
 same file-backed OAuth credential is deliberately not routed through
 `codex login --with-api-key`.
 
+The instance config disables the separately packaged Code Mode host and hides
+the rate-limit model-switch nudge before the PTY starts. Codex may still record
+only its model-availability counters in a narrowly parsed TUI suffix; the
+acceptor and ordinary instance verification reject all other config drift.
+
 Failure cleanup removes the disposable credential before invoking ordinary
 manifest-gated instance removal. This acceptance-only authority is limited to
 the exact verified instance root's `codex/auth.json`: one no-follow opened Codex

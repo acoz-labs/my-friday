@@ -81,6 +81,7 @@ Never run install, upgrade, enable, disable, remove, or lifecycle recover, and n
 const builderPolicy = "policy:\n  allow_implicit_invocation: true\n"
 
 var namePattern = regexp.MustCompile(`^[a-z0-9](?:[a-z0-9-]{0,30}[a-z0-9])?$`)
+var modelAvailabilityLinePattern = regexp.MustCompile(`^(?:[A-Za-z0-9_-]+|"[A-Za-z0-9._-]+") = [0-9]+$`)
 var reserved = map[string]bool{"codex": true, "my-friday": true, "default": true, "current": true, "new": true}
 
 type Manifest struct {
@@ -330,7 +331,37 @@ func managedCodexConfig(p Paths, capabilityRevision int) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	return []byte("approval_policy = \"never\"\nsandbox_mode = \"workspace-write\"\n\n[sandbox_workspace_write]\nnetwork_access = false\nwritable_roots = [" + runtime + "]\n\n[projects." + workspace + "]\ntrust_level = \"trusted\"\n"), nil
+	prefix := "approval_policy = \"never\"\nsandbox_mode = \"workspace-write\"\n\n"
+	if capabilityRevision == CapabilityRevision {
+		prefix += "[features]\ncode_mode_host = false\n\n[notice]\nhide_rate_limit_model_nudge = true\n\n"
+	}
+	return []byte(prefix + "[sandbox_workspace_write]\nnetwork_access = false\nwritable_roots = [" + runtime + "]\n\n[projects." + workspace + "]\ntrust_level = \"trusted\"\n"), nil
+}
+
+func validCodexModelAvailabilitySuffix(body, expected []byte) bool {
+	if bytes.Equal(body, expected) {
+		return true
+	}
+	if !bytes.HasPrefix(body, expected) {
+		return false
+	}
+	suffix := string(body[len(expected):])
+	const header = "\n[tui.model_availability_nux]\n"
+	if !strings.HasPrefix(suffix, header) || !strings.HasSuffix(suffix, "\n") {
+		return false
+	}
+	lines := strings.Split(strings.TrimSuffix(strings.TrimPrefix(suffix, header), "\n"), "\n")
+	if len(lines) == 0 || len(lines) > 32 {
+		return false
+	}
+	seen := make(map[string]bool, len(lines))
+	for _, line := range lines {
+		if !modelAvailabilityLinePattern.MatchString(line) || seen[line[:strings.Index(line, " = ")]] {
+			return false
+		}
+		seen[line[:strings.Index(line, " = ")]] = true
+	}
+	return true
 }
 
 func capabilityBuilder(p Paths) []byte {
@@ -839,7 +870,11 @@ func verifyManagedConfig(p Paths, m Manifest) error {
 	if err != nil {
 		return err
 	}
-	if info.Mode().Perm() != 0600 || digest(b) != m.CodexConfigSHA256 || !bytes.Equal(b, expected) {
+	validBody := bytes.Equal(b, expected)
+	if m.ContractVersion == ContractVersion && m.CapabilityRevision == CapabilityRevision {
+		validBody = validCodexModelAvailabilitySuffix(b, expected)
+	}
+	if info.Mode().Perm() != 0600 || digest(expected) != m.CodexConfigSHA256 || !validBody {
 		return errors.New("managed Codex config drift")
 	}
 	return nil
