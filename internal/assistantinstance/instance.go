@@ -93,6 +93,8 @@ type Manifest struct {
 	LauncherSHA256             string   `json:"launcher_sha256"`
 	CodexExecutable            string   `json:"codex_executable"`
 	CodexSHA256                string   `json:"codex_sha256"`
+	CodexCodeModeHost          string   `json:"codex_code_mode_host,omitempty"`
+	CodexCodeModeHostSHA256    string   `json:"codex_code_mode_host_sha256,omitempty"`
 	CodexConfig                string   `json:"codex_config"`
 	CodexConfigSHA256          string   `json:"codex_config_sha256"`
 	CodexInstructions          string   `json:"codex_instructions,omitempty"`
@@ -118,9 +120,11 @@ type capabilityMigration struct {
 	TargetCapabilityRevision     int    `json:"target_capability_revision,omitempty"`
 	SourceManifestSHA256         string `json:"source_manifest_sha256,omitempty"`
 	CandidateSHA256              string `json:"candidate_sha256,omitempty"`
+	CodeModeHostCandidateSHA256  string `json:"code_mode_host_candidate_sha256,omitempty"`
 	BuilderQuarantineSHA256      string `json:"builder_quarantine_sha256,omitempty"`
 	CapabilitiesQuarantineSHA256 string `json:"capabilities_quarantine_sha256,omitempty"`
 	MyFridayQuarantineSHA256     string `json:"my_friday_quarantine_sha256,omitempty"`
+	CodeModeHostQuarantineSHA256 string `json:"code_mode_host_quarantine_sha256,omitempty"`
 }
 
 func capabilityMigrationPath(root string) string {
@@ -169,13 +173,13 @@ func readCapabilityMigration(root string) (capabilityMigration, error) {
 	}
 	canonical, _ := json.MarshalIndent(m, "", "  ")
 	canonical = append(canonical, '\n')
-	validTarget := m.Action == "upgrade" && m.TargetContractVersion == 0 && m.TargetCapabilityRevision == 0
+	validTarget := m.Action == "upgrade" && m.TargetContractVersion == 0 && m.TargetCapabilityRevision == 0 && validDigest(m.CodeModeHostCandidateSHA256)
 	if m.Action == "rollback" {
-		validTarget = (m.TargetContractVersion == 1 && m.TargetCapabilityRevision == 0) || (m.TargetContractVersion == ContractVersion && (m.TargetCapabilityRevision == 0 || m.TargetCapabilityRevision == 2))
+		validTarget = m.CodeModeHostCandidateSHA256 == "" && ((m.TargetContractVersion == 1 && m.TargetCapabilityRevision == 0) || (m.TargetContractVersion == ContractVersion && (m.TargetCapabilityRevision == 0 || m.TargetCapabilityRevision == 2)))
 	}
-	validQuarantines := m.BuilderQuarantineSHA256 == "" && m.CapabilitiesQuarantineSHA256 == "" && m.MyFridayQuarantineSHA256 == ""
-	if m.BuilderQuarantineSHA256 != "" || m.CapabilitiesQuarantineSHA256 != "" || m.MyFridayQuarantineSHA256 != "" {
-		validQuarantines = validDigest(m.BuilderQuarantineSHA256) && validDigest(m.CapabilitiesQuarantineSHA256) && validDigest(m.MyFridayQuarantineSHA256)
+	validQuarantines := m.BuilderQuarantineSHA256 == "" && m.CapabilitiesQuarantineSHA256 == "" && m.MyFridayQuarantineSHA256 == "" && m.CodeModeHostQuarantineSHA256 == ""
+	if m.BuilderQuarantineSHA256 != "" || m.CapabilitiesQuarantineSHA256 != "" || m.MyFridayQuarantineSHA256 != "" || m.CodeModeHostQuarantineSHA256 != "" {
+		validQuarantines = validDigest(m.BuilderQuarantineSHA256) && validDigest(m.CapabilitiesQuarantineSHA256) && validDigest(m.MyFridayQuarantineSHA256) && validDigest(m.CodeModeHostQuarantineSHA256)
 	}
 	validPhase := m.Phase == "" || (m.Action == "rollback" && m.Phase == "executable-restored")
 	if !bytes.Equal(body, canonical) || m.ContractVersion != 2 || (m.Action != "upgrade" && m.Action != "rollback") || !validDigest(m.SourceManifestSHA256) || !validTarget || !validQuarantines || !validPhase {
@@ -191,16 +195,18 @@ type Paths struct {
 type rootProof struct{ Device, Inode uint64 }
 
 type Plan struct {
-	Action          string
-	Paths           Paths
-	Items           []string
-	RuntimeSource   string
-	MemorySource    string
-	AssistantID     string
-	candidatePath   string
-	candidateSHA256 string
-	rootDevice      uint64
-	rootInode       uint64
+	Action             string
+	Paths              Paths
+	Items              []string
+	RuntimeSource      string
+	MemorySource       string
+	AssistantID        string
+	candidatePath      string
+	candidateSHA256    string
+	codeModeHostPath   string
+	codeModeHostSHA256 string
+	rootDevice         uint64
+	rootInode          uint64
 }
 
 func (p Plan) String() string {
@@ -333,7 +339,7 @@ func managedCodexConfig(p Paths, capabilityRevision int) ([]byte, error) {
 	}
 	prefix := "approval_policy = \"never\"\nsandbox_mode = \"workspace-write\"\n\n"
 	if capabilityRevision == CapabilityRevision {
-		prefix += "[features]\ncode_mode_host = false\n\n[notice]\nhide_rate_limit_model_nudge = true\n\n"
+		prefix += "[notice]\nhide_rate_limit_model_nudge = true\n\n"
 	}
 	return []byte(prefix + "[sandbox_workspace_write]\nnetwork_access = false\nwritable_roots = [" + runtime + "]\n\n[projects." + workspace + "]\ntrust_level = \"trusted\"\n"), nil
 }
@@ -569,7 +575,11 @@ func PlanCreate(home, name, executable, codex string) (Plan, error) {
 	if _, _, err = regular(codex); err != nil {
 		return Plan{}, fmt.Errorf("Codex executable refused: %w", err)
 	}
-	return Plan{Action: "create", Paths: p, Items: []string{"create private instance root", "create codex, runtime, memory, workspace, and dependencies", "trust the exact workspace and add only the private runtime as workspace-write authority with approvals never and network disabled", "copy and bind the exact My Friday executable for capability-builder read-only checks", "install exact native launcher with no replacement", "leave HOME, shell files, user Codex state, and launcher siblings unchanged"}}, nil
+	hostPath, hostBytes, err := codeModeHostSource(codex)
+	if err != nil {
+		return Plan{}, err
+	}
+	return Plan{Action: "create", Paths: p, Items: []string{"create private instance root", "create codex, runtime, memory, workspace, and dependencies", "copy and bind the exact same-package Codex Code Mode host", "trust the exact workspace and add only the private runtime as workspace-write authority with approvals never and network disabled", "copy and bind the exact My Friday executable for capability-builder read-only checks", "install exact native launcher with no replacement", "leave HOME, shell files, user Codex state, and launcher siblings unchanged"}, codeModeHostPath: hostPath, codeModeHostSHA256: digest(hostBytes)}, nil
 }
 
 func WithRepositories(plan Plan, runtime, memory, assistantID string) (Plan, error) {
@@ -693,12 +703,18 @@ func createLocked(plan Plan, executable, codex string, afterVerify func() error)
 	owned := []string{"capabilities", "codex", "dependencies", "memory", "runtime", "workspace"}
 	sort.Strings(owned)
 	managedCodex := filepath.Join(p.Root, "dependencies", "codex")
+	managedCodeModeHost := filepath.Join(p.Root, "dependencies", "codex-code-mode-host")
 	managedMyFriday := filepath.Join(p.Root, "dependencies", "my-friday")
 	managedConfig := filepath.Join(p.Root, "codex", "config.toml")
 	codexBytes, _, err := regular(codex)
 	if err != nil {
 		clean()
 		return err
+	}
+	hostBytes, hostInfo, err := regular(plan.codeModeHostPath)
+	if err != nil || hostInfo.Mode().Perm()&0o111 == 0 || digest(hostBytes) != plan.codeModeHostSHA256 {
+		clean()
+		return errors.New("Codex Code Mode host changed after preview")
 	}
 	configBytes, err := managedCodexConfig(p, CapabilityRevision)
 	if err != nil {
@@ -742,7 +758,7 @@ func createLocked(plan Plan, executable, codex string, afterVerify func() error)
 		clean()
 		return err
 	}
-	m := Manifest{ContractVersion: ContractVersion, Name: p.Name, Root: p.Root, Owned: owned, Launcher: p.Launcher, LauncherSHA256: digest(launcher), CodexExecutable: managedCodex, CodexSHA256: digest(codexBytes), CodexConfig: managedConfig, CodexConfigSHA256: digest(configBytes), CodexInstructions: managedInstructions, AssistantID: plan.AssistantID, MyFridayExecutable: managedMyFriday, MyFridaySHA256: digest(launcher), CapabilityRevision: CapabilityRevision, RollbackContractVersion: 1, CapabilityBuilder: filepath.Join(p.Root, "workspace", ".agents", "skills", "capability-builder"), CapabilityBuilderSHA256: digest(builderBytes), CapabilityPolicySHA256: digest(policyBytes)}
+	m := Manifest{ContractVersion: ContractVersion, Name: p.Name, Root: p.Root, Owned: owned, Launcher: p.Launcher, LauncherSHA256: digest(launcher), CodexExecutable: managedCodex, CodexSHA256: digest(codexBytes), CodexCodeModeHost: managedCodeModeHost, CodexCodeModeHostSHA256: digest(hostBytes), CodexConfig: managedConfig, CodexConfigSHA256: digest(configBytes), CodexInstructions: managedInstructions, AssistantID: plan.AssistantID, MyFridayExecutable: managedMyFriday, MyFridaySHA256: digest(launcher), CapabilityRevision: CapabilityRevision, RollbackContractVersion: 1, CapabilityBuilder: filepath.Join(p.Root, "workspace", ".agents", "skills", "capability-builder"), CapabilityBuilderSHA256: digest(builderBytes), CapabilityPolicySHA256: digest(policyBytes)}
 	if managedInstructions != "" {
 		m.CodexInstructionsSHA256 = digest(instructionsBytes)
 	}
@@ -757,6 +773,10 @@ func createLocked(plan Plan, executable, codex string, afterVerify func() error)
 		return err
 	}
 	if err = os.WriteFile(filepath.Join(stage, "dependencies", "codex"), codexBytes, 0700); err != nil {
+		clean()
+		return err
+	}
+	if err = os.WriteFile(filepath.Join(stage, "dependencies", "codex-code-mode-host"), hostBytes, 0700); err != nil {
 		clean()
 		return err
 	}
@@ -819,11 +839,17 @@ func readManifest(p Paths) (Manifest, error) {
 		want = []string{"codex", "dependencies", "memory", "runtime", "workspace"}
 	}
 	wantCodex := filepath.Join(p.Root, "dependencies", "codex")
+	wantCodeModeHost := ""
+	validCodeModeHostDigest := m.CodexCodeModeHostSHA256 == ""
 	wantMyFriday := ""
 	validMyFridayDigest := m.MyFridaySHA256 == ""
 	if m.ContractVersion == ContractVersion && (m.CapabilityRevision == 2 || m.CapabilityRevision == CapabilityRevision) {
 		wantMyFriday = filepath.Join(p.Root, "dependencies", "my-friday")
 		validMyFridayDigest = validDigest(m.MyFridaySHA256)
+	}
+	if m.ContractVersion == ContractVersion && m.CapabilityRevision == CapabilityRevision {
+		wantCodeModeHost = filepath.Join(p.Root, "dependencies", "codex-code-mode-host")
+		validCodeModeHostDigest = validDigest(m.CodexCodeModeHostSHA256)
 	}
 	wantConfig := filepath.Join(p.Root, "codex", "config.toml")
 	wantInstructions := ""
@@ -855,7 +881,7 @@ func readManifest(p Paths) (Manifest, error) {
 		validRollback = (m.RollbackContractVersion == 1 && m.RollbackCapabilityRevision == 0) || (m.RollbackContractVersion == ContractVersion && m.RollbackCapabilityRevision == 0)
 	}
 	validRevision := (m.ContractVersion == 1 && m.CapabilityRevision == 0) || (m.ContractVersion == ContractVersion && (m.CapabilityRevision == 0 || m.CapabilityRevision == 2 || m.CapabilityRevision == CapabilityRevision))
-	if configErr != nil || !validRevision || !validRollback || m.Name != p.Name || m.Root != p.Root || m.Launcher != p.Launcher || m.CodexExecutable != wantCodex || !validDigest(m.CodexSHA256) || m.MyFridayExecutable != wantMyFriday || !validMyFridayDigest || m.CodexConfig != wantConfig || m.CodexConfigSHA256 != digest(configBytes) || m.CodexInstructions != wantInstructions || !validInstructionsDigest || !validBuilder || strings.Join(m.Owned, "\x00") != strings.Join(want, "\x00") {
+	if configErr != nil || !validRevision || !validRollback || m.Name != p.Name || m.Root != p.Root || m.Launcher != p.Launcher || m.CodexExecutable != wantCodex || !validDigest(m.CodexSHA256) || m.CodexCodeModeHost != wantCodeModeHost || !validCodeModeHostDigest || m.MyFridayExecutable != wantMyFriday || !validMyFridayDigest || m.CodexConfig != wantConfig || m.CodexConfigSHA256 != digest(configBytes) || m.CodexInstructions != wantInstructions || !validInstructionsDigest || !validBuilder || strings.Join(m.Owned, "\x00") != strings.Join(want, "\x00") {
 		return m, errors.New("manifest ownership contract mismatch")
 	}
 	return m, nil
@@ -935,6 +961,14 @@ func PlanUpgrade(home, name, executable string) (Plan, error) {
 	if candidateErr != nil || candidateInfo.Mode().Perm()&0o111 == 0 {
 		return Plan{}, errors.New("assistant upgrade candidate executable refused")
 	}
+	codex, err := FindCodex()
+	if err != nil {
+		return Plan{}, err
+	}
+	hostPath, hostBytes, err := codeModeHostSource(codex)
+	if err != nil {
+		return Plan{}, err
+	}
 	if _, err = os.Lstat(capabilityMigrationPath(p.Root)); err == nil {
 		return Plan{}, errors.New("assistant capability migration recovery required")
 	} else if !errors.Is(err, os.ErrNotExist) {
@@ -945,7 +979,7 @@ func PlanUpgrade(home, name, executable string) (Plan, error) {
 		return Plan{}, err
 	}
 	st := info.Sys().(*syscall.Stat_t)
-	return Plan{Action: "upgrade", Paths: p, Items: []string{"add manifest-owned capability control root", "project the instance-specific capability builder into this instance workspace", "copy and bind the exact currently executing My Friday candidate for read-only builder checks", "add only the private runtime to workspace-write authority with approvals never and network disabled", "leave external runtime source, global skills, Codex credentials, and other instances unchanged"}, candidatePath: executable, candidateSHA256: digest(candidate), rootDevice: uint64(st.Dev), rootInode: uint64(st.Ino)}, nil
+	return Plan{Action: "upgrade", Paths: p, Items: []string{"add manifest-owned capability control root", "project the instance-specific capability builder into this instance workspace", "copy and bind the exact same-package Codex Code Mode host", "copy and bind the exact currently executing My Friday candidate for read-only builder checks", "add only the private runtime to workspace-write authority with approvals never and network disabled", "leave external runtime source, global skills, Codex credentials, and other instances unchanged"}, candidatePath: executable, candidateSHA256: digest(candidate), codeModeHostPath: hostPath, codeModeHostSHA256: digest(hostBytes), rootDevice: uint64(st.Dev), rootInode: uint64(st.Ino)}, nil
 }
 
 func Upgrade(plan Plan) error {
@@ -1063,6 +1097,10 @@ func validateRollbackQuarantines(p Paths, migration capabilityMigration) error {
 	if err != nil || executableDigest != migration.MyFridayQuarantineSHA256 {
 		return errors.New("assistant rollback executable quarantine drift")
 	}
+	hostDigest, err := ownedExecutableDigest(filepath.Join(p.Root, "dependencies", "codex-code-mode-host.rollback"))
+	if err != nil || hostDigest != migration.CodeModeHostQuarantineSHA256 {
+		return errors.New("assistant rollback Codex Code Mode host quarantine drift")
+	}
 	return nil
 }
 
@@ -1077,6 +1115,9 @@ func finishRollbackQuarantines(p Paths, migration capabilityMigration) error {
 		return err
 	}
 	if err := os.Remove(filepath.Join(p.Root, "dependencies", "my-friday.rollback")); err != nil {
+		return err
+	}
+	if err := os.Remove(filepath.Join(p.Root, "dependencies", "codex-code-mode-host.rollback")); err != nil {
 		return err
 	}
 	return os.Remove(capabilityMigrationPath(p.Root))
@@ -1101,6 +1142,8 @@ func completeRollback(p Paths, m Manifest) error {
 	capabilitiesQ := capabilities + ".rollback"
 	managedMyFriday := filepath.Join(p.Root, "dependencies", "my-friday")
 	managedMyFridayQ := managedMyFriday + ".rollback"
+	managedCodeModeHost := filepath.Join(p.Root, "dependencies", "codex-code-mode-host")
+	managedCodeModeHostQ := managedCodeModeHost + ".rollback"
 	if _, err := os.Lstat(builderQ); errors.Is(err, os.ErrNotExist) {
 		entries, readErr := os.ReadDir(skills)
 		if readErr != nil || len(entries) != 1 || entries[0].Name() != "capability-builder" {
@@ -1130,6 +1173,13 @@ func completeRollback(p Paths, m Manifest) error {
 	} else if err != nil {
 		return err
 	}
+	if _, err := os.Lstat(managedCodeModeHostQ); errors.Is(err, os.ErrNotExist) {
+		if err = os.Rename(managedCodeModeHost, managedCodeModeHostQ); err != nil {
+			return err
+		}
+	} else if err != nil {
+		return err
+	}
 	if migration.BuilderQuarantineSHA256 == "" {
 		skill, info, skillErr := regular(filepath.Join(builderQ, "SKILL.md"))
 		policy, policyInfo, policyErr := regular(filepath.Join(builderQ, "agents", "openai.yaml"))
@@ -1152,6 +1202,10 @@ func completeRollback(p Paths, m Manifest) error {
 		if err != nil || migration.MyFridayQuarantineSHA256 != m.MyFridaySHA256 {
 			return errors.New("assistant rollback executable quarantine does not match source manifest")
 		}
+		migration.CodeModeHostQuarantineSHA256, err = ownedExecutableDigest(managedCodeModeHostQ)
+		if err != nil || migration.CodeModeHostQuarantineSHA256 != m.CodexCodeModeHostSHA256 {
+			return errors.New("assistant rollback Codex Code Mode host quarantine does not match source manifest")
+		}
 		if err = writeCapabilityMigration(p.Root, migration, true); err != nil {
 			return err
 		}
@@ -1172,6 +1226,8 @@ func completeRollback(p Paths, m Manifest) error {
 	m.RollbackMyFridaySHA256 = ""
 	m.MyFridayExecutable = ""
 	m.MyFridaySHA256 = ""
+	m.CodexCodeModeHost = ""
+	m.CodexCodeModeHostSHA256 = ""
 	if targetContract == 1 {
 		m.Owned = []string{"codex", "dependencies", "memory", "runtime", "workspace"}
 		m.CapabilityBuilder = ""
@@ -1298,6 +1354,8 @@ func upgradeLocked(plan Plan) error {
 	managedMyFriday := filepath.Join(plan.Paths.Root, "dependencies", "my-friday")
 	rollbackSource := managedMyFriday + ".rollback-source"
 	candidateStage := managedMyFriday + ".upgrade"
+	managedCodeModeHost := filepath.Join(plan.Paths.Root, "dependencies", "codex-code-mode-host")
+	hostStage := managedCodeModeHost + ".upgrade"
 	if !resuming {
 		if !errors.Is(journalErr, os.ErrNotExist) {
 			return journalErr
@@ -1329,6 +1387,12 @@ func upgradeLocked(plan Plan) error {
 		if _, statErr := os.Lstat(candidateStage); !errors.Is(statErr, os.ErrNotExist) {
 			return errors.New("managed My Friday upgrade staging collision")
 		}
+		if _, statErr := os.Lstat(managedCodeModeHost); !errors.Is(statErr, os.ErrNotExist) {
+			return errors.New("managed Codex Code Mode host collision")
+		}
+		if _, statErr := os.Lstat(hostStage); !errors.Is(statErr, os.ErrNotExist) {
+			return errors.New("managed Codex Code Mode host staging collision")
+		}
 		candidate, info, candidateErr := regular(plan.candidatePath)
 		if candidateErr != nil || info.Mode().Perm()&0o111 == 0 || digest(candidate) != plan.candidateSHA256 {
 			return errors.New("assistant upgrade candidate changed after preview")
@@ -1337,12 +1401,21 @@ func upgradeLocked(plan Plan) error {
 		if manifestErr != nil {
 			return manifestErr
 		}
-		migration = capabilityMigration{ContractVersion: 2, Action: "upgrade", SourceContractVersion: m.ContractVersion, SourceCapabilityRevision: m.CapabilityRevision, SourceManifestSHA256: digest(manifestBytes), CandidateSHA256: plan.candidateSHA256}
+		hostBytes, hostInfo, hostErr := regular(plan.codeModeHostPath)
+		if hostErr != nil || hostInfo.Mode().Perm()&0o111 == 0 || digest(hostBytes) != plan.codeModeHostSHA256 {
+			return errors.New("Codex Code Mode host changed after preview")
+		}
+		migration = capabilityMigration{ContractVersion: 2, Action: "upgrade", SourceContractVersion: m.ContractVersion, SourceCapabilityRevision: m.CapabilityRevision, SourceManifestSHA256: digest(manifestBytes), CandidateSHA256: plan.candidateSHA256, CodeModeHostCandidateSHA256: plan.codeModeHostSHA256}
 		if err = CopyFile(candidateStage, bytes.NewReader(candidate), 0o700); err != nil {
+			return err
+		}
+		if err = CopyFile(hostStage, bytes.NewReader(hostBytes), 0o700); err != nil {
+			_ = os.Remove(candidateStage)
 			return err
 		}
 		if err = writeCapabilityMigration(plan.Paths.Root, migration, false); err != nil {
 			_ = os.Remove(candidateStage)
+			_ = os.Remove(hostStage)
 			return err
 		}
 	} else {
@@ -1354,6 +1427,10 @@ func upgradeLocked(plan Plan) error {
 	candidateBytes, candidateInfo, candidateErr := regular(candidateStage)
 	if candidateErr != nil || candidateInfo.Mode().Perm() != 0o700 || digest(candidateBytes) != migration.CandidateSHA256 {
 		return errors.New("assistant upgrade candidate staging drift")
+	}
+	hostBytes, hostInfo, hostErr := regular(hostStage)
+	if hostErr != nil || hostInfo.Mode().Perm() != 0o700 || digest(hostBytes) != migration.CodeModeHostCandidateSHA256 {
+		return errors.New("assistant upgrade Codex Code Mode host staging drift")
 	}
 	if m.CapabilityRevision == 2 {
 		if _, backupErr := os.Lstat(rollbackSource); errors.Is(backupErr, os.ErrNotExist) {
@@ -1415,6 +1492,15 @@ func upgradeLocked(plan Plan) error {
 	} else if err = CopyFile(managedMyFriday, bytes.NewReader(candidateBytes), 0o700); err != nil {
 		return err
 	}
+	if existing, info, existingErr := regular(managedCodeModeHost); existingErr == nil {
+		if info.Mode().Perm() != 0o700 || !bytes.Equal(existing, hostBytes) {
+			return errors.New("managed Codex Code Mode host drift")
+		}
+	} else if !errors.Is(existingErr, os.ErrNotExist) {
+		return existingErr
+	} else if err = CopyFile(managedCodeModeHost, bytes.NewReader(hostBytes), 0o700); err != nil {
+		return err
+	}
 	configBytes, configErr := managedCodexConfig(plan.Paths, CapabilityRevision)
 	if configErr != nil {
 		return configErr
@@ -1444,6 +1530,8 @@ func upgradeLocked(plan Plan) error {
 	m.CapabilityPolicySHA256 = digest(policy)
 	m.MyFridayExecutable = managedMyFriday
 	m.MyFridaySHA256 = digest(candidateBytes)
+	m.CodexCodeModeHost = managedCodeModeHost
+	m.CodexCodeModeHostSHA256 = digest(hostBytes)
 	m.CodexConfigSHA256 = digest(configBytes)
 	body, err := json.MarshalIndent(m, "", "  ")
 	if err != nil {
@@ -1462,6 +1550,9 @@ func upgradeLocked(plan Plan) error {
 		return fmt.Errorf("assistant upgrade recovery required: %w", err)
 	}
 	if err = os.Remove(candidateStage); err != nil {
+		return err
+	}
+	if err = os.Remove(hostStage); err != nil {
 		return err
 	}
 	return os.Remove(capabilityMigrationPath(plan.Paths.Root))
@@ -1497,6 +1588,15 @@ func verify(home, name string) (Manifest, error) {
 	}
 	if cinfo.Mode().Perm() != 0700 || digest(cb) != m.CodexSHA256 {
 		return m, errors.New("managed Codex executable drift")
+	}
+	if m.ContractVersion == ContractVersion && m.CapabilityRevision == CapabilityRevision {
+		hb, hinfo, hostErr := regular(m.CodexCodeModeHost)
+		if hostErr != nil {
+			return m, fmt.Errorf("managed Codex Code Mode host unavailable: %w", hostErr)
+		}
+		if hinfo.Mode().Perm() != 0700 || digest(hb) != m.CodexCodeModeHostSHA256 {
+			return m, errors.New("managed Codex Code Mode host drift")
+		}
 	}
 	if m.ContractVersion == ContractVersion && (m.CapabilityRevision == 2 || m.CapabilityRevision == CapabilityRevision) {
 		mb, minfo, managedErr := regular(m.MyFridayExecutable)
@@ -1622,7 +1722,15 @@ func Recover(home, name string) (string, error) {
 				if stageErr != nil || info.Mode().Perm() != 0o700 || digest(body) != journal.CandidateSHA256 {
 					return "", finishTransaction(lock, errors.New("assistant upgrade candidate staging drift"))
 				}
+				hostStage := filepath.Join(p.Root, "dependencies", "codex-code-mode-host.upgrade")
+				hostBody, hostInfo, hostErr := regular(hostStage)
+				if hostErr != nil || hostInfo.Mode().Perm() != 0o700 || digest(hostBody) != journal.CodeModeHostCandidateSHA256 {
+					return "", finishTransaction(lock, errors.New("assistant upgrade Codex Code Mode host staging drift"))
+				}
 				removeErr := os.Remove(stage)
+				if removeErr == nil {
+					removeErr = os.Remove(hostStage)
+				}
 				if removeErr == nil {
 					removeErr = os.Remove(capabilityMigrationPath(p.Root))
 				}
@@ -1719,6 +1827,10 @@ func recoverableManifest(p Paths) (Manifest, error) {
 		return m, fmt.Errorf("recovery refused: %w", err)
 	}
 	if m.ContractVersion == ContractVersion && m.CapabilityRevision == CapabilityRevision {
+		hb, hinfo, hostErr := regular(m.CodexCodeModeHost)
+		if hostErr != nil || hinfo.Mode().Perm() != 0700 || digest(hb) != m.CodexCodeModeHostSHA256 {
+			return m, errors.New("recovery refused: managed Codex Code Mode host drift")
+		}
 		mb, minfo, managedErr := regular(m.MyFridayExecutable)
 		if managedErr != nil || minfo.Mode().Perm() != 0700 || digest(mb) != m.MyFridaySHA256 {
 			return m, errors.New("recovery refused: managed My Friday executable drift")
@@ -1786,6 +1898,19 @@ func FindCodex() (string, error) {
 		}
 	}
 	return "", errors.New("Codex executable not found on absolute PATH entries")
+}
+
+func codeModeHostSource(codex string) (string, []byte, error) {
+	path := filepath.Join(filepath.Dir(codex), "codex-code-mode-host")
+	resolved, err := filepath.EvalSymlinks(path)
+	if err != nil {
+		return "", nil, fmt.Errorf("Codex Code Mode host required beside Codex: %w", err)
+	}
+	body, info, err := regular(resolved)
+	if err != nil || info.Mode().Perm()&0o111 == 0 {
+		return "", nil, errors.New("Codex Code Mode host executable refused")
+	}
+	return resolved, body, nil
 }
 
 func validDigest(value string) bool {
