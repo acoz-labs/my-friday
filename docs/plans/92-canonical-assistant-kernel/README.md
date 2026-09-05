@@ -43,7 +43,13 @@ source until the user deliberately retires them.
 - **Remote-backed creation is the B1 default.** The first canonical commit must
   push to an already-created, explicitly attested private remote. Local-only
   and hosted-provider creation are outside B1 because the approved outcome
-  requires recoverable remote ownership without provider-specific policy.
+  requires recoverable remote ownership without provider-specific policy. The
+  required `--remote-private` flag is an attestation, not a provider check.
+- **Restore is distinct from create.** `assistant restore` accepts an existing
+  valid canonical `origin/main`, creates no semantic commit, and rebuilds only
+  the local checkout, binding, dependencies, launcher, and Codex projection.
+  This is the clean-host recovery path and prevents nonempty remotes from being
+  misclassified as create collisions.
 - **Source survives removal.** Ordinary `assistant remove` deletes only the
   manifest-proven launcher and generated harness state; it detaches but never
   deletes the canonical repository or remote. Destructive repository deletion

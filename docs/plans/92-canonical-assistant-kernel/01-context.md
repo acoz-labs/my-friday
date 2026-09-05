@@ -66,17 +66,23 @@ Codex instance.
 ### Primary create flow
 
 1. The user invokes `my-friday assistant create NAME --repository PATH
-   --remote URL` from an interactive terminal.
-2. My Friday validates the name, canonical path, Git author, remote syntax and
-   reachability, explicit privacy attestation, empty remote, dependencies, and
-   collision-free host binding without changing either side.
-3. The preview groups canonical repository files, local generated state, Git
+   --remote URL --remote-private` from an interactive terminal. The last flag
+   explicitly attests that the already-created remote is private.
+2. My Friday runs the released profile questions for display name, form of
+   address, purpose, and communication style, preserving their normalization,
+   limits, and policy boundary. It then validates the name, canonical path, Git
+   author, remote syntax and reachability, explicit privacy attestation, empty
+   remote, dependencies, and collision-free host binding without changing
+   either side.
+3. The preview shows normalized non-secret profile values and groups canonical
+   repository files, local generated state, Git
    commit/push, preserved state, prohibited effects, and the exact recovery
    location. Only exact `Create` proceeds.
 4. The kernel creates and validates a staged repository, commits the complete
    baseline, pushes the exact commit to `origin/main`, atomically promotes the
-   repository, generates and verifies the Codex projection, and removes its
-   journal.
+   staged repository into the empty destination, generates and verifies the
+   Codex projection, and removes its journal. The remote-first create order
+   ensures a machine lost after push can be restored from the remote.
 5. The command reports repository, commit, remote name/ref, baseline version,
    projection state, and the launcher to use.
 
@@ -86,8 +92,18 @@ Codex instance.
 assistant is unhealthy. `assistant verify NAME` is strict and nonzero unless
 repository contracts, Git synchronization, host binding, dependencies, and
 projection all agree. `assistant diagnose NAME` adds exact refusal reasons and
-the one safe next command: reconcile, repair, recover, migrate, or resolve a
-remote divergence manually.
+the one safe next command: reconcile, repair, recover, restore, migrate, or
+resolve a remote divergence manually.
+
+### Clean-host restore flow
+
+`assistant restore NAME --repository PATH --remote URL --remote-private`
+requires an empty local target and a nonempty remote whose `main` tip is a valid
+canonical baseline. It previews the source commit and generated host effects,
+then exact `Restore` clones and validates the repository without creating a
+semantic commit, builds the host binding and Codex projection, verifies them,
+and reports the launcher. A failed restore never changes the remote. This is
+also the normal reconstruction path after a host is lost.
 
 ### Mutation and recovery flow
 

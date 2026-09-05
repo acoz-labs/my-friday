@@ -16,7 +16,10 @@
 
 ### Git transaction integration
 
-Use local bare repositories and an injected Git runner to prove:
+Use local bare repositories behind an injected test transport to prove the Git
+state machine. The production endpoint parser remains active in its own tests
+and rejects local/file transports; only the test resolver substitutes transport
+execution after that boundary.
 
 - empty-remote initial commit/push and exact `origin/main` tracking;
 - clean successor commits that stage only declared paths;
@@ -62,8 +65,8 @@ preserved/canonical effects are explicitly named before confirmation.
    exact commit/push, and healthy verification.
 4. Add phase-by-phase interruption and ambiguous-push tests; implement journal
    recovery before adding more mutation verbs.
-5. Add failing host-binding create/reconcile/repair/remove tests; adapt the
-   named-instance boundary so canonical source remains external.
+5. Add failing host-binding create/restore/reconcile/repair/remove tests; adapt
+   the named-instance boundary so canonical source remains external.
 6. Add legacy import and switch-boundary failures; implement migration while
    preserving the old pair/instance.
 7. Add migration-chain tests; implement baseline upgrade and forward-history
@@ -83,7 +86,8 @@ The exact candidate is the nominated Darwin/ARM64 artifact tuple and commit.
 Native acceptance on a clean supported Apple-silicon account uses a newly
 created private test remote with no refs and exercises:
 
-1. create, inspect, local verify, remote verify, launch, and fresh-task identity;
+1. create, inspect, local verify, remote verify, launch, and fresh-task identity,
+   including the visible user-attested privacy label;
 2. one exact-path canonical change through the shared steward, commit and push;
 3. projection drift diagnosis and repair;
 4. commit-success/push-failure recovery and push-success/projection-failure
@@ -93,8 +97,8 @@ created private test remote with no refs and exercises:
 7. migration from a released populated split pair while the old pair remains;
 8. generated-state removal while canonical local/remote source and memory
    remain byte/tree equal; and
-9. restoration on a second clean host from the same remote, proving the host
-   binding and projection are replaceable.
+9. `assistant restore` on a second clean host from the same remote without a new
+   semantic commit, proving the host binding and projection are replaceable.
 
 The product owner and independent acceptor must be different from the sole
 implementation contributor. B1 acceptance records task completion and boundary

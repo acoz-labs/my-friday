@@ -10,15 +10,20 @@ flowchart TD
   Plan --> Preview[Grouped preview + exact confirmation]
   Preview -->|cancel| Noop[No changes]
   Preview -->|confirm| Lock[Lock binding and repository identities]
-  Lock --> Fetch[Fetch exact origin/main]
+  Lock --> Fetch[Fetch or inspect exact origin/main]
   Fetch -->|ref mismatch| Deny
-  Fetch --> Stage[Build candidate files, tree, commit, receipt]
+  Fetch --> Stage[Build candidate files, index, tree, commit, receipt]
   Stage --> Validate[Validate baseline + affected modules]
   Validate -->|failure| Restore[Restore proven predecessor / retain journal]
-  Validate --> Promote[Promote source + compare-and-swap local ref]
-  Promote --> Push[Push HEAD:refs/heads/main]
-  Push -->|failed/ambiguous| Journal[Retain phase journal; recover only]
-  Push --> Projection[Reconcile generated Codex projection]
+  Validate --> Route{Fresh create?}
+  Route -->|yes| CreatePush[Push candidate:refs/heads/main]
+  CreatePush --> CreatePromote[Promote complete staged repository]
+  CreatePush -->|failed/ambiguous| Journal[Retain phase journal; recover only]
+  CreatePromote --> Projection[Reconcile generated Codex projection]
+  Route -->|no| Promote[Promote source + index; CAS local ref]
+  Promote --> UpdatePush[Push HEAD:refs/heads/main]
+  UpdatePush -->|failed/ambiguous| Journal
+  UpdatePush --> Projection
   Projection --> Final[Re-verify source, remote, binding, projection]
   Final --> Cleanup[Remove operation support state]
 ```
@@ -27,7 +32,10 @@ No network call occurs before the command identifies the configured endpoint
 and intended operation. Read-only `inspect` does not fetch; strict `verify` may
 use `--remote` to fetch and compare, while its default reports the last verified
 remote receipt separately from local contract health. Mutating plans always
-fetch immediately before candidate construction.
+fetch immediately before candidate construction. Fresh create proves an empty
+remote, pushes the staged commit, then promotes the complete staged repository.
+Existing-repository mutation atomically promotes planned source entries and a
+candidate index, compare-and-swap advances the local ref, then pushes.
 
 ## State And Data Model
 
@@ -69,12 +77,43 @@ extend their versions through declared migrations.
 | Canonical receipt | repository | operation ID/type, predecessor commit/tree, planned path digests, resulting module/baseline versions, migration IDs; excludes its own digest and secrets |
 | Migration | embedded tool + recorded application | stable ID, from/to versions, preconditions, touched paths, forward/inverse support, validation set |
 | Host binding | generated local state | name, assistant ID, canonical no-follow path identity, designated remote/ref, endpoint hash, current source commit, projection generation/digests |
-| Operation journal | generated local state | plan digest, confirmation, before/candidate proofs, commit, phases, remote observations, projection proofs, recovery disposition |
+| Operation journal | local operation area | name, plan digest, confirmation, before/candidate source/index/ref proofs, commit, phases, remote observations, projection proofs, recovery disposition |
 
 The canonical receipt is committed with the semantic change. The local journal
 binds the resulting commit and remote push; avoiding the commit SHA inside the
 committed receipt prevents a circular tree hash. Successful final verification
 may persist a replaceable host receipt in the binding.
+
+The operation area is
+`$HOME/.my-friday/operations/<name>/transaction.json`, derived from the current
+operating-system account and validated assistant name without trusting `HOME`.
+It exists independently of the destination and host binding, is owner-only,
+contains no source content or endpoint URL, and is removed only after final
+verification. Create, restore, and migration can therefore recover before a
+binding exists.
+
+### Generated host layout and launch
+
+```text
+$HOME/.my-friday/assistants/<name>/
+├── binding.json
+├── codex/
+│   ├── AGENTS.md
+│   └── config.toml
+├── dependencies/
+│   ├── codex
+│   ├── codex-code-mode-host
+│   └── my-friday
+└── workspace/
+```
+
+The B1 Codex projection renders identity/presentation from the bound canonical
+commit into `codex/AGENTS.md`; it does not copy `config/`, `memory/`, or
+`capabilities/` into generated ownership. The launcher preserves the caller's
+`HOME`, discards ambient `CODEX_HOME`, sets instance `CODEX_HOME`, and starts
+the copied Codex executable in the generated `workspace/`. Later B2/B3 plans
+may add compiler or governed port projections, but canonical paths remain
+outside generated-root removal authority.
 
 ### Invariants
 
@@ -118,8 +157,9 @@ last compatible tool; neither Git reset nor remote ref reversal is offered.
 
 | Command | Contract |
 |---|---|
-| `assistant create NAME --repository PATH --remote URL` | Preflight empty target/remote, preview complete baseline/host/Git plan, exact `Create`, push and activate |
-| `assistant migrate NAME --runtime PATH --memory PATH --repository PATH --remote URL` | Validate released legacy pair, preview mapping/preservation, exact `Migrate`, push new source, switch only after verification |
+| `assistant create NAME --repository PATH --remote URL --remote-private` | Collect and validate the released non-secret assistant profile, preflight empty target/remote, record explicit privacy attestation, preview complete baseline/host/Git plan, exact `Create`, push and activate |
+| `assistant restore NAME --repository PATH --remote URL --remote-private` | Preflight empty target and valid canonical remote main, exact `Restore`, clone/validate the existing commit, rebuild local binding/projection without a semantic commit |
+| `assistant migrate NAME --runtime PATH --memory PATH --repository PATH --remote URL --remote-private` | Validate released legacy pair, record explicit privacy attestation, preview mapping/preservation, exact `Migrate`, push new source, switch only after verification |
 | `assistant inspect NAME [--json]` | Local read-only state including repository, versions, binding, projection, Git worktree, last remote verification, and recovery need |
 | `assistant verify NAME [--remote] [--json]` | Strict contract verification; optional bounded fetch proves current designated remote ref |
 | `assistant diagnose NAME [--json]` | Stable state/error classification and one or more safe next commands; never mutates or reads secrets |
@@ -135,6 +175,23 @@ file changes; module migrations; Git commit/push; generated state; preserved
 state; prohibited effects; recovery path; confirmation. Paths occupy distinct
 lines and output does not depend on colour. `--json` is read-only in B1 so an
 automation cannot bypass interactive mutation authority.
+
+Fresh create reuses the released line-oriented profile questions and their NFC,
+grapheme, control-character, style, and policy-boundary rules. Restore reads
+that profile from the validated canonical commit and never asks the user to
+retype it. Migration maps the validated legacy profile byte-semantically before
+showing the normalized destination preview.
+
+`--remote-private` is a required, literal attestation that the user has already
+configured a private repository at the supplied non-credential URL. Preview
+labels visibility as `user-attested (not provider-verified)`. Absence refuses
+before network access. The attestation is recorded as a boolean in the binding
+and canonical create/import receipt; endpoint coordinates are not.
+
+`reconcile` applies the complete generated plan needed to represent the current
+healthy canonical commit, including legitimate version changes. `repair` is
+narrower: it restores drifted manifest-owned generated bytes for the already-
+bound commit and refuses if canonical versions or desired projection changed.
 
 Existing split commands remain available for verify/recover/migration during a
 documented compatibility window. New split creation is deprecated once B1 is
@@ -160,9 +217,10 @@ patterns before display or journal persistence.
 - Invoke Git with an explicit repository, designated remote/ref, fixed
   noninteractive timeout for lifecycle writes, empty hooks path, disabled
   optional locks where unsafe, and no credential variables in logs/evidence.
-- Construct candidate blobs/tree from exact bytes without applying repository
-  clean/smudge filters. Refuse attributes or config that assign filters to
-  B1-owned paths.
+- Construct candidate blobs, index, and tree from exact bytes without applying
+  repository clean/smudge filters. Refuse attributes or config that assign
+  filters to B1-owned paths. Promote the candidate index under the same journal
+  as source bytes and bind its digest in recovery proofs.
 - Resolve author/committer identity from ordinary Git configuration during
   preflight; never invent a service identity or store email in product policy.
 - Use a deterministic subject with an operation ID trailer; timestamps and
@@ -190,14 +248,25 @@ credential values remain inside their existing helper/agent boundary.
 
 ## Failure, Recovery, And Observability
 
+### Existing-repository mutation phases
+
 | Last proven phase | Recovery behavior |
 |---|---|
 | prepared | Remove only plan-owned staging/support state; active source/ref/remote unchanged |
-| source-promoted | Revalidate candidate and predecessor; complete local ref commit or restore exact predecessor bytes |
+| source-index-promoted | Revalidate candidate and predecessor source/index; complete local ref commit or restore both exact predecessor forms |
 | ref-committed | If remote still equals predecessor, retry explicit push; if remote equals candidate, advance journal; otherwise refuse divergence |
 | remote-pushed | Complete local source/ref alignment and generated projection; never issue a second semantic commit |
 | projection-promoted | Reverify source/ref/remote/projection and clean support state |
 | verified | Idempotently remove only authenticated journal/quarantine artifacts |
+
+Fresh create has a distinct safe order: `prepared`, `candidate-committed`,
+`remote-pushed`, `repository-promoted`, `projection-promoted`, `verified`.
+Before remote push, recovery removes only the stage. After remote push, recovery
+requires that exact candidate at the remote, then promotes the complete staged
+repository or restores it into an empty target from the same remote. A foreign
+local target or changed remote is preserved and refused. Restore never pushes;
+its phases are staged clone, repository promotion, projection promotion, and
+verification.
 
 Signals before confirmation exit with no journal. Signals after confirmation
 are converted into a bounded stop request at a recorded checkpoint; the command
@@ -216,6 +285,7 @@ merge.
 | Acceptance/critical journey | Component/state | Interface | Recovery proof |
 |---|---|---|---|
 | Create one repository/three modules | baseline and module manifests | `assistant create` | prepared through verified phase tests |
+| Restore after host loss | remote validator and host binding | `assistant restore` | staged clone and projection interruption tests |
 | Inspect/verify/diagnose | read model and stable states | three read-only commands/JSON | corrupted/missing/legacy/diverged fixtures |
 | Reconcile/repair/launch | host binding and projection planner | reconcile, repair, launcher | manifest drift/collision/interruption tests |
 | Upgrade/rollback/migrate | migration registry and legacy adapter | upgrade, rollback, migrate | forward/inverse and switch-boundary injection |

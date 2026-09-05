@@ -7,7 +7,8 @@
 The smallest complete outcome is not merely a new directory layout. One
 immutable artifact must create a remote-backed canonical assistant repository,
 verify and diagnose it, launch from a separately owned generated projection,
-perform one exact commit/push transaction with interruption recovery, migrate a
+perform one exact commit/push transaction with interruption recovery, restore
+on a clean host without a new semantic commit, migrate a
 released split pair without altering it, roll a compatible baseline forward
 and back through descendant commits, and remove generated state while source
 and memory survive locally and remotely.
@@ -27,7 +28,7 @@ and memory survive locally and remotely.
 3. **Canonical create plus host binding**
    - Ownership: adapt `internal/assistantinstance`, retain reusable executable,
      config, launcher, and no-follow projection primitives.
-   - Exit: `assistant create/inspect/verify/diagnose/reconcile/repair/remove`
+   - Exit: `assistant create/restore/inspect/verify/diagnose/reconcile/repair/remove`
      work end to end; remove plans cannot name canonical paths.
 4. **Legacy migration**
    - Ownership: repository-pair adapter plus instance switch transaction.
@@ -54,7 +55,7 @@ safe in partially released form.
 | Acceptance group | Slices | Required evidence |
 |---|---|---|
 | One repository/three governed modules | 1, 3 | schema/semantic tests; fresh exact-candidate creation |
-| Setup, inspect, reconcile, verify, diagnose, repair, launch, remove | 3, 6 | command goldens; native full lifecycle; preservation canaries |
+| Setup, restore, inspect, reconcile, verify, diagnose, repair, launch, remove | 3, 6 | command goldens; native full lifecycle; preservation canaries |
 | Exact commit/push and refusal boundaries | 2, 6 | Git trace suite; real private-remote success/divergence/ambiguity |
 | Upgrade/rollback/migrate/recover | 2, 4, 5, 6 | phase matrix; released legacy fixtures; native interruption journey |
 | Portability after host failure | 3, 6 | second clean-host restore from remote with rebuilt projection |
@@ -79,7 +80,7 @@ Implementation reconciliation should update, based on shipped behavior:
 - `docs/development.md` — fixtures, focused tests, native requirements;
 - `docs/deployment.md` — candidate, migration compatibility, acceptance, and
   release prerequisites; and
-- `docs/runbook.md`/README — create, inspect, diagnose, recover, migrate,
+- `docs/runbook.md`/README — create, restore, inspect, diagnose, recover, migrate,
   rollback, remove, and clean-host restore commands.
 
 The implementation PR must delete `docs/plans/92-canonical-assistant-kernel/`

@@ -67,8 +67,9 @@ Use a contract-v1 canonical assistant repository and a contract-v3 named host
 binding. The repository owns baseline/module manifests, configuration,
 capability source, governed-memory data, migrations, and canonical lifecycle
 receipts. The host binding owns only endpoint hash/ref, canonical path identity,
-generated Codex state, copied executable dependencies, launcher, and the one
-active operation journal.
+current source commit, generated Codex state, copied executable dependencies,
+and the launcher. A separately derivable local operation area exists before
+either repository or binding and owns the one active journal.
 
 The Git adapter creates candidate blobs/tree with filters and hooks disabled,
 validates the complete candidate through a read-only staged view, writes the
@@ -80,12 +81,15 @@ and the canonical manifest to agree. It never invokes pull, merge, rebase,
 reset, checkout of unrelated paths, force, prune, tag publication, or a
 provider API.
 
-The journal distinguishes `prepared`, `source-promoted`, `ref-committed`,
-`remote-pushed`, `projection-promoted`, and `verified`. Recovery validates the
-same plan, predecessor proofs, candidate commit, remote ref, and host binding.
-It completes the unique safe next transition or stops without mutation. A
-remote that advanced to an unknown commit is divergence even when the semantic
-files appear equal.
+Fresh create uses `prepared`, `candidate-committed`, `remote-pushed`,
+`repository-promoted`, `projection-promoted`, and `verified`, because the empty
+remote can safely become the recovery source before the local target exists.
+Existing-repository mutation uses `prepared`, `source-index-promoted`,
+`ref-committed`, `remote-pushed`, `projection-promoted`, and `verified`.
+Recovery validates the same plan, predecessor proofs, candidate commit, remote
+ref, active index, and host binding. It completes the unique safe next
+transition or stops without mutation. A remote that advanced to an unknown
+commit is divergence even when the semantic files appear equal.
 
 Confidence is medium-high. Existing components prove the hardest local
 ownership/recovery primitives; new risk is concentrated in Git candidate/ref
@@ -99,7 +103,7 @@ adversarial fixtures and real private-remote acceptance.
 | One Git repository with module manifests | Delivers portability while preserving domain governance | Discovery #81 B1 and conceptual architecture |
 | Canonical source outside the named instance | Removal and rebuild must never threaten source or memory | Existing source/projection lifecycle and B1 acceptance |
 | Required pre-existing empty private remote for create | Provides host-failure recovery without provider-specific account creation | Approved remote-backed outcome; provider setup is non-goal |
-| Hash endpoint in canonical/local receipts; keep URL in Git config and binding only | Recovery needs endpoint identity without unnecessarily copying private coordinates into history/logs | Privacy boundary and Git's native ownership |
+| Keep the endpoint URL only in Git config; store its normalized hash in binding/receipts | Recovery needs endpoint identity without unnecessarily copying private coordinates into history/logs | Privacy boundary and Git's native ownership |
 | Forward commits for rollback | Preserves audit history and enforces no rewrite/force | Approved Git stewardship decision |
 | Preserve legacy repositories after migration | Gives reversible cutover without multi-history surgery or destructive cleanup | Current split contract and migration risk |
 | Stable read-only `inspect`, strict `verify`, actionable `diagnose` | Supports healthy return use and degraded recovery without hiding state | B1 critical tasks and terminal experience gate |
