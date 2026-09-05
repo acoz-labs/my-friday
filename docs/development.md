@@ -12,6 +12,24 @@ If container support is not ready for this repo yet:
 bin/ci
 ```
 
+## Known validation limitations
+
+- The development container currently lacks `jq`, so `bin/container bin/ci`
+  stops in `bin/release-assets` with exit 127 after solution-plan validation.
+  [Issue #112](https://github.com/acoz-labs/my-friday/issues/112) tracks the
+  container/toolchain correction. Record this deviation and run the native
+  fallback; do not report the container check as passing.
+- Native `bin/ci` can exceed the 10-second outer bound in
+  `TestRunnerTimesOutProcessGroup`. The reproduced source matched `main`, and
+  hosted CI passed, but neither fact makes the local safety failure harmless;
+  no host-load cause has been established. Record the native check as failed
+  until [issue #111](https://github.com/acoz-labs/my-friday/issues/111) resolves
+  the timeout reliability gap without weakening descendant cleanup.
+
+Both follow-ups are Inbox items requiring their own planning and authority;
+their existence does not authorize dependency, container, runtime, or timeout
+changes in unrelated work.
+
 My Friday uses Go 1.26.4, pinned by `mise.toml`; `go.mod` declares the module's
 language baseline. Install the exact host toolchain with `mise install`.
 
@@ -258,3 +276,35 @@ contract.
 This integration runs on the required Apple-silicon acceptance host and skips
 on portable CI hosts without `/usr/bin/expect`; the remaining contract and
 cross-platform runner tests still run there.
+
+## Capability routing experiment
+
+The developer-only comparison under `tools/capability-routing-experiment/`
+validates and stages a frozen 24-capability/24-task synthetic suite, supplies
+lookup modes through a counted in-memory transport without preloading catalogue
+metadata, records supervised native-driver preflight, scores immutable attempt
+rows, and emits sanitized JSON and Markdown. Reporting revalidates the frozen
+manifest, recomputes scores, and cross-binds both native probes. It is not part
+of the public `my-friday` command and does not install capabilities or change
+routing defaults.
+
+Run its offline checks with:
+
+```sh
+go test -race ./tools/capability-routing-experiment/...
+go run ./tools/capability-routing-experiment validate \
+  --data tools/capability-routing-experiment/testdata
+```
+
+`run` additionally requires explicit `--live`, an exact preregistered manifest,
+an owner-only fresh run root, existing authorized harness access, and every
+native isolation/control preflight. An unavailable driver records incomplete
+cells and null metrics; it never falls back to unsandboxed inference. See
+[`docs/experiments/capability-routing/README.md`](experiments/capability-routing/README.md)
+for the method, commands, control matrix, and current partial result.
+Executing-runner VCS revision/modified state is independent of the
+preregistration-basis commit and is captured from Go build information. Missing
+or dirty build provenance cannot support a completed trial. Process-table
+sampling supervises the credential-free probes but is not claimed to contain an
+immediately detached descendant between samples; that unresolved native control
+keeps both drivers unavailable.
