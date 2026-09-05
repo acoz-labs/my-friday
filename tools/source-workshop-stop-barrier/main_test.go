@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-func TestCanStopOwnedExpectProcessGroup(t *testing.T) {
+func TestCanStopOwnedExpectProcessTree(t *testing.T) {
 	if _, err := os.Stat("/usr/bin/expect"); err != nil {
 		t.Skip("native Expect unavailable")
 	}
@@ -29,9 +29,14 @@ func TestCanStopOwnedExpectProcessGroup(t *testing.T) {
 		_, _ = cmd.Process.Wait()
 	})
 	time.Sleep(50 * time.Millisecond)
-	if err := syscall.Kill(-pgid, syscall.SIGSTOP); err != nil {
-		t.Fatalf("stop owned Expect process group %d: %v", pgid, err)
+	stopped, err := stopOwnedTree(pgid)
+	if err != nil {
+		t.Fatalf("stop owned Expect process tree %d: %v", pgid, err)
 	}
+	if len(stopped) < 2 {
+		t.Fatalf("stopped %d processes, want Expect and child", len(stopped))
+	}
+	signalPIDs(stopped, syscall.SIGCONT)
 }
 
 func TestConfirmationSentRequiresEchoedSourceConfirmation(t *testing.T) {
