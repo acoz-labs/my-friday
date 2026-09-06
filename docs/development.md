@@ -195,6 +195,7 @@ Issue-51 release authority has a separate deterministic contract suite:
 
 ```sh
 bin/test-capability-workshop-evidence
+bin/test-owner-dogfood-command-paths
 bin/test-acceptance-contract
 ```
 
