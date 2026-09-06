@@ -163,6 +163,28 @@ builder alone in the managed skill root.
 Both paths use an exact `Rollback` preview and preserve source, credentials,
 launchers, global skills, and sibling instances.
 
+## Acceptance boundary
+
+The workshop's release authority is versioned separately from its source and
+projection contracts. Active issue-51 approval uses
+`capability-workshop-owner-dogfood-v1`: the existing strict provisional/final
+workshop evidence plus one strict product-owner receipt for the same issue,
+candidate, and artifact. The evidence author/product acceptor, allowlisted
+owner, and every lifecycle-linked implementation PR author are separate actors.
+The candidate must contain every linked implementation merge. Both acceptance
+and release replay mutable comments through double fetch and exact body digest
+verification.
+
+The owner receipt fixes its claim to owner-operated dogfood, records
+independent-user validation as not collected, and binds a promise to collect
+real migration evidence under issue 92 before that outcome's release. It does
+not contain migration evidence or grant general-usability authority. Historical
+four-part partner bundles remain verifiable for audit but are not active
+approval or release inputs. Operator commands and recovery live in
+`docs/deployment.md` and `docs/runbook.md`; executable schemas live in
+`bin/verify-capability-workshop-owner-receipt` and
+`bin/verify-capability-workshop-owner-dogfood`.
+
 Runtime initialize/rollback and named-instance upgrade/rollback are serialized
 one-root migrations with canonical durable journals and explicit recovery. An
 instance upgrade initializes its private copied runtime and stages a digest of

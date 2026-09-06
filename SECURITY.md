@@ -59,8 +59,16 @@ credential-source equality and complete copy, instance, launcher, APFS image,
 mount, and run-root reversal. Ambiguity produces non-approving failure evidence
 and preserves state for diagnosis.
 
-Issue-51 evidence and partner receipts use schemas distinct from issue 4.
-Product acceptance and release re-fetch comments twice, bind issue/candidate/
-artifact and actors, require one product owner plus two distinct design
-partners, and reject provisional, edited, cross-schema, or duplicate-person
-authority.
+Issue-51 workshop evidence and owner receipts use schemas distinct from issue
+4. The active owner-dogfood authority combines exact-candidate workshop
+evidence with one separately authored product-owner receipt. Product acceptance
+and release require the same external `PRODUCT_OWNER_ACTORS` allowlist,
+re-fetch comments twice, bind issue/candidate/artifact and actors, and reject
+missing configuration, provisional or edited comments, cross-schema tokens,
+duplicate owner/acceptor roles, either role matching a lifecycle-linked
+implementation author, or a candidate that excludes an implementation merge.
+The receipt fixes the claim to owner-operated dogfood, records independent-user
+validation as not collected, and commits only to future issue-92 migration
+evidence; it contains no identity profile, private path, transcript, credential,
+or migration content. The former partner authority remains audit-only and
+cannot approve or release a new candidate.

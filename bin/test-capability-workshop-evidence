@@ -8,10 +8,49 @@ write_comment() { local id="$1" actor="$2" body="$3"; jq -nc --argjson id "$id" 
 cat >"$tmp/bin/gh" <<'SH'
 #!/usr/bin/env bash
 set -euo pipefail
-id="${*: -1}"; id="${id##*/}"; count_file="$EVIDENCE_FIXTURES/counts/$id"; count=0; [[ ! -f "$count_file" ]] || count="$(cat "$count_file")"; echo $((count+1)) >"$count_file"
-if [[ -n "${MUTATE_ID:-}" && "$id" == "$MUTATE_ID" && "$count" -gt 0 ]]; then jq '.body += " edited"' "$EVIDENCE_FIXTURES/$id.json"; else cat "$EVIDENCE_FIXTURES/$id.json"; fi
+endpoint=""
+for arg in "$@"; do
+  if [[ "$arg" == user || "$arg" == repos/* ]]; then endpoint="$arg"; break; fi
+done
+case "$endpoint" in
+  user)
+    printf '%s\n' "${FAKE_GH_ACTOR:-owner}"
+    ;;
+  repos/*/issues/comments/*)
+    id="${endpoint##*/}"; count_file="$EVIDENCE_FIXTURES/counts/$id"; count=0
+    [[ ! -f "$count_file" ]] || count="$(cat "$count_file")"
+    echo $((count+1)) >"$count_file"
+    if [[ -n "${DISAPPEAR_ID:-}" && "$id" == "$DISAPPEAR_ID" && "$count" -gt 0 ]]; then exit 1; fi
+    if [[ -n "${MUTATE_ID:-}" && "$id" == "$MUTATE_ID" && "$count" -gt 0 ]]; then
+      jq '.body += " edited"' "$EVIDENCE_FIXTURES/$id.json"
+    else
+      cat "$EVIDENCE_FIXTURES/$id.json"
+    fi
+    ;;
+  repos/*/issues/51)
+    if [[ "${NO_IMPLEMENTATION:-0}" == 1 ]]; then jq '.body=""' "$EVIDENCE_FIXTURES/issue.json"; else cat "$EVIDENCE_FIXTURES/issue.json"; fi
+    ;;
+  repos/*/pulls/55)
+    if [[ "${UNMERGED_IMPLEMENTATION:-0}" == 1 ]]; then jq '.merged_at=null' "$EVIDENCE_FIXTURES/pull.json"; else cat "$EVIDENCE_FIXTURES/pull.json"; fi
+    ;;
+  repos/*/compare/*)
+    if [[ "${EXCLUDED_IMPLEMENTATION:-0}" == 1 ]]; then printf '%s\n' '{"status":"diverged"}'; else printf '%s\n' '{"status":"ahead"}'; fi
+    ;;
+  repos/*/issues/51/comments)
+    body=""
+    for arg in "$@"; do [[ "$arg" != body=* ]] || body="${arg#body=}"; done
+    jq -nc --arg body "$body" --arg actor "${FAKE_GH_ACTOR:-owner}" \
+      '{id:120,body:$body,issue_url:"https://api.github.com/repos/owner/repo/issues/51",user:{login:$actor},created_at:"2026-09-05T00:00:00Z"}' >"$EVIDENCE_FIXTURES/120.json"
+    printf '%s\n' 'https://api.github.com/repos/owner/repo/issues/comments/120'
+    ;;
+  *)
+    echo "unexpected gh fixture request: $*" >&2; exit 1
+    ;;
+esac
 SH
 chmod +x "$tmp/bin/gh"
+jq -nc '{body:"<!-- software-lifecycle:start -->\n## Lifecycle\n\n- Phase 3 — Implementation: https://github.com/owner/repo/pull/55\n<!-- software-lifecycle:end -->"}' >"$tmp/issue.json"
+jq -nc --arg merge "$h40" '{merged_at:"2026-09-05T00:00:00Z",merge_commit_sha:$merge,user:{login:"implementer"}}' >"$tmp/pull.json"
 pjson="$(jq -nc --arg sha "$sha" --arg artifact "$artifact" --arg h40 "$h40" --arg h64 "$h64" '
  def p($s;$e):{passed:true,expected_state:$s,exit_class:$e};
  {schema:"capability-workshop-acceptance-evidence-v1",authority:"provisional",issue:51,candidate:$sha,artifact:$artifact,run_id:"0123456789abcdef0123456789abcdef",checkout:{tree:$h40,supervisor_blob:$h40,helper_closure_sha256:$h64,executable_sha256:$h64,archive_sha256:$h64,source_diff_sha256:$h64},platform:{architecture:"arm64",filesystem:"apfs",runtime_contract:2},controls:{credential_by_path:true,deterministic_tests:true,deterministic_workshop:true,fresh_tasks:true,optional_bytes_preserved:true,redacted_complete_diff:true,source_confirmation_separate:true},scenarios:{create_without_activation:p("ready-no-projection";"success"),navigation_and_signals:p("q-eof-int-term-no-write";"success"),validate_and_test:p("ready";"success"),install:p("installed-healthy";"success"),explicit_invocation:p("declared-behavior-observed";"success"),enhancement_and_upgrade:p("source-changed-opaque-preserved-upgraded";"success"),source_workshop_interruption_recovery:p("journal-stopped-reentered-quiescent";"success"),collision_and_drift:p("foreign-and-owned-bytes-preserved";"refused"),disable_enable_remove:p("fresh-task-absent-source-preserved-control-reversed";"success"),lifecycle_interruption_recovery:p("projection-stopped-reaped-recovered";"success"),migration_and_rollback:p("private-copy-bounded";"success"),ambient_preservation:p("stable-subset-and-protected-equal";"success")},preservation:{ambient_codex_metadata_excluded:["sessions","sessions/**","logs_<digits>.sqlite","logs_<digits>.sqlite-shm","logs_<digits>.sqlite-wal","state_<digits>.sqlite","state_<digits>.sqlite-shm","state_<digits>.sqlite-wal","thread_history_<digits>.sqlite","thread_history_<digits>.sqlite-shm","thread_history_<digits>.sqlite-wal","goals_<digits>.sqlite","goals_<digits>.sqlite-shm","goals_<digits>.sqlite-wal","models_cache.json","tmp","tmp/**"],ambient_codex_stable_subset_equal:true,ambient_home_equal:true,credential_source_equal:true,protected_canaries_equal:true,sibling_instance_equal:true,source_preserved:true},cleanup_expected:["credential-copy","instance","launcher","mount","run-root","volume-image"],redacted:true}')"
@@ -43,4 +82,73 @@ $json"; write_comment "$id" "$actor" "$body"; digest="$(printf %s "$body" | shas
 owner="$(receipt 105 owner product-owner)"; partner_one="$(receipt 106 partner-one design-partner)"; partner_two="$(receipt 107 partner-two design-partner)"
 rm -f "$tmp/counts/"*; PATH="$tmp/bin:$PATH" EVIDENCE_FIXTURES="$tmp" GITHUB_REPOSITORY=owner/repo "$root/bin/verify-capability-workshop-acceptance" "capability-workshop-acceptance-v1:$token|$owner|$partner_one|$partner_two" 51 "$sha" "$artifact" acceptor >/dev/null
 if PATH="$tmp/bin:$PATH" EVIDENCE_FIXTURES="$tmp" GITHUB_REPOSITORY=owner/repo "$root/bin/verify-capability-workshop-acceptance" "capability-workshop-acceptance-v1:$token|$owner|$partner_one|$partner_one" 51 "$sha" "$artifact" acceptor >/dev/null 2>&1; then echo "accepted duplicate partners" >&2; exit 1; fi
+
+owner_receipt() { local id="$1" actor="$2" filter="${3:-.}"; local json body digest; json="$(jq -nc --arg sha "$sha" --arg artifact "$artifact" '{schema:"capability-workshop-owner-receipt-v1",issue:51,candidate:$sha,artifact:$artifact,role:"product-owner",completion:true,source_comprehension:true,projection_comprehension:true,recovery_needed:false,retention_decision:"retain",acceptance_scope:"owner-operated-dogfood",migration_evidence_issue:92,migration_evidence_due:"before-release",independent_user_validation:"not-collected",redacted:true}' | jq -c "$filter")"; body="<!-- capability-workshop-owner-receipt-v1 -->
+$json"; write_comment "$id" "$actor" "$body"; digest="$(printf %s "$body" | shasum -a 256 | awk '{print $1}')"; printf 'capability-workshop-owner-receipt-v1:comment=%s:%s' "$id" "$digest"; }
+verify_owner() { rm -f "$tmp/counts/"*; PATH="$tmp/bin:$PATH" EVIDENCE_FIXTURES="$tmp" GITHUB_REPOSITORY=owner/repo PRODUCT_OWNER_ACTORS="${PRODUCT_OWNER_ACTORS-}" "$root/bin/verify-capability-workshop-owner-receipt" "$@"; }
+owner_v1="$(owner_receipt 110 owner)"
+PRODUCT_OWNER_ACTORS='other, OwNeR ' verify_owner "$owner_v1" 51 "$sha" "$artifact" owner >/dev/null
+for allowlist in '' ',' 'owner,' ',owner' 'owner,,other' 'owner,not valid' 'not-owner'; do
+  if PRODUCT_OWNER_ACTORS="$allowlist" verify_owner "$owner_v1" 51 "$sha" "$artifact" owner >/dev/null 2>&1; then echo "accepted invalid owner allowlist: $allowlist" >&2; exit 1; fi
+done
+if PRODUCT_OWNER_ACTORS=owner verify_owner "$owner_v1" 51 "$sha" "$artifact" other >/dev/null 2>&1; then echo "accepted wrong expected owner" >&2; exit 1; fi
+if PRODUCT_OWNER_ACTORS=owner MUTATE_ID=110 verify_owner "$owner_v1" 51 "$sha" "$artifact" owner >/dev/null 2>&1; then echo "accepted edited owner receipt" >&2; exit 1; fi
+if PRODUCT_OWNER_ACTORS=owner DISAPPEAR_ID=110 verify_owner "$owner_v1" 51 "$sha" "$artifact" owner >/dev/null 2>&1; then echo "accepted disappearing owner receipt" >&2; exit 1; fi
+if PRODUCT_OWNER_ACTORS=owner verify_owner "${owner_v1%?}0" 51 "$sha" "$artifact" owner >/dev/null 2>&1; then echo "accepted wrong owner receipt digest" >&2; exit 1; fi
+
+bad_owner_filters=(
+  'del(.migration_evidence_due)'
+  '.extra=true'
+  '.schema="capability-workshop-partner-receipt-v1"'
+  '.issue=50'
+  '.candidate="bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"'
+  '.artifact="artifact-v1:run=9:id=9:name=other:sha256=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"'
+  '.role="design-partner"'
+  '.completion=false'
+  '.source_comprehension="true"'
+  '.projection_comprehension=false'
+  '.recovery_needed=true'
+  '.retention_decision="maybe"'
+  '.acceptance_scope="general-usability"'
+  '.migration_evidence_issue=93'
+  '.migration_evidence_due="after-release"'
+  '.independent_user_validation="collected"'
+  '.redacted=false'
+)
+bad_id=130
+for filter in "${bad_owner_filters[@]}"; do
+  bad_owner="$(owner_receipt "$bad_id" owner "$filter")"
+  if PRODUCT_OWNER_ACTORS=owner verify_owner "$bad_owner" 51 "$sha" "$artifact" owner >/dev/null 2>&1; then echo "accepted invalid owner receipt: $filter" >&2; exit 1; fi
+  bad_id=$((bad_id+1))
+done
+wrong_marker_body="<!-- capability-workshop-partner-receipt-v1 -->
+$(jq -r '.body | split("\n")[1]' "$tmp/110.json")"; write_comment 150 owner "$wrong_marker_body"; wrong_marker_digest="$(printf %s "$wrong_marker_body" | shasum -a 256 | awk '{print $1}')"
+if PRODUCT_OWNER_ACTORS=owner verify_owner "capability-workshop-owner-receipt-v1:comment=150:$wrong_marker_digest" 51 "$sha" "$artifact" owner >/dev/null 2>&1; then echo "accepted wrong owner receipt marker" >&2; exit 1; fi
+jq '.issue_url="https://api.github.com/repos/owner/repo/issues/50"' "$tmp/110.json" >"$tmp/151.json"
+if PRODUCT_OWNER_ACTORS=owner verify_owner "${owner_v1/comment=110/comment=151}" 51 "$sha" "$artifact" owner >/dev/null 2>&1; then echo "accepted wrong owner receipt URL" >&2; exit 1; fi
+
+verify_bundle() { rm -f "$tmp/counts/"*; PATH="$tmp/bin:$PATH" EVIDENCE_FIXTURES="$tmp" GITHUB_REPOSITORY=owner/repo PRODUCT_OWNER_ACTORS="${PRODUCT_OWNER_ACTORS-}" "$root/bin/verify-capability-workshop-owner-dogfood" "$@"; }
+bundle="capability-workshop-owner-dogfood-v1:$token|$owner_v1"
+PRODUCT_OWNER_ACTORS=owner verify_bundle "$bundle" 51 "$sha" "$artifact" acceptor >/dev/null
+for malformed in "capability-workshop-owner-dogfood-v1:$token" "capability-workshop-owner-dogfood-v1:|$owner_v1" "capability-workshop-owner-dogfood-v1:$token|" "capability-workshop-owner-dogfood-v1:$token|$owner_v1|extra" "capability-workshop-acceptance-v1:$token|$owner_v1"; do
+  if PRODUCT_OWNER_ACTORS=owner verify_bundle "$malformed" 51 "$sha" "$artifact" acceptor >/dev/null 2>&1; then echo "accepted malformed owner bundle" >&2; exit 1; fi
+done
+same_actor_owner="$(owner_receipt 152 acceptor)"
+if PRODUCT_OWNER_ACTORS=acceptor verify_bundle "capability-workshop-owner-dogfood-v1:$token|$same_actor_owner" 51 "$sha" "$artifact" acceptor >/dev/null 2>&1; then echo "accepted duplicate owner and acceptor" >&2; exit 1; fi
+implementation_owner="$(owner_receipt 153 implementer)"
+if PRODUCT_OWNER_ACTORS=implementer verify_bundle "capability-workshop-owner-dogfood-v1:$token|$implementation_owner" 51 "$sha" "$artifact" acceptor >/dev/null 2>&1; then echo "accepted implementation author as owner" >&2; exit 1; fi
+for fixture_mode in NO_IMPLEMENTATION UNMERGED_IMPLEMENTATION EXCLUDED_IMPLEMENTATION; do
+  export "$fixture_mode=1"
+  if PRODUCT_OWNER_ACTORS=owner verify_bundle "$bundle" 51 "$sha" "$artifact" acceptor >/dev/null 2>&1; then echo "accepted invalid implementation set: $fixture_mode" >&2; exit 1; fi
+  unset "$fixture_mode"
+done
+cp "$tmp/101.json" "$tmp/101.acceptor.json"; cp "$tmp/102.json" "$tmp/102.acceptor.json"
+jq '.user.login="implementer"' "$tmp/101.acceptor.json" >"$tmp/101.json"; jq '.user.login="implementer"' "$tmp/102.acceptor.json" >"$tmp/102.json"
+if PRODUCT_OWNER_ACTORS=owner verify_bundle "$bundle" 51 "$sha" "$artifact" implementer >/dev/null 2>&1; then echo "accepted implementation author as evidence acceptor" >&2; exit 1; fi
+mv "$tmp/101.acceptor.json" "$tmp/101.json"; mv "$tmp/102.acceptor.json" "$tmp/102.json"
+
+recorded="$(PATH="$tmp/bin:$PATH" EVIDENCE_FIXTURES="$tmp" FAKE_GH_ACTOR=owner GITHUB_REPOSITORY=owner/repo PRODUCT_OWNER_ACTORS='OWNER,other' "$root/bin/record-capability-workshop-owner-receipt" 51 "$sha" "$artifact" retain 92)"
+[[ "$recorded" == capability-workshop-owner-receipt-v1:comment=120:* ]]
+if PATH="$tmp/bin:$PATH" EVIDENCE_FIXTURES="$tmp" FAKE_GH_ACTOR=intruder GITHUB_REPOSITORY=owner/repo PRODUCT_OWNER_ACTORS=owner "$root/bin/record-capability-workshop-owner-receipt" 51 "$sha" "$artifact" retain 92 >/dev/null 2>&1; then echo "unauthorized owner recorder posted" >&2; exit 1; fi
+if PATH="$tmp/bin:$PATH" EVIDENCE_FIXTURES="$tmp" FAKE_GH_ACTOR=owner GITHUB_REPOSITORY=owner/repo PRODUCT_OWNER_ACTORS=owner "$root/bin/record-capability-workshop-owner-receipt" 51 "$sha" "$artifact" retain 91 >/dev/null 2>&1; then echo "owner recorder accepted wrong migration issue" >&2; exit 1; fi
 echo "capability workshop evidence tests passed."

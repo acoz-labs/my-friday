@@ -1,0 +1,59 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+issue="${1:-}"
+sha="${2:-}"
+artifact="${3:-}"
+retention="${4:-}"
+migration_issue="${5:-}"
+repo="${GITHUB_REPOSITORY:-}"
+allowed_actors="${PRODUCT_OWNER_ACTORS:-}"
+actor_pattern='^[A-Za-z0-9]([A-Za-z0-9-]{0,37}[A-Za-z0-9])?$'
+malformed_allowlist='(^,)|(,$)|(,,)'
+
+[[ -n "$repo" && "$issue" == 51 && "$sha" =~ ^[0-9a-f]{40}$ &&
+  "$artifact" =~ ^artifact-v1:run=[0-9]+:id=[0-9]+:name=[A-Za-z0-9._-]+:sha256=[0-9a-f]{64}$ &&
+  "$retention" =~ ^(retain|remove)$ && "$migration_issue" == 92 ]] || {
+  echo "Usage: GITHUB_REPOSITORY=OWNER/REPO PRODUCT_OWNER_ACTORS=<allowlist> bin/record-capability-workshop-owner-receipt 51 <full-sha> <artifact-v1> <retain|remove> 92" >&2
+  exit 64
+}
+[[ -n "${allowed_actors//[[:space:]]/}" && ! "$allowed_actors" =~ $malformed_allowlist ]] || {
+  echo "PRODUCT_OWNER_ACTORS must name the repository's authorized product owners." >&2
+  exit 1
+}
+
+actor="$(gh api user --jq .login)"
+actor_normalized="$(printf %s "$actor" | tr '[:upper:]' '[:lower:]')"
+actor_allowed=0
+IFS=',' read -r -a actors <<< "$allowed_actors"
+for raw_allowed in "${actors[@]}"; do
+  allowed="$(printf '%s' "$raw_allowed" | xargs)"
+  [[ "$allowed" =~ $actor_pattern ]] || {
+    echo "PRODUCT_OWNER_ACTORS contains an invalid GitHub actor." >&2
+    exit 1
+  }
+  if [[ "$(printf %s "$allowed" | tr '[:upper:]' '[:lower:]')" == "$actor_normalized" ]]; then
+    actor_allowed=1
+  fi
+done
+[[ "$actor_allowed" == 1 ]] || {
+  echo "Actor $actor is not listed in PRODUCT_OWNER_ACTORS." >&2
+  exit 1
+}
+
+json="$(jq -nc \
+  --argjson issue "$issue" \
+  --arg sha "$sha" \
+  --arg artifact "$artifact" \
+  --arg retention "$retention" \
+  '{schema:"capability-workshop-owner-receipt-v1",issue:$issue,candidate:$sha,artifact:$artifact,role:"product-owner",completion:true,source_comprehension:true,projection_comprehension:true,recovery_needed:false,retention_decision:$retention,acceptance_scope:"owner-operated-dogfood",migration_evidence_issue:92,migration_evidence_due:"before-release",independent_user_validation:"not-collected",redacted:true}')"
+body="<!-- capability-workshop-owner-receipt-v1 -->
+$json"
+url="$(gh api -X POST "repos/$repo/issues/$issue/comments" -f body="$body" --jq .url)"
+id="${url##*/}"
+digest="$(printf %s "$body" | shasum -a 256 | awk '{print $1}')"
+token="capability-workshop-owner-receipt-v1:comment=$id:$digest"
+GITHUB_REPOSITORY="$repo" PRODUCT_OWNER_ACTORS="$allowed_actors" \
+  bin/verify-capability-workshop-owner-receipt \
+  "$token" "$issue" "$sha" "$artifact" "$actor" >/dev/null
+printf '%s\n' "$token"

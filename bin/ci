@@ -5,6 +5,7 @@ bin/validate-solution-plans
 bin/test-release-assets
 bin/test-acceptance-evidence
 bin/test-capability-workshop-evidence
+bin/test-owner-dogfood-command-paths
 bin/test-acceptance-contract
 bin/test-acceptance-primitives
 bin/test-capability-workshop-supervisor
