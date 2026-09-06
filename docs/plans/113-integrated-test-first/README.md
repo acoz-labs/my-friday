@@ -1,6 +1,6 @@
 # Solution Design: integrated-test-first delivery authority
 
-- **Status:** Draft
+- **Status:** Final
 - **Issue:** #113
 - **Planning PR:** #114
 - **Repository basis:** 949a4171145660d3463994d6f339898bcf3d7315
@@ -17,8 +17,8 @@ acceptance mechanism.
 
 ## Needs Attention
 
-No blocking design unknown. Independent maintainer review and final plan
-approval remain required. Actual integration compatibility, native platform
+No blocking design unknown. Independent maintainer review found no blocking
+findings; final product-authority approval remains required. Actual integration compatibility, native platform
 proof, real harness execution, migration rehearsal, owner judgment, and public
 release are later delivery evidence; this documentation change certifies none.
 
@@ -52,6 +52,6 @@ release are later delivery evidence; this documentation change certifies none.
 
 ## Final Gate
 
-The maintainer reviews the complete pack before it is marked Final. Final
+The maintainer reviewed the complete pack with no blocking findings. Final
 product-authority approval must bind the actual planning head and the
 `implementation` envelope; neither discovery approval nor CI supplies it.
