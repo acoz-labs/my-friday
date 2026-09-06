@@ -1,0 +1,181 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+root="$(cd "$(dirname "$0")/.." && pwd)"
+fixture="$(mktemp -d)"
+trap 'rm -rf "$fixture"' EXIT
+mkdir -p "$fixture/bin" "$fixture/assets"
+
+git -C "$fixture" init -q
+git -C "$fixture" -c user.name=Fixture -c user.email=fixture@example.invalid \
+  commit -q --allow-empty -m fixture
+sha="$(git -C "$fixture" rev-parse HEAD)"
+merge_sha="$sha"
+artifact="artifact-v1:run=12:id=34:name=my-friday-darwin-arm64:sha256=$(printf 'b%.0s' {1..64})"
+artifact_digest="$(printf %s "$artifact" | git hash-object --stdin)"
+implementation_digest="$(printf '55\n' | git hash-object --stdin)"
+evidence="capability-workshop-evidence-v1:provisional=101:$(printf 'c%.0s' {1..64}):final=102:$(printf 'd%.0s' {1..64})"
+second_evidence="capability-workshop-evidence-v1:provisional=103:$(printf 'e%.0s' {1..64}):final=104:$(printf 'f%.0s' {1..64})"
+failure="capability-workshop-failure-v1:comment=105:$(printf 'a%.0s' {1..64})"
+owner="capability-workshop-owner-receipt-v1:comment=110:$(printf '9%.0s' {1..64})"
+bundle="capability-workshop-owner-dogfood-v1:$evidence|$owner"
+second_bundle="capability-workshop-owner-dogfood-v1:$second_evidence|$owner"
+summary='Owner-operated dogfood. Independent-user validation: not collected.'
+
+cp "$root/bin/record-product-acceptance" "$fixture/bin/"
+cp "$root/bin/finalize-release" "$fixture/bin/"
+cp "$root/bin/verify-capability-workshop-owner-dogfood" "$fixture/bin/"
+cat >"$fixture/bin/verify-capability-workshop-evidence" <<'SH'
+#!/usr/bin/env bash
+set -euo pipefail
+printf '%s\n' "$(printf %s "${5:-}" | tr '[:upper:]' '[:lower:]')"
+SH
+cat >"$fixture/bin/verify-capability-workshop-owner-receipt" <<'SH'
+#!/usr/bin/env bash
+set -euo pipefail
+[[ "${INVALIDATE_OWNER:-0}" != 1 ]] || { echo 'owner receipt invalidated' >&2; exit 1; }
+printf '%s\n' owner
+SH
+cat >"$fixture/bin/verify-acceptance-evidence" <<'SH'
+#!/usr/bin/env bash
+exit 1
+SH
+cat >"$fixture/bin/release-gate" <<'SH'
+#!/usr/bin/env bash
+exit 0
+SH
+chmod +x "$fixture/bin/"*
+
+jq -nc --arg body '<!-- software-lifecycle:start -->
+## Lifecycle
+
+- Phase 3 — Implementation: https://github.com/owner/repo/pull/55
+<!-- software-lifecycle:end -->' '{body:$body,state:"open",labels:["delivery:acceptance"]}' >"$fixture/issue-api.json"
+jq -nc --arg merge "$merge_sha" '{merged_at:"2026-09-05T00:00:00Z",merge_commit_sha:$merge,user:{login:"implementer"}}' >"$fixture/pull.json"
+nomination="<!-- release-candidate sha=$sha artifact=$artifact_digest source=workflow source-id=1 intent=application -->"
+reset_comments() {
+  jq -nc --arg body "$nomination" '[{user:{login:"github-actions[bot]"},body:$body}]' >"$fixture/comments.json"
+  : >"$fixture/writes.log"
+}
+reset_comments
+
+cat >"$fixture/bin/gh" <<'SH'
+#!/usr/bin/env bash
+set -euo pipefail
+log="$COMMAND_FIXTURES/writes.log"
+if [[ "${1:-}" == api ]]; then
+  endpoint=""
+  for arg in "$@"; do [[ "$arg" != repos/* ]] || { endpoint="$arg"; break; }; done
+  case "$endpoint" in
+    repos/*/commits/*/pulls*) printf '%s\n' '[]' ;;
+    repos/*/issues/51/comments*) jq -c '[.]' "$COMMAND_FIXTURES/comments.json" ;;
+    repos/*/issues/51) cat "$COMMAND_FIXTURES/issue-api.json" ;;
+    repos/*/pulls/55) cat "$COMMAND_FIXTURES/pull.json" ;;
+    repos/*/compare/*) printf '%s\n' '{"status":"identical"}' ;;
+    repos/*/commits/*/statuses*) printf '%s\n' '[[]]' ;;
+    repos/*/statuses/*) printf 'status-write\n' >>"$log"; printf '%s\n' '{}' ;;
+    repos/*/issues/51/labels/*) printf 'state-write\n' >>"$log"; printf '%s\n' '{}' ;;
+    *) echo "unexpected gh api request: $*" >&2; exit 1 ;;
+  esac
+  exit 0
+fi
+if [[ "${1:-}" == issue && "${2:-}" == comment ]]; then
+  body=""
+  args=("$@")
+  for ((i=0; i<${#args[@]}; i++)); do
+    [[ "${args[$i]}" != --body ]] || body="${args[$((i+1))]}"
+  done
+  jq --arg body "$body" '. += [{user:{login:"github-actions[bot]"},body:$body}]' \
+    "$COMMAND_FIXTURES/comments.json" >"$COMMAND_FIXTURES/comments.next"
+  mv "$COMMAND_FIXTURES/comments.next" "$COMMAND_FIXTURES/comments.json"
+  printf 'issue-comment\n' >>"$log"
+  exit 0
+fi
+if [[ "${1:-}" == issue && "${2:-}" == list ]]; then
+  if [[ "$*" == *delivery:ready-for-release* ]]; then printf '%s\n' 51; fi
+  exit 0
+fi
+if [[ "${1:-}" == issue && "${2:-}" == view ]]; then
+  jq -nc --arg body "$(jq -r .body "$COMMAND_FIXTURES/issue-api.json")" \
+    '{state:"OPEN",labels:[{name:"delivery:ready-for-release"}],body:$body}'
+  exit 0
+fi
+if [[ "${1:-}" == label || ( "${1:-}" == issue && "${2:-}" == edit ) ]]; then
+  printf 'state-write\n' >>"$log"
+  exit 0
+fi
+if [[ "${1:-}" == release ]]; then
+  printf 'release-write\n' >>"$log"
+  exit 1
+fi
+echo "unexpected gh request: $*" >&2
+exit 1
+SH
+chmod +x "$fixture/bin/gh"
+
+record() {
+  (
+    cd "$fixture"
+    PATH="$fixture/bin:$PATH" \
+    COMMAND_FIXTURES="$fixture" \
+    GITHUB_REPOSITORY=owner/repo \
+    GITHUB_ACTOR=acceptor \
+    GITHUB_RUN_ID=99 \
+    ACCEPTANCE_ACTORS=acceptor \
+    PRODUCT_OWNER_ACTORS=owner \
+    DELIVERY_PROFILE=artifact \
+    RELEASE_ARTIFACT="$artifact" \
+      bin/record-product-acceptance "$sha" 51 approved "$summary" "$1"
+  )
+}
+assert_no_writes() { [[ ! -s "$fixture/writes.log" ]] || { echo "$1 caused acceptance writes" >&2; exit 1; }; }
+
+record "$bundle" >/dev/null
+grep -Fxq issue-comment "$fixture/writes.log"
+
+reset_comments
+if record "capability-workshop-owner-dogfood-v1:$failure|$owner" >/dev/null 2>&1; then
+  echo 'failure evidence authorized owner-dogfood approval' >&2; exit 1
+fi
+assert_no_writes 'failure evidence'
+if record "capability-workshop-acceptance-v1:$evidence|$owner" >/dev/null 2>&1; then
+  echo 'legacy bundle authorized owner-dogfood approval' >&2; exit 1
+fi
+assert_no_writes 'legacy bundle'
+for malformed in "$bundle|" "$bundle|extra" "$bundle"$'\n'; do
+  if record "$malformed" >/dev/null 2>&1; then echo 'malformed owner-dogfood bundle authorized approval' >&2; exit 1; fi
+  assert_no_writes 'malformed bundle'
+done
+
+reset_comments
+record "$bundle" >/dev/null
+: >"$fixture/writes.log"
+record "$bundle" >/dev/null
+if grep -Fxq issue-comment "$fixture/writes.log"; then echo 'exact retry duplicated acceptance comment' >&2; exit 1; fi
+: >"$fixture/writes.log"
+record "$second_bundle" >/dev/null
+grep -Fxq issue-comment "$fixture/writes.log"
+
+: >"$fixture/writes.log"
+touch "$fixture/assets/my-friday-darwin-arm64.tar.gz" "$fixture/assets/SHA256SUMS"
+if (
+  cd "$fixture"
+  PATH="$fixture/bin:$PATH" \
+  COMMAND_FIXTURES="$fixture" \
+  FINALIZER_MODE=1 \
+  INVALIDATE_OWNER=1 \
+  GITHUB_REPOSITORY=owner/repo \
+  GITHUB_RUN_ID=100 \
+  PRODUCT_OWNER_ACTORS=owner \
+  RELEASE_ARTIFACT="$artifact" \
+  RELEASE_ISSUES=51 \
+  RELEASE_SHA="$sha" \
+  RELEASE_SUMMARY="$summary" \
+  RELEASE_ASSET_PATHS="$fixture/assets/my-friday-darwin-arm64.tar.gz:$fixture/assets/SHA256SUMS" \
+    bin/finalize-release artifact
+) >/dev/null 2>&1; then
+  echo 'release accepted an invalidated owner receipt' >&2; exit 1
+fi
+assert_no_writes 'invalidated release receipt'
+
+echo 'owner dogfood command-path tests passed.'

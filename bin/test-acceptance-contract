@@ -77,7 +77,7 @@ grep -Fq 'setsid descendant control' "$supervisor"
 grep -Fq 'protected-metadata' "$supervisor"
 grep -Fq 'published evidence did not survive exact re-fetch verification' "$supervisor"
 grep -Fq 'fetch_stable' "$root/bin/verify-acceptance-evidence"
-grep -Fq '(?:evidence-v1|failure-v1|capability-workshop-acceptance-v1|capability-workshop-failure-v1)' "$root/bin/record-product-acceptance"
+grep -Fq '(?:evidence-v1|failure-v1|capability-workshop-owner-dogfood-v1|capability-workshop-failure-v1)' "$root/bin/record-product-acceptance"
 grep -Fq 'this supervisor is scoped to issue 51' "$workshop"
 grep -Fq 'capability-workshop-acceptance-evidence-v1' "$workshop"
 grep -Fq 'MY_FRIDAY_CODEX_AUTH_FILE' "$workshop"
@@ -98,9 +98,18 @@ grep -Fq 'before_workshop' "$workshop"
 grep -Fq "trap - EXIT INT TERM" "$workshop"
 if grep -Eq 'cp -p .*auth|rm -rf.*(run_root|instance_root|sibling_root)' "$workshop"; then exit 1; fi
 for scenario in workshop install upgrade denials interruption migration cleanup; do grep -Fq "phase=$scenario" "$workshop"; done
-for command in verify-capability-workshop-evidence verify-capability-workshop-receipt verify-capability-workshop-acceptance record-capability-workshop-receipt; do [[ -x "$root/bin/$command" ]]; done
+for command in verify-capability-workshop-evidence verify-capability-workshop-receipt verify-capability-workshop-acceptance record-capability-workshop-receipt verify-capability-workshop-owner-receipt record-capability-workshop-owner-receipt verify-capability-workshop-owner-dogfood test-owner-dogfood-command-paths; do [[ -x "$root/bin/$command" ]]; done
 grep -Fq 'elif [[ "$issue_number" == 51 ]]' "$root/bin/record-product-acceptance"
 grep -Fq 'elif [[ "$issue_number" == 51 ]]' "$root/bin/finalize-release"
+grep -Fq "expected_evidence='^capability-workshop-owner-dogfood-v1:'" "$root/bin/record-product-acceptance"
+grep -Fq 'bin/verify-capability-workshop-owner-dogfood "$evidence"' "$root/bin/record-product-acceptance"
+grep -Fq 'bin/verify-capability-workshop-owner-dogfood "$evidence_authority"' "$root/bin/finalize-release"
+grep -Fq 'PRODUCT_OWNER_ACTORS: ${{ vars.PRODUCT_OWNER_ACTORS }}' "$root/.github/workflows/product-acceptance.yml"
+[[ "$(grep -Fc 'PRODUCT_OWNER_ACTORS: ${{ vars.PRODUCT_OWNER_ACTORS }}' "$root/.github/workflows/release-artifact.yml")" == 2 ]]
+if grep -Eq 'capability-workshop-acceptance-v1.*verify-capability-workshop-acceptance' "$root/bin/record-product-acceptance"; then exit 1; fi
+grep -Fq 'capability-workshop-owner-dogfood-v1:<workshop-evidence>|<owner-receipt>' "$root/docs/deployment.md"
+grep -Fq 'Independent-user validation: not collected' "$root/docs/deployment.md"
+grep -Fq 'former partner authority remains audit-only' "$root/SECURITY.md"
 grep -Fq '(subpath @@VOLUME@@)' "$root/config/acceptance/lifecycle.sb.in"
 if grep -Eq 'rm -rf.*(run_root|evidence_root|run_parent|evidence_parent)' "$supervisor"; then exit 1; fi
 if grep -Eq '[^[:space:]]<\(' "$workshop"; then

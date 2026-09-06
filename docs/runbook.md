@@ -260,3 +260,13 @@ detach the marker-bound image without `-force`. If marker, manifest, inode,
 foreign collision, credential-copy, or mount facts are ambiguous, retain them
 for maintainer diagnosis and retry with a new run. Failure and provisional
 comments cannot authorize product acceptance or release.
+
+An owner-receipt post that fails its immediate round-trip check is not
+authority. Do not edit or delete it. Correct the configuration or candidate
+facts and post a new receipt; only the exact comment ID and body digest that
+passes the verifier may enter the owner-dogfood bundle. If acceptance or release
+replay later reports an edited, missing, cross-candidate, unauthorized, or
+role-conflicting receipt, preserve all comments, correct the underlying cause,
+and nominate a new candidate when candidate or implementation binding changed.
+Never reinterpret a historical four-part partner bundle as owner-dogfood
+authority.

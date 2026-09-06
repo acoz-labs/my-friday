@@ -5,14 +5,14 @@ contract, deterministic workshop isolation, exact install/upgrade plans, drift a
 refusal, retained-generation enable, complete reversal with source preserved,
 and fresh-task Codex discovery. Existing v1 roots remain unchanged until an
 explicit migration; release publication never mutates a user root. Acceptance
-must use the nominated immutable artifact and independent evidence rather than
-contributor-local model behavior.
+must use the nominated immutable artifact and separately authored exact-candidate
+evidence rather than contributor-local model behavior.
 
 ### Capability workshop acceptance
 
 Issue 51 uses a distinct acceptance authority; issue-4 installed-baseline
 evidence is never interchangeable. After implementation merges and a new
-artifact is nominated, an independent Apple-silicon acceptor runs:
+artifact is nominated, an authorized non-owner evidence/product acceptor runs:
 
 ```sh
 MY_FRIDAY_RUNTIME_PROJECTION=/absolute/validated/runtime \
@@ -38,20 +38,39 @@ publishing final authority. Public evidence contains only digests, state names,
 and boolean results—not instruction bodies, full diffs, prompts, model
 transcripts, private paths, foreign bytes, or credentials.
 
-Approved issue-51 acceptance uses one exact bundle:
+Approved issue-51 acceptance uses one exact owner-operated dogfood bundle:
 
 ```text
-capability-workshop-acceptance-v1:<evidence>|<product-owner-receipt>|<design-partner-receipt>|<design-partner-receipt>
+capability-workshop-owner-dogfood-v1:<workshop-evidence>|<owner-receipt>
 ```
 
-The evidence author is the independent acceptor. The product owner and two
-design partners must be three distinct GitHub actors and bind completed,
-redacted receipts to the same issue, candidate, and artifact. Both
-`record-product-acceptance` and `finalize-release` re-fetch and validate the
-bundle; `named-instance-acceptance-evidence-v1` remains valid only for issue 4.
-Each participant records their own bounded receipt with
-`bin/record-capability-workshop-receipt`; no free-form response or personal
-profile enters the authority.
+The evidence author/product acceptor and product owner must be distinct from
+each other and from every lifecycle-linked implementation PR author. The owner
+must be named by the required `PRODUCT_OWNER_ACTORS` repository variable, use
+the same exact candidate and artifact, complete the hands-on source,
+projection, recovery, and retention judgment, and record the fixed commitment
+to collect real migration evidence in issue 92 before that issue's release:
+
+```sh
+GITHUB_REPOSITORY=acoz-labs/my-friday \
+PRODUCT_OWNER_ACTORS=<configured-allowlist> \
+  bin/record-capability-workshop-owner-receipt \
+  51 <full-sha> <artifact-v1> <retain-or-remove> 92
+```
+
+Both `record-product-acceptance` and `finalize-release` require the same owner
+allowlist, re-fetch each comment twice, and revalidate the exact bundle.
+Approval and release summaries must state `Owner-operated dogfood` and
+`Independent-user validation: not collected`. The product owner's judgment is
+the user evidence; the evidence/product acceptor supplies technical and
+lifecycle independence, not an independent-user claim.
+
+The historical `capability-workshop-acceptance-v1` four-part authority and
+`capability-workshop-partner-receipt-v1` receipts remain directly verifiable
+for audit, but neither can authorize a new issue-51 acceptance or release.
+`named-instance-acceptance-evidence-v1` remains valid only for issue 4. No
+free-form response, personal profile, transcript, private path, or migration
+content enters the owner authority.
 
 ## Delivery profile
 
@@ -117,8 +136,9 @@ notes, commit-suffixed archive, `SHA256SUMS`, and acceptance evidence. Re-run th
 guarded backfill only after the retained source passes every verification.
 
 Every new candidate still requires successful CI, exact-candidate nomination,
-independent Apple silicon acceptance, and the artifact release gate. No
-configuration or secrets are used at runtime.
+separately operated Apple-silicon workshop evidence, owner acceptance, and the
+artifact release gate. `PRODUCT_OWNER_ACTORS` configures release control only;
+no configuration or secrets are embedded in or used by the runtime artifact.
 
 Named-instance acceptance must exercise create, verify, launch, two-instance
 coexistence, collision refusal, interrupted-remove recovery, and reversal as

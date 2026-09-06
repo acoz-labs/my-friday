@@ -195,14 +195,19 @@ Issue-51 release authority has a separate deterministic contract suite:
 
 ```sh
 bin/test-capability-workshop-evidence
+bin/test-owner-dogfood-command-paths
 bin/test-acceptance-contract
 ```
 
 These checks lock the strict provisional, final, failure, and three-person
-workshop receipt schemas; exact issue/candidate/artifact bindings; stable-
-comment re-fetches; cross-schema refusal; and product-acceptance/release
-routing. They are network/model-free and do not replace the native Apple-
-silicon run of `bin/accept-capability-workshop` against nominated bytes.
+historical workshop receipt schemas plus the active two-part owner-dogfood
+authority; exact issue/candidate/artifact bindings; fixed issue-92 migration
+terms; product-owner allowlist validation; owner/acceptor/implementation-author
+separation; stable-comment re-fetches; candidate containment; cross-schema
+refusal; and product-acceptance/release routing. They are network/model-free
+and do not replace the native Apple-silicon run of
+`bin/accept-capability-workshop` against nominated bytes or the product owner's
+hands-on judgment of that same artifact.
 The shared acceptance-support and runner suites additionally lock no-follow
 auth copy/source-swap refusal, secure-root collision and ambiguous cleanup
 preservation, timeout/escaped-child reaping, `INT`/`TERM` exit status and

@@ -55,6 +55,7 @@ jobs:
       - name: Verify issue-specific release authority
         env:
           GH_TOKEN: ${{ github.token }}
+          PRODUCT_OWNER_ACTORS: ${{ vars.PRODUCT_OWNER_ACTORS }}
           RELEASE_ARTIFACT: ${{ inputs.artifact }}
           RELEASE_ISSUES: ${{ inputs.issues }}
           RELEASE_SHA: ${{ inputs.sha }}
@@ -70,6 +71,7 @@ jobs:
       - name: Publish artifact ledger
         env:
           GH_TOKEN: ${{ github.token }}
+          PRODUCT_OWNER_ACTORS: ${{ vars.PRODUCT_OWNER_ACTORS }}
           RELEASE_ARTIFACT: ${{ inputs.artifact }}
           RELEASE_ISSUES: ${{ inputs.issues }}
           RELEASE_SHA: ${{ inputs.sha }}

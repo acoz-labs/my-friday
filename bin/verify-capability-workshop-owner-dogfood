@@ -1,0 +1,65 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+bundle="${1:-}"
+issue="${2:-}"
+sha="${3:-}"
+artifact="${4:-}"
+acceptor="${5:-}"
+repo="${GITHUB_REPOSITORY:-}"
+die() { echo "$*" >&2; exit 1; }
+
+[[ -n "$repo" && "$issue" == 51 && "$sha" =~ ^[0-9a-f]{40}$ &&
+  "$artifact" =~ ^artifact-v1:run=[0-9]+:id=[0-9]+:name=[A-Za-z0-9._-]+:sha256=[0-9a-f]{64}$ &&
+  "$acceptor" =~ ^[A-Za-z0-9]([A-Za-z0-9-]{0,37}[A-Za-z0-9])?$ ]] || exit 64
+
+bundle_pattern='^capability-workshop-owner-dogfood-v1:(capability-workshop-evidence-v1:provisional=[0-9]+:[0-9a-f]{64}:final=[0-9]+:[0-9a-f]{64})\|(capability-workshop-owner-receipt-v1:comment=[0-9]+:[0-9a-f]{64})$'
+[[ "$bundle" != *$'\n'* && "$bundle" != *$'\r'* && "$bundle" =~ $bundle_pattern ]] || exit 64
+evidence="${BASH_REMATCH[1]}"
+owner="${BASH_REMATCH[2]}"
+
+evidence_actor="$(bin/verify-capability-workshop-evidence \
+  "$evidence" "$issue" "$sha" "$artifact" "$acceptor")"
+owner_actor="$(bin/verify-capability-workshop-owner-receipt \
+  "$owner" "$issue" "$sha" "$artifact" "")"
+acceptor_normalized="$(printf %s "$acceptor" | tr '[:upper:]' '[:lower:]')"
+[[ "$evidence_actor" == "$acceptor_normalized" ]] || die "Workshop evidence author mismatch."
+[[ "$owner_actor" != "$acceptor_normalized" ]] ||
+  die "The product owner and evidence acceptor must be distinct actors."
+
+issue_json="$(gh api "repos/$repo/issues/$issue")" || die "Unable to resolve issue implementation set."
+implementation_prs="$(jq -r '.body // ""' <<< "$issue_json" | awk '
+  /^- (Phase 3 .*Implementation|Implementation PR):/ {
+    line = $0
+    while (match(line, /\/pull\/[0-9]+/)) {
+      print substr(line, RSTART + 6, RLENGTH - 6)
+      line = substr(line, RSTART + RLENGTH)
+    }
+  }
+' | sort -nu)"
+[[ -n "$implementation_prs" ]] || die "Issue #$issue lifecycle does not link an implementation pull request."
+
+while IFS= read -r implementation_pr; do
+  [[ -n "$implementation_pr" ]] || continue
+  implementation_json="$(gh api "repos/$repo/pulls/$implementation_pr")" ||
+    die "Unable to resolve implementation PR #$implementation_pr."
+  [[ -n "$(jq -r '.merged_at // ""' <<< "$implementation_json")" ]] ||
+    die "Issue #$issue links unmerged implementation PR #$implementation_pr."
+  merge_sha="$(jq -r '.merge_commit_sha // ""' <<< "$implementation_json")"
+  [[ "$merge_sha" =~ ^[0-9a-f]{40}$ ]] ||
+    die "Issue #$issue implementation PR #$implementation_pr lacks a merge commit."
+  comparison="$(gh api "repos/$repo/compare/$merge_sha...$sha")" ||
+    die "Unable to compare implementation PR #$implementation_pr with the candidate."
+  status="$(jq -r '.status // ""' <<< "$comparison")"
+  [[ "$status" == ahead || "$status" == identical ]] ||
+    die "Candidate $sha does not contain implementation PR #$implementation_pr merge $merge_sha."
+  implementation_actor="$(jq -r '.user.login | ascii_downcase' <<< "$implementation_json")"
+  [[ -n "$implementation_actor" && "$implementation_actor" != null ]] ||
+    die "Issue #$issue implementation PR #$implementation_pr lacks an author."
+  [[ "$owner_actor" != "$implementation_actor" ]] ||
+    die "An issue's implementing pull-request author cannot supply the product-owner receipt."
+  [[ "$acceptor_normalized" != "$implementation_actor" ]] ||
+    die "An issue's implementing pull-request author cannot supply workshop evidence or product acceptance."
+done <<< "$implementation_prs"
+
+printf '%s\n' "$acceptor_normalized"
