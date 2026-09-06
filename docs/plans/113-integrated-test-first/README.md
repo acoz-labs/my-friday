@@ -2,7 +2,7 @@
 
 - **Status:** Draft
 - **Issue:** #113
-- **Planning PR:** Pending
+- **Planning PR:** #114
 - **Repository basis:** 949a4171145660d3463994d6f339898bcf3d7315
 - **Execution envelope:** implementation
 
