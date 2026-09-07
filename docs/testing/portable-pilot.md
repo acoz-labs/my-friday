@@ -240,8 +240,39 @@ and its Git worktree remained clean. The existing pilot's source/auth state was
 not part of these destructive fixtures. Prior executable artifacts are retained
 when updating the trial at its stable bound path.
 
+## Physical second-machine offline portability — 2026-09-07
+
+Transferred the tested `f4e10eb` Apple Silicon executable to a second physical
+Mac over SSH with an independently verified host key. Its SHA-256 matched
+`5fac4770b6fa183c3cf015aab9961d5bff607345c184905e1a0468534cc576af`.
+The target ran macOS 26.6.2 and Git 2.55.0. All installation paths were disposable;
+existing assistant installations and global SSH/Git configuration were unchanged.
+
+The target's existing GitHub CLI authentication returned HTTP 401, including
+with token environment overrides removed. Used a Git bundle of the synthetic
+remote pilot source to exercise offline import without copying credentials or
+native sessions. This was test orchestration, not a new bundle-import wizard.
+
+Observed outcomes:
+
+- Clone/import preserved the assistant identity and registered a distinct device.
+- Scoped recall recovered the current synthetic project name and all three prior
+  revisions. The imported record retained its original machine provenance.
+- A correction authored on the second Mac superseded the current revision and
+  carried the new device ID. Intentional credential refusal returned `pending`;
+  the correction was committed, the worktree was clean, and validation passed.
+- A return bundle brought that correction to the first Mac. Publication through
+  its working private test credential helper succeeded, and another installation
+  pulled and recalled the correction with the second Mac's provenance intact.
+- Fresh target harness homes contained no copied Codex or Pi authentication files.
+
+This proves physical-machine CLI continuity and offline round-trip recovery.
+It does not yet prove direct authenticated synchronization from the second Mac
+or a live model conversation there. Those checks await native local logins;
+remote Codex 0.153.0 was inventoried but not used for a model request.
+
 ## Next checkpoints
 
-1. Exercise bootstrap and continuity on a second physical machine.
+1. Complete direct authenticated sync and a live harness test on the second Mac.
 2. Improve scratch-file handling and remaining retrieval inefficiencies.
 3. Review remaining install/update/recovery and provenance gaps before release.
