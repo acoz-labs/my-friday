@@ -1,73 +1,46 @@
 # Repository Instructions
 
-This repository follows a role-based, tool-agnostic SDLC.
+## Current workflow: portable assistant rebuild
 
-## Roles
+On 2026-09-06 the product owner explicitly authorized replacing the legacy
+delivery gates for this rebuild with direct local implementation, testing, and
+review. The direction in `docs/discovery/portable-assistant-vnext/README.md` is
+current. Conflicting old product plans and lifecycle documents are historical
+context, not prerequisites for this work.
 
-- Product owners set intent, priority, and product judgment.
-- Maintainers shape work, review PRs, verify releases, and preserve durable
-  repository knowledge.
-- Product design reviewers shape user flows, interaction behavior, visual direction,
-  accessibility and localization requirements, and implementation-ready design
-  acceptance criteria for substantive user-facing work.
-- Contributors implement code, tests, docs, branches, and PR responses.
+On 2026-09-07 the product owner clarified that this repository is being developed
+directly, not through a personal assistant instance. Private-agent account and
+SDLC policies do not govern this development workflow.
 
-## Workflow
+- Implement approved work without requiring discovery issues, planning PRs,
+  exact-head product approvals, or acceptance cohorts first.
+- Use tests first for meaningful behavior and exercise failure boundaries.
+- Review the diff and document actual behavior, verification, and limitations.
+- Preserve unrelated work and existing installations. Use disposable test
+  repositories and synthetic accounts, never ambient harness configuration.
+- Keep private memory, credentials, identities, and transcripts out of this
+  public repository. Public contributor attribution is normal project metadata.
+- Use the configured, authorized development Git/GitHub account for commits and
+  feature-branch pushes. Do not require separate agent identities, alternating
+  contributor/reviewer accounts, or private-agent delivery gates. Review the
+  diff, validate changes, and checkpoint/push completed work without an extra
+  identity-approval ceremony. Do not force-push or merge/release by implication.
+- This is the shared open-source platform, not any particular user's agent.
+  Core capabilities cover memory management, capability design/validation,
+  setup, harness adaptation, and synchronization. Service integrations,
+  credential-provider implementations, account-role models, inbox rules, and
+  personal workflows belong in each user's private agent repository. Core may
+  define provider-neutral extension contracts, but must not ship personal
+  integrations as built-ins, optional bundled packages, or seeded examples.
+  Use synthetic provider-neutral fixtures for core behavior. The repository's
+  own development/release tooling is distinct from installed agent capabilities.
+- Development authority does not authorize production release,
+  live-data migration, or removal of an existing installation.
+- Do not reintroduce mandatory confirmations for the private assistant's
+  routine learning, capability execution, or offline use.
 
-1. Capture an ambiguous product opportunity as a discovery issue. Use the
-   owning repository whenever one is known.
-2. Develop the decision in one scoped, contributor-authored pull request under
-   `docs/discovery/<issue>-<slug>/`. Keep one complete `README.md`; add optional
-   files only when the evidence or outcome map needs depth. A maintainer records
-   product authority with an approval on the exact final head, then merges it.
-3. Materialize only selected or deliberately deferred outcomes as self-contained
-   delivery issues linked to the approved discovery head and outcome key.
-4. Shape a bounded delivery issue before implementation.
-5. For substantive user-facing work, complete the product-design gate before
-   solution design.
-6. Complete one contributor-authored solution-design planning PR under
-   `docs/plans/<issue>-<slug>/`. Resolve maintainer findings internally, obtain
-   the final product-authority approval, merge the planning-only PR, and only
-   then move the issue to `Ready`.
-7. Use `discovery/<issue>-<short-topic>` for discovery and
-   `design/<issue>-<short-topic>` for the planning-only PR, then branch the
-   approved implementation from `main` with `feature/<short-topic>`.
-8. Use TDD for meaningful behavior changes.
-9. Keep changes small, scoped, and documented.
-10. Commit, push, open a draft PR linked from the issue lifecycle, and keep it
-   draft while reconciliation is prepared.
-11. Reconcile that draft's current head with the approved plan, explain drift,
-   record the documentation-promotion matrix, update durable repository docs
-   from the shipped behavior, and delete the temporary issue plan. Replace the
-   current reconciliation and bind it to the exact head commit.
-12. Verify the current reconciliation and plan removal. For meaningful rendered
-    changes, complete `docs/operations/ui-acceptance.md` against the exact PR
-    head and attach its evidence manifest. Then mark the PR ready with
-    validation, design, docs, and deploy evidence.
-13. Merge only after review and required checks.
-14. Keep the linked issue open after merge when the change requires staging,
-    product acceptance, or a production release.
-    Candidate association uses only an explicit top-level `Refs`, `Closes`,
-    `Fixes`, or `Resolves` PR line; narrative mentions and closed issues do not
-    authorize nomination.
-15. Accept only the exact nominated commit and immutable artifact. Service
-    nominations come from staging; artifact repositories use the staging-free
-    artifact-nomination workflow. The contributor who implemented the change
-    must not be its sole product acceptor. Durable acceptance must be bound to
-    the issue and its current implementation pull-request set; issue labels or
-    comments alone are not release authority. Every lifecycle-linked
-    implementation merge must be contained in the accepted candidate.
-    UI acceptance repeats the hands-on scenario matrix and records fresh,
-    openable exact-candidate evidence; contributor-local screenshots are not
-    staging acceptance.
-
-Generated managed-standard adoption issues may omit an issue-local Solution
-Design plan only when they link the immutable reviewed template commit, carry
-the managed-standard marker, change no product outcome, record repo-specific
-deviations, pass CI, receive independent maintainer review, and pass the
-post-merge stewardship audit. They complete after the reviewed merge passes
-that audit, are excluded from candidate nomination, and do not authorize a
-production promotion.
+Legacy lifecycle and release documentation remains available in
+`docs/operations/sdlc.md` as reference, not a prerequisite for this rebuild.
 
 ## Engineering Rules
 
@@ -80,8 +53,8 @@ production promotion.
 - Keep related behavior, data, contracts, authorization, invariants, failure,
   and operation coherent by capability. Do not copy one permanent document per
   solution-design stage.
-- Keep Solution Design review in its planning pull request. Issues contain the
-  compact product contract and lifecycle links, not copies of planning files.
+- Record significant design decisions and remaining limitations in repository
+  docs. Use issues and PRs when useful; do not invent mandatory planning gates.
 - Do not commit secrets.
 - Treat local and development-preview URLs as ephemeral review aids, not
   acceptance or release evidence.

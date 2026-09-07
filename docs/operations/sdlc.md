@@ -1,6 +1,16 @@
 # SDLC And Release Flow
 
-This repository follows a role-based, tool-agnostic SDLC.
+> For the portable assistant rebuild authorized on 2026-09-06, follow
+> [the current repository instructions](../../AGENTS.md). Direct implementation,
+> testing, review, commits, and feature-branch pushes replace the preimplementation
+> gates in this legacy workflow. As clarified on 2026-09-07, use the authorized
+> development account; private-agent account separation does not apply here.
+> This development scope does not authorize a production release.
+
+The material below records the earlier role-based SDLC and release process.
+It is historical reference for this rebuild, not an additional set of active
+development instructions. The current workflow is in `AGENTS.md` and
+`CONTRIBUTING.md`; release workflows are not invoked by ordinary development.
 
 ## Standard Flow
 
