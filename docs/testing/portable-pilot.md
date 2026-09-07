@@ -50,13 +50,38 @@ toolkit capability check, and source validation passed. The private source
 worktree remained clean after verification.
 
 This closes the observed authoring-discovery finding for this Codex scenario,
-not every harness or capability. Natural-language discovery and reuse in
-another fresh session remain pending; inspect recorded calls as well as the
-answer to distinguish reuse from reimplementation.
+not every harness or capability.
+
+## Fresh-session capability reuse — 2026-09-07
+
+A fresh Codex session received a synthetic counting request without the
+capability name or implementation path. Its recorded calls listed capability
+manifests, read the selected instructions, and executed the existing script
+with exact stdin bytes. The script returned the expected counts. No capability
+was created or modified: inspection confirmed no capability diff against the
+pre-session checkpoint and a clean private source worktree.
+
+Reuse is demonstrated for this scenario. Discovery still involved an extra
+agent-help call and a filename search between listing manifests and reading
+instructions. Consider making instruction locations explicit in discovery
+output; the correct result alone does not prove optimal tool efficiency.
+
+## Pi preflight — 2026-09-07
+
+Installed `@earendil-works/pi-coding-agent@0.85.1` in a disposable local npm
+prefix with dependency lifecycle scripts disabled, following the
+[upstream package instructions](https://github.com/earendil-works/pi/blob/main/packages/coding-agent/README.md).
+No global harness installation or shell configuration was changed.
+The existing agent launcher successfully forwarded Pi version/help requests.
+Pi's installed extension loader loaded the generated My Friday extension with
+all thirteen registered event names and no errors; its context-file loader
+found the generated instance instructions from an unrelated project cwd.
+
+This verifies loading, not callback delivery or authenticated model behavior.
+Native Pi login and the cross-harness memory/capability pilot remain pending.
 
 ## Next checkpoints
 
-1. Validate capability reuse without reimplementation.
-2. Repeat the core learning/capability experience through Pi.
-3. Exercise remote sync, a second installation, and offline recovery.
-4. Review remaining install/update/recovery and provenance gaps before release.
+1. Repeat the core learning/capability experience through Pi.
+2. Exercise remote sync, a second installation, and offline recovery.
+3. Review remaining install/update/recovery and provenance gaps before release.
