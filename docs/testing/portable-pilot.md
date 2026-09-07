@@ -248,7 +248,7 @@ Mac over SSH with an independently verified host key. Its SHA-256 matched
 The target ran macOS 26.6.2 and Git 2.55.0. All installation paths were disposable;
 existing assistant installations and global SSH/Git configuration were unchanged.
 
-The target's existing GitHub CLI authentication returned HTTP 401, including
+The target's SSH session returned GitHub CLI HTTP 401, including
 with token environment overrides removed. Used a Git bundle of the synthetic
 remote pilot source to exercise offline import without copying credentials or
 native sessions. This was test orchestration, not a new bundle-import wizard.
@@ -267,12 +267,27 @@ Observed outcomes:
 - Fresh target harness homes contained no copied Codex or Pi authentication files.
 
 This proves physical-machine CLI continuity and offline round-trip recovery.
-It does not yet prove direct authenticated synchronization from the second Mac
-or a live model conversation there. Those checks await native local logins;
-remote Codex 0.153.0 was inventoried but not used for a model request.
+Remote Codex 0.153.0 was inventoried but not used for a model request.
+
+### Direct authenticated sync follow-up
+
+The owner's local Terminal successfully retrieved the selected account's token
+and verified its identity, with no token environment overrides. SSH could not
+retrieve that token. Local Terminal selected a newer GitHub CLI, but explicitly
+running that same executable over SSH still failed. The login itself was valid;
+session-specific credential access remains the unresolved SSH limitation.
+No credentials were printed, copied, or reset during these checks.
+
+The owner then ran the same My Friday sync command directly in the target's
+local Terminal using the private helper's explicit account selection. It returned
+`synced` with identical local and remote commit IDs matching the previously
+published physical-machine correction. This establishes direct authenticated
+reconciliation from the second Mac, but not publication of a new correction
+from that Terminal or native model lifecycle delivery. A live harness test is
+next; the isolated test Codex home still requires its own login.
 
 ## Next checkpoints
 
-1. Complete direct authenticated sync and a live harness test on the second Mac.
+1. Complete a live harness test and publish new work directly from the second Mac.
 2. Improve scratch-file handling and remaining retrieval inefficiencies.
 3. Review remaining install/update/recovery and provenance gaps before release.
