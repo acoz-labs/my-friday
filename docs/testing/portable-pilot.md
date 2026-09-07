@@ -286,8 +286,47 @@ reconciliation from the second Mac, but not publication of a new correction
 from that Terminal or native model lifecycle delivery. A live harness test is
 next; the isolated test Codex home still requires its own login.
 
+## Physical second-machine live Codex pilot — 2026-09-07
+
+The owner authenticated the disposable Codex home locally and launched the
+assistant from a fresh, empty project directory outside its source repository.
+The private test helper gained a non-reserved account-selector variable because
+the launcher clears inherited `MY_FRIDAY_*` variables before supplying runtime
+identity. Startup pulled that private helper update; no service-specific code
+was added to the public toolkit.
+
+Reviewed the native session's messages and executed commands, then independently
+pulled the resulting source on the first physical Mac. Observed:
+
+- Scope discovery selected the existing project ID without guessing from cwd.
+- The assistant recovered the current name and four-revision history, then saved
+  a fifth revision superseding the previous name under explicit user direction.
+- Source evidence, revision, and completion journal were published directly from
+  the second Mac. Local and remote heads matched; the first Mac then recalled
+  the same new revision with second-device, Codex, and session provenance.
+- All five revisions remained available, with no current conflicts. Source
+  validation passed and the source worktree was clean. The project stayed empty.
+- The memory write used a unique temporary file with cleanup in a finally block,
+  rather than a predictable shared scratch filename.
+- Native request-hook additional context was visible in the transcript. Explicit
+  memory writes performed synchronization, so this result does not isolate the
+  completion hook's publication behavior or prove every lifecycle callback.
+
+Two follow-up defects were visible despite the correct final answer:
+
+1. Scoped query `name` did not match the current record's `named` wording. The
+   assistant recovered with an empty query in the same scope; lexical retrieval
+   still causes avoidable calls. Scope and supersession filtering must remain
+   intact when improving matching.
+2. The native skill catalog included unrelated user-home skills despite the
+   separate Codex home. None were invoked in this task, but generated-home
+   separation alone does not isolate inherited capability discovery. The
+   [official OpenAI skills documentation](https://learn.chatgpt.com/docs/build-skills)
+   describes user-home discovery and per-skill disable configuration. A tested
+   inheritance policy is still needed; no existing global skills were modified.
+
 ## Next checkpoints
 
-1. Complete a live harness test and publish new work directly from the second Mac.
-2. Improve scratch-file handling and remaining retrieval inefficiencies.
+1. Resolve unintended user-home skill inheritance and retest native discovery.
+2. Improve lexical retrieval and consistently safe scratch-file handling.
 3. Review remaining install/update/recovery and provenance gaps before release.
