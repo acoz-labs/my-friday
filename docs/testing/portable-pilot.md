@@ -35,17 +35,28 @@ a JSON manifest template, and MY_FRIDAY_BIN for runtime path resolution.
 Point fresh harness sessions to that guide. Tests cover discovery without a
 repository binding, template shape/invalid IDs, and projected instructions.
 
-Required retest, still pending: in a fresh session on the corrected candidate,
-ask for a different small private capability. Do not tell the agent where the
-source checkout lives or paste the manifest format. Verify that it uses the
-built-in guide/template, implements and runs meaningful checks, and records
-portable usage instructions. Then test natural-language discovery and reuse
-in another fresh session. Inspect the recorded calls as well as the answer.
+Fresh-session authoring retest passed on candidate `bc407a1` (2026-09-07).
+The agent created a different small private capability using the installed
+guide and manifest template, without inspecting executable strings or the
+development checkout. Its reusable instructions resolve paths through the
+runtime environment rather than hardcoded installation paths. It registered
+no automatic subscriptions.
+
+Recorded calls showed executable checks covering 13 counting cases, two error
+cases, and local no-write assertions. An initial Unicode test expectation was
+incorrect; the agent ran the check directly for diagnostics and corrected the
+expected count, preserving the assertion. Independent reruns of the checks,
+toolkit capability check, and source validation passed. The private source
+worktree remained clean after verification.
+
+This closes the observed authoring-discovery finding for this Codex scenario,
+not every harness or capability. Natural-language discovery and reuse in
+another fresh session remain pending; inspect recorded calls as well as the
+answer to distinguish reuse from reimplementation.
 
 ## Next checkpoints
 
-1. Close the authoring-discovery finding through the fresh-session retest.
-2. Validate capability reuse without reimplementation.
-3. Repeat the core learning/capability experience through Pi.
-4. Exercise remote sync, a second installation, and offline recovery.
-5. Review remaining install/update/recovery and provenance gaps before release.
+1. Validate capability reuse without reimplementation.
+2. Repeat the core learning/capability experience through Pi.
+3. Exercise remote sync, a second installation, and offline recovery.
+4. Review remaining install/update/recovery and provenance gaps before release.
