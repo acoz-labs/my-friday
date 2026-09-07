@@ -192,6 +192,47 @@ func TestRecallDoesNotReturnSupersededKeywordHit(t *testing.T) {
 	}
 }
 
+func TestScopeDiscoveryDoesNotPromoteUnrelatedGuidance(t *testing.T) {
+	s := fixtureStore(t)
+	scopes, err := s.Scopes()
+	if err != nil || scopes == nil || len(scopes) != 0 {
+		t.Fatalf("empty discovery: %+v %v", scopes, err)
+	}
+	first := revision("revision-original")
+	first.Scope = Scope{Kind: "project", ID: "project-stable-id"}
+	second := first
+	second.ID, second.Summary = "revision-renamed", "The project has a new display name"
+	second.Supersedes = []string{first.ID}
+	other := revision("revision-other")
+	other.RecordID = "record-other"
+	for _, r := range []Revision{first, second, other} {
+		if err := s.Put(r); err != nil {
+			t.Fatal(err)
+		}
+	}
+	scopes, err = s.Scopes()
+	if err != nil || len(scopes) != 2 || scopes[0].Scope != other.Scope || scopes[1].Scope != first.Scope || scopes[1].RecordCount != 1 {
+		t.Fatalf("scope discovery must be sorted and count records, not revisions: %+v %v", scopes, err)
+	}
+	p, err := s.Recall(Query{Scope: Scope{Kind: "project", ID: "/unrelated/cwd"}}, time.Now())
+	if err != nil || len(p.Current) != 0 || !strings.Contains(p.Notice, "memory scopes") {
+		t.Fatalf("empty scoped recall should offer discovery, not widen guidance: %+v %v", p, err)
+	}
+	p, err = s.Recall(Query{Scope: scopes[1].Scope}, time.Now())
+	if err != nil || len(p.Current) != 1 || p.Current[0].ID != second.ID {
+		t.Fatalf("explicit discovered scope did not return current revision: %+v %v", p, err)
+	}
+	// Discovery must validate the graph, just like recall, rather than trusting a stale index.
+	second.Supersedes = []string{"revision-missing"}
+	data, _ := json.Marshal(second)
+	if err := os.WriteFile(filepath.Join(s.Root, "memory/records", second.RecordID, second.ID+".json"), data, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Scopes(); err == nil {
+		t.Fatal("scope discovery accepted invalid memory")
+	}
+}
+
 func TestStrictJSONAndFutureFormat(t *testing.T) {
 	s := fixtureStore(t)
 	data, err := os.ReadFile(filepath.Join(s.Root, "agent.json"))

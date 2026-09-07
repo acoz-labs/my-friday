@@ -129,6 +129,15 @@ Before substantial work, use "memory recall --query TEXT" and select an explicit
 --scope-kind/--scope-id for account, project, or task-specific guidance. Use
 "memory history --record ID" to explain changes. Scope is not inferred from a
 similarity score. A conflicting revision is evidence to reconcile, not guidance.
+Do not guess scope IDs from cwd, account identity, or the harness state directory.
+When the relevant scope is unknown or recall is empty, use "memory scopes" to
+list stored scope kinds/IDs, then recall explicitly within the relevant scope.
+Scope discovery is metadata, not permission to apply unrelated guidance. Scope
+IDs are stable identifiers and need not match display names or directory paths.
+An empty recall is not evidence that a remembered fact is absent. Try the relevant
+discovered scope with a simpler or empty query; if evidence remains unavailable,
+say it was not found rather than inventing a name. Journal only verified outcomes;
+record retrieval failures honestly instead of recording a guess as success.
 
 To learn, use "memory write --input FILE" with a memory revision document. Use
 "memory template" for its shape; the writer stamps device, actor, harness, and
@@ -138,8 +147,12 @@ evidence, and "memory event --summary TEXT --kind task-completed" for chronology
 Record meaningful outcomes and reusable learning before finishing the task.
 One-task exceptions use task scope. Never copy secrets or raw transcripts.
 
-Use "agent capabilities" to list portable capabilities, then read the selected
-capability's complete instructions and requirements. Capabilities can contain
+Use "agent capabilities" to list portable capabilities. The runtime inventory
+includes directory and instruction_files paths; read the selected capability's
+listed instructions completely, then use its documented entrypoint. There is no
+"agent capability" command. Do not search the whole repository to locate listed
+instructions. Runtime inventory paths are not fields for capability.json.
+Capabilities can contain
 scripts and hook subscriptions. Before authoring a capability, read the built-in
 "agent capability-guide" and use "agent capability-template --capability ID".
 These commands work without a source checkout. Use --help for CLI discovery;

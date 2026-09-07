@@ -26,6 +26,39 @@ func fixtureCapability(t *testing.T, s *Store, id string, subscriptions []Subscr
 	}
 }
 
+func TestCapabilityDiscoveryIncludesExistingInstructionPaths(t *testing.T) {
+	s := fixtureStore(t)
+	fixtureCapability(t, s, "capability-example", nil, "#!/bin/sh\nexit 0\n")
+	root := filepath.Join(s.Root, "capabilities/capability-example")
+	if err := os.WriteFile(filepath.Join(root, "README.md"), []byte("Additional usage."), 0600); err != nil {
+		t.Fatal(err)
+	}
+	caps, err := s.DiscoverCapabilities()
+	if err != nil || len(caps) != 1 {
+		t.Fatalf("discovery: %+v %v", caps, err)
+	}
+	if caps[0].Directory != root || len(caps[0].InstructionFiles) != 2 || caps[0].InstructionFiles[0] != filepath.Join(root, "instructions.md") || caps[0].InstructionFiles[1] != filepath.Join(root, "README.md") {
+		t.Fatalf("missing direct instruction locations: %+v", caps[0])
+	}
+	// The installed runtime inventory must not add fields to persisted manifests.
+	if _, err := s.Capabilities(); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(filepath.Join(root, "instructions.md")); err != nil {
+		t.Fatal(err)
+	}
+	caps, err = s.DiscoverCapabilities()
+	if err != nil || len(caps[0].InstructionFiles) != 1 || caps[0].InstructionFiles[0] != filepath.Join(root, "README.md") {
+		t.Fatalf("existing README capability not discoverable: %+v %v", caps, err)
+	}
+	if err := os.Symlink(filepath.Join(root, "README.md"), filepath.Join(root, "instructions.md")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.DiscoverCapabilities(); err == nil {
+		t.Fatal("symlink instructions accepted")
+	}
+}
+
 func TestHookOrderStructuredInputAndDeduplication(t *testing.T) {
 	s := fixtureStore(t)
 	script := "#!/bin/sh\nread payload\nprintf '%s\\n' \"$1\" >> \"$MY_FRIDAY_ASSISTANT_ROOT/order\"\nprintf '{\"additional_context\":\"done\"}'\n"

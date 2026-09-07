@@ -95,6 +95,41 @@ func TestPortableCLIRejectsUnknownFlagsAndTrailingJSON(t *testing.T) {
 	}
 }
 
+func TestPortableScopeDiscoveryCLI(t *testing.T) {
+	s, err := portable.Create(filepath.Join(t.TempDir(), "agent"), "friday", "pi", "device-example", "Example")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("MY_FRIDAY_ASSISTANT_ROOT", s.Root)
+	var out bytes.Buffer
+	if err := runPortable([]string{"memory", "scopes"}, strings.NewReader(""), &out, &out); err != nil {
+		t.Fatal(err)
+	}
+	if strings.TrimSpace(out.String()) != "[]" {
+		t.Fatalf("empty scope inventory: %s", out.String())
+	}
+	root := filepath.Join(s.Root, "capabilities", "example-capability")
+	if err := os.MkdirAll(root, 0700); err != nil {
+		t.Fatal(err)
+	}
+	for name, content := range map[string]string{
+		"capability.json": `{"schema_version":1,"id":"example-capability","description":"Synthetic capability","subscriptions":[]}`,
+		"instructions.md": "Use the existing implementation.",
+	} {
+		if err := os.WriteFile(filepath.Join(root, name), []byte(content), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	out.Reset()
+	if err := runPortable([]string{"agent", "capabilities"}, strings.NewReader(""), &out, &out); err != nil {
+		t.Fatal(err)
+	}
+	var caps []portable.CapabilityInfo
+	if err := json.Unmarshal(out.Bytes(), &caps); err != nil || len(caps) != 1 || len(caps[0].InstructionFiles) != 1 || caps[0].Directory != root {
+		t.Fatalf("CLI omitted capability navigation: %s %v", out.String(), err)
+	}
+}
+
 func TestServiceCapabilitiesAreNotCoreCommands(t *testing.T) {
 	for _, command := range []string{"github", "secret"} {
 		var out bytes.Buffer

@@ -111,6 +111,7 @@ my-friday memory template
 my-friday memory source --summary 'User established an ongoing preference'
 my-friday memory write --input /path/to/revision.json
 my-friday memory recall --query 'response format'
+my-friday memory scopes
 my-friday memory history --record record-example
 my-friday memory event --kind task-completed --summary 'Completed the requested work'
 ```
@@ -141,6 +142,14 @@ global guidance; the model must request other scopes explicitly. Search does not
 infer permissions or select an account. There is no index that can lag source,
 but remote changes are visible only after successful synchronization. Updating a
 file also does not erase an earlier statement already in model context.
+
+When the relevant scope is unknown, `memory scopes` lists stored scope kinds,
+stable IDs, and distinct record counts, sorted by kind/ID. It validates current
+source on every call and includes history/future records in its counts. This is
+routing metadata, not a cross-scope guidance packet. Select a relevant ID and
+call recall explicitly; IDs need not match a project display name or cwd.
+An empty recall is not proof that a fact is absent. Generated instructions and
+recall notices direct agents to discover scopes and retry rather than guess.
 
 ## Synchronization
 
@@ -206,7 +215,12 @@ scripts, and checks. For example:
 }
 ```
 
-`agent capabilities` lists manifests; `agent check --capability daily-context`
+`agent capabilities` lists manifest fields plus runtime-only `directory` and
+`instruction_files` paths. The latter lists existing regular `instructions.md`
+and `README.md` files, in that order; an empty list means neither was found.
+These paths are computed for the current installation and must not be copied
+into source manifests. Agents can read the listed files directly without a
+repository-wide search. `agent check --capability daily-context`
 validates ordering and executes declared checks. There is no separate activation
 approval: a valid committed capability can execute at its subscribed event.
 Commands run from a temporary copy of their capability source, receive a structured

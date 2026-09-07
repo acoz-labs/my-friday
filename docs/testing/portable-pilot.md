@@ -77,8 +77,30 @@ Pi's installed extension loader loaded the generated My Friday extension with
 all thirteen registered event names and no errors; its context-file loader
 found the generated instance instructions from an unrelated project cwd.
 
-This verifies loading, not callback delivery or authenticated model behavior.
-Native Pi login and the cross-harness memory/capability pilot remain pending.
+This preflight verifies loading, not callback delivery or authenticated model
+behavior; the following hands-on run exercises more of the path.
+
+## Finding: Pi recall guessed unknown scopes — 2026-09-07
+
+The user authenticated Pi and ran the same agent from the separate project
+directory. Its transcript contains the injected My Friday memory packet,
+demonstrating prompt-hook context delivery. It discovered and executed the
+existing private capability with correct results and no capability edits.
+
+Memory recall failed: the agent guessed scope IDs from filesystem/account
+context, received empty packets, and reported the working directory's name as
+the remembered fictional project's name. It also journaled the answer as a
+successful retrieval. The stored current revision was unchanged and correct;
+the failure was finding and using it. A separate capability-discovery detour
+included an invented command and a repository-wide filename scan.
+
+Correction: add `memory scopes` to expose validated routing metadata without
+widening scoped guidance. Recall notices and generated instructions direct
+agents to discover exact scope IDs, retry relevant recall, and report missing
+evidence honestly. Capability inventory now includes direct instruction paths.
+Tests cover discovery, unchanged scope filtering, current supersession, invalid
+source rejection, CLI output, and projected instructions. Fresh Pi retest is
+required before closing this finding.
 
 ## Next checkpoints
 

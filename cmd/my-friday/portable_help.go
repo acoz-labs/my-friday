@@ -26,7 +26,7 @@ separate from this portable workflow; use agent commands for portable capabiliti
   launch                Start the configured harness, preserving project cwd
   inspect               Print the agent identity
   validate              Validate agent source and memory structure
-  capabilities          List private capability manifests
+  capabilities          List private capabilities with directory/instruction paths
   capability-guide      Print the built-in capability design/format guide
   capability-template   Print a manifest; requires --capability <id>
   check                 Validate and execute checks; requires --capability <id>
@@ -40,13 +40,16 @@ forwarded to its selected harness. Use <command> --help for options.
   template   Print a revision document to edit
   write      Save a revision with --input FILE (or - for stdin)
   recall     Retrieve current scoped guidance with --query TEXT
+  scopes     List stored scope IDs and record counts (not guidance)
   history    Explain a record's revisions with --record ID
   source     Save concise evidence with --summary TEXT
   event      Save a journal entry with --summary TEXT
 
 Use --repository PATH / MY_FRIDAY_ASSISTANT_ROOT and --device ID /
 MY_FRIDAY_DEVICE_ID for writes. Select --scope-kind and --scope-id for scoped
-recall. Corrections append a new revision with explicit supersedes IDs.
+recall. Discover IDs with memory scopes; do not infer them from cwd. Scope counts
+include stored history/future records, not just currently effective guidance.
+Corrections append a new revision with explicit supersedes IDs.
 Use <command> --help for options.
 `,
 	"agent launch": `Usage: my-friday agent launch --instance PATH [--harness codex|pi] [harness arguments]

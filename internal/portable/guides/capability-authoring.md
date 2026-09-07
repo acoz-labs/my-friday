@@ -6,10 +6,15 @@ Run `agent capability-guide` to read it again and `--help` for command discovery
 
 ## Find and use existing capabilities first
 
-Run `agent capabilities` to list IDs and descriptions. Read a selected capability's
-complete instructions.md (or its existing README.md) and capability.json before
+Run `agent capabilities` to list IDs, descriptions, directory, and instruction_files.
+Read the selected capability's listed instruction files completely and its
+capability.json before
 using it. Do not rebuild an existing capability just because memory recall did
 not mention it: capability manifests are the authoritative capability inventory.
+The directory and instruction_files fields are resolved runtime navigation, not
+manifest fields. Never copy inventory JSON into capability.json. Empty
+instruction_files means no conventional instructions.md/README.md was found;
+inspect that capability directory for its documentation before using it.
 
 ## Authoring workflow
 

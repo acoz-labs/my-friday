@@ -23,6 +23,42 @@ type Capability struct {
 	Subscriptions []Subscription `json:"subscriptions"`
 	Checks        [][]string     `json:"checks,omitempty"`
 }
+
+// CapabilityInfo adds machine-local navigation to the runtime inventory only.
+// These resolved paths do not belong in the portable source manifest.
+type CapabilityInfo struct {
+	Capability
+	Directory        string   `json:"directory"`
+	InstructionFiles []string `json:"instruction_files"`
+}
+
+func (s *Store) DiscoverCapabilities() ([]CapabilityInfo, error) {
+	caps, err := s.Capabilities()
+	if err != nil {
+		return nil, err
+	}
+	result := []CapabilityInfo{}
+	for _, c := range caps {
+		info := CapabilityInfo{Capability: c, Directory: filepath.Join(s.Root, "capabilities", c.ID), InstructionFiles: []string{}}
+		for _, name := range []string{"instructions.md", "README.md"} {
+			path := filepath.Join(info.Directory, name)
+			entry, err := os.Lstat(path)
+			if os.IsNotExist(err) {
+				continue
+			}
+			if err != nil {
+				return nil, err
+			}
+			if !entry.Mode().IsRegular() {
+				return nil, fmt.Errorf("capability instructions must be a regular file: %s", path)
+			}
+			info.InstructionFiles = append(info.InstructionFiles, path)
+		}
+		result = append(result, info)
+	}
+	return result, nil
+}
+
 type Subscription struct {
 	ID             string   `json:"id"`
 	Event          string   `json:"event"`

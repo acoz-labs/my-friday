@@ -16,6 +16,42 @@ type Scope struct {
 	Kind string `json:"kind"`
 	ID   string `json:"id"`
 }
+
+// ScopeInfo is a routing inventory, not recalled guidance. Counts include all
+// stored records (including future-effective records), not revision counts.
+type ScopeInfo struct {
+	Scope       Scope `json:"scope"`
+	RecordCount int   `json:"record_count"`
+}
+
+func (s *Store) Scopes() ([]ScopeInfo, error) {
+	records, err := s.revisions()
+	if err != nil {
+		return nil, err
+	}
+	if err := s.validateGraph(records); err != nil {
+		return nil, err
+	}
+	byScope := map[Scope]map[string]bool{}
+	for _, r := range records {
+		if byScope[r.Scope] == nil {
+			byScope[r.Scope] = map[string]bool{}
+		}
+		byScope[r.Scope][r.RecordID] = true
+	}
+	result := []ScopeInfo{}
+	for scope, records := range byScope {
+		result = append(result, ScopeInfo{Scope: scope, RecordCount: len(records)})
+	}
+	sort.Slice(result, func(i, j int) bool {
+		if result[i].Scope.Kind == result[j].Scope.Kind {
+			return result[i].Scope.ID < result[j].Scope.ID
+		}
+		return result[i].Scope.Kind < result[j].Scope.Kind
+	})
+	return result, nil
+}
+
 type Authorship struct {
 	DeviceID  string  `json:"device_id"`
 	Actor     string  `json:"actor"`
@@ -253,7 +289,7 @@ func relevance(r Revision, query string) int {
 }
 
 func (s *Store) Recall(q Query, now time.Time) (Packet, error) {
-	p := Packet{AssistantID: s.Agent.ID, GeneratedAt: now.UTC().Format(time.RFC3339Nano), Current: []Revision{}, Conflicts: []Conflict{}, Notice: "Current memory is scoped evidence. Verify volatile live state; conflicting revisions are not current guidance."}
+	p := Packet{AssistantID: s.Agent.ID, GeneratedAt: now.UTC().Format(time.RFC3339Nano), Current: []Revision{}, Conflicts: []Conflict{}, Notice: "Current memory is scoped evidence. Verify volatile live state; conflicting revisions are not current guidance. An empty recall is not evidence that the fact is absent. Use memory scopes to discover stored scope IDs, then recall an explicitly selected scope; do not guess IDs or substitute cwd for a remembered entity."}
 	records, err := s.revisions()
 	if err != nil {
 		return p, err

@@ -53,7 +53,7 @@ func TestLaunchKeepsProjectAndSeparatesHarnessHomes(t *testing.T) {
 	if !strings.Contains(string(instructions), "memory recall") || !strings.Contains(string(instructions), s.Root) {
 		t.Fatal("memory unavailable outside assistant directory")
 	}
-	for _, expected := range []string{"agent capability-guide", "agent capability-template", "MY_FRIDAY_BIN", "MY_FRIDAY_ASSISTANT_ROOT"} {
+	for _, expected := range []string{"agent capability-guide", "agent capability-template", "MY_FRIDAY_BIN", "MY_FRIDAY_ASSISTANT_ROOT", "memory scopes", "Do not guess scope IDs", "instruction_files", "An empty recall is not evidence"} {
 		if !strings.Contains(string(instructions), expected) {
 			t.Errorf("missing authoring guidance: %s", expected)
 		}

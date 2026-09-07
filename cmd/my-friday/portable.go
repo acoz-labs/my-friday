@@ -228,7 +228,7 @@ func portableSetup(args []string, input io.Reader, out, errout io.Writer) error 
 
 func portableMemory(args []string, input io.Reader, out, errout io.Writer) error {
 	if len(args) == 0 {
-		return errors.New("usage: my-friday memory <template|write|recall|history|source|event>")
+		return errors.New("usage: my-friday memory <template|write|recall|scopes|history|source|event>")
 	}
 	f := portableFlags("memory "+args[0], errout)
 	root := f.String("repository", os.Getenv("MY_FRIDAY_ASSISTANT_ROOT"), "Assistant repository")
@@ -265,6 +265,12 @@ func portableMemory(args []string, input io.Reader, out, errout io.Writer) error
 		author.Model = &value
 	}
 	switch args[0] {
+	case "scopes":
+		scopes, err := s.Scopes()
+		if err != nil {
+			return err
+		}
+		return outputJSON(out, scopes)
 	case "template":
 		return outputJSON(out, portable.Revision{Version: 1, ID: portable.NewID("revision"), RecordID: portable.NewID("record"), Kind: "preference", Scope: portable.Scope{Kind: *scopeKind, ID: *scopeID}, Summary: "Describe the enduring claim", Body: "Explain its meaning and boundaries", Sensitivity: "private", Volatility: "stable", RecordedAt: now, EffectiveFrom: now, Authorship: author, Evidence: portable.Evidence{Basis: "user-direction", Confidence: "high", SourceRefs: []string{}}, Supersedes: []string{}, ChangeReason: "Describe why this claim was created or changed"})
 	case "recall":
@@ -462,7 +468,7 @@ func portableAgent(args []string, input io.Reader, out, errout io.Writer) error 
 		}
 		return outputJSON(out, map[string]bool{"valid": true})
 	case "capabilities":
-		caps, err := s.Capabilities()
+		caps, err := s.DiscoverCapabilities()
 		if err != nil {
 			return err
 		}
