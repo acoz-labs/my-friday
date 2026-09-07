@@ -124,8 +124,50 @@ plus a Linux/AMD64 CLI cross-build. The disposable trial binary was updated;
 its previous executable was retained for rollback. No source-format migration,
 global installation change, or private capability publication was required.
 
+## Pi-authored correction recalled by Codex — 2026-09-07
+
+The user requested another synthetic project rename in a fresh Pi session.
+Inspection confirmed a third immutable revision on the same record and stable
+scope, explicitly superseding the prior revision. Authorship identifies Pi,
+its selected model, the originating device, and session. A concise evidence
+record and journal entry were committed; no capability files changed.
+
+A fresh Codex noninteractive session received only a question about the current
+and previous names, without any names, scope IDs, or record IDs in the prompt.
+Its three tool calls discovered scopes, recalled the correct current revision,
+and read the full history. The answer reported the current name and all three
+names in chronological order. The run exited successfully and left the private
+source unchanged. Source validation passed. This demonstrates cross-harness
+continuity on one machine, not thread transfer or cross-machine synchronization.
+The verification used the documented
+[Codex noninteractive flow](https://learn.chatgpt.com/docs/non-interactive-mode),
+without resume and with explicit EOF on stdin for the programmatic runner.
+
+Pi still issued one guessed-scope lookup before reading its discovery result.
+It also used a predictable temporary JSON pathname for its write and left that
+synthetic scratch file behind. Neither affected the saved revision, but scratch
+file isolation/cleanup and needless lookups remain workflow improvements.
+
+## Automated import and offline recovery
+
+`TestPortableImportOfflineRecoveryAcrossDevices` exercises the command layer
+through new setup, local Git publication, clone/import into a second instance,
+and a second-device correction while that clone's remote is unavailable. It
+checks the offline write returns `pending` with a clean committed worktree,
+then restores the remote while retaining independent online work from the
+first instance. Both clones and the bare remote must converge to the same
+commit, retain the correction/history and the independent journal entry, and
+contain both device registrations with the correct authorship.
+
+This uses disposable local repositories, synthetic records, and separate
+instance bindings on one host. It does not test real network authentication,
+an actual second physical machine, or remote cloning through the wizard.
+The focused regression passed three consecutive race-enabled runs; the full
+Go race suite, command package vet, and diff checks also passed. No installed executable changes are
+needed for this test-only addition.
+
 ## Next checkpoints
 
-1. Verify a Pi-authored memory correction is recalled through Codex.
-2. Exercise remote sync, a second installation, and offline recovery.
+1. Exercise authenticated remote sync and a real second installation.
+2. Improve scratch-file handling and remaining retrieval inefficiencies.
 3. Review remaining install/update/recovery and provenance gaps before release.
