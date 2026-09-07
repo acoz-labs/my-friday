@@ -108,8 +108,9 @@ func TestPortableImportOfflineRecoveryAcrossDevices(t *testing.T) {
 	}
 	call("", &online, "memory", "event", "--repository", a, "--device", ia.DeviceID, "--kind", "test-checkpoint", "--summary", "Independent synthetic online work")
 	git("-C", b, "remote", "set-url", "origin", remote)
-	sync(b, "synced")
-	sync(a, "synced")
+	// Recovery must also happen through lifecycle entrypoints without explicit sync.
+	call(`{"event_id":"event-recovery-completed"}`, nil, "hook", "--instance", sb, "--harness", "pi", "--native", "agent_settled")
+	call(`{"event_id":"event-recovery-received","prompt":"synthetic project"}`, nil, "hook", "--instance", sa, "--harness", "codex", "--native", "UserPromptSubmit")
 	for _, store := range []*portable.Store{first, second} {
 		if err := store.Validate(); err != nil {
 			t.Fatal(err)

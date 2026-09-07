@@ -155,7 +155,8 @@ through new setup, local Git publication, clone/import into a second instance,
 and a second-device correction while that clone's remote is unavailable. It
 checks the offline write returns `pending` with a clean committed worktree,
 then restores the remote while retaining independent online work from the
-first instance. Both clones and the bare remote must converge to the same
+first instance. Recovery runs through request-completed and request-received
+hook entrypoints, without explicit sync commands. Both clones and the bare remote must converge to the same
 commit, retain the correction/history and the independent journal entry, and
 contain both device registrations with the correct authorship.
 
@@ -163,11 +164,52 @@ This uses disposable local repositories, synthetic records, and separate
 instance bindings on one host. It does not test real network authentication,
 an actual second physical machine, or remote cloning through the wizard.
 The focused regression passed three consecutive race-enabled runs; the full
-Go race suite, command package vet, and diff checks also passed. No installed executable changes are
-needed for this test-only addition.
+Go race suite, command package vet, and diff checks also passed. No installed
+executable changes are needed for this test-only addition.
+
+## Authenticated remote pilot — 2026-09-07
+
+With explicit owner approval, created a separate private hosted repository
+containing only fresh synthetic agent source and test configuration. Two
+disposable installations used the existing `e83954c` executable (SHA-256
+`8b0e0cb320625f484f426b4ec1ba188d31c8748786dfb52c2f58e1bd966516d7`).
+No prior pilot memory, sessions, authentication files, or instance bindings were
+uploaded. The original pilot and live assistant repositories were not changed.
+
+A private test helper restricted credentials to the exact host/repository and
+verified the explicitly selected development account. It rejected wrong-host,
+wrong-repository, and missing-account inputs without credential output. Tokens
+were passed only through the Git credential protocol; the helper stored none.
+Neither the helper implementation nor service configuration is bundled in the
+public toolkit. Existing development authentication was used without changing
+global Git helpers or account selection; separate assistant account roles were
+not under test.
+
+Observed outcomes:
+
+- HTTPS publication, authenticated clone, and new-instance import succeeded.
+- Unavailable credentials produced `pending` while preserving a committed local
+  correction; independent online work continued from the other installation.
+- Restoring credential access reconciled both histories. Both worktrees and the
+  remote converged, retaining the correction, prior revision, independent journal,
+  and both device registrations. Source validation passed.
+- A request-start adapter invocation fetched a subsequent remote correction
+  before explicit scoped recall. A completion adapter invocation published a
+  pending journal entry. A later launch (forwarding harness help, without a
+  model session) pulled that entry into the other installation.
+- Remote privacy was checked after publication, and the tracked-file inventory
+  contained only expected source/configuration. Test artifacts remain available
+  privately for further investigation; no automatic deletion was performed.
+
+These are two installations on one physical machine. Credential refusal
+simulated the outage; this did not disconnect the host network. Adapter calls
+were driven directly, so this test does not establish that every native harness
+callback is delivered correctly over a real network. Remote creation and clone
+were test orchestration, not new wizard features. A physical second-machine
+trial, bootstrap ergonomics, and longer-running failure modes remain open.
 
 ## Next checkpoints
 
-1. Exercise authenticated remote sync and a real second installation.
+1. Exercise bootstrap and continuity on a second physical machine.
 2. Improve scratch-file handling and remaining retrieval inefficiencies.
 3. Review remaining install/update/recovery and provenance gaps before release.
