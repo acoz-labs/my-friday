@@ -37,9 +37,35 @@ func parseFlags(f *flag.FlagSet, args []string) error {
 	return nil
 }
 
-func runPortable(args []string, input io.Reader, out, errout io.Writer) error {
+func runPortable(args []string, input io.Reader, out, errout io.Writer) (err error) {
+	defer func() {
+		if errors.Is(err, flag.ErrHelp) {
+			err = nil
+		}
+	}()
 	if len(args) == 0 {
 		args = []string{"setup"}
+	}
+	if len(args) == 1 && helpFlag(args[0]) {
+		return printPortableHelp("", out)
+	}
+	if args[0] == "help" {
+		topic := strings.Join(args[1:], " ")
+		if _, ok := portableHelpTopics[topic]; ok {
+			return printPortableHelp(topic, out)
+		}
+		// Delegate option help to the command's own flag definitions.
+		if (len(args) == 2 && (args[1] == "setup" || args[1] == "sync" || args[1] == "hook")) ||
+			(len(args) == 3 && (args[1] == "agent" || args[1] == "memory")) {
+			return runPortable(append(append([]string{}, args[1:]...), "--help"), input, out, out)
+		}
+		return printPortableHelp(topic, out)
+	}
+	if (args[0] == "agent" || args[0] == "memory") && (len(args) == 1 || (len(args) == 2 && helpFlag(args[1]))) {
+		return printPortableHelp(args[0], out)
+	}
+	if (len(args) == 2 || len(args) == 3) && helpFlag(args[len(args)-1]) {
+		errout = out
 	}
 	switch args[0] {
 	case "setup":
@@ -342,13 +368,19 @@ func splitLaunchArgs(args []string) (owned, forwarded []string, err error) {
 
 func portableAgent(args []string, input io.Reader, out, errout io.Writer) error {
 	if len(args) == 0 {
-		return errors.New("usage: my-friday agent <launch|inspect|validate|capabilities|check>")
+		return printPortableHelp("agent", out)
+	}
+	switch args[0] {
+	case "launch", "inspect", "validate", "capabilities", "check", "capability-guide", "capability-template":
+	default:
+		return errors.New("unknown agent command; use my-friday help agent")
 	}
 	f := portableFlags("agent "+args[0], errout)
 	root := f.String("repository", os.Getenv("MY_FRIDAY_ASSISTANT_ROOT"), "Assistant repository")
 	state := f.String("instance", os.Getenv("MY_FRIDAY_INSTANCE"), "Instance directory")
 	harness := f.String("harness", "", "Override default harness")
 	capabilityID := f.String("capability", "", "Capability ID")
+	description := f.String("description", "", "Capability template description")
 	parseArgs := args[1:]
 	var forwarded []string
 	if args[0] == "launch" {
@@ -402,6 +434,20 @@ func portableAgent(args []string, input io.Reader, out, errout io.Writer) error 
 	}
 	if f.NArg() != 0 {
 		return errors.New("unexpected agent arguments")
+	}
+	if args[0] == "capability-guide" {
+		_, err := io.WriteString(out, portable.CapabilityGuide)
+		return err
+	}
+	if args[0] == "capability-template" {
+		template, err := portable.CapabilityTemplate(*capabilityID, *description)
+		if err != nil {
+			return err
+		}
+		return outputJSON(out, template)
+	}
+	if args[0] == "check" && *capabilityID == "" {
+		return errors.New("agent check requires --capability ID; use agent capabilities to list IDs or agent capability-guide to design one")
 	}
 	s, err := portable.Open(*root)
 	if err != nil {

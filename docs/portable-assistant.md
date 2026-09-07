@@ -166,6 +166,27 @@ can interrupt long synchronization; interrupted operations need a later retry.
 
 ## Capabilities and lifecycle subscriptions
 
+The executable carries its own authoring reference and manifest template:
+
+```sh
+my-friday --help
+my-friday help agent
+my-friday agent capability-guide
+my-friday agent capability-template --capability example-capability
+```
+
+Guide/template commands need no installation, source checkout, or network.
+The template prints JSON only; implement or replace its placeholder executable
+check before running it. The embedded guide describes every manifest field,
+the authoring workflow, portable paths, temporary check execution, and optional
+subscriptions. Generated harness instructions point agents to these commands.
+Launched sessions and capability handlers expose `MY_FRIDAY_BIN`; use it and
+`MY_FRIDAY_ASSISTANT_ROOT` rather than copying installation paths into reusable
+instructions. Existing instance instructions refresh on the next launcher run.
+Top-level and command help exit successfully. `my-friday help agent launch`
+documents the launcher; `--help` forwarded through a launcher still belongs to
+the selected harness.
+
 Each capability directory contains `capability.json`, and can include instructions,
 scripts, and checks. For example:
 
@@ -281,3 +302,7 @@ migrations, remote bootstrap, QMD retrieval evaluation, lifecycle completeness,
 and staged legacy import. User service integrations are outside the public-core
 roadmap. Legacy operational instructions and scripts must be reconciled
 before activation, not imported wholesale as current authority.
+
+See [the hands-on pilot record](testing/portable-pilot.md) for user-experience
+checks, discovered defects, and the next retest. Automated passing checks alone
+do not close a hands-on finding.

@@ -53,6 +53,14 @@ func TestLaunchKeepsProjectAndSeparatesHarnessHomes(t *testing.T) {
 	if !strings.Contains(string(instructions), "memory recall") || !strings.Contains(string(instructions), s.Root) {
 		t.Fatal("memory unavailable outside assistant directory")
 	}
+	for _, expected := range []string{"agent capability-guide", "agent capability-template", "MY_FRIDAY_BIN", "MY_FRIDAY_ASSISTANT_ROOT"} {
+		if !strings.Contains(string(instructions), expected) {
+			t.Errorf("missing authoring guidance: %s", expected)
+		}
+	}
+	if !strings.Contains(env, "MY_FRIDAY_BIN="+instance.Binary) {
+		t.Fatal("portable CLI path unavailable to capabilities")
+	}
 	if _, err = Bind(s, state, "other", binary, "device-laptop"); err == nil {
 		t.Fatal("overwrote another instance")
 	}

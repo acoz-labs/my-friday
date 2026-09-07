@@ -114,3 +114,48 @@ func TestPortableLaunchForwardsHarnessFlags(t *testing.T) {
 		t.Fatal("missing harness accepted")
 	}
 }
+
+func TestPortableHelpWorksWithoutInstallation(t *testing.T) {
+	t.Setenv("MY_FRIDAY_ASSISTANT_ROOT", "/nonexistent-assistant")
+	for _, args := range [][]string{{"--help"}, {"-h"}, {"help"}, {"agent"}, {"agent", "--help"}, {"memory", "--help"}, {"help", "agent"}, {"agent", "check", "--help"}, {"setup", "--help"}, {"help", "agent", "launch"}} {
+		var out, errs bytes.Buffer
+		if err := runPortable(args, strings.NewReader(""), &out, &errs); err != nil {
+			t.Errorf("help %v failed: %v", args, err)
+		}
+		if out.Len() == 0 || errs.Len() != 0 {
+			t.Errorf("help %v not on stdout: %q %q", args, out.String(), errs.String())
+		}
+	}
+	var out bytes.Buffer
+	if err := runPortable([]string{"help", "agent", "not-real"}, strings.NewReader(""), &out, &out); err == nil {
+		t.Fatal("unknown help command accepted")
+	}
+}
+
+func TestCapabilityAuthoringIsSelfContained(t *testing.T) {
+	t.Setenv("MY_FRIDAY_ASSISTANT_ROOT", "/nonexistent-assistant")
+	var out, errs bytes.Buffer
+	if err := runPortable([]string{"agent", "capability-guide"}, strings.NewReader(""), &out, &errs); err != nil {
+		t.Fatal(err)
+	}
+	for _, required := range []string{"capability.json", "MY_FRIDAY_ASSISTANT_ROOT", "MY_FRIDAY_BIN", "subscriptions", "checks", "schema_version", "temporary", "agent check", "instructions.md"} {
+		if !strings.Contains(out.String(), required) {
+			t.Errorf("guide omits %s", required)
+		}
+	}
+	out.Reset()
+	if err := runPortable([]string{"agent", "capability-template", "--capability", "example-check", "--description", "Synthetic test capability"}, strings.NewReader(""), &out, &errs); err != nil {
+		t.Fatal(err)
+	}
+	var manifest portable.Capability
+	if err := json.Unmarshal(out.Bytes(), &manifest); err != nil {
+		t.Fatal(err)
+	}
+	if manifest.Version != 1 || manifest.ID != "example-check" || manifest.Description != "Synthetic test capability" || len(manifest.Subscriptions) != 0 || len(manifest.Checks) == 0 {
+		t.Fatalf("incomplete template: %+v", manifest)
+	}
+	out.Reset()
+	if err := runPortable([]string{"agent", "capability-template", "--capability", "../../outside"}, strings.NewReader(""), &out, &errs); err == nil {
+		t.Fatal("invalid template ID accepted")
+	}
+}

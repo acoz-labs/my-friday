@@ -122,6 +122,8 @@ func (i Instance) Project(s *Store) error {
 Your working directory is the user's project. Your assistant repository is %s.
 Use the absolute My Friday command %s; do not infer assistant paths from cwd.
 The launch environment supplies MY_FRIDAY_ASSISTANT_ROOT and MY_FRIDAY_DEVICE_ID.
+MY_FRIDAY_BIN is the absolute toolkit executable; use it to keep reusable
+instructions and scripts portable rather than embedding installation paths.
 
 Before substantial work, use "memory recall --query TEXT" and select an explicit
 --scope-kind/--scope-id for account, project, or task-specific guidance. Use
@@ -138,7 +140,11 @@ One-task exceptions use task scope. Never copy secrets or raw transcripts.
 
 Use "agent capabilities" to list portable capabilities, then read the selected
 capability's complete instructions and requirements. Capabilities can contain
-scripts and hook subscriptions. Use "agent check --capability ID" after changing
+scripts and hook subscriptions. Before authoring a capability, read the built-in
+"agent capability-guide" and use "agent capability-template --capability ID".
+These commands work without a source checkout. Use --help for CLI discovery;
+do not inspect executable strings or search for a development checkout to learn
+the format. Use "agent check --capability ID" after changing
 one. Repository Git history is versioned; external effects require their own
 reconciliation. User corrections override older remembered user guidance within
 their actual scope. Native project instructions still apply to project work.
@@ -218,7 +224,7 @@ func (i Instance) Plan(s *Store, harness, cwd string, args []string) (LaunchPlan
 		}
 		env = append(env, entry)
 	}
-	env = append(env, "MY_FRIDAY_ASSISTANT_ROOT="+s.Root, "MY_FRIDAY_DEVICE_ID="+i.DeviceID, "MY_FRIDAY_INSTANCE="+i.Root, "MY_FRIDAY_HARNESS="+harness, "MY_FRIDAY_SESSION_ID="+NewID("session"))
+	env = append(env, "MY_FRIDAY_ASSISTANT_ROOT="+s.Root, "MY_FRIDAY_BIN="+i.Binary, "MY_FRIDAY_DEVICE_ID="+i.DeviceID, "MY_FRIDAY_INSTANCE="+i.Root, "MY_FRIDAY_HARNESS="+harness, "MY_FRIDAY_SESSION_ID="+NewID("session"))
 	if harness == "codex" {
 		env = append(env, "CODEX_HOME="+filepath.Join(i.Root, "codex"))
 		args = append([]string{"--dangerously-bypass-approvals-and-sandbox", "--dangerously-bypass-hook-trust"}, args...)

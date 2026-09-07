@@ -321,6 +321,10 @@ func (b *boundedOutput) Write(p []byte) (int, error) {
 }
 
 func runHandler(ctx context.Context, root string, s *Store, device string, args []string, payload []byte, check bool) (string, error) {
+	binary, err := os.Executable()
+	if err != nil {
+		return "", err
+	}
 	cmd := exec.CommandContext(ctx, args[0], args[1:]...)
 	cmd.Dir = root
 	env := []string{}
@@ -331,7 +335,7 @@ func runHandler(ctx context.Context, root string, s *Store, device string, args 
 		}
 		env = append(env, entry)
 	}
-	cmd.Env = append(env, "MY_FRIDAY_ASSISTANT_ROOT="+s.Root, "MY_FRIDAY_ASSISTANT_ID="+s.Agent.ID, "MY_FRIDAY_DEVICE_ID="+device, "MY_FRIDAY_DISPATCH_ACTIVE="+s.Agent.ID)
+	cmd.Env = append(env, "MY_FRIDAY_ASSISTANT_ROOT="+s.Root, "MY_FRIDAY_BIN="+binary, "MY_FRIDAY_ASSISTANT_ID="+s.Agent.ID, "MY_FRIDAY_DEVICE_ID="+device, "MY_FRIDAY_DISPATCH_ACTIVE="+s.Agent.ID)
 	cmd.Stdin = bytes.NewReader(payload)
 	output := &boundedOutput{Limit: 16385}
 	cmd.Stdout = output
