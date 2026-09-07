@@ -256,8 +256,8 @@ native sessions. This was test orchestration, not a new bundle-import wizard.
 Observed outcomes:
 
 - Clone/import preserved the assistant identity and registered a distinct device.
-- Scoped recall recovered the current synthetic project name and all three prior
-  revisions. The imported record retained its original machine provenance.
+- Scoped recall recovered the current synthetic project name and its complete
+  three-revision history. The imported record retained its machine provenance.
 - A correction authored on the second Mac superseded the current revision and
   carried the new device ID. Intentional credential refusal returned `pending`;
   the correction was committed, the worktree was clean, and validation passed.
