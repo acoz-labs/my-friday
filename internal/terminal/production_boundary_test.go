@@ -33,6 +33,14 @@ func TestProductionNetworkAndSubprocessBoundary(t *testing.T) {
 		"golang.org/x/text/unicode/norm": true,
 		"golang.org/x/sys/unix":          true,
 	}
+	// The portable runtime explicitly adds bounded harness, capability, and
+	// credential consumers. Preserve the legacy no-network boundary elsewhere.
+	portableImports := map[string]bool{"context": true, "embed": true, "flag": true, "time": true, "net/url": true, "github.com/acoz-labs/my-friday/internal/portable": true}
+	portableExec := map[string]string{
+		"cmd/my-friday/portable.go":  "Command",
+		"internal/portable/hooks.go": "CommandContext",
+		"internal/portable/sync.go":  "CommandContext",
+	}
 	err := filepath.WalkDir(root, func(path string, entry os.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			return walkErr
@@ -47,9 +55,15 @@ func TestProductionNetworkAndSubprocessBoundary(t *testing.T) {
 		if err != nil {
 			return err
 		}
+		rel, err := filepath.Rel(root, path)
+		if err != nil {
+			return err
+		}
+		rel = filepath.ToSlash(rel)
+		portableSource := strings.HasPrefix(rel, "internal/portable/") || rel == "cmd/my-friday/portable.go"
 		for _, spec := range file.Imports {
 			name, _ := strconv.Unquote(spec.Path.Value)
-			if !allowedImports[name] {
+			if !allowedImports[name] && !(portableSource && portableImports[name]) {
 				t.Errorf("production import %q is not allowlisted in %s", name, path)
 			}
 			if name == "os/exec" && spec.Name != nil {
@@ -67,6 +81,12 @@ func TestProductionNetworkAndSubprocessBoundary(t *testing.T) {
 			}
 			pkg, pkgOK := sel.X.(*ast.Ident)
 			if !pkgOK || pkg.Name != "exec" {
+				return true
+			}
+			if api, ok := portableExec[rel]; ok {
+				if sel.Sel.Name != api {
+					t.Errorf("unexpected portable subprocess API %s in %s", sel.Sel.Name, path)
+				}
 				return true
 			}
 			if sel.Sel.Name != "Command" {

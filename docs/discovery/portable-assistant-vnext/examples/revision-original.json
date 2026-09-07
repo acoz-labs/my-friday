@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "id": "revision-format-original",
+  "record_id": "record-response-format",
+  "kind": "preference",
+  "scope": { "kind": "project", "id": "project-example" },
+  "summary": "Use numbered progress summaries",
+  "body": "For this example project, use numbered lists for progress summaries.",
+  "sensitivity": "private",
+  "volatility": "stable",
+  "recorded_at": "2026-09-01T15:00:00Z",
+  "effective_from": "2026-09-01T15:00:00Z",
+  "authorship": {
+    "device_id": "device-desktop-example",
+    "actor": "assistant-example",
+    "harness": "codex",
+    "model": null,
+    "session_id": "local-session-example-one"
+  },
+  "evidence": {
+    "basis": "user-direction",
+    "confidence": "high",
+    "source_refs": ["source-direction-example-one"]
+  },
+  "supersedes": [],
+  "change_reason": "The user established an initial response-format preference."
+}

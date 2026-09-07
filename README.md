@@ -1,5 +1,28 @@
 # My Friday
 
+## Portable assistant rebuild — local development
+
+The current direction is one private, Git-backed agent repository with portable
+memory and capabilities, plus machine-local Codex/Pi projections. The new
+`setup`, `agent`, `memory`, `sync`, and `hook` commands are an
+initial implementation, not a production release or migration of existing agents.
+Running the binary without arguments opens the new setup wizard.
+
+Only shared assistant infrastructure belongs in this public toolkit. Users define
+their service integrations, credentials, account policies, and personal workflows
+in their own agent repositories; My Friday does not bundle them.
+
+Start with the [portable assistant guide](docs/portable-assistant.md) for the
+implemented contract, examples, validation, and remaining work. The
+[rebuild design](docs/discovery/portable-assistant-vnext/README.md) describes the
+broader target; not every design feature is implemented yet.
+
+## Earlier pilot — retained for compatibility
+
+The sections below describe the earlier two-repository Codex pilot. Its explicit
+commands remain available, but its product model and approval ceremony are not
+the portable rebuild's defaults.
+
 My Friday is a local-first toolkit for creating and safely maintaining a
 personalized Codex assistant. It gives technically capable users an inspectable,
 version-controlled foundation with separate runtime and governed-memory

@@ -108,6 +108,13 @@ func run() error {
 			}
 		}
 	}
+	if len(os.Args) == 1 {
+		return runPortable(nil, os.Stdin, os.Stdout, os.Stderr)
+	}
+	switch os.Args[1] {
+	case "setup", "agent", "memory", "sync", "hook":
+		return runPortable(os.Args[1:], os.Stdin, os.Stdout, os.Stderr)
+	}
 	command := "init"
 	if len(os.Args) >= 2 {
 		command = os.Args[1]

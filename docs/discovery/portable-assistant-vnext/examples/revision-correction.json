@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "id": "revision-format-correction",
+  "record_id": "record-response-format",
+  "kind": "preference",
+  "scope": { "kind": "project", "id": "project-example" },
+  "summary": "Use short paragraph progress summaries",
+  "body": "For this example project, use short paragraphs for progress summaries. Other projects retain their own formatting preferences.",
+  "sensitivity": "private",
+  "volatility": "stable",
+  "recorded_at": "2026-09-06T15:00:00Z",
+  "effective_from": "2026-09-06T15:00:00Z",
+  "authorship": {
+    "device_id": "device-laptop-example",
+    "actor": "assistant-example",
+    "harness": "pi",
+    "model": null,
+    "session_id": "local-session-example-two"
+  },
+  "evidence": {
+    "basis": "user-direction",
+    "confidence": "high",
+    "source_refs": ["source-direction-example-two"]
+  },
+  "supersedes": ["revision-format-original"],
+  "change_reason": "The user replaced the numbered-list preference with short paragraphs."
+}

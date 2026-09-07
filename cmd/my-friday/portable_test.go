@@ -1,0 +1,116 @@
+package main
+
+import (
+	"bytes"
+	"encoding/json"
+	"os"
+	"path/filepath"
+	"reflect"
+	"strings"
+	"testing"
+
+	"github.com/acoz-labs/my-friday/internal/portable"
+)
+
+func TestPortableSetupAndMemoryRoundTrip(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "assistant")
+	state := filepath.Join(t.TempDir(), "instance")
+	var out bytes.Buffer
+	err := runPortable([]string{"setup", "--repository", root, "--state", state, "--name", "friday", "--device-label", "Test laptop", "--no-launcher"}, strings.NewReader(""), &out, &out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	instance, s, err := portable.LoadInstance(state)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("MY_FRIDAY_ASSISTANT_ROOT", root)
+	t.Setenv("MY_FRIDAY_DEVICE_ID", instance.DeviceID)
+	t.Setenv("MY_FRIDAY_HARNESS", "pi")
+	out.Reset()
+	if err = runPortable([]string{"memory", "template"}, strings.NewReader(""), &out, &out); err != nil {
+		t.Fatal(err)
+	}
+	var r portable.Revision
+	if err = json.Unmarshal(out.Bytes(), &r); err != nil {
+		t.Fatal(err)
+	}
+	r.ID = "revision-learning"
+	r.RecordID = "record-learning"
+	r.Summary = "Prefer short answers"
+	r.Body = "The user prefers concise responses."
+	r.Authorship.DeviceID = "device-forged"
+	data, _ := json.Marshal(r)
+	file := filepath.Join(t.TempDir(), "input.json")
+	if err = os.WriteFile(file, data, 0600); err != nil {
+		t.Fatal(err)
+	}
+	out.Reset()
+	if err = runPortable([]string{"memory", "write", "--input", file}, strings.NewReader(""), &out, &out); err != nil {
+		t.Fatal(err)
+	}
+	out.Reset()
+	if err = runPortable([]string{"memory", "recall", "--query", "short answers"}, strings.NewReader(""), &out, &out); err != nil {
+		t.Fatal(err)
+	}
+	var packet portable.Packet
+	if err = json.Unmarshal(out.Bytes(), &packet); err != nil {
+		t.Fatal(err)
+	}
+	if len(packet.Current) != 1 || packet.Current[0].Authorship.DeviceID != instance.DeviceID || packet.Current[0].Authorship.Harness != "pi" {
+		t.Fatalf("writer provenance not stamped: %+v", packet)
+	}
+	if err = s.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	out.Reset()
+	if err := runPortable([]string{"hook", "--instance", state, "--harness", "codex", "--native", "UserPromptSubmit"}, strings.NewReader(`{"prompt":"short answers","event_id":"event-fixture"}`), &out, &out); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), "revision-learning") || !strings.Contains(out.String(), "hookSpecificOutput") {
+		t.Fatal("native prompt hook omitted current memory")
+	}
+	bin := t.TempDir()
+	if err := os.WriteFile(filepath.Join(bin, "pi"), []byte("#!/bin/sh\nprintf '%s\\n' \"$PWD\" \"$MY_FRIDAY_ASSISTANT_ROOT\" \"$PI_CODING_AGENT_DIR\" \"$@\"\n"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+	project := t.TempDir()
+	t.Chdir(project)
+	project, _ = os.Getwd()
+	out.Reset()
+	if err := runPortable([]string{"agent", "launch", "--instance", state, "--harness", "pi", "--model", "fixture", "hello world"}, strings.NewReader(""), &out, &out); err != nil {
+		t.Fatal(err)
+	}
+	want := strings.Join([]string{project, s.Root, filepath.Join(state, "pi"), "--model", "fixture", "hello world", ""}, "\n")
+	if out.String() != want {
+		t.Fatalf("launch changed cwd/identity/arguments: %q", out.String())
+	}
+}
+
+func TestPortableCLIRejectsUnknownFlagsAndTrailingJSON(t *testing.T) {
+	var out bytes.Buffer
+	if err := runPortable([]string{"setup", "--not-a-real-flag"}, strings.NewReader(""), &out, &out); err == nil {
+		t.Fatal("unknown option accepted")
+	}
+}
+
+func TestServiceCapabilitiesAreNotCoreCommands(t *testing.T) {
+	for _, command := range []string{"github", "secret"} {
+		var out bytes.Buffer
+		err := runPortable([]string{command}, strings.NewReader(""), &out, &out)
+		if err == nil || !strings.HasPrefix(err.Error(), "usage: my-friday <setup|") {
+			t.Fatalf("service command %s still routed by core: %v", command, err)
+		}
+	}
+}
+
+func TestPortableLaunchForwardsHarnessFlags(t *testing.T) {
+	owned, forwarded, err := splitLaunchArgs([]string{"--instance", "/state", "--harness=pi", "--model", "example", "hello world", "--", "--harness", "literal"})
+	if err != nil || !reflect.DeepEqual(owned, []string{"--instance", "/state", "--harness=pi"}) || !reflect.DeepEqual(forwarded, []string{"--model", "example", "hello world", "--", "--harness", "literal"}) {
+		t.Fatalf("arguments changed: %q %q %v", owned, forwarded, err)
+	}
+	if _, _, err := splitLaunchArgs([]string{"--harness"}); err == nil {
+		t.Fatal("missing harness accepted")
+	}
+}
