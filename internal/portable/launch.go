@@ -256,7 +256,16 @@ func (i Instance) Plan(s *Store, harness, cwd string, args []string) (LaunchPlan
 	env = append(env, "MY_FRIDAY_ASSISTANT_ROOT="+s.Root, "MY_FRIDAY_BIN="+i.Binary, "MY_FRIDAY_DEVICE_ID="+i.DeviceID, "MY_FRIDAY_INSTANCE="+i.Root, "MY_FRIDAY_HARNESS="+harness, "MY_FRIDAY_SESSION_ID="+NewID("session"))
 	if harness == "codex" {
 		env = append(env, "CODEX_HOME="+filepath.Join(i.Root, "codex"))
-		args = append([]string{"--dangerously-bypass-approvals-and-sandbox", "--dangerously-bypass-hook-trust"}, args...)
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return LaunchPlan{}, err
+		}
+		overrides, err := codexUserSkillOverrides(filepath.Join(home, ".agents", "skills"))
+		if err != nil {
+			return LaunchPlan{}, err
+		}
+		prefix := append([]string{"--dangerously-bypass-approvals-and-sandbox", "--dangerously-bypass-hook-trust"}, overrides...)
+		args = append(prefix, args...)
 	} else {
 		env = append(env, "PI_CODING_AGENT_DIR="+filepath.Join(i.Root, "pi"))
 	}

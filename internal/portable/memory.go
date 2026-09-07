@@ -267,6 +267,26 @@ func (s *Store) History(recordID string) ([]Revision, error) {
 var words = regexp.MustCompile(`[\pL\pN][\pL\pN._-]*`)
 
 func terms(text string) []string { return words.FindAllString(strings.ToLower(text), -1) }
+
+// A small English inflection fallback for prose, not identifiers or synonyms.
+// Exact hits receive four times the weight. Do not expand arbitrary substrings.
+func inflected(base, word string) bool {
+	if len(base) < 4 {
+		return false
+	}
+	for _, r := range base + word {
+		if r < 'a' || r > 'z' {
+			return false
+		}
+	}
+	for _, suffix := range []string{"s", "es", "ed", "ing"} {
+		if word == base+suffix {
+			return true
+		}
+	}
+	return strings.HasSuffix(base, "e") && (word == base+"d" || word == strings.TrimSuffix(base, "e")+"ing")
+}
+
 func relevance(r Revision, query string) int {
 	if strings.TrimSpace(query) == "" {
 		return 1
@@ -278,12 +298,18 @@ func relevance(r Revision, query string) int {
 	for _, t := range terms(r.Summary) {
 		tokens[t] += 4
 	}
+	identifiers := map[string]int{}
 	for _, t := range terms(r.ID + " " + r.RecordID + " " + r.Scope.ID) {
-		tokens[t] += 8
+		identifiers[t] += 8
 	}
 	score := 0
 	for _, t := range terms(query) {
-		score += tokens[t]
+		score += 4 * (tokens[t] + identifiers[t])
+		for word, weight := range tokens {
+			if word != t && (inflected(t, word) || inflected(word, t)) {
+				score += weight
+			}
+		}
 	}
 	return score
 }

@@ -15,6 +15,19 @@ bin/ci
 My Friday uses Go 1.26.4, pinned by `mise.toml`; `go.mod` declares the module's
 language baseline. Install the exact host toolchain with `mise install`.
 
+Portable Codex discovery has an additional opt-in, model-free native contract
+test. Set `FRIDAY_TEST_CODEX` to an absolute installed executable and run:
+
+```sh
+FRIDAY_TEST_CODEX=/absolute/path/to/codex mise exec -- go test ./internal/portable -run TestNativeCodexSkillExclusions -count=1 -v
+```
+
+It uses disposable Codex homes and synthetic linked user/project skills to check
+native `skills/list` enablement before/after per-skill overrides. It neither
+authenticates nor starts model turns. Normal CI skips this test unless explicitly
+enabled. Tested with Codex 0.153.4; installed app-server schemas can lag the latest
+documentation (this version does not accept extra-user-root discovery parameters).
+
 When host-local language execution is supported, commit exact versions in a
 root `mise.toml` and install them with:
 

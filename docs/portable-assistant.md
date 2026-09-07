@@ -82,6 +82,20 @@ paths and generated instructions. Codex launches with approval/sandbox and hook
 trust bypass flags. This is deliberate full-access execution, **not OS isolation**.
 Project instructions still participate in the harness's instruction hierarchy.
 
+Codex launches inventory `$HOME/.agents/skills` and pass per-skill disable
+overrides for that user-wide collection. Linked skill paths are resolved;
+the global files and `HOME` are unchanged. Project-local skills and native
+system/instance skills remain available. This is a startup discovery policy,
+not a security sandbox: a newly added global skill during a running session
+requires a relaunch to update exclusions, and explicit native configuration
+overrides can change the policy. Canonical aliases of a disabled skill are
+disabled too. Administrator policies and account-provided plugins are not
+removed. Missing/broken targets are skipped; unreadable inventories or excessive
+trees/argument sizes stop launch rather than silently applying partial exclusions.
+The current adapter bounds discovery to 10,000 resolved paths and 64 KiB of
+override text. This policy addresses the observed Codex user-home inheritance;
+it is not a claim of complete isolation across every harness discovery source.
+
 ## Source and local state
 
 ```text
@@ -181,6 +195,15 @@ global guidance; the model must request other scopes explicitly. Search does not
 infer permissions or select an account. There is no index that can lag source,
 but remote changes are visible only after successful synchronization. Updating a
 file also does not erase an earlier statement already in model context.
+
+Prose matching includes a limited English inflection fallback (for example,
+`name`/`named`/`naming` and `review`/`reviewed`). Base words must contain at least
+four ASCII letters; supported suffixes are `s`, `es`, `ed`, `ing`, and silent-e
+variants. Exact hits receive four times the weight of variant hits. Record,
+revision, and scope identifiers remain exact-only. This is not general stemming,
+translation, synonym search, or arbitrary substring matching; non-English terms
+retain exact matching. Scope, effective-time, conflict, and supersession filters
+run independently of this relevance scoring.
 
 When the relevant scope is unknown, `memory scopes` lists stored scope kinds,
 stable IDs, and distinct record counts, sorted by kind/ID. It validates current
