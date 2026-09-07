@@ -325,8 +325,51 @@ Two follow-up defects were visible despite the correct final answer:
    describes user-home discovery and per-skill disable configuration. A tested
    inheritance policy is still needed; no existing global skills were modified.
 
+## Discovery exclusions and lexical retest — 2026-09-07
+
+Implemented Codex launch-time exclusions for discovered user-home skills using
+the documented per-skill native configuration. No global skill or home setting
+was modified. Regression tests cover linked paths, directory cycles, broken
+targets, quoting, and discovery refresh on another launch. An opt-in model-free
+Codex 0.153.4 contract test verifies that a synthetic linked user skill changes
+from enabled to disabled while a synthetic project skill remains enabled.
+
+A separate disposable installation on the physical second Mac exercised the real
+launcher against Codex 0.153.0: native discovery reported all 17 unrelated user
+skills disabled and six native skills enabled. This used no copied credentials
+and made no model request. The installed app-server schema lacks a newer
+extra-user-root parameter in current docs; the committed contract test instead
+uses a supported disposable instance-user root.
+
+Added limited English prose inflection matching with lower weight than exact
+hits. Tests reproduce `name` versus `named`, exercise silent-e and plural forms,
+and reject arbitrary substrings, numeric/compound identifiers, other scopes,
+and superseded keyword hits. Existing effective-time and conflict tests pass.
+This is a bounded lexical improvement, not general linguistic stemming.
+
+Full native `mise exec -- bin/ci`, an opt-in race-enabled native discovery run,
+Linux/AMD64 CLI cross-build, and diff checks passed. Built clean commit `8659297`
+as SHA-256 `79e37e37c2d3272623356f60cd9a3b2f27289b34dd4578a7d82c44c22b7fd133`.
+Updated both disposable pilot executables at their existing bound paths, retaining
+the previous executable beside each as a rollback copy.
+
+A fresh read-only Codex conversation on the second Mac used that executable and
+the already-authenticated test home. Its injected skill catalog omitted the
+unrelated user-home collection. The model discovered the project scope and
+returned the current name from its first `name` query without a fallback. Its
+only shell operations were scope discovery, cwd reporting, and scoped recall.
+Source HEAD/worktree and the empty project directory remained unchanged. This
+SSH session did not establish working GitHub credential access; authenticated
+publication remains covered by the earlier local-Terminal pilot.
+
+Exclusions are a startup snapshot, not filesystem isolation or complete control
+of administrator/account-provided capabilities. Fresh native sessions are required
+to retest changed catalogs. Pi discovery beyond its configured instance home,
+installation/update UX, and longer-running lifecycle failures remain separate
+checks before release.
+
 ## Next checkpoints
 
-1. Resolve unintended user-home skill inheritance and retest native discovery.
-2. Improve lexical retrieval and consistently safe scratch-file handling.
+1. Audit Pi's external discovery sources and remaining lifecycle failure behavior.
+2. Improve consistently safe scratch-file handling and installation/update UX.
 3. Review remaining install/update/recovery and provenance gaps before release.
