@@ -95,6 +95,92 @@ func TestPortableCLIRejectsUnknownFlagsAndTrailingJSON(t *testing.T) {
 	}
 }
 
+func TestPortableSetupRejectsOverlapBeforeMutation(t *testing.T) {
+	base := t.TempDir()
+	root := filepath.Join(base, "agent")
+	var out bytes.Buffer
+	err := runPortable([]string{"setup", "--repository", root, "--state", filepath.Join(root, "state"), "--name", "friday", "--device-label", "Fixture", "--no-launcher"}, strings.NewReader(""), &out, &out)
+	if err == nil {
+		t.Fatal("nested state accepted")
+	}
+	if _, err := os.Stat(root); !os.IsNotExist(err) {
+		t.Fatal("invalid setup created source")
+	}
+	s, err := portable.Create(root, "friday", "codex", "device-fixture", "Fixture")
+	if err != nil {
+		t.Fatal(err)
+	}
+	before, err := os.ReadDir(filepath.Join(s.Root, "provenance/devices"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = runPortable([]string{"setup", "--import", root, "--state", filepath.Join(root, "state"), "--name", "friday", "--device-label", "New fixture", "--no-launcher"}, strings.NewReader(""), &out, &out)
+	if err == nil {
+		t.Fatal("nested import state accepted")
+	}
+	after, err := os.ReadDir(filepath.Join(s.Root, "provenance/devices"))
+	if err != nil || len(before) != len(after) {
+		t.Fatal("rejected import registered a device")
+	}
+}
+
+func TestPortableRepairPreservesSourceBindingAndNativeState(t *testing.T) {
+	base := t.TempDir()
+	root, state := filepath.Join(base, "agent"), filepath.Join(base, "state")
+	var out bytes.Buffer
+	if err := runPortable([]string{"setup", "--repository", root, "--state", state, "--name", "friday", "--device-label", "Fixture", "--no-launcher"}, strings.NewReader(""), &out, &out); err != nil {
+		t.Fatal(err)
+	}
+	binding, err := os.ReadFile(filepath.Join(state, "binding.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(state, "pi/auth.json"), []byte("synthetic-canary"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(filepath.Join(state, "pi/extensions/my-friday.ts")); err != nil {
+		t.Fatal(err)
+	}
+	launcher := filepath.Join(base, "bin/friday")
+	out.Reset()
+	if err := runPortable([]string{"agent", "repair", "--instance", state, "--launcher", launcher}, strings.NewReader(""), &out, &out); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), `"repaired": true`) {
+		t.Fatal(out.String())
+	}
+	for _, path := range []string{launcher, filepath.Join(state, "pi/extensions/my-friday.ts")} {
+		if _, err := os.Stat(path); err != nil {
+			t.Fatal(err)
+		}
+	}
+	after, err := os.ReadFile(filepath.Join(state, "binding.json"))
+	if err != nil || !bytes.Equal(binding, after) {
+		t.Fatal("repair changed binding/device/binary")
+	}
+	auth, err := os.ReadFile(filepath.Join(state, "pi/auth.json"))
+	if err != nil || string(auth) != "synthetic-canary" {
+		t.Fatal("repair changed native auth")
+	}
+	// No source/Git mutations are needed, even to repair repeatedly.
+	out.Reset()
+	if err := runPortable([]string{"agent", "repair", "--instance", state}, strings.NewReader(""), &out, &out); err != nil {
+		t.Fatal(err)
+	}
+	config := filepath.Join(state, "codex/config.toml")
+	if err := os.WriteFile(config, []byte("preserve-on-collision"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	out.Reset()
+	if err := runPortable([]string{"agent", "repair", "--instance", state, "--launcher", launcher}, strings.NewReader(""), &out, &out); err == nil {
+		t.Fatal("repair replaced existing launcher")
+	}
+	data, err := os.ReadFile(config)
+	if err != nil || string(data) != "preserve-on-collision" {
+		t.Fatal("repair modified projection before reporting launcher collision")
+	}
+}
+
 func TestPortableScopeDiscoveryCLI(t *testing.T) {
 	s, err := portable.Create(filepath.Join(t.TempDir(), "agent"), "friday", "pi", "device-example", "Example")
 	if err != nil {

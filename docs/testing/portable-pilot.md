@@ -208,6 +208,38 @@ callback is delivered correctly over a real network. Remote creation and clone
 were test orchestration, not new wizard features. A physical second-machine
 trial, bootstrap ergonomics, and longer-running failure modes remain open.
 
+## Installation separation and generated-file repair — 2026-09-07
+
+Review found that explicit setup paths could nest machine-local instance state
+inside versioned source, allowing subsequent checkpoints to include native state.
+Regression tests reproduced acceptance of that layout. Setup now rejects
+source/state overlap before source creation or imported-device registration;
+binding creation/load and launcher installation enforce the same separation.
+Existing symlink aliases and prospective descendants are resolved for the check;
+macOS conservatively refuses case-only overlaps too. No live installation was
+found affected during this work, and no authentication data was used in fixtures.
+
+Generated-file refresh previously followed symlink targets and truncated existing
+inodes. Tests cover symlinked directories/files and hard-linked file canaries.
+Projection now preflights all managed destinations and replaces files atomically.
+Native auth/session files are not managed targets. Multi-file crash atomicity and
+hostile same-user races remain outside this guarantee.
+
+`agent repair --instance PATH` regenerates missing/stale managed files without
+network synchronization, source mutations, or binding changes. An explicit
+`--launcher PATH` can create a missing launcher but never overwrite one. Invalid
+source/bindings must be investigated, not silently repaired. This is generated
+configuration recovery, not an automatic executable updater or data migration.
+
+Verification: full native `mise exec -- bin/ci` passed, plus Linux/AMD64 CLI
+cross-build. A compiled-executable smoke in a separate disposable installation
+restored a missing extension and launcher, refused a launcher collision and a
+symlink targeting synthetic auth, and rejected nested setup before source
+creation. Binding/auth canaries stayed byte-identical; source validation passed
+and its Git worktree remained clean. The existing pilot's source/auth state was
+not part of these destructive fixtures. Prior executable artifacts are retained
+when updating the trial at its stable bound path.
+
 ## Next checkpoints
 
 1. Exercise bootstrap and continuity on a second physical machine.

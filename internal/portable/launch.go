@@ -34,6 +34,9 @@ func ValidateLauncherName(name string) error {
 
 func Bind(s *Store, state, name, binary, deviceID string) (Instance, error) {
 	result := Instance{Version: 1, Name: name, AssistantID: s.Agent.ID, Repository: s.Root, DeviceID: deviceID, Binary: binary}
+	if err := ValidateInstallationPaths(s.Root, state, ""); err != nil {
+		return result, err
+	}
 	if err := ValidateLauncherName(name); err != nil {
 		return result, err
 	}
@@ -69,6 +72,9 @@ func LoadInstance(path string) (Instance, *Store, error) {
 	if result.Version != 1 || !identifier.MatchString(result.Name) || !filepath.IsAbs(result.Repository) || !filepath.IsAbs(result.Binary) {
 		return result, nil, errors.New("invalid instance binding")
 	}
+	if err := ValidateInstallationPaths(result.Repository, path, ""); err != nil {
+		return result, nil, err
+	}
 	s, err := Open(result.Repository)
 	if err != nil {
 		return result, nil, err
@@ -85,6 +91,9 @@ func LoadInstance(path string) (Instance, *Store, error) {
 func shellQuote(value string) string { return "'" + strings.ReplaceAll(value, "'", "'\\''") + "'" }
 
 func (i Instance) InstallLauncher(path string) error {
+	if err := ValidateInstallationPaths(i.Repository, i.Root, path); err != nil {
+		return err
+	}
 	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
 		return err
 	}
@@ -101,6 +110,9 @@ func (i Instance) InstallLauncher(path string) error {
 }
 
 func (i Instance) Project(s *Store) error {
+	if err := i.preflightProjection(s); err != nil {
+		return err
+	}
 	instructions := []string{"# My Friday assistant\n\nAssistant repository: " + s.Root + "\n"}
 	for _, name := range []string{"identity.md", "operating.md"} {
 		path := filepath.Join(s.Root, "instructions", name)
@@ -168,12 +180,12 @@ their actual scope. Native project instructions still apply to project work.
 		if err := os.MkdirAll(root, 0700); err != nil {
 			return err
 		}
-		if err := os.WriteFile(filepath.Join(root, "AGENTS.md"), []byte(text), 0600); err != nil {
+		if err := replaceProjectionFile(filepath.Join(root, "AGENTS.md"), []byte(text)); err != nil {
 			return err
 		}
 	}
 	config := "approval_policy = \"never\"\nsandbox_mode = \"danger-full-access\"\n[features]\nhooks = true\n"
-	if err := os.WriteFile(filepath.Join(i.Root, "codex/config.toml"), []byte(config), 0600); err != nil {
+	if err := replaceProjectionFile(filepath.Join(i.Root, "codex/config.toml"), []byte(config)); err != nil {
 		return err
 	}
 	hooks := map[string]any{}
@@ -185,7 +197,11 @@ their actual scope. Native project instructions still apply to project work.
 		command := shellQuote(i.Binary) + " hook --instance " + shellQuote(i.Root) + " --harness codex --native " + shellQuote(event)
 		hooks[event] = []any{map[string]any{"hooks": []any{map[string]any{"type": "command", "command": command, "timeout": timeout}}}}
 	}
-	if err := writeLocalJSON(filepath.Join(i.Root, "codex/hooks.json"), map[string]any{"hooks": hooks}); err != nil {
+	hookJSON, err := json.MarshalIndent(map[string]any{"hooks": hooks}, "", "  ")
+	if err != nil {
+		return err
+	}
+	if err := replaceProjectionFile(filepath.Join(i.Root, "codex/hooks.json"), append(hookJSON, '\n')); err != nil {
 		return err
 	}
 	dir := filepath.Join(i.Root, "pi/extensions")
@@ -219,7 +235,7 @@ export default function (pi: any) {
 `
 	extension = strings.ReplaceAll(extension, "BINARY", string(binary))
 	extension = strings.ReplaceAll(extension, "INSTANCE", string(instance))
-	return os.WriteFile(filepath.Join(dir, "my-friday.ts"), []byte(extension), 0600)
+	return replaceProjectionFile(filepath.Join(dir, "my-friday.ts"), []byte(extension))
 }
 
 func (i Instance) Plan(s *Store, harness, cwd string, args []string) (LaunchPlan, error) {

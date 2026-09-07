@@ -46,6 +46,14 @@ Without `--no-launcher`, setup creates `~/.local/bin/<name>` or the explicit
 `--launcher` path. It refuses existing instance/launcher destinations. Put the
 binary somewhere stable before installing a launcher: the launcher binds that
 absolute binary path. Setup initializes and commits the local source repository.
+Source and instance directories must be separate and non-nested; the launcher
+must also live outside source. Setup resolves existing symlink aliases before
+checking paths and refuses overlap before creating source or registering an
+imported device. macOS checks conservatively reject case-only overlap too.
+Binding load rechecks separation before launch/hook synchronization. This keeps
+native credentials and sessions out of the normal source checkpoint boundary.
+It is not a security boundary against deliberate edits or same-user races.
+
 It does not create a remote repository, install a harness, copy credentials, or
 log in. A filesystem error midway through setup can leave a partial installation;
 inspect the reported paths before retrying. Existing installations are not removed.
@@ -100,6 +108,37 @@ Source format 1 is explicit. Unknown versions fail instead of being guessed at.
 There is no version-upgrade engine yet. Generated instance instructions, hook
 registrations, and Codex config are regenerated at launch; do not customize those
 generated files. Native authentication files are not rewritten.
+
+## Repair and executable updates
+
+For an instance with a valid binding and valid source, rebuild its generated
+configuration without starting a harness or synchronizing:
+
+```sh
+my-friday agent repair --instance /absolute/instance
+# Only when the named launcher is missing:
+my-friday agent repair --instance /absolute/instance --launcher /absolute/bin/friday
+```
+
+Repair preserves the binding's device ID, source path, and binary path, plus
+native authentication and sessions. It never overwrites an existing launcher
+or repairs corrupt memory by guessing. Missing generated instructions, config,
+and extensions are recreated. Projection preflight refuses symlink/nonregular
+targets before changing any generated file, and each file is atomically
+replaced rather than truncated. A failure midway through the multi-file refresh
+can leave mixed generations; rerun repair after resolving the reported cause.
+This is not an all-files transaction or protection against hostile concurrent
+same-user changes.
+
+There is no automatic executable updater or source-format migration yet. Keep
+the executable at its bound path, retain the previous verified artifact, and
+replace it atomically with a verified compatible build while sessions are idle.
+Run repair (or the next normal launch) to refresh projections. Rolling the
+executable back at the same path and refreshing projections does not reverse
+memory writes or external effects. Moving the binary/source or losing the
+binding requires a new explicit setup/import into a new instance location;
+preserve the old state for recovery rather than deleting it. A new installation
+gets a new device ID and needs its own native harness login.
 
 ## Memory and supersession
 
@@ -298,9 +337,11 @@ mise exec -- go test -race ./internal/portable ./cmd/my-friday
 mise exec -- bin/ci
 ```
 
-Actual authenticated Codex/Pi conversations and live network-provider effects have
-not been validated. Installed Codex 0.153.4's CLI flags were inspected; Pi is not
-installed on the development host. This is not yet a production-ready runtime.
+The hands-on pilot now covers authenticated Codex/Pi conversations, cross-harness
+memory/capability reuse, and authenticated HTTPS source sync between disposable
+installations. See the pilot record for exact scope and limitations. A second
+physical-machine trial and remaining installation/recovery checks are still
+needed; these observations are not a production-release declaration.
 
 Local verification on 2026-09-06: `mise exec -- bin/ci` passed, including native
 acceptance primitives, `go vet`, race-enabled tests, and Darwin builds. An

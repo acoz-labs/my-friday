@@ -172,6 +172,17 @@ func portableSetup(args []string, input io.Reader, out, errout io.Writer) error 
 	if *launcher == "" {
 		*launcher = filepath.Join(home, ".local/bin", *name)
 	}
+	sourcePath := *root
+	if *existing != "" {
+		sourcePath = *existing
+	}
+	launcherPath := *launcher
+	if *noLauncher {
+		launcherPath = ""
+	}
+	if err := portable.ValidateInstallationPaths(sourcePath, *state, launcherPath); err != nil {
+		return err
+	}
 	// Check all obvious installation collisions before creating source state.
 	if _, err = os.Lstat(*state); !os.IsNotExist(err) {
 		return errors.New("instance directory already exists or cannot be inspected")
@@ -377,7 +388,7 @@ func portableAgent(args []string, input io.Reader, out, errout io.Writer) error 
 		return printPortableHelp("agent", out)
 	}
 	switch args[0] {
-	case "launch", "inspect", "validate", "capabilities", "check", "capability-guide", "capability-template":
+	case "launch", "repair", "inspect", "validate", "capabilities", "check", "capability-guide", "capability-template":
 	default:
 		return errors.New("unknown agent command; use my-friday help agent")
 	}
@@ -387,6 +398,7 @@ func portableAgent(args []string, input io.Reader, out, errout io.Writer) error 
 	harness := f.String("harness", "", "Override default harness")
 	capabilityID := f.String("capability", "", "Capability ID")
 	description := f.String("description", "", "Capability template description")
+	launcher := f.String("launcher", "", "For repair: recreate a missing launcher at this explicit path")
 	parseArgs := args[1:]
 	var forwarded []string
 	if args[0] == "launch" {
@@ -440,6 +452,32 @@ func portableAgent(args []string, input io.Reader, out, errout io.Writer) error 
 	}
 	if f.NArg() != 0 {
 		return errors.New("unexpected agent arguments")
+	}
+	if args[0] == "repair" {
+		instance, s, err := portable.LoadInstance(*state)
+		if err != nil {
+			return err
+		}
+		if err := portable.ValidateInstallationPaths(s.Root, instance.Root, *launcher); err != nil {
+			return err
+		}
+		if *launcher != "" {
+			if _, err := os.Lstat(*launcher); !os.IsNotExist(err) {
+				return errors.New("repair only creates a missing launcher; existing destination is preserved")
+			}
+		}
+		if err := s.Validate(); err != nil {
+			return err
+		}
+		if err := instance.Project(s); err != nil {
+			return err
+		}
+		if *launcher != "" {
+			if err := instance.InstallLauncher(*launcher); err != nil {
+				return err
+			}
+		}
+		return outputJSON(out, map[string]any{"repaired": true, "instance": instance.Root, "device_id": instance.DeviceID, "binary": instance.Binary, "launcher_created": *launcher != "", "notice": "Generated files refreshed. Source, binding, credentials and sessions preserved; no synchronization performed."})
 	}
 	if args[0] == "capability-guide" {
 		_, err := io.WriteString(out, portable.CapabilityGuide)
