@@ -100,10 +100,32 @@ agents to discover exact scope IDs, retry relevant recall, and report missing
 evidence honestly. Capability inventory now includes direct instruction paths.
 Tests cover discovery, unchanged scope filtering, current supersession, invalid
 source rejection, CLI output, and projected instructions. Fresh Pi retest is
-required before closing this finding.
+described below.
+
+Fresh noninteractive Pi retest passed on candidate `e83954c`, using the same
+model (`openai-codex/gpt-5.5`, thinking off), exact synthetic prompt, agent, and
+project cwd with no continued thread. The trace shows scope inventory followed
+by explicit recall of the stored project scope and its current renamed revision.
+It read the capability's listed instructions directly and ran the unchanged
+implementation successfully. No repository-wide file search or invented
+capability command occurred. Source validation passed and capability files
+remained unchanged. A journal correction was appended for the earlier false
+success report; the original event and memory revisions were preserved.
+
+The incorrect-name failure is resolved in this retest, but one guessed scope
+query remained in the first tool batch before the model consumed the inventory.
+It also reported the containing assistant repository rather than the precise
+memory subdirectory. These remain answer/discovery refinements, not evidence
+of lost memory. Loading and this prompt's context delivery do not prove every
+lifecycle callback or unattended learning behavior.
+
+Verification: full native `mise exec -- bin/ci` passed, including race tests,
+plus a Linux/AMD64 CLI cross-build. The disposable trial binary was updated;
+its previous executable was retained for rollback. No source-format migration,
+global installation change, or private capability publication was required.
 
 ## Next checkpoints
 
-1. Repeat the core learning/capability experience through Pi.
+1. Verify a Pi-authored memory correction is recalled through Codex.
 2. Exercise remote sync, a second installation, and offline recovery.
 3. Review remaining install/update/recovery and provenance gaps before release.
