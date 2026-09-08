@@ -137,6 +137,16 @@ The launch environment supplies MY_FRIDAY_ASSISTANT_ROOT and MY_FRIDAY_DEVICE_ID
 MY_FRIDAY_BIN is the absolute toolkit executable; use it to keep reusable
 instructions and scripts portable rather than embedding installation paths.
 
+Native user-wide and project-local skills may supplement this assistant's own
+capabilities. Their availability depends on the current machine and harness;
+they are not automatically part of the synchronized assistant repository.
+Before reusing a remembered procedure, verify its required tools are available.
+When recording a reusable procedure, distinguish assistant-owned capabilities
+from host/project dependencies and describe prerequisites without hardcoding
+machine paths. Report conflicting inherited guidance instead of silently
+turning it into this assistant's permanent policy. Native instruction priority
+still applies; remembered preferences are not higher-priority instructions.
+
 Before substantial work, use "memory recall --query TEXT" and select an explicit
 --scope-kind/--scope-id for account, project, or task-specific guidance. Use
 "memory history --record ID" to explain changes. Scope is not inferred from a
@@ -256,16 +266,7 @@ func (i Instance) Plan(s *Store, harness, cwd string, args []string) (LaunchPlan
 	env = append(env, "MY_FRIDAY_ASSISTANT_ROOT="+s.Root, "MY_FRIDAY_BIN="+i.Binary, "MY_FRIDAY_DEVICE_ID="+i.DeviceID, "MY_FRIDAY_INSTANCE="+i.Root, "MY_FRIDAY_HARNESS="+harness, "MY_FRIDAY_SESSION_ID="+NewID("session"))
 	if harness == "codex" {
 		env = append(env, "CODEX_HOME="+filepath.Join(i.Root, "codex"))
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return LaunchPlan{}, err
-		}
-		overrides, err := codexUserSkillOverrides(filepath.Join(home, ".agents", "skills"))
-		if err != nil {
-			return LaunchPlan{}, err
-		}
-		prefix := append([]string{"--dangerously-bypass-approvals-and-sandbox", "--dangerously-bypass-hook-trust"}, overrides...)
-		args = append(prefix, args...)
+		args = append([]string{"--dangerously-bypass-approvals-and-sandbox", "--dangerously-bypass-hook-trust"}, args...)
 	} else {
 		env = append(env, "PI_CODING_AGENT_DIR="+filepath.Join(i.Root, "pi"))
 	}

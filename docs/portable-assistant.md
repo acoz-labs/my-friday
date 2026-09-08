@@ -82,19 +82,21 @@ paths and generated instructions. Codex launches with approval/sandbox and hook
 trust bypass flags. This is deliberate full-access execution, **not OS isolation**.
 Project instructions still participate in the harness's instruction hierarchy.
 
-Codex launches inventory `$HOME/.agents/skills` and pass per-skill disable
-overrides for that user-wide collection. Linked skill paths are resolved;
-the global files and `HOME` are unchanged. Project-local skills and native
-system/instance skills remain available. This is a startup discovery policy,
-not a security sandbox: a newly added global skill during a running session
-requires a relaunch to update exclusions, and explicit native configuration
-overrides can change the policy. Canonical aliases of a disabled skill are
-disabled too. Administrator policies and account-provided plugins are not
-removed. Missing/broken targets are skipped; unreadable inventories or excessive
-trees/argument sizes stop launch rather than silently applying partial exclusions.
-The current adapter bounds discovery to 10,000 resolved paths and 64 KiB of
-override text. This policy addresses the observed Codex user-home inheritance;
-it is not a claim of complete isolation across every harness discovery source.
+Native skill inheritance is intentional. The assistant brings synchronized
+identity, memory, and private capabilities; the host and project can supply
+additional skills and tools through the selected harness's normal discovery.
+My Friday does not inject blanket exclusions or rewrite native Pi settings.
+Separate harness homes still keep instance authentication and sessions separate;
+they do not imply identical skill catalogs or filesystem isolation.
+
+Use the native harness catalog to discover host/project skills; `agent capabilities`
+lists only capabilities owned by the assistant repository, not every available
+tool. Before reusing remembered procedures, verify their host dependencies.
+Record portable prerequisites instead of treating a machine-local path or
+installed skill as universally available. A headless installation may have fewer
+host additions, but can intentionally install shared skills too. Investigate
+actual instruction conflicts rather than treating inheritance itself as failure.
+Native instruction priority, project trust, and administrator policy still apply.
 
 ## Source and local state
 

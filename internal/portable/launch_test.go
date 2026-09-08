@@ -61,6 +61,18 @@ func TestLaunchKeepsProjectAndSeparatesHarnessHomes(t *testing.T) {
 	if !strings.Contains(env, "MY_FRIDAY_BIN="+instance.Binary) {
 		t.Fatal("portable CLI path unavailable to capabilities")
 	}
+	for _, expected := range []string{"Native user-wide and project-local skills", "host/project dependencies", "verify its required tools are available"} {
+		if !strings.Contains(string(instructions), expected) {
+			t.Errorf("missing inheritance guidance: %s", expected)
+		}
+	}
+	codexPlan, err := instance.Plan(s, "codex", project, []string{"app-server"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Join(codexPlan.Arguments, "|") != "--dangerously-bypass-approvals-and-sandbox|--dangerously-bypass-hook-trust|app-server" {
+		t.Fatalf("unexpected native discovery override: %q", codexPlan.Arguments)
+	}
 	if _, err = Bind(s, state, "other", binary, "device-laptop"); err == nil {
 		t.Fatal("overwrote another instance")
 	}

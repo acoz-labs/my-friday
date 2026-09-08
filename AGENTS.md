@@ -38,6 +38,11 @@ SDLC policies do not govern this development workflow.
   live-data migration, or removal of an existing installation.
 - Do not reintroduce mandatory confirmations for the private assistant's
   routine learning, capability execution, or offline use.
+- Native user-wide/project skill inheritance is intentional (owner decision,
+  2026-09-07). Portable identity and memory do not require identical host tooling.
+  Do not reinstate blanket skill exclusions or rewrite native user settings to
+  suppress inheritance. Distinguish host dependencies from assistant-owned
+  capabilities and diagnose actual conflicts in their scope.
 
 Legacy lifecycle and release documentation remains available in
 `docs/operations/sdlc.md` as reference, not a prerequisite for this rebuild.

@@ -327,6 +327,9 @@ Two follow-up defects were visible despite the correct final answer:
 
 ## Discovery exclusions and lexical retest — 2026-09-07
 
+Historical experiment: the exclusion policy below was superseded by the owner's
+native-inheritance decision later on the same date. The lexical fix remains.
+
 Implemented Codex launch-time exclusions for discovered user-home skills using
 the documented per-skill native configuration. No global skill or home setting
 was modified. Regression tests cover linked paths, directory cycles, broken
@@ -368,8 +371,43 @@ to retest changed catalogs. Pi discovery beyond its configured instance home,
 installation/update UX, and longer-running lifecycle failures remain separate
 checks before release.
 
+## Native inheritance decision supersedes blanket exclusions — 2026-09-07
+
+The owner clarified that host skills should normally supplement the portable
+assistant. A daily-use machine can contribute useful tools, while a headless
+installation may have few or no additions. Continuity means shared identity,
+memory, and assistant-owned capabilities, not identical tool catalogs everywhere.
+Inherited skills are not themselves a defect or a security boundary; actual
+instruction conflicts and unavailable host dependencies need scoped diagnosis.
+
+Removed the Codex exclusion injection and its scanner-specific tests. Discarded
+the uncommitted Pi settings-exclusion experiment before installing it in a pilot.
+Neither harness now receives blanket exclusions from My Friday; Pi native
+settings remain untouched. No source-format or memory migration is involved.
+Generated guidance now distinguishes host/project prerequisites from synchronized
+capabilities and asks the assistant to verify them before reusing procedures.
+
+The native Codex regression now exercises the actual launch plan with and
+without a synthetic linked user skill; project skills remain enabled in both
+cases. A Pi 0.85.1 resource-loader regression verifies linked user and project
+skill discovery, generated lifecycle extension registration, and byte-identical
+native settings. Both are model-free, opt-in tests using disposable state.
+These checks do not claim every host is skill-free when a fixture is absent.
+
+Pi's inspected implementation also discovers user-home `.agents/skills`, plus
+trusted project `.pi` resources and ancestor `.agents/skills`. Its default
+extension directories are instance/project scoped. Explicit settings, packages,
+CLI paths, ancestor instructions, and extensions can contribute more resources;
+native trust and instruction precedence remain applicable.
+
+Verification: full native `mise exec -- bin/ci`, race-enabled portable tests with
+both opt-in native discovery checks, Linux/AMD64 CLI cross-build, and diff checks
+passed. The lexical regression remains green. The existing second-Mac SSH
+connection expired during this follow-up; its installed executable still needs
+the inheritance update and a fresh native-catalog check after reconnecting.
+
 ## Next checkpoints
 
-1. Audit Pi's external discovery sources and remaining lifecycle failure behavior.
+1. Finish inherited-catalog verification on the second Mac after reconnecting SSH.
 2. Improve consistently safe scratch-file handling and installation/update UX.
 3. Review remaining install/update/recovery and provenance gaps before release.

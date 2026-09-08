@@ -19,14 +19,27 @@ Portable Codex discovery has an additional opt-in, model-free native contract
 test. Set `FRIDAY_TEST_CODEX` to an absolute installed executable and run:
 
 ```sh
-FRIDAY_TEST_CODEX=/absolute/path/to/codex mise exec -- go test ./internal/portable -run TestNativeCodexSkillExclusions -count=1 -v
+FRIDAY_TEST_CODEX=/absolute/path/to/codex mise exec -- go test ./internal/portable -run TestNativeCodexSkillInheritance -count=1 -v
 ```
 
 It uses disposable Codex homes and synthetic linked user/project skills to check
-native `skills/list` enablement before/after per-skill overrides. It neither
+native `skills/list` through the real launch plan with/without the synthetic
+user skill. Available user/project skills stay enabled. It neither
 authenticates nor starts model turns. Normal CI skips this test unless explicitly
 enabled. Tested with Codex 0.153.4; installed app-server schemas can lag the latest
 documentation (this version does not accept extra-user-root discovery parameters).
+
+Pi also has an opt-in, model-free resource-loader check against an already
+installed package (tested with Pi 0.85.1 and Node 24.1.0):
+
+```sh
+FRIDAY_TEST_PI_PACKAGE=/absolute/path/to/node_modules/@earendil-works/pi-coding-agent mise exec -- go test ./internal/portable -run TestNativePiResourceInheritance -count=1 -v
+```
+
+The test loads synthetic linked user/project skills and the generated lifecycle
+extension using disposable native state. It checks settings remain byte-identical;
+no model, authentication, or lifecycle handler is executed. It does not install
+dependencies or prove every possible native discovery source.
 
 When host-local language execution is supported, commit exact versions in a
 root `mise.toml` and install them with:

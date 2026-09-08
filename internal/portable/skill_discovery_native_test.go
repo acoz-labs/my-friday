@@ -14,7 +14,7 @@ import (
 
 // Opt-in, model-free contract check against an explicitly selected native Codex.
 // Only disposable state and synthetic project/instance-user roots are written.
-func TestNativeCodexSkillExclusions(t *testing.T) {
+func TestNativeCodexSkillInheritance(t *testing.T) {
 	binary := os.Getenv("FRIDAY_TEST_CODEX")
 	if binary == "" {
 		t.Skip("set FRIDAY_TEST_CODEX to an absolute Codex executable")
@@ -35,32 +35,32 @@ func TestNativeCodexSkillExclusions(t *testing.T) {
 	}
 	writeSkill(filepath.Join(project, ".agents/skills/project-canary"), "friday-project-canary")
 	writeSkill(filepath.Join(root, "linked-target"), "friday-user-canary")
-	for _, disabled := range []bool{false, true} {
-		t.Run(map[bool]string{false: "baseline", true: "excluded"}[disabled], func(t *testing.T) {
-			state := filepath.Join(t.TempDir(), "codex")
-			if err := os.Mkdir(state, 0700); err != nil {
+	for _, userAvailable := range []bool{false, true} {
+		t.Run(map[bool]string{false: "without-user-skill", true: "with-user-skill"}[userAvailable], func(t *testing.T) {
+			s := fixtureStore(t)
+			instance, err := Bind(s, filepath.Join(t.TempDir(), "instance"), "native-pilot", "/synthetic/my-friday", "device-laptop")
+			if err != nil {
 				t.Fatal(err)
 			}
+			state := filepath.Join(instance.Root, "codex")
 			userSkills := filepath.Join(state, "skills")
 			if err := os.Mkdir(userSkills, 0700); err != nil {
 				t.Fatal(err)
 			}
-			if err := os.Symlink(filepath.Join(root, "linked-target"), filepath.Join(userSkills, "alias")); err != nil {
-				t.Fatal(err)
-			}
-			args := []string{"app-server"}
-			if disabled {
-				overrides, err := codexUserSkillOverrides(userSkills)
-				if err != nil {
+			if userAvailable {
+				if err := os.Symlink(filepath.Join(root, "linked-target"), filepath.Join(userSkills, "alias")); err != nil {
 					t.Fatal(err)
 				}
-				args = append(args, overrides...)
+			}
+			plan, err := instance.Plan(s, "codex", project, []string{"app-server"})
+			if err != nil {
+				t.Fatal(err)
 			}
 			ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
 			defer cancel()
-			cmd := exec.CommandContext(ctx, binary, args...)
-			cmd.Dir = project
-			for _, env := range os.Environ() {
+			cmd := exec.CommandContext(ctx, binary, plan.Arguments...)
+			cmd.Dir = plan.Directory
+			for _, env := range plan.Environment {
 				if !strings.HasPrefix(env, "CODEX_") && !strings.HasPrefix(env, "OPENAI_") {
 					cmd.Env = append(cmd.Env, env)
 				}
@@ -127,8 +127,8 @@ func TestNativeCodexSkillExclusions(t *testing.T) {
 			if !found["friday-project-canary"] {
 				t.Fatal("project skill missing or disabled")
 			}
-			if enabled, exists := found["friday-user-canary"]; !exists || enabled == disabled {
-				t.Fatalf("user skill enabled=%v exists=%v, exclusion=%v", enabled, exists, disabled)
+			if enabled, exists := found["friday-user-canary"]; exists != userAvailable || enabled != userAvailable {
+				t.Fatalf("user skill enabled=%v exists=%v, available=%v", enabled, exists, userAvailable)
 			}
 		})
 	}
