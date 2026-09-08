@@ -30,6 +30,9 @@ func main() {
 }
 
 func classifyError(args []string, err error) (int, string) {
+	if errors.Is(err, errInstallationNeedsAttention) {
+		return 3, "installation.unhealthy"
+	}
 	var interrupted workshopInterruptedError
 	if errors.As(err, &interrupted) {
 		if interrupted.signal == os.Interrupt {

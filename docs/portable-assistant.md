@@ -136,8 +136,9 @@ my-friday agent doctor --instance /absolute/instance --harness pi
 
 Doctor validates source, checks for its own Git directory, the bound binary and selected harness on PATH,
 and compares generated files with the **running** toolkit and current source
-instructions. It prints JSON checks and remedies; findings return a nonzero exit
-status. It never repairs, launches a harness, runs Git/helpers, reads credentials,
+instructions. It prints JSON checks and remedies; unhealthy findings return exit
+status 3 with `installation.unhealthy`, distinct from invalid command input.
+It never repairs, launches a harness, runs Git/helpers, reads credentials,
 or contacts a remote. A healthy result is structural, not a login, version
 compatibility, current-context, or service-access test. A corrupt/missing binding
 must be inspected separately; doctor will not guess a replacement identity.

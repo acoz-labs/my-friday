@@ -207,6 +207,12 @@ func TestPortableDoctorRepairRoundTrip(t *testing.T) {
 		if report.Healthy != want || (err == nil) != want {
 			t.Fatalf("doctor: %+v %v", report, err)
 		}
+		if !want {
+			code, category := classifyError([]string{"my-friday", "agent", "doctor"}, err)
+			if code != 3 || category != "installation.unhealthy" {
+				t.Fatalf("installation finding mislabeled: %d %s", code, category)
+			}
+		}
 	}
 	doctor(true)
 	missing := filepath.Join(state, "codex/hooks.json")

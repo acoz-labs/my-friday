@@ -19,6 +19,8 @@ import (
 	"github.com/acoz-labs/my-friday/internal/portable"
 )
 
+var errInstallationNeedsAttention = errors.New("installation needs attention; see doctor checks and remedies")
+
 func portableFlags(name string, out io.Writer) *flag.FlagSet {
 	f := flag.NewFlagSet(name, flag.ContinueOnError)
 	f.SetOutput(out)
@@ -465,7 +467,7 @@ func portableAgent(args []string, input io.Reader, out, errout io.Writer) error 
 			return err
 		}
 		if !report.Healthy {
-			return errors.New("installation needs attention; see doctor checks and remedies")
+			return errInstallationNeedsAttention
 		}
 		return nil
 	}

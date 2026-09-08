@@ -441,7 +441,8 @@ Private transcripts and inherited skill names remain outside this repository.
 
 ## Next checkpoints
 
-1. Hands-on diagnosis/repair usability with a disposable damaged projection.
+1. Diagnose/repair/diagnose hands-on flow passed; continue with native interactive
+   warning/interruption feedback.
 2. Review remaining install/update/recovery and provenance gaps before release.
 3. Check native interactive warning/interruption behavior and define the initial
    release's supported boundaries before migrating a live personal assistant.
@@ -493,3 +494,22 @@ unchanged throughout diagnosis/repair, and the restored hook matched its backup.
 A separate equally disposable fixture is left at the missing-hook stage for
 hands-on clarity testing. Neither fixture contains native credentials or real
 memory; existing authenticated pilots were not modified by this checkpoint.
+
+## Hands-on recovery completed — 2026-09-08
+
+The user ran doctor in Terminal and received the single expected missing-hook
+finding. They then ran repair and repeated doctor; the final report was healthy
+with every listed check passing. This closes the functional hands-on recovery
+scenario, not broader authentication or release acceptance. The repair command
+was also repeated in the conversation, so this is not proof that the embedded
+remedy alone was sufficiently clear.
+
+The initial failure misleadingly printed `Error [input.invalid]`. Doctor now
+returns a typed unhealthy-installation finding, classified as
+`installation.unhealthy` with exit status 3. Regression tests cover the actual
+doctor/repair command flow, wrapped findings, and retention of input-error
+classification for ordinary invalid arguments. The user-tested artifact remains
+the earlier recorded build; its executable was not silently replaced.
+Independent inspection found a clean source worktree and restored hook bytes
+identical to the retained backup. Full native CI, race-enabled portable/CLI
+tests, a Linux/AMD64 CLI cross-build, and diff checks passed for the label fix.

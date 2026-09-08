@@ -16,6 +16,21 @@ import (
 	"github.com/acoz-labs/my-friday/internal/codexhome"
 )
 
+func TestDoctorFindingClassificationIsTyped(t *testing.T) {
+	args := []string{"my-friday", "agent", "doctor"}
+	code, category := classifyError(args, fmt.Errorf("diagnosis: %w", errInstallationNeedsAttention))
+	if code != 3 || category != "installation.unhealthy" {
+		t.Fatalf("wrapped finding misclassified: %d %s", code, category)
+	}
+	// The command name or matching prose alone must not reclassify bad input.
+	for _, err := range []error{errors.New("flag provided but not defined: -bogus"), errors.New(errInstallationNeedsAttention.Error())} {
+		code, category := classifyError(args, err)
+		if code != 2 || category != "input.invalid" {
+			t.Fatalf("untyped error reclassified: %d %s", code, category)
+		}
+	}
+}
+
 func TestWorkshopSignalHelper(t *testing.T) {
 	if os.Getenv("MY_FRIDAY_WORKSHOP_SIGNAL_HELPER") != "1" {
 		return
