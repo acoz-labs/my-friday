@@ -513,3 +513,44 @@ the earlier recorded build; its executable was not silently replaced.
 Independent inspection found a clean source worktree and restored hook bytes
 identical to the retained backup. Full native CI, race-enabled portable/CLI
 tests, a Linux/AMD64 CLI cross-build, and diff checks passed for the label fix.
+
+## Native warning and interruption probes — 2026-09-08
+
+Built clean `e88effe` as SHA-256
+`8d277ba3837722e72d050c1a2dcb31f7fe31ea6220e60c53b337e0122abc0227`
+and updated the first authenticated disposable pilot at its bound executable
+path, retaining the prior artifact. Repair refreshed generated files without
+copying authentication. Added a private synthetic lifecycle canary, gated by an
+explicit test-workspace environment marker and matching event cwd. Ordinary
+pilot sessions do not activate its intentional failure/slow-interruption paths.
+The fixture and private transcripts are not distributed in the public toolkit.
+
+Pi 0.85.1 RPC emitted a native `extension_ui_request` warning for the failed
+subscriber and completed read-only recall correctly. After a separate synthetic
+shell command reported readiness, RPC abort settled the run in about 0.11 seconds.
+The native message reported that the operation was aborted; a subsequent prompt
+in the same session recalled the same current name and did not replay the command.
+This proves RPC notification/abort/recovery, not visual presentation or an
+explicit portable Pi `request.interrupted` event. Pi's `agent_settled` occurs after
+aborted runs too; `request.completed` is currently a synchronization checkpoint,
+not a success assertion.
+
+Codex 0.153.4 `exec` ran the request subscriber, recorded its deliberate failure,
+and the model acknowledged the warning while recalling correctly. A dedicated
+warning item was not observed in the captured exec stream; UI visibility remains
+a separate hands-on check.
+
+The app-server transport behaved differently: `hooks/list` reported generated
+hooks enabled but untrusted, and model turns produced no corresponding canary
+dispatch receipt or warning. This is not a passing lifecycle test, despite correct
+memory retrieval through explicit commands. A later app-server probe confirmed
+an active turn could be interrupted and the next prompt could recall correctly,
+but did not prove My Friday interruption-handler delivery. The first interruption
+driver awaited a readiness output delta that this version did not emit and timed
+out; the corrected driver uses the native command-start event. No claim is made
+that its earlier un-interrupted command was cancelled.
+
+After the recorded fixture addition, source HEAD/worktree remained unchanged,
+source validation passed, and the test project directory stayed empty. A scoped
+Terminal launcher is prepared for the owner's warning/ Escape-interruption check.
+The second physical Mac and the separate recovery-only fixture are unchanged.

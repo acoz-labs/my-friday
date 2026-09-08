@@ -341,6 +341,17 @@ events. Events without a common semantic mapping stay native-namespaced; Pi
 `before_agent_start`; other callbacks currently only report errors to the UI.
 Background handlers, every Pi extension event, source-change events, persistent
 outboxes, and guaranteed end-of-task learning capture are not implemented.
+Pi `agent_settled` also fires after aborts; its mapped `request.completed` event is
+a synchronization checkpoint, not proof that the task succeeded. It does not
+currently emit a portable `request.interrupted` event. Subscribers must not infer
+successful external work merely from a completion checkpoint.
+
+Native lifecycle support must be verified for the actual launch mode. In the
+Codex 0.153.4 pilot, `exec` dispatched the generated request hook, while a directly
+launched app-server discovered enabled-but-untrusted hooks without dispatching the
+test subscriber. Correct explicit memory recall through that transport does not
+prove automatic checkpoint delivery. App-server lifecycle parity and interactive
+warning/interruption presentation remain unverified; see the pilot record.
 
 ## Provider-neutral Git authentication
 
