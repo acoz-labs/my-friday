@@ -39,16 +39,15 @@ without a regression or new behavior that needs them.
 
 ## Remaining before initial rollout
 
-1. Complete the conversational source-checkpoint provenance/`agent changes`
-   check. Automated creation/edit/delete, cross-clone, offline retry, malformed
-   remote and device-binding checks passed on 2026-09-08; they do not close the
-   human-facing discovery check.
-2. Apply the rehearsed executable-update flow to the disposable authenticated
-   pilot and start a fresh conversation. The separate black-box rehearsal passed
-   on 2026-09-08: preserved binary, atomic bound-path replacement, doctor drift,
-   repair, healthy doctor, unchanged launcher/cwd, and retained synthetic auth.
-   Actual native login/session continuity still needs the conversational check.
-   Production placement must use durable paths, never a `/tmp` pilot binding.
+1. Source-checkpoint provenance passed the owner-driven Codex Terminal check on
+   2026-09-08: useful private documentation edit, checks, journal/local checkpoint,
+   accurate device label and observation/authorship distinction. No repeat needed.
+2. The authenticated executable upgrade and fresh conversation also passed, but
+   post-session doctor exposed native-config and alias-path false alarms. Retest
+   the fixes with one fresh read-only native session: preserve settings across
+   launch/repair and keep doctor healthy afterward. Automated preservation and
+   alias regression tests cover the implementation. Production placement must
+   use durable paths, never a `/tmp` pilot binding.
 3. Choose and explicitly authorize the artifact/release route. Feature-branch
    pushes are development checkpoints, not releases. The repository still has
    legacy release automation; its existence does not make this rebuild released.

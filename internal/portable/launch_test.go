@@ -28,7 +28,7 @@ func TestLaunchKeepsProjectAndSeparatesHarnessHomes(t *testing.T) {
 		t.Fatalf("launch changed request: %+v", plan)
 	}
 	env := strings.Join(plan.Environment, "\n")
-	if strings.Contains(env, "/ambient/") || !strings.Contains(env, "PI_CODING_AGENT_DIR="+filepath.Join(state, "pi")) || !strings.Contains(env, "MY_FRIDAY_ASSISTANT_ROOT="+s.Root) {
+	if strings.Contains(env, "/ambient/") || !strings.Contains(env, "PI_CODING_AGENT_DIR="+filepath.Join(instance.Root, "pi")) || !strings.Contains(env, "MY_FRIDAY_ASSISTANT_ROOT="+s.Root) {
 		t.Fatalf("wrong instance environment: %s", env)
 	}
 	if err = instance.Project(s); err != nil {
@@ -70,7 +70,7 @@ func TestLaunchKeepsProjectAndSeparatesHarnessHomes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.Join(codexPlan.Arguments, "|") != "--dangerously-bypass-approvals-and-sandbox|--dangerously-bypass-hook-trust|app-server" {
+	if strings.Join(codexPlan.Arguments, "|") != "--dangerously-bypass-approvals-and-sandbox|--dangerously-bypass-hook-trust|--enable|hooks|app-server" {
 		t.Fatalf("unexpected native discovery override: %q", codexPlan.Arguments)
 	}
 	if _, err = Bind(s, state, "other", binary, "device-laptop"); err == nil {

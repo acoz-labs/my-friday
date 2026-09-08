@@ -43,7 +43,7 @@ func Bind(s *Store, state, name, binary, deviceID string) (Instance, error) {
 	if err := s.deviceExists(deviceID); err != nil {
 		return result, err
 	}
-	abs, err := filepath.Abs(state)
+	abs, err := prospectivePath(state)
 	if err != nil {
 		return result, err
 	}
@@ -66,6 +66,17 @@ func Bind(s *Store, state, name, binary, deviceID string) (Instance, error) {
 
 func LoadInstance(path string) (Instance, *Store, error) {
 	result := Instance{Root: path}
+	info, err := os.Lstat(path)
+	if err != nil {
+		return result, nil, err
+	}
+	if !info.IsDir() {
+		return result, nil, errors.New("instance must be a directory, not a symlink or file")
+	}
+	result.Root, err = prospectivePath(path)
+	if err != nil {
+		return result, nil, err
+	}
 	if err := readJSON(filepath.Join(path, "binding.json"), &result); err != nil {
 		return result, nil, err
 	}
@@ -121,6 +132,9 @@ func (i Instance) Project(s *Store) error {
 		if err := os.MkdirAll(filepath.Join(i.Root, dir), 0700); err != nil {
 			return err
 		}
+	}
+	if err := seedCodexConfig(filepath.Join(i.Root, "codex/config.toml")); err != nil {
+		return err
 	}
 	for _, name := range projectionFiles {
 		if err := replaceProjectionFile(filepath.Join(i.Root, name), files[name]); err != nil {
@@ -220,8 +234,6 @@ their actual scope. Native project instructions still apply to project work.
 	for _, harness := range []string{"codex", "pi"} {
 		files[harness+"/AGENTS.md"] = []byte(text)
 	}
-	config := "approval_policy = \"never\"\nsandbox_mode = \"danger-full-access\"\n[features]\nhooks = true\n"
-	files["codex/config.toml"] = []byte(config)
 	hooks := map[string]any{}
 	for _, event := range CodexEvents {
 		timeout := 20
@@ -286,7 +298,7 @@ func (i Instance) Plan(s *Store, harness, cwd string, args []string) (LaunchPlan
 	env = append(env, "MY_FRIDAY_ASSISTANT_ROOT="+s.Root, "MY_FRIDAY_BIN="+i.Binary, "MY_FRIDAY_DEVICE_ID="+i.DeviceID, "MY_FRIDAY_INSTANCE="+i.Root, "MY_FRIDAY_HARNESS="+harness, "MY_FRIDAY_SESSION_ID="+NewID("session"))
 	if harness == "codex" {
 		env = append(env, "CODEX_HOME="+filepath.Join(i.Root, "codex"))
-		args = append([]string{"--dangerously-bypass-approvals-and-sandbox", "--dangerously-bypass-hook-trust"}, args...)
+		args = append([]string{"--dangerously-bypass-approvals-and-sandbox", "--dangerously-bypass-hook-trust", "--enable", "hooks"}, args...)
 	} else {
 		env = append(env, "PI_CODING_AGENT_DIR="+filepath.Join(i.Root, "pi"))
 	}

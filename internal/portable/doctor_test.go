@@ -1,12 +1,93 @@
 package portable
 
 import (
+	"bytes"
 	"context"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 )
+
+func TestDoctorAndRepairPreserveNativeCodexSettings(t *testing.T) {
+	s := fixtureStore(t)
+	if err := s.InitGit(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	bin := t.TempDir()
+	for _, name := range []string{"my-friday", "codex"} {
+		if err := os.WriteFile(filepath.Join(bin, name), []byte("#!/bin/sh\nexit 99\n"), 0700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	t.Setenv("PATH", bin)
+	i, err := Bind(s, filepath.Join(t.TempDir(), "state"), "friday", filepath.Join(bin, "my-friday"), "device-laptop")
+	if err != nil {
+		t.Fatal(err)
+	}
+	config := filepath.Join(i.Root, "codex/config.toml")
+	native := []byte("# Preserve native choices and comments\nmodel = \"fixture-model\"\n[features]\nhooks = false\n[projects.\"/synthetic/project\"]\ntrust_level = \"trusted\"\n[tui.model_availability_nux]\nfixture = 1\n")
+	if err := os.WriteFile(config, native, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if report := i.Doctor(s, "codex"); !report.Healthy {
+		t.Fatalf("native settings treated as damage: %+v", report)
+	}
+	if err := i.Project(s); err != nil {
+		t.Fatal(err)
+	}
+	after, err := os.ReadFile(config)
+	if err != nil || !bytes.Equal(after, native) {
+		t.Fatal("repair erased native settings")
+	}
+	plan, err := i.Plan(s, "codex", t.TempDir(), nil)
+	if err != nil || !strings.Contains(strings.Join(plan.Arguments, "|"), "--enable|hooks") {
+		t.Fatalf("hooks depend on native config: %+v %v", plan, err)
+	}
+	// Malformed native TOML must remain available for explicit native recovery,
+	// never silently replaced with defaults by My Friday.
+	if err := os.WriteFile(config, []byte("invalid native TOML ["), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := i.Project(s); err != nil {
+		t.Fatal(err)
+	}
+	after, _ = os.ReadFile(config)
+	if string(after) != "invalid native TOML [" {
+		t.Fatal("native configuration was overwritten")
+	}
+}
+
+func TestInstanceParentAliasesRenderIdentically(t *testing.T) {
+	s := fixtureStore(t)
+	parent := t.TempDir()
+	alias := filepath.Join(t.TempDir(), "alias")
+	if err := os.Symlink(parent, alias); err != nil {
+		t.Fatal(err)
+	}
+	i, err := Bind(s, filepath.Join(alias, "state"), "friday", "/fixture/my-friday", "device-laptop")
+	if err != nil {
+		t.Fatal(err)
+	}
+	a, _, err := LoadInstance(filepath.Join(alias, "state"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, _, err := LoadInstance(filepath.Join(parent, "state"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if i.Root != a.Root || a.Root != b.Root || !filepath.IsAbs(a.Root) {
+		t.Fatalf("alias-dependent binding: %q %q %q", i.Root, a.Root, b.Root)
+	}
+	before, _ := a.projection(s)
+	after, _ := b.projection(s)
+	for name, data := range before {
+		if !bytes.Equal(data, after[name]) {
+			t.Fatalf("alias-dependent projection: %s", name)
+		}
+	}
+}
 
 func TestDoctorReportsProjectionDriftWithoutRepair(t *testing.T) {
 	s := fixtureStore(t)

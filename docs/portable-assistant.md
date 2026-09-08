@@ -122,8 +122,13 @@ instance/
 
 Source format 1 is explicit. Unknown versions fail instead of being guessed at.
 There is no version-upgrade engine yet. Generated instance instructions, hook
-registrations, and Codex config are regenerated at launch; do not customize those
-generated files. Native authentication files are not rewritten.
+registrations are regenerated at launch; do not customize those generated files.
+Codex `config.toml` is native-owned after initial seeding, just like Pi's native
+settings: launch and repair preserve it byte-for-byte. Required Codex hook and
+full-access options are supplied by the launcher. Codex validates native TOML;
+doctor does not claim its syntax or settings are valid. Native authentication
+files are not rewritten. Instance parent aliases are resolved to a canonical
+absolute path so equivalent paths do not generate different hook registrations.
 
 ## Source-change provenance
 
@@ -202,9 +207,11 @@ my-friday agent repair --instance /absolute/instance --launcher /absolute/bin/fr
 ```
 
 Repair preserves the binding's device ID, source path, and binary path, plus
-native authentication and sessions. It never overwrites an existing launcher
-or repairs corrupt memory by guessing. Missing generated instructions, config,
-and extensions are recreated. Projection preflight refuses symlink/nonregular
+native authentication, settings and sessions. It never overwrites an existing
+launcher or repairs corrupt memory by guessing. Missing generated instructions,
+hooks and extensions are recreated. Missing Codex config is seeded with defaults;
+an existing config, even malformed TOML, is preserved for explicit native recovery.
+Projection preflight refuses symlink/nonregular
 targets before changing any generated file, and each file is atomically
 replaced rather than truncated. A failure midway through the multi-file refresh
 can leave mixed generations; rerun repair after resolving the reported cause.

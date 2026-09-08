@@ -81,7 +81,7 @@ func ValidateInstallationPaths(repository, state, launcher string) error {
 }
 
 var projectionDirectories = []string{".", "codex", "pi", "pi/extensions"}
-var projectionFiles = []string{"codex/AGENTS.md", "pi/AGENTS.md", "codex/config.toml", "codex/hooks.json", "pi/extensions/my-friday.ts"}
+var projectionFiles = []string{"codex/AGENTS.md", "pi/AGENTS.md", "codex/hooks.json", "pi/extensions/my-friday.ts"}
 
 func (i Instance) preflightProjection(s *Store) error {
 	if err := ValidateInstallationPaths(s.Root, i.Root, ""); err != nil {
@@ -99,7 +99,8 @@ func (i Instance) preflightProjection(s *Store) error {
 			return fmt.Errorf("projection directory must not be a symlink or file: %s", name)
 		}
 	}
-	for _, name := range projectionFiles {
+	// Native config is not managed, but it must not redirect our initial seed.
+	for _, name := range append(append([]string{}, projectionFiles...), "codex/config.toml") {
 		info, err := os.Lstat(filepath.Join(i.Root, name))
 		if os.IsNotExist(err) {
 			continue
@@ -112,6 +113,23 @@ func (i Instance) preflightProjection(s *Store) error {
 		}
 	}
 	return nil
+}
+
+// Codex owns its settings after first creation. Launch supplies our required
+// flags without erasing native model choices, project trust, or UI state.
+func seedCodexConfig(path string) error {
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
+	if os.IsExist(err) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	if _, err = f.WriteString("approval_policy = \"never\"\nsandbox_mode = \"danger-full-access\"\n[features]\nhooks = true\n"); err != nil {
+		return err
+	}
+	return f.Sync()
 }
 
 // Replace a generated file atomically instead of truncating its old inode.

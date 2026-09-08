@@ -63,6 +63,7 @@ func (i Instance) Doctor(s *Store, harness string) DoctorReport {
 		return r
 	}
 	add("projection-paths", true, "Generated paths have no detected type or overlap conflicts.", "")
+	add("native:codex/config.toml", true, "Native-owned settings are preserved, not compared with generated defaults. Codex checks their syntax and values at launch; this diagnostic does not.", "")
 	files, err := i.projection(s)
 	if err != nil {
 		add("projection", false, "Could not render generated instructions.", "Inspect source instructions before repair.")

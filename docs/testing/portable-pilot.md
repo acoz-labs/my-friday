@@ -486,6 +486,46 @@ start a fresh native conversation, make one useful documentation-only private
 capability correction, run its checks, and explain the resulting observation.
 Do not call that conversational checkpoint passed based on the synthetic harness.
 
+### Owner conversation passed; native-settings diagnostic correction
+
+The owner ran the authenticated Codex Terminal provenance prompt with the new
+executable. Inspection of the private session and resulting Git history confirms:
+
+- Only the selected private capability README was edited, replacing concrete
+  installation paths with launch-environment references. Its implementation and
+  subscriptions were unchanged; the working project stayed empty.
+- Capability checks, source validation and diff whitespace checks passed before
+  a journal entry and local checkpoint. The agent accurately reported `local-only`,
+  not remote publication. The source worktree ended clean.
+- The source-change record's before/after object IDs match Git, and the final
+  answer correctly resolved the device label and distinguished checkpoint
+  observation from original authorship. The rollback executable was retained.
+- Some help queries and unrelated project-scope memory fallback were unnecessary.
+  They did not cause wrong edits or old-policy refusal. Keep this as a non-blocking
+  retrieval/discovery efficiency finding rather than repeating the successful task.
+
+Post-session diagnostics exposed two separate false alarms: the instance's
+Codex config acquired normal native project-trust/UI state, and parent aliases
+such as `/tmp` versus `/private/tmp` generated different embedded hook paths.
+Byte-comparing all config against a seed also meant a subsequent repair/launch
+would discard native choices. The fix makes Codex config seed-only/native-owned,
+passes required hook enablement through launcher arguments, and canonicalizes
+instance parent paths on bind/load. Native syntax/setting validation is explicitly
+left to Codex; malformed existing config is not silently reset. Generated
+instructions/hooks/extensions still have exact drift checks and repair support.
+
+This separation follows the official [Codex configuration precedence](https://learn.chatgpt.com/docs/config-file/config-basic)
+and [project-trust configuration](https://learn.chatgpt.com/docs/config-file/config-reference).
+The exact native UI additions were observed locally, not inferred from docs.
+Regression tests reproduce both false alarms and prove native bytes survive
+repair, including comments/model/trust state and malformed content. Full native
+CI, Linux/AMD64 CLI cross-build, and opt-in model-free Codex discovery/Pi resource
+and warning-delivery checks passed. Read-only checks against the current pilot
+now agree across parent aliases and no longer flag native config as drift; old
+alias-embedded generated hooks still require one refresh. The live pilot was
+not repaired or overwritten during diagnosis. A fresh owner-run read-only
+session plus post-session doctor remains the final native regression check.
+
 ## Recovery diagnostics and lifecycle failure boundaries — 2026-09-07
 
 Added `agent doctor`: read-only source validation, own-Git-directory presence,

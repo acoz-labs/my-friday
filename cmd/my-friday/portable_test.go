@@ -82,7 +82,7 @@ func TestPortableSetupAndMemoryRoundTrip(t *testing.T) {
 	if err := runPortable([]string{"agent", "launch", "--instance", state, "--harness", "pi", "--model", "fixture", "hello world"}, strings.NewReader(""), &out, &out); err != nil {
 		t.Fatal(err)
 	}
-	want := strings.Join([]string{project, s.Root, filepath.Join(state, "pi"), "--model", "fixture", "hello world", ""}, "\n")
+	want := strings.Join([]string{project, s.Root, filepath.Join(instance.Root, "pi"), "--model", "fixture", "hello world", ""}, "\n")
 	if out.String() != want {
 		t.Fatalf("launch changed cwd/identity/arguments: %q", out.String())
 	}

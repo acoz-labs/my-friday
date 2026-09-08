@@ -116,7 +116,7 @@ func TestProjectionRefreshPreservesNativeStateAndReplacesInodes(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	config := filepath.Join(i.Root, "codex/config.toml")
+	config := filepath.Join(i.Root, "codex/hooks.json")
 	old := filepath.Join(t.TempDir(), "old-config")
 	if err := os.Link(config, old); err != nil {
 		t.Fatal(err)
