@@ -412,8 +412,36 @@ The first pilot's bound executable is updated with its previous build retained
 for rollback. Offline repair refreshed its generated instructions without
 changing source, binding, authentication, or sessions.
 
+## Second-Mac inherited-catalog retest — 2026-09-07
+
+After reconnecting the scoped SSH session, installed the same `92f0a35` artifact
+on the second physical Mac. Verified its SHA-256 before replacement, retained the
+previous executable for rollback, and atomically replaced the bound executable.
+Offline repair refreshed generated files; the binding hash and native auth-file
+size, modification time, and inode stayed unchanged. Source validation passed.
+An older open conversation was left running; verification used fresh processes
+rather than assuming its loaded instructions had changed.
+
+The actual launcher against Codex 0.153.0 returned 17 inherited user skills
+enabled, 23 enabled skills total, and no discovery errors through `skills/list`.
+A fresh authenticated read-only model conversation listed the inherited catalog
+separately from the assistant-owned capability inventory. Its only four shell
+operations were scope discovery, cwd reporting, capability inventory, and scoped
+recall. The first `name` query returned the current synthetic project name with
+no conflicts; no fallback lookup, skill-instruction reads, or assistant-source
+or project edits occurred. Native session and runtime state stayed machine-local.
+
+Both checks preserved source HEAD, a clean source worktree, and the empty project
+directory. The private pilot helper deliberately reported offline, and launch
+continued with visible pending sync. This does not establish GitHub credential
+access over SSH or replace the earlier local-Terminal publication evidence.
+Codex emitted hook-trust-bypass warnings as error-typed stream items; these were
+warnings for the intentionally configured launch mode, not failed operations.
+Private transcripts and inherited skill names remain outside this repository.
+
 ## Next checkpoints
 
-1. Finish inherited-catalog verification on the second Mac after reconnecting SSH.
-2. Improve consistently safe scratch-file handling and installation/update UX.
-3. Review remaining install/update/recovery and provenance gaps before release.
+1. Improve consistently safe scratch-file handling and installation/update UX.
+2. Review remaining install/update/recovery and provenance gaps before release.
+3. Exercise longer-running lifecycle failures and define the initial release's
+   supported boundaries before migrating a live personal assistant.

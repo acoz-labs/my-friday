@@ -364,9 +364,12 @@ mise exec -- bin/ci
 
 The hands-on pilot now covers authenticated Codex/Pi conversations, cross-harness
 memory/capability reuse, and authenticated HTTPS source sync between disposable
-installations. See the pilot record for exact scope and limitations. A second
-physical-machine trial and remaining installation/recovery checks are still
-needed; these observations are not a production-release declaration.
+installations. A second physical Mac has exercised import, device attribution,
+offline continuity, local-Terminal authenticated publication, and fresh-session
+recall with inherited native skills. GitHub credential access over SSH remains
+unavailable in that pilot; native local-Terminal access worked. See the pilot
+record for exact scope and limitations. Remaining installation/recovery checks
+are still needed; these observations are not a production-release declaration.
 
 Local verification on 2026-09-06: `mise exec -- bin/ci` passed, including native
 acceptance primitives, `go vet`, race-enabled tests, and Darwin builds. An
