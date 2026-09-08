@@ -79,12 +79,16 @@ func runPortable(args []string, input io.Reader, out, errout io.Writer) (err err
 	case "sync":
 		f := portableFlags("sync", errout)
 		root := f.String("repository", os.Getenv("MY_FRIDAY_ASSISTANT_ROOT"), "Assistant repository")
+		device := f.String("device", os.Getenv("MY_FRIDAY_DEVICE_ID"), "Registered checkpoint device; omitted means unknown")
 		if err := parseFlags(f, args[1:]); err != nil {
 			return err
 		}
 		s, err := portable.Open(*root)
 		if err != nil {
 			return err
+		}
+		if *device != "" {
+			s = s.WithCheckpointObserver(portableAuthorship(*device, s.Agent.Name))
 		}
 		status, err := s.Sync(context.Background())
 		if err != nil {
@@ -218,6 +222,7 @@ func portableSetup(args []string, input io.Reader, out, errout io.Writer) error 
 			return err
 		}
 	}
+	s = s.WithCheckpointObserver(portable.Authorship{DeviceID: device, Actor: s.Agent.Name, Harness: "setup"})
 	if err = s.InitGit(context.Background()); err != nil {
 		return err
 	}
@@ -239,6 +244,20 @@ func portableSetup(args []string, input io.Reader, out, errout io.Writer) error 
 		}
 	}
 	return outputJSON(out, map[string]any{"assistant_id": s.Agent.ID, "repository": s.Root, "instance": instance.Root, "device_id": device, "launcher_installed": !*noLauncher, "default_harness": s.Agent.DefaultHarness, "next": "Authenticate each harness in its private instance home before first use."})
+}
+
+func portableAuthorship(device, actor string) portable.Authorship {
+	author := portable.Authorship{DeviceID: device, Actor: actor, Harness: os.Getenv("MY_FRIDAY_HARNESS")}
+	if author.Harness == "" {
+		author.Harness = "cli"
+	}
+	if value := os.Getenv("MY_FRIDAY_SESSION_ID"); value != "" {
+		author.SessionID = &value
+	}
+	if value := os.Getenv("PI_MODEL"); value != "" {
+		author.Model = &value
+	}
+	return author
 }
 
 func portableMemory(args []string, input io.Reader, out, errout io.Writer) error {
@@ -269,16 +288,8 @@ func portableMemory(args []string, input io.Reader, out, errout io.Writer) error
 		*scopeID = s.Agent.ID
 	}
 	now := time.Now().UTC().Format(time.RFC3339Nano)
-	author := portable.Authorship{DeviceID: *device, Actor: s.Agent.Name, Harness: os.Getenv("MY_FRIDAY_HARNESS")}
-	if author.Harness == "" {
-		author.Harness = "cli"
-	}
-	if value := os.Getenv("MY_FRIDAY_SESSION_ID"); value != "" {
-		author.SessionID = &value
-	}
-	if value := os.Getenv("PI_MODEL"); value != "" {
-		author.Model = &value
-	}
+	author := portableAuthorship(*device, s.Agent.Name)
+	s = s.WithCheckpointObserver(author)
 	switch args[0] {
 	case "scopes":
 		scopes, err := s.Scopes()
@@ -392,7 +403,7 @@ func portableAgent(args []string, input io.Reader, out, errout io.Writer) error 
 		return printPortableHelp("agent", out)
 	}
 	switch args[0] {
-	case "launch", "doctor", "repair", "inspect", "validate", "capabilities", "check", "capability-guide", "capability-template":
+	case "launch", "doctor", "repair", "inspect", "validate", "changes", "capabilities", "check", "capability-guide", "capability-template":
 	default:
 		return errors.New("unknown agent command; use my-friday help agent")
 	}
@@ -403,6 +414,7 @@ func portableAgent(args []string, input io.Reader, out, errout io.Writer) error 
 	capabilityID := f.String("capability", "", "Capability ID")
 	description := f.String("description", "", "Capability template description")
 	launcher := f.String("launcher", "", "For repair: recreate a missing launcher at this explicit path")
+	changePath := f.String("path", "", "For changes: exact repository-relative file path; omitted lists all")
 	parseArgs := args[1:]
 	var forwarded []string
 	if args[0] == "launch" {
@@ -420,6 +432,7 @@ func portableAgent(args []string, input io.Reader, out, errout io.Writer) error 
 		if err != nil {
 			return err
 		}
+		s = s.WithCheckpointObserver(portable.Authorship{DeviceID: instance.DeviceID, Actor: s.Agent.Name, Harness: "launcher"})
 		status, err := s.Sync(context.Background())
 		if err != nil {
 			return err
@@ -516,6 +529,12 @@ func portableAgent(args []string, input io.Reader, out, errout io.Writer) error 
 		return err
 	}
 	switch args[0] {
+	case "changes":
+		changes, err := s.SourceChanges(*changePath)
+		if err != nil {
+			return err
+		}
+		return outputJSON(out, map[string]any{"changes": changes, "notice": "Checkpoint observations, not proof of authorship or successful commit. Incoming changes retain their original records. An empty result is not proof that a file never changed; older or external Git commits may have no record. Display time does not resolve concurrent changes; use Git history and memory supersession for decisions."})
 	case "inspect":
 		return outputJSON(out, s.Agent)
 	case "validate":
@@ -579,6 +598,11 @@ func portableHookContext(parent context.Context, args []string, input io.Reader,
 	}
 	raw, _ := json.Marshal(payload)
 	event := portable.Event{Version: 1, ID: eventID, Name: portable.NormalizeEvent(*harness, *native), AssistantID: s.Agent.ID, DeviceID: instance.DeviceID, SessionID: field("session_id"), RequestID: field("turn_id"), NativeEvent: *native, WorkingDirectory: field("cwd"), Payload: raw}
+	observer := portable.Authorship{DeviceID: instance.DeviceID, Actor: s.Agent.Name, Harness: *harness}
+	if event.SessionID != "" {
+		observer.SessionID = &event.SessionID
+	}
+	s = s.WithCheckpointObserver(observer)
 	contextParts := []string{}
 	warnings := []string{}
 	synchronize := func() {

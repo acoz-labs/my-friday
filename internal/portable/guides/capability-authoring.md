@@ -33,6 +33,16 @@ inspect that capability directory for its documentation before using it.
    and call `sync` to checkpoint any remaining source changes. Reuse it in a
    fresh conversation to verify discovery. Do not add it to the public toolkit.
 
+Local checkpoints automatically record changed source paths, before/after Git
+object IDs and modes, and the checkpointing device/session when available. Inspect
+them with `agent changes --path capabilities/<id>/instructions.md`. These are
+observations, not proof of original authorship or successful commit. Record why
+a procedure changed in memory with explicit supersession; provenance timestamps
+alone cannot choose between conflicting processes. Changes pulled from another
+machine retain their original records. Direct Git commits bypass this capture;
+older work is not retroactively attributed. Unbound `sync --repository PATH`
+records an unknown observer unless given `--device ID`.
+
 ```text
 capabilities/<id>/
   capability.json

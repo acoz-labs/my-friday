@@ -35,7 +35,8 @@ func TestProductionNetworkAndSubprocessBoundary(t *testing.T) {
 	}
 	// The portable runtime explicitly adds bounded harness, capability, and
 	// credential consumers. Preserve the legacy no-network boundary elsewhere.
-	portableImports := map[string]bool{"context": true, "embed": true, "flag": true, "time": true, "net/url": true, "github.com/acoz-labs/my-friday/internal/portable": true}
+	// Git source-change paths are slash-delimited independently of the host OS.
+	portableImports := map[string]bool{"context": true, "embed": true, "flag": true, "time": true, "net/url": true, "path": true, "github.com/acoz-labs/my-friday/internal/portable": true}
 	portableExec := map[string]string{
 		"cmd/my-friday/portable.go":  "Command",
 		"internal/portable/hooks.go": "CommandContext",

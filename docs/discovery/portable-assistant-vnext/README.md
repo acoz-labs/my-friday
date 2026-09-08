@@ -180,6 +180,13 @@ Committed records may reference a parent commit, but cannot embed their own
 resulting commit SHA because that creates a circular hash dependency. Local
 operation receipts can associate a completed change with its resulting commit.
 
+Implementation checkpoint (2026-09-08): the first slice records the local
+checkpoint observer, base commit and before/after Git object IDs/modes. It does
+not prove original authorship, fill historical gaps, or attach structured reasons
+and source references to source changes. Reasons remain in memory/journal
+records. See the current [source-change contract](../../portable-assistant.md#source-change-provenance)
+before relying on the richer target design above.
+
 ## Lifecycle subscriptions
 
 Register one My Friday adapter per harness installation. The adapter registers

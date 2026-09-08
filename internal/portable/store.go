@@ -48,9 +48,10 @@ type Source struct {
 	RecordedAt string `json:"recorded_at"`
 }
 type Store struct {
-	Root        string
-	Agent       Agent
-	gitSettings *SyncConfig
+	Root               string
+	Agent              Agent
+	gitSettings        *SyncConfig
+	checkpointObserver *Authorship
 }
 
 func NewID(prefix string) string {
@@ -345,6 +346,9 @@ func (s *Store) Validate() error {
 		return err
 	}
 	if err := s.validateGraph(records); err != nil {
+		return err
+	}
+	if _, err := s.SourceChanges(""); err != nil {
 		return err
 	}
 	caps, err := s.Capabilities()

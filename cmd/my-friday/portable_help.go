@@ -28,6 +28,7 @@ separate from this portable workflow; use agent commands for portable capabiliti
   repair                Rebuild generated files for --instance PATH; no network
   inspect               Print the agent identity
   validate              Validate agent source and memory structure
+  changes               List source checkpoint provenance; optional --path FILE
   capabilities          List private capabilities with directory/instruction paths
   capability-guide      Print the built-in capability design/format guide
   capability-template   Print a manifest; requires --capability <id>

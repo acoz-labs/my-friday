@@ -443,9 +443,48 @@ Private transcripts and inherited skill names remain outside this repository.
 
 1. Recovery and both native Terminal warning/interruption scenarios have passed;
    no repeat of these scenarios is currently required.
-2. Review remaining install/update/recovery and provenance gaps before release.
-3. Resolve or explicitly exclude the observed Codex app-server hook-trust gap
-   from the initial supported launch modes before migrating a live assistant.
+2. Follow the [initial-offering checklist](first-offering.md): source-checkpoint
+   provenance, stable-path rollout, and explicit release/private-import decisions.
+3. The initial support boundary now explicitly excludes the observed Codex
+   app-server automatic-hook trust gap; broader transport support is follow-up
+   work, not something the successful Terminal pilots prove.
+
+## Source-checkpoint provenance and upgrade rehearsal — 2026-09-08
+
+Added automatic append-only source-change observations at local My Friday
+checkpoints and read-only `agent changes` discovery. Records identify the bound
+checkpoint device/session, base commit and exact before/after Git object IDs and
+modes. They are explicitly observations, not proof of authorship or successful
+commit. Incoming history is not reattributed; unknown unbound devices remain
+unknown, and old/external Git commits are not backfilled. Process reasons and
+semantic supersession remain in memory rather than inferred from timestamps.
+
+Tests cover initial files, updates/deletion, executable modes, tab/newline paths,
+no-op and memory-only sync, explicit/environment/instance observer binding,
+independent cross-clone edits, identical anonymous edits, offline retry without
+duplicate observations, append-only refusal and rejection of invalid incoming
+records while preserving local HEAD. Full native `mise exec -- bin/ci` passed,
+including race tests, vet, native legacy acceptance primitives and Darwin builds.
+A Linux/AMD64 CLI cross-build also passed. The first CI run identified the legacy
+import allowlist's missing standard-library `path` entry; it was added only to
+the portable import allowance for canonical slash-delimited Git paths.
+
+A separate disposable black-box installation was created using the previous
+pilot executable, then atomically replaced at its original bound path with the
+new executable while retaining a byte-identical old binary. Doctor returned
+`installation.unhealthy`/exit 3 for the changed generated instructions, repair
+refreshed them, and doctor became healthy. The existing named launcher, from an
+unrelated project directory with a synthetic harness, captured the expected
+source-file observation with the original bound device and left source clean.
+A fake native-auth sentinel survived repair; no real authentication was copied
+or exercised. The old binary still validated source containing the new records,
+though old writers do not provide provenance coverage.
+
+The existing authenticated pilots and live personal-agent data were unchanged
+during this rehearsal. The next owner check should update the disposable pilot,
+start a fresh native conversation, make one useful documentation-only private
+capability correction, run its checks, and explain the resulting observation.
+Do not call that conversational checkpoint passed based on the synthetic harness.
 
 ## Recovery diagnostics and lifecycle failure boundaries — 2026-09-07
 

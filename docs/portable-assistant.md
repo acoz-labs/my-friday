@@ -109,7 +109,7 @@ agent/
   memory/sources/                # Concise evidence with originating device
   memory/events/YYYY/MM/         # Append-only journal entries
   provenance/devices/           # Stable device IDs and human-readable labels
-  provenance/changes/           # Reserved for richer source-change provenance
+  provenance/changes/           # Immutable local source-checkpoint observations
   capabilities/<capability-id>/ # Manifest, instructions, scripts, checks
   integrations/                 # Nonsecret configuration and secret references
   extensions/                   # Reserved user extension space
@@ -124,6 +124,55 @@ Source format 1 is explicit. Unknown versions fail instead of being guessed at.
 There is no version-upgrade engine yet. Generated instance instructions, hook
 registrations, and Codex config are regenerated at launch; do not customize those
 generated files. Native authentication files are not rewritten.
+
+## Source-change provenance
+
+Local My Friday Git checkpoints append schema-version-1 observations for changed
+files outside `memory/` and `provenance/`. This includes capabilities,
+instructions, integrations, extensions, and agent/sync configuration. Each
+observation records its base commit, time, exact relative paths, before/after Git
+object IDs and file modes, and a `checkpoint_observer` when a device is bound.
+Creation has no `before`; deletion has no `after`; renames are delete/add pairs.
+File contents, secrets, and raw transcripts are not duplicated in these records.
+This does not prevent sensitive content from being committed to Git itself.
+
+Setup and launcher checkpoints use their bound device. Native lifecycle
+checkpoints use the instance device, harness, and supplied native session ID;
+memory writes and explicit sync inside an agent use the launch environment.
+Outside a session, use `sync --repository PATH --device REGISTERED_ID` to supply
+the checkpoint device. With no device, the observer is explicitly `null`, not
+inferred from a hostname or Git author. Unknown supplied devices are rejected.
+Device labels remain in `provenance/devices/<device-id>.json`.
+
+```sh
+my-friday agent changes --repository /absolute/agent
+my-friday agent changes --repository /absolute/agent \
+  --path capabilities/example-capability/instructions.md
+```
+
+The command is read-only and filters by an exact repository-relative path. It
+returns matching whole observations, which may also contain other changed paths.
+No-op syncs and memory-only writes add no source observations. Incoming changes
+retain their original observations; pulling does not attribute them to the
+receiving machine. Offline checkpoints still commit observations locally. A
+retry of the same snapshot with the same observer reuses an existing observation;
+an attempt with changed files, base, or observer can append a new observation.
+
+These identify **where a checkpoint observed changes**, not verified authorship,
+successful publication, or proof that the attempted commit completed. A record
+can survive a failed commit. Git history establishes committed ancestry and the
+recorded object IDs identify versions; files committed externally or before this
+feature have no automatic retrospective attribution. Reconciliation merges may
+combine file changes without generating a new local authorship claim. Dates are
+display order, not precedence: explain process changes with memory's explicit
+supersession and journal reasons. This is an audit aid, not a tamper-proof log.
+
+Observations are strict JSON, limited to 4 MiB each, and append-only once committed.
+Invalid local records stop validation; invalid incoming records are not adopted.
+The previously reserved `provenance/changes/` directory now has this contract.
+Empty format-1 repositories need no migration, and no old work is backfilled.
+Older toolkit builds can still read the surrounding format but do not capture
+or validate these records; upgrade all writers for consistent coverage.
 
 ## Repair and executable updates
 
@@ -416,8 +465,9 @@ installations. A second physical Mac has exercised import, device attribution,
 offline continuity, local-Terminal authenticated publication, and fresh-session
 recall with inherited native skills. GitHub credential access over SSH remains
 unavailable in that pilot; native local-Terminal access worked. See the pilot
-record for exact scope and limitations. Remaining installation/recovery checks
-are still needed; these observations are not a production-release declaration.
+record for exact scope and limitations. The doctor/repair recovery roundtrip and
+both native Terminal warning/interruption scenarios have also passed. These
+observations are not a production-release declaration.
 
 Local verification on 2026-09-06: `mise exec -- bin/ci` passed, including native
 acceptance primitives, `go vet`, race-enabled tests, and Darwin builds. An
@@ -427,12 +477,19 @@ one-off killed legacy launcher helper (passed standalone and on the full rerun).
 That verification used disposable fixtures; it did not install a live agent,
 import private memory, bootstrap credentials, mutate services, or publish a release.
 
-Next milestones are live harness parity, richer configuration/capability machine
-provenance (currently only memory/source/journal authorship is stamped), source
-migrations, remote bootstrap, QMD retrieval evaluation, lifecycle completeness,
-and staged legacy import. User service integrations are outside the public-core
-roadmap. Legacy operational instructions and scripts must be reconciled
-before activation, not imported wholesale as current authority.
+The bounded initial offering targets the tested macOS/ARM64 Codex and Pi Terminal
+launch modes. Codex app-server remains outside that tested support boundary:
+the standalone probe discovered enabled hooks as untrusted and did not run them.
+Explicit memory reads working there do not establish automatic lifecycle parity.
+Pi's completion checkpoint also occurs after abort; it is not proof of task success
+and does not provide a normalized interruption subscription.
+
+See [the initial-offering checklist](testing/first-offering.md) for remaining
+rollout decisions and work, separated from follow-ups such as remote bootstrap,
+automatic updates/source migrations, QMD evaluation, and broader lifecycle support.
+User service integrations remain outside the public-core roadmap. Legacy
+operational instructions and scripts must be reconciled before activation, not
+imported wholesale as current authority.
 
 See [the hands-on pilot record](testing/portable-pilot.md) for user-experience
 checks, discovered defects, and the next retest. Automated passing checks alone

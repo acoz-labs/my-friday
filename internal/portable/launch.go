@@ -206,7 +206,13 @@ scripts and hook subscriptions. Before authoring a capability, read the built-in
 These commands work without a source checkout. Use --help for CLI discovery;
 do not inspect executable strings or search for a development checkout to learn
 the format. Use "agent check --capability ID" after changing
-one. Repository Git history is versioned; external effects require their own
+one. Local source checkpoints record the device and before/after Git versions.
+Use "agent changes --path capabilities/ID/instructions.md" (or omit --path) to
+inspect these observations. They identify the checkpointing machine, not proof
+of original authorship; pulled changes keep their original records. An empty
+result can mean older or externally committed work has no observation. Explain
+process changes using memory supersession and journal reasons, not timestamp
+ordering alone. Repository Git history is versioned; external effects require their own
 reconciliation. User corrections override older remembered user guidance within
 their actual scope. Native project instructions still apply to project work.
 `, s.Root, i.Binary))

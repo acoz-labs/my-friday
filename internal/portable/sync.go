@@ -97,7 +97,11 @@ func (s *Store) checkpoint(ctx context.Context) error {
 	if err := s.Validate(); err != nil {
 		return err
 	}
-	if _, err := s.git(ctx, "rev-parse", "--verify", "HEAD"); err == nil {
+	if err := s.validateCheckpointObserver(s.checkpointObserver); err != nil {
+		return err
+	}
+	base, headErr := s.git(ctx, "rev-parse", "--verify", "HEAD")
+	if headErr == nil {
 		if err := s.validateAppendOnly(ctx, "HEAD"); err != nil {
 			return err
 		}
@@ -111,6 +115,9 @@ func (s *Store) checkpoint(ctx context.Context) error {
 	}
 	if status == "" {
 		return nil
+	}
+	if err := s.captureSourceChanges(ctx, base); err != nil {
+		return err
 	}
 	_, err = s.git(ctx, "commit", "-m", "Record assistant changes")
 	return err
