@@ -441,11 +441,11 @@ Private transcripts and inherited skill names remain outside this repository.
 
 ## Next checkpoints
 
-1. Recovery and Codex interactive warning/interruption flows passed; collect Pi
-   interactive warning/interruption feedback (RPC checks already passed).
+1. Recovery and both native Terminal warning/interruption scenarios have passed;
+   no repeat of these scenarios is currently required.
 2. Review remaining install/update/recovery and provenance gaps before release.
-3. Check native interactive warning/interruption behavior and define the initial
-   release's supported boundaries before migrating a live personal assistant.
+3. Resolve or explicitly exclude the observed Codex app-server hook-trust gap
+   from the initial supported launch modes before migrating a live assistant.
 
 ## Recovery diagnostics and lifecycle failure boundaries — 2026-09-07
 
@@ -575,3 +575,22 @@ and subsequent recall for this Codex Terminal scenario. The supplied output does
 not establish how far the shell command ran before Escape or guarantee cleanup
 of every possible descendant. It does not close the separate app-server trust
 gap or Pi Terminal visual-feedback check. No implementation change was required.
+
+## Pi Terminal warning/interruption passed — 2026-09-08
+
+The owner ran the same marked request in Pi 0.85.1's Terminal interface. It
+displayed a separate warning for the deliberately failed subscription, then
+used scope discovery and scoped recall to answer with the current synthetic
+project name. The owner subsequently interrupted the test shell command; Pi
+displayed command-aborted and operation-aborted messages. A new request in the
+same session again discovered the scope and recalled the correct name, without
+resuming the interrupted command.
+
+Independent source inspection confirmed the same fixture checkpoint, a clean
+worktree, and successful validation. This closes Pi Terminal warning visibility,
+observed command abortion, and post-interruption recall for this scenario. The
+displayed rounded duration does not establish exact latency or prove cleanup of
+every descendant. No portable Pi interruption event is claimed; that adapter
+limitation and the Codex app-server trust finding remain as documented.
+Both Terminal scenarios now have hands-on evidence. No implementation or
+executable change was needed for this checkpoint; documentation diff checks pass.

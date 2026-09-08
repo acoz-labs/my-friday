@@ -352,8 +352,10 @@ launched app-server discovered enabled-but-untrusted hooks without dispatching t
 test subscriber. Correct explicit memory recall through that transport does not
 prove automatic checkpoint delivery. The normal Codex Terminal pilot did show
 the warning, run the interruption hook with bounded failure reporting, and recall
-successfully afterward. App-server lifecycle parity and Pi Terminal presentation
-remain unverified; Pi RPC notification/abort/recovery passed. See the pilot record.
+successfully afterward. Pi RPC and Terminal pilots also showed the warning,
+aborted the test command, and recalled correctly afterward. App-server lifecycle
+parity remains unverified. These are scoped scenarios, not universal cleanup or
+delivery guarantees; see the pilot record.
 
 ## Provider-neutral Git authentication
 
