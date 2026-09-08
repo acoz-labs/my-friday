@@ -482,3 +482,14 @@ No real private capability, production memory, native authentication, global
 skill settings, release, or source-format migration is part of these changes.
 Deadline handling does not preempt filesystem validation/copying, contain
 deliberately detached descendants, or undo external effects already performed.
+
+Built clean code commit `344f660` as SHA-256
+`0c48876738181dc01d73992bad0e67f447623398752aa7ddd2172b5a4ea44945`.
+An executable-level disposable smoke test created a new local-only installation,
+confirmed healthy diagnostics, moved one generated hook file to a retained
+backup, confirmed the specific finding without repair, repaired it, and confirmed
+healthy diagnostics again. Source repository bytes and binding bytes were
+unchanged throughout diagnosis/repair, and the restored hook matched its backup.
+A separate equally disposable fixture is left at the missing-hook stage for
+hands-on clarity testing. Neither fixture contains native credentials or real
+memory; existing authenticated pilots were not modified by this checkpoint.
