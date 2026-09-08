@@ -350,8 +350,10 @@ Native lifecycle support must be verified for the actual launch mode. In the
 Codex 0.153.4 pilot, `exec` dispatched the generated request hook, while a directly
 launched app-server discovered enabled-but-untrusted hooks without dispatching the
 test subscriber. Correct explicit memory recall through that transport does not
-prove automatic checkpoint delivery. App-server lifecycle parity and interactive
-warning/interruption presentation remain unverified; see the pilot record.
+prove automatic checkpoint delivery. The normal Codex Terminal pilot did show
+the warning, run the interruption hook with bounded failure reporting, and recall
+successfully afterward. App-server lifecycle parity and Pi Terminal presentation
+remain unverified; Pi RPC notification/abort/recovery passed. See the pilot record.
 
 ## Provider-neutral Git authentication
 

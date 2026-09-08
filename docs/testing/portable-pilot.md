@@ -441,8 +441,8 @@ Private transcripts and inherited skill names remain outside this repository.
 
 ## Next checkpoints
 
-1. Diagnose/repair/diagnose hands-on flow passed; continue with native interactive
-   warning/interruption feedback.
+1. Recovery and Codex interactive warning/interruption flows passed; collect Pi
+   interactive warning/interruption feedback (RPC checks already passed).
 2. Review remaining install/update/recovery and provenance gaps before release.
 3. Check native interactive warning/interruption behavior and define the initial
    release's supported boundaries before migrating a live personal assistant.
@@ -554,3 +554,24 @@ After the recorded fixture addition, source HEAD/worktree remained unchanged,
 source validation passed, and the test project directory stayed empty. A scoped
 Terminal launcher is prepared for the owner's warning/ Escape-interruption check.
 The second physical Mac and the separate recovery-only fixture are unchanged.
+
+## Codex Terminal warning/interruption passed — 2026-09-08
+
+The owner ran the marked request in the normal Codex Terminal interface. A
+separate Hook warning identified the intentionally failed request subscriber;
+the agent then used scope discovery and scoped recall to report the current
+synthetic project name, without repairing the fixture or writing memory.
+
+During the next test request, Escape interrupted the conversation. The UI showed
+the deliberately slow interruption subscriber exceeding the lifecycle deadline,
+then accepted a follow-up request. The agent recalled the same current project
+name without resuming the interrupted command. Independent inspection confirmed
+the interruption receipt was `failed` with an unsuccessful handler, rather than
+falsely completed. Source HEAD remained at the fixture checkpoint, the worktree
+was clean, and source validation passed.
+
+This closes warning visibility, interruption-hook delivery/deadline reporting,
+and subsequent recall for this Codex Terminal scenario. The supplied output does
+not establish how far the shell command ran before Escape or guarantee cleanup
+of every possible descendant. It does not close the separate app-server trust
+gap or Pi Terminal visual-feedback check. No implementation change was required.
