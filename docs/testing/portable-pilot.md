@@ -406,6 +406,12 @@ passed. The lexical regression remains green. The existing second-Mac SSH
 connection expired during this follow-up; its installed executable still needs
 the inheritance update and a fresh native-catalog check after reconnecting.
 
+Built clean commit `92f0a35` as SHA-256
+`027db6d2c2ba969e1739d95e7433a5daa3aaec6fff442ad601caab801be03a95`.
+The first pilot's bound executable is updated with its previous build retained
+for rollback. Offline repair refreshed its generated instructions without
+changing source, binding, authentication, or sessions.
+
 ## Next checkpoints
 
 1. Finish inherited-catalog verification on the second Mac after reconnecting SSH.
