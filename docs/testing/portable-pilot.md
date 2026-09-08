@@ -441,7 +441,44 @@ Private transcripts and inherited skill names remain outside this repository.
 
 ## Next checkpoints
 
-1. Improve consistently safe scratch-file handling and installation/update UX.
+1. Hands-on diagnosis/repair usability with a disposable damaged projection.
 2. Review remaining install/update/recovery and provenance gaps before release.
-3. Exercise longer-running lifecycle failures and define the initial release's
-   supported boundaries before migrating a live personal assistant.
+3. Check native interactive warning/interruption behavior and define the initial
+   release's supported boundaries before migrating a live personal assistant.
+
+## Recovery diagnostics and lifecycle failure boundaries — 2026-09-07
+
+Added `agent doctor`: read-only source validation, own-Git-directory presence,
+bound-executable metadata, selected-harness PATH lookup, projection path safety,
+and byte comparison against the running toolkit's generated files. Findings
+include remedies and return a nonzero status. Generated-file remedies contain an
+explicit quoted repair command. Doctor never executes the harness or a helper,
+reads authentication, initializes native state, or performs synchronization.
+Missing/corrupt binding remains a separate refusal, not an inferred new identity.
+Launcher placement, native version compatibility, credentials, remote access,
+and active-session context are explicitly outside its healthy-result guarantee.
+
+Tests reproduce and correct two lifecycle defects: trailing output/null accepted
+as a successful handler response, and a cancelled warn-policy dispatch marked
+completed after proceeding through the remaining chain. Adapters now surface
+warn-policy failures and synchronization attention, including Pi completion UI
+notifications. The Pi request callback preserves available memory context when
+also reporting a subscription error. Native callbacks share an internal deadline
+shorter than their configured harness timeout, propagated through sync and
+subscribers; ordinary Git/helper process groups are cancelled as well.
+
+Regression coverage includes malformed output, warn/stop ordering, cancellation
+and replay refusal, no delayed effect from a cancelled ordinary Git child,
+Codex/Pi warning response shapes, completion sync warnings, doctor/repair/doctor
+round trips, missing Git metadata, inherited resource discovery, and a native Pi
+callback invoked with a synthetic hook executable. Generated guidance now prefers
+stdin for memory drafts and private temporary directories for scratch files.
+This guidance is not a sandbox or an automatic secret/scratch-file filter.
+
+Full native CI passed after narrowly allowing doctor's read-only `LookPath` in
+the legacy subprocess-boundary test. Race-enabled portable/CLI tests with native
+Codex/Pi checks and a Linux/AMD64 CLI cross-build also passed for the candidate.
+No real private capability, production memory, native authentication, global
+skill settings, release, or source-format migration is part of these changes.
+Deadline handling does not preempt filesystem validation/copying, contain
+deliberately detached descendants, or undo external effects already performed.

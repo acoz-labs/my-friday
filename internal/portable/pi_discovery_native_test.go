@@ -88,3 +88,63 @@ console.log('PASS native Pi skill inheritance and lifecycle extension discovery'
 		t.Fatalf("native settings changed: %v", err)
 	}
 }
+
+// Invoke the generated callback with a synthetic hook executable. This verifies
+// warning/context delivery without a model, credentials or real subscriptions.
+func TestNativePiHookWarningDelivery(t *testing.T) {
+	pkg := os.Getenv("FRIDAY_TEST_PI_PACKAGE")
+	if pkg == "" {
+		t.Skip("set FRIDAY_TEST_PI_PACKAGE to an installed Pi package directory")
+	}
+	if !filepath.IsAbs(pkg) {
+		t.Fatal("FRIDAY_TEST_PI_PACKAGE must be absolute")
+	}
+	s := fixtureStore(t)
+	binary := filepath.Join(t.TempDir(), "hook-fixture")
+	script := "#!/bin/sh\nwhile IFS= read -r line; do :; done\nprintf '%s' '{\"warnings\":[\"fixture warning\"],\"error\":\"fixture chain stopped\",\"additional_context\":\"fixture memory remains available\"}'\n"
+	if err := os.WriteFile(binary, []byte(script), 0700); err != nil {
+		t.Fatal(err)
+	}
+	i, err := Bind(s, filepath.Join(t.TempDir(), "instance"), "pi-pilot", binary, "device-laptop")
+	if err != nil {
+		t.Fatal(err)
+	}
+	plan, err := i.Plan(s, "pi", t.TempDir(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	program := `
+const {pathToFileURL} = await import('node:url');
+const {join} = await import('node:path');
+const {DefaultResourceLoader} = await import(pathToFileURL(join(process.argv[1],'dist/core/resource-loader.js')));
+const {SettingsManager} = await import(pathToFileURL(join(process.argv[1],'dist/core/settings-manager.js')));
+const state = process.env.PI_CODING_AGENT_DIR;
+const settings = SettingsManager.create(process.cwd(),state);
+settings.setProjectTrusted(true);
+const loader = new DefaultResourceLoader({cwd:process.cwd(),agentDir:state,settingsManager:settings});
+await loader.reload();
+const loaded = loader.getExtensions();
+if (loaded.errors.length) throw Error('Extension load failed');
+const extension = loaded.extensions.find(e=>e.handlers.has('before_agent_start'));
+if (!extension) throw Error('My Friday callback missing');
+const warnings = [];
+const ctx = {cwd:process.cwd(),sessionManager:{getSessionId:()=> 'synthetic-session'},ui:{notify:(message,level)=>warnings.push([message,level])}};
+const handlers = extension.handlers.get('before_agent_start');
+if (handlers.length !== 1) throw Error('Unexpected callback count');
+const result = await handlers[0]({prompt:'synthetic request'},ctx);
+if (warnings.length !== 2 || warnings[0][0] !== 'fixture warning' || warnings[1][0] !== 'fixture chain stopped' || warnings.some(w=>w[1] !== 'warning')) throw Error('Warnings not delivered');
+if (result?.message?.content !== 'fixture memory remains available') throw Error('Failure discarded available memory context');
+console.log('PASS native Pi warning and context delivery');
+`
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "node", "--input-type=module", "-e", program, pkg)
+	cmd.Dir, cmd.Env = plan.Directory, plan.Environment
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("native callback failed: %v\n%s", err, output)
+	}
+	if !strings.Contains(string(output), "PASS native Pi warning") {
+		t.Fatal("missing native callback result")
+	}
+}

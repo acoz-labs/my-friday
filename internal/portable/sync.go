@@ -35,6 +35,7 @@ func cleanGitEnvironment() []string {
 func (s *Store) git(ctx context.Context, args ...string) (string, error) {
 	cmd := exec.CommandContext(ctx, "git", append(s.gitArguments(), args...)...)
 	cmd.Env = cleanGitEnvironment()
+	configureCommandCancellation(cmd)
 	out, err := cmd.Output()
 	if err != nil {
 		return "", fmt.Errorf("assistant Git operation %s failed: %w", args[0], err)
@@ -147,9 +148,15 @@ func (s *Store) Sync(parent context.Context) (SyncStatus, error) {
 		if err := s.checkpoint(ctx); err != nil {
 			return err
 		}
-		result.Head, _ = s.git(ctx, "rev-parse", "HEAD")
+		result.Head, err = s.git(ctx, "rev-parse", "HEAD")
+		if err != nil {
+			return err
+		}
 		remote, err := s.git(ctx, "remote", "get-url", "origin")
 		if err != nil {
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
 			result.State = "local-only"
 			return nil
 		}

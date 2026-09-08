@@ -24,6 +24,7 @@ separate from this portable workflow; use agent commands for portable capabiliti
 `,
 	"agent": `Usage: my-friday agent <command> [options]
   launch                Start the configured harness, preserving project cwd
+  doctor                Read-only installation checks for --instance PATH
   repair                Rebuild generated files for --instance PATH; no network
   inspect               Print the agent identity
   validate              Validate agent source and memory structure
@@ -36,6 +37,8 @@ Most commands accept --repository PATH (or MY_FRIDAY_ASSISTANT_ROOT).
 The guide and template need no repository, installation, or source checkout.
 Repair preserves credentials/sessions and the binding; optional --launcher PATH
 creates a missing launcher only. It does not replace or relocate the executable.
+Doctor compares generated files with the running toolkit and checks the selected
+harness on PATH. It does not test authentication/network or change files.
 Use my-friday help agent launch for launcher help; a launcher's --help is
 forwarded to its selected harness. Use <command> --help for options.
 `,

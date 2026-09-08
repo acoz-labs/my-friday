@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func fixtureCapability(t *testing.T, s *Store, id string, subscriptions []Subscription, script string) {
@@ -23,6 +24,61 @@ func fixtureCapability(t *testing.T, s *Store, id string, subscriptions []Subscr
 	}
 	if err := writeNewJSON(filepath.Join(root, "capability.json"), Capability{Version: 1, ID: id, Description: "Synthetic test capability", Subscriptions: subscriptions}); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestHookRejectsTrailingOutput(t *testing.T) {
+	for _, output := range []string{`{"additional_context":"ok"} {}`, `{"additional_context":"ok"} garbage`, `null`} {
+		t.Run(output, func(t *testing.T) {
+			s := fixtureStore(t)
+			fixtureCapability(t, s, "capability-example", []Subscription{{ID: "handler", Event: "request.received", Command: []string{"sh", "scripts/run.sh"}}}, "#!/bin/sh\nprintf '%s' '"+output+"'\n")
+			r, err := s.Dispatch(context.Background(), Event{Version: 1, ID: "event-invalid-output", Name: "request.received", AssistantID: s.Agent.ID, DeviceID: "device-laptop"})
+			if err != nil || len(r.Handlers) != 1 || r.Handlers[0].Success || len(r.Context) != 0 {
+				t.Fatalf("invalid output accepted: %+v %v", r, err)
+			}
+		})
+	}
+}
+
+func TestHookCancellationStopsChainAndRefusesReplay(t *testing.T) {
+	s := fixtureStore(t)
+	fixtureCapability(t, s, "capability-example", []Subscription{
+		{ID: "slow", Event: "request.received", Command: []string{"sh", "scripts/run.sh", "slow"}, Failure: "warn"},
+		{ID: "later", Event: "request.received", Command: []string{"sh", "scripts/run.sh", "later"}, After: []string{"slow"}},
+	}, "#!/bin/sh\nif [ \"$1\" = slow ]; then sleep 30; fi\nprintf '%s\\n' \"$1\" >> \"$MY_FRIDAY_ASSISTANT_ROOT/effects\"\n")
+	event := Event{Version: 1, ID: "event-cancelled", Name: "request.received", AssistantID: s.Agent.ID, DeviceID: "device-laptop"}
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+	r, err := s.Dispatch(ctx, event)
+	if err == nil || len(r.Handlers) != 1 || r.Handlers[0].Success {
+		t.Fatalf("cancelled event claimed completion or continued chain: %+v %v", r, err)
+	}
+	if _, err := os.Stat(filepath.Join(s.Root, "effects")); !os.IsNotExist(err) {
+		t.Fatal("cancelled chain executed later effects")
+	}
+	if _, err := s.Dispatch(context.Background(), event); err == nil {
+		t.Fatal("cancelled event allowed replay")
+	}
+}
+
+func TestHookWarnContinuesAndStopDoesNot(t *testing.T) {
+	for _, failure := range []string{"warn", "stop"} {
+		t.Run(failure, func(t *testing.T) {
+			s := fixtureStore(t)
+			fixtureCapability(t, s, "capability-example", []Subscription{
+				{ID: "first", Event: "request.received", Command: []string{"sh", "scripts/run.sh", "first"}, Failure: failure},
+				{ID: "second", Event: "request.received", Command: []string{"sh", "scripts/run.sh", "second"}, After: []string{"first"}},
+			}, "#!/bin/sh\n[ \"$1\" = first ] && exit 1\nprintf '{\"additional_context\":\"continued\"}'\n")
+			event := Event{Version: 1, ID: "event-chain", Name: "request.received", AssistantID: s.Agent.ID, DeviceID: "device-laptop"}
+			r, err := s.Dispatch(context.Background(), event)
+			if failure == "warn" {
+				if err != nil || len(r.Handlers) != 2 || r.Handlers[0].Success || !r.Handlers[1].Success {
+					t.Fatalf("warn chain: %+v %v", r, err)
+				}
+			} else if err == nil || len(r.Handlers) != 1 {
+				t.Fatalf("stop chain: %+v %v", r, err)
+			}
+		})
 	}
 }
 

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"os/exec"
@@ -239,6 +240,10 @@ func (s *Store) Dispatch(ctx context.Context, event Event) (DispatchResult, erro
 		return result, err
 	}
 	for _, h := range handlers {
+		if err := ctx.Err(); err != nil {
+			_ = writeLocalJSON(receipt, map[string]any{"event_id": event.ID, "state": "failed", "handlers": result.Handlers})
+			return result, errors.New("lifecycle deadline or cancellation stopped the subscription chain; inspect its receipt before retrying")
+		}
 		var root string
 		cleanup := func() {}
 		err := s.withLock(func() error {
@@ -264,6 +269,10 @@ func (s *Store) Dispatch(ctx context.Context, event Event) (DispatchResult, erro
 			result.Context = append(result.Context, output)
 		}
 		result.Handlers = append(result.Handlers, hr)
+		if ctx.Err() != nil {
+			_ = writeLocalJSON(receipt, map[string]any{"event_id": event.ID, "state": "failed", "handlers": result.Handlers})
+			return result, errors.New("lifecycle deadline or cancellation stopped the subscription chain; inspect its receipt before retrying")
+		}
 		if runErr != nil && h.Failure == "stop" {
 			_ = writeLocalJSON(receipt, map[string]any{"event_id": event.ID, "state": "failed", "handlers": result.Handlers})
 			return result, fmt.Errorf("required lifecycle handler failed: %s", hr.ID)
@@ -375,14 +384,7 @@ func runHandler(ctx context.Context, root string, s *Store, device string, args 
 	cmd.Stdin = bytes.NewReader(payload)
 	output := &boundedOutput{Limit: 16385}
 	cmd.Stdout = output
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
-	cmd.Cancel = func() error {
-		if cmd.Process == nil {
-			return nil
-		}
-		return syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
-	}
-	cmd.WaitDelay = time.Second
+	configureCommandCancellation(cmd)
 	if err := cmd.Run(); err != nil {
 		return "", err
 	}
@@ -395,7 +397,7 @@ func runHandler(ctx context.Context, root string, s *Store, device string, args 
 	if strings.TrimSpace(output.String()) == "" {
 		return "", nil
 	}
-	var response struct {
+	var response *struct {
 		Context string `json:"additional_context"`
 	}
 	decoder := json.NewDecoder(bytes.NewReader(output.Bytes()))
@@ -403,5 +405,24 @@ func runHandler(ctx context.Context, root string, s *Store, device string, args 
 	if err := decoder.Decode(&response); err != nil {
 		return "", err
 	}
+	if response == nil {
+		return "", errors.New("hook response must be a JSON object")
+	}
+	if err := decoder.Decode(new(any)); err != io.EOF {
+		return "", errors.New("hook response must contain exactly one JSON object")
+	}
 	return response.Context, nil
+}
+
+// Cancel the ordinary process group as well as the direct child. This does not
+// contain descendants that deliberately detach into another process group.
+func configureCommandCancellation(cmd *exec.Cmd) {
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	cmd.Cancel = func() error {
+		if cmd.Process == nil {
+			return nil
+		}
+		return syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
+	}
+	cmd.WaitDelay = time.Second
 }

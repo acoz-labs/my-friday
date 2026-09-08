@@ -40,6 +40,8 @@ func TestProductionNetworkAndSubprocessBoundary(t *testing.T) {
 		"cmd/my-friday/portable.go":  "Command",
 		"internal/portable/hooks.go": "CommandContext",
 		"internal/portable/sync.go":  "CommandContext",
+		// Doctor resolves the selected harness but never executes it.
+		"internal/portable/doctor.go": "LookPath",
 	}
 	err := filepath.WalkDir(root, func(path string, entry os.DirEntry, walkErr error) error {
 		if walkErr != nil {

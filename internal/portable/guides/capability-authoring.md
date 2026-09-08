@@ -92,6 +92,10 @@ instructions, code, or durable memory. Helpers should resolve sibling resources
 relative to their own file. The assistant's cwd is the user's working project,
 not its memory repository. For a manual workspace-inspection capability, keep
 that cwd when invoking its script; do not cd into the capability first.
+Prefer memory write --input - for draft revisions. If files are needed, use a
+fresh private temporary directory (mktemp -d), outside both project and assistant
+source, and clean up only your own artifacts. Automatic synchronization does not
+filter scratch files or secrets out of the versioned repository.
 Outside a launched session, use the installed executable and explicit
 --repository / --device options. Missing required bindings should produce clear
 errors, not guesses at a user's home directory or source checkout.
@@ -102,8 +106,12 @@ Add subscriptions only when the user intends automatic execution. Each object
 has id, event, command (argv array), optional after (dependency IDs), optional
 timeout_seconds (0 = 10 seconds; maximum 120), and failure (warn or stop).
 Dependency IDs are local subscription IDs or capability-id/subscription-id and
-must subscribe to the same event; cycles are rejected. Harness deadlines can
-be shorter than an individual subscription timeout.
+must subscribe to the same event; cycles are rejected. A native hook has a shared
+15-second budget for sync and all subscribers (one second for Codex ending/interrupt
+events), which can be shorter than an individual subscription timeout. Cancellation
+stops remaining subscribers and refuses automatic replay; it does not undo effects.
+Keep hooks short. Ordinary process-group descendants are cancelled, but deliberately
+detached processes are not contained.
 
 Common events include session.started, request.received, request.completed,
 tool.before, tool.after, context.compacting, and context.compacted. Native
@@ -118,8 +126,9 @@ workspace operation from working_directory explicitly. Handlers receive
 MY_FRIDAY_ASSISTANT_ROOT, MY_FRIDAY_ASSISTANT_ID, MY_FRIDAY_BIN, and
 MY_FRIDAY_DEVICE_ID. Nested lifecycle dispatch is refused.
 
-An empty stdout is accepted; otherwise return JSON with additional_context as a
-string (maximum total output 16 KiB). failure: stop stops the subscription chain,
+An empty stdout is accepted; otherwise return one JSON object with optional
+additional_context as a string (maximum total output 16 KiB). Trailing text/JSON
+and null are rejected. Warn failures remain visible; failure: stop stops the subscription chain,
 not necessarily the harness action. Retries are not globally exactly-once; design
 external effects to reconcile interrupted operations. Do not write credentials or
 raw transcripts into capability source, memory, logs, or returned context.

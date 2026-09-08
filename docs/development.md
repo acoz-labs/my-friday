@@ -41,6 +41,11 @@ extension using disposable native state. It checks settings remain byte-identica
 no model, authentication, or lifecycle handler is executed. It does not install
 dependencies or prove every possible native discovery source.
 
+The same opt-in variable also enables `TestNativePiHookWarningDelivery`. That
+test invokes the generated request callback with a synthetic executable, verifying
+UI warnings and retained memory context after a subscriber error. It makes no
+model request and runs no private subscription.
+
 When host-local language execution is supported, commit exact versions in a
 root `mise.toml` and install them with:
 

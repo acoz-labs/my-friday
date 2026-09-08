@@ -10,8 +10,10 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/acoz-labs/my-friday/internal/portable"
@@ -388,7 +390,7 @@ func portableAgent(args []string, input io.Reader, out, errout io.Writer) error 
 		return printPortableHelp("agent", out)
 	}
 	switch args[0] {
-	case "launch", "repair", "inspect", "validate", "capabilities", "check", "capability-guide", "capability-template":
+	case "launch", "doctor", "repair", "inspect", "validate", "capabilities", "check", "capability-guide", "capability-template":
 	default:
 		return errors.New("unknown agent command; use my-friday help agent")
 	}
@@ -452,6 +454,20 @@ func portableAgent(args []string, input io.Reader, out, errout io.Writer) error 
 	}
 	if f.NArg() != 0 {
 		return errors.New("unexpected agent arguments")
+	}
+	if args[0] == "doctor" {
+		instance, s, err := portable.LoadInstance(*state)
+		if err != nil {
+			return fmt.Errorf("cannot diagnose instance binding: %w; preserve the instance and inspect binding.json before recreating anything", err)
+		}
+		report := instance.Doctor(s, *harness)
+		if err := outputJSON(out, report); err != nil {
+			return err
+		}
+		if !report.Healthy {
+			return errors.New("installation needs attention; see doctor checks and remedies")
+		}
+		return nil
 	}
 	if args[0] == "repair" {
 		instance, s, err := portable.LoadInstance(*state)
@@ -523,6 +539,12 @@ func portableAgent(args []string, input io.Reader, out, errout io.Writer) error 
 }
 
 func portableHook(args []string, input io.Reader, out, errout io.Writer) error {
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer cancel()
+	return portableHookContext(ctx, args, input, out, errout)
+}
+
+func portableHookContext(parent context.Context, args []string, input io.Reader, out, errout io.Writer) error {
 	f := portableFlags("hook", errout)
 	state := f.String("instance", "", "Instance directory")
 	harness := f.String("harness", "", "Harness")
@@ -537,6 +559,12 @@ func portableHook(args []string, input io.Reader, out, errout io.Writer) error {
 	if *harness != "codex" && *harness != "pi" {
 		return errors.New("invalid hook harness")
 	}
+	budget := 15 * time.Second
+	if *harness == "codex" && (*native == "SessionEnd" || *native == "Interrupt") {
+		budget = time.Second
+	}
+	ctx, cancel := context.WithTimeout(parent, budget)
+	defer cancel()
 	var payload map[string]json.RawMessage
 	decoder := json.NewDecoder(io.LimitReader(input, 1<<20))
 	if err = decoder.Decode(&payload); err != nil && err != io.EOF {
@@ -550,12 +578,13 @@ func portableHook(args []string, input io.Reader, out, errout io.Writer) error {
 	raw, _ := json.Marshal(payload)
 	event := portable.Event{Version: 1, ID: eventID, Name: portable.NormalizeEvent(*harness, *native), AssistantID: s.Agent.ID, DeviceID: instance.DeviceID, SessionID: field("session_id"), RequestID: field("turn_id"), NativeEvent: *native, WorkingDirectory: field("cwd"), Payload: raw}
 	contextParts := []string{}
+	warnings := []string{}
 	synchronize := func() {
-		status, syncErr := s.Sync(context.Background())
+		status, syncErr := s.Sync(ctx)
 		if syncErr != nil {
-			contextParts = append(contextParts, "My Friday synchronization needs attention; local memory is preserved.")
+			warnings = append(warnings, "My Friday synchronization needs attention; local memory is preserved.")
 		} else if status.State != "synced" && status.State != "local-only" {
-			contextParts = append(contextParts, "My Friday sync status: "+status.State+". "+status.Detail)
+			warnings = append(warnings, "My Friday sync status: "+status.State+". "+status.Detail)
 		}
 	}
 	if event.Name == "session.started" || event.Name == "request.received" {
@@ -569,8 +598,13 @@ func portableHook(args []string, input io.Reader, out, errout io.Writer) error {
 		data, _ := json.Marshal(packet)
 		contextParts = append(contextParts, string(data))
 	}
-	dispatched, dispatchErr := s.Dispatch(context.Background(), event)
+	dispatched, dispatchErr := s.Dispatch(ctx, event)
 	contextParts = append(contextParts, dispatched.Context...)
+	for _, handler := range dispatched.Handlers {
+		if !handler.Success {
+			warnings = append(warnings, "My Friday subscription failed: "+handler.ID+". "+handler.Detail)
+		}
+	}
 	if dispatchErr != nil {
 		contextParts = append(contextParts, "My Friday subscription requires attention: "+dispatchErr.Error())
 	}
@@ -578,15 +612,19 @@ func portableHook(args []string, input io.Reader, out, errout io.Writer) error {
 		// Include changes made by completion subscribers in this checkpoint.
 		synchronize()
 	}
+	contextParts = append(contextParts, warnings...)
 	text := strings.Join(contextParts, "\n")
 	if *harness == "pi" {
-		response := map[string]any{"additional_context": text}
+		response := map[string]any{"additional_context": text, "warnings": warnings}
 		if dispatchErr != nil {
 			response["error"] = dispatchErr.Error()
 		}
 		return outputJSON(out, response)
 	}
 	response := map[string]any{}
+	if len(warnings) > 0 {
+		response["systemMessage"] = strings.Join(warnings, "\n")
+	}
 	switch *native {
 	case "SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse", "PreCompact", "PostCompact", "SubagentStart":
 		if text != "" {

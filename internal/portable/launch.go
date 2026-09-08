@@ -113,19 +113,39 @@ func (i Instance) Project(s *Store) error {
 	if err := i.preflightProjection(s); err != nil {
 		return err
 	}
+	files, err := i.projection(s)
+	if err != nil {
+		return err
+	}
+	for _, dir := range projectionDirectories {
+		if err := os.MkdirAll(filepath.Join(i.Root, dir), 0700); err != nil {
+			return err
+		}
+	}
+	for _, name := range projectionFiles {
+		if err := replaceProjectionFile(filepath.Join(i.Root, name), files[name]); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// Render without side effects so diagnostics and repair compare the same output.
+func (i Instance) projection(s *Store) (map[string][]byte, error) {
+	files := map[string][]byte{}
 	instructions := []string{"# My Friday assistant\n\nAssistant repository: " + s.Root + "\n"}
 	for _, name := range []string{"identity.md", "operating.md"} {
 		path := filepath.Join(s.Root, "instructions", name)
 		info, err := os.Lstat(path)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		if !info.Mode().IsRegular() {
-			return errors.New("instructions must be regular files")
+			return nil, errors.New("instructions must be regular files")
 		}
 		b, err := os.ReadFile(path)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		instructions = append(instructions, string(b))
 	}
@@ -161,13 +181,19 @@ discovered scope with a simpler or empty query; if evidence remains unavailable,
 say it was not found rather than inventing a name. Journal only verified outcomes;
 record retrieval failures honestly instead of recording a guess as success.
 
-To learn, use "memory write --input FILE" with a memory revision document. Use
+To learn, use "memory write --input -" with a revision document on stdin, or
+"memory write --input FILE" with a prepared document. Use
 "memory template" for its shape; the writer stamps device, actor, harness, and
 time. Preserve record/scope IDs and name predecessor revision IDs in supersedes.
 Use "memory source --summary TEXT --kind user-direction" to record concise
 evidence, and "memory event --summary TEXT --kind task-completed" for chronology.
 Record meaningful outcomes and reusable learning before finishing the task.
 One-task exceptions use task scope. Never copy secrets or raw transcripts.
+Temporary drafts and test fixtures belong in a fresh private temporary directory,
+not the user's project or synchronized assistant source. Prefer stdin for memory
+writes. Use mktemp -d when files are needed, keep track of that exact directory,
+and clean up only files you created. Do not commit scratch files, copied native
+state, credentials, or raw session logs during automatic source synchronization.
 
 Use "agent capabilities" to list portable capabilities. The runtime inventory
 includes directory and instruction_files paths; read the selected capability's
@@ -186,18 +212,10 @@ their actual scope. Native project instructions still apply to project work.
 `, s.Root, i.Binary))
 	text := strings.Join(instructions, "\n\n")
 	for _, harness := range []string{"codex", "pi"} {
-		root := filepath.Join(i.Root, harness)
-		if err := os.MkdirAll(root, 0700); err != nil {
-			return err
-		}
-		if err := replaceProjectionFile(filepath.Join(root, "AGENTS.md"), []byte(text)); err != nil {
-			return err
-		}
+		files[harness+"/AGENTS.md"] = []byte(text)
 	}
 	config := "approval_policy = \"never\"\nsandbox_mode = \"danger-full-access\"\n[features]\nhooks = true\n"
-	if err := replaceProjectionFile(filepath.Join(i.Root, "codex/config.toml"), []byte(config)); err != nil {
-		return err
-	}
+	files["codex/config.toml"] = []byte(config)
 	hooks := map[string]any{}
 	for _, event := range CodexEvents {
 		timeout := 20
@@ -209,15 +227,9 @@ their actual scope. Native project instructions still apply to project work.
 	}
 	hookJSON, err := json.MarshalIndent(map[string]any{"hooks": hooks}, "", "  ")
 	if err != nil {
-		return err
+		return nil, err
 	}
-	if err := replaceProjectionFile(filepath.Join(i.Root, "codex/hooks.json"), append(hookJSON, '\n')); err != nil {
-		return err
-	}
-	dir := filepath.Join(i.Root, "pi/extensions")
-	if err := os.MkdirAll(dir, 0700); err != nil {
-		return err
-	}
+	files["codex/hooks.json"] = append(hookJSON, '\n')
 	binary, _ := json.Marshal(i.Binary)
 	instance, _ := json.Marshal(i.Root)
 	extension := `import { execFile } from "node:child_process";
@@ -235,7 +247,8 @@ export default function (pi: any) {
         });
         child.stdin?.end(input);
       });
-      if (result.error) { ctx.ui?.notify?.(result.error, "warning"); return; }
+      for (const warning of result.warnings || []) { ctx.ui?.notify?.(warning, "warning"); }
+      if (result.error) { ctx.ui?.notify?.(result.error, "warning"); }
       if (name === "before_agent_start" && result.additional_context) {
         return { message: { customType: "my-friday-memory", content: result.additional_context, display: false } };
       }
@@ -245,7 +258,8 @@ export default function (pi: any) {
 `
 	extension = strings.ReplaceAll(extension, "BINARY", string(binary))
 	extension = strings.ReplaceAll(extension, "INSTANCE", string(instance))
-	return replaceProjectionFile(filepath.Join(dir, "my-friday.ts"), []byte(extension))
+	files["pi/extensions/my-friday.ts"] = []byte(extension)
+	return files, nil
 }
 
 func (i Instance) Plan(s *Store, harness, cwd string, args []string) (LaunchPlan, error) {

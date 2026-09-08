@@ -127,6 +127,21 @@ generated files. Native authentication files are not rewritten.
 
 ## Repair and executable updates
 
+Start with read-only local diagnostics:
+
+```sh
+my-friday agent doctor --instance /absolute/instance
+my-friday agent doctor --instance /absolute/instance --harness pi
+```
+
+Doctor validates source, checks for its own Git directory, the bound binary and selected harness on PATH,
+and compares generated files with the **running** toolkit and current source
+instructions. It prints JSON checks and remedies; findings return a nonzero exit
+status. It never repairs, launches a harness, runs Git/helpers, reads credentials,
+or contacts a remote. A healthy result is structural, not a login, version
+compatibility, current-context, or service-access test. A corrupt/missing binding
+must be inspected separately; doctor will not guess a replacement identity.
+
 For an instance with a valid binding and valid source, rebuild its generated
 configuration without starting a harness or synchronizing:
 
@@ -170,6 +185,11 @@ my-friday memory scopes
 my-friday memory history --record record-example
 my-friday memory event --kind task-completed --summary 'Completed the requested work'
 ```
+
+`memory write --input -` accepts a revision from stdin without creating a draft
+file. When temporary files are necessary, use a fresh private temporary directory
+outside both project and assistant source, and clean up only your own artifacts.
+Automatic sync checkpoints source changes; it is not a secret/scratch-file filter.
 
 The [runtime schema](../internal/portable/schemas/memory-revision.schema.json)
 defines claims. The writer stamps machine, actor, harness, session when available,
@@ -294,12 +314,24 @@ Hooks have full user access and may execute external effects. Never subscribe an
 irreversible action that assumes exactly-once delivery.
 
 `after` orders handlers by local subscription ID or `capability/subscription`.
-Timeouts terminate the process group. `failure: stop` stops the subscription chain;
+Timeouts terminate ordinary process-group descendants, including Git helpers.
+Deliberately detached descendants are not contained. Each native hook shares a
+15-second budget across sync and subscribers, with one second for Codex
+SessionEnd/Interrupt, leaving time to report before the configured 20/3-second
+native deadlines. A shorter subscription timeout still applies. Cancellation
+stops the remaining chain regardless of its warn/stop policy and leaves a receipt
+that refuses automatic replay. Filesystem validation/copying is not preemptible;
+this is not a hard real-time guarantee or rollback of completed external effects.
+Warn failures are surfaced through Codex warnings/context and Pi UI notifications;
+available request memory context is retained even if another subscriber fails.
+`failure: stop` stops the subscription chain;
 it does **not** promise to block the harness's action. Failed/interrupted receipts
 require inspection before replay. Deduplication is local and applies only when
 the same event ID is supplied. Native events without stable IDs cannot be
 deduplicated across redelivery. Receipts retain status, not raw event payloads or
-returned context. The trusted consumer remains responsible for its own logs.
+returned context. Handler output must be empty or one JSON object with optional
+additional_context; trailing JSON/text and null are rejected. The trusted consumer
+remains responsible for its own logs.
 
 The Codex projection registers the twelve native events listed in `launch.go`.
 The Pi projection currently subscribes to thirteen session/agent/turn/tool/model

@@ -181,6 +181,49 @@ func TestPortableRepairPreservesSourceBindingAndNativeState(t *testing.T) {
 	}
 }
 
+func TestPortableDoctorRepairRoundTrip(t *testing.T) {
+	base := t.TempDir()
+	root, state := filepath.Join(base, "agent"), filepath.Join(base, "state")
+	var out bytes.Buffer
+	if err := runPortable([]string{"setup", "--repository", root, "--state", state, "--name", "friday", "--device-label", "Fixture", "--no-launcher"}, strings.NewReader(""), &out, &out); err != nil {
+		t.Fatal(err)
+	}
+	bin := filepath.Join(base, "bin")
+	if err := os.Mkdir(bin, 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(bin, "codex"), []byte("#!/bin/sh\nexit 99\n"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin) // Doctor must not run Git or the harness.
+	doctor := func(want bool) {
+		t.Helper()
+		out.Reset()
+		err := runPortable([]string{"agent", "doctor", "--instance", state}, strings.NewReader(""), &out, &out)
+		var report portable.DoctorReport
+		if decodeErr := json.Unmarshal(out.Bytes(), &report); decodeErr != nil {
+			t.Fatal(decodeErr, out.String())
+		}
+		if report.Healthy != want || (err == nil) != want {
+			t.Fatalf("doctor: %+v %v", report, err)
+		}
+	}
+	doctor(true)
+	missing := filepath.Join(state, "codex/hooks.json")
+	if err := os.Remove(missing); err != nil {
+		t.Fatal(err)
+	}
+	doctor(false)
+	if _, err := os.Lstat(missing); !os.IsNotExist(err) {
+		t.Fatal("doctor repaired missing file")
+	}
+	out.Reset()
+	if err := runPortable([]string{"agent", "repair", "--instance", state}, strings.NewReader(""), &out, &out); err != nil {
+		t.Fatal(err)
+	}
+	doctor(true)
+}
+
 func TestPortableScopeDiscoveryCLI(t *testing.T) {
 	s, err := portable.Create(filepath.Join(t.TempDir(), "agent"), "friday", "pi", "device-example", "Example")
 	if err != nil {
