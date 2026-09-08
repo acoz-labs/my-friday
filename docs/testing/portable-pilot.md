@@ -526,6 +526,31 @@ alias-embedded generated hooks still require one refresh. The live pilot was
 not repaired or overwritten during diagnosis. A fresh owner-run read-only
 session plus post-session doctor remains the final native regression check.
 
+### Native-settings and parent-alias owner retest passed — 2026-09-08
+
+The owner ran the prepared upgrade/repair wrapper, completed a fresh read-only
+Codex Terminal conversation, and exited so its post-session checks could run.
+Inspection confirmed all four saved doctor reports (before/after, physical/alias
+instance paths) were healthy. The in-session diagnostic was also healthy and
+accurately described its structural-only scope. Repair's pre-launch guards
+verified native config and binding hashes were unchanged before continuing.
+
+The agent used three read-only commands: doctor, scope discovery, then a relevant
+scoped recall. It returned the correct current synthetic project name with no
+fallback query, journal, repair or source edit. Assistant HEAD and clean worktree
+were unchanged, and the working project remained empty. Native project-trust
+state remained present; a normal native UI-state counter advanced without
+triggering diagnostic drift. Native runtime/session writes are expected and are
+distinct from assistant-source or working-project changes.
+
+The installed pilot executable matches the verified `72807f6` artifact and its
+previous executable remains available for rollback. This closes the identified
+native-settings/alias regression; no repeat of this or the provenance task is
+needed. Artifact publication and a durable private-agent installation/import
+remain separate rollout decisions, not consequences of a passing pilot. Private
+transcripts, device labels, artifact paths and capability contents remain outside
+the public repository.
+
 ## Recovery diagnostics and lifecycle failure boundaries — 2026-09-07
 
 Added `agent doctor`: read-only source validation, own-Git-directory presence,

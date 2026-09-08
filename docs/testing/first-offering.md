@@ -36,23 +36,27 @@ without a regression or new behavior that needs them.
   and a real doctor → repair → healthy roundtrip.
 - Visible warning, interrupted command, and successful next read-only recall in
   both Codex and Pi Terminal. Transport-specific limitations remain explicit.
+- Source-checkpoint provenance passed the owner-driven Codex Terminal check on
+  2026-09-08: useful private documentation edit, checks, journal/local checkpoint,
+  accurate device label and observation/authorship distinction.
+- Authenticated executable upgrade and fresh conversation, followed by the
+  native-settings/parent-alias regression on 2026-09-08. Doctor stayed healthy
+  before, during and after the native session; both parent path spellings agreed.
+  Native settings survived repair, normal UI state was retained, and read-only
+  recall left assistant source and the empty working project unchanged.
 
 ## Remaining before initial rollout
 
-1. Source-checkpoint provenance passed the owner-driven Codex Terminal check on
-   2026-09-08: useful private documentation edit, checks, journal/local checkpoint,
-   accurate device label and observation/authorship distinction. No repeat needed.
-2. The authenticated executable upgrade and fresh conversation also passed, but
-   post-session doctor exposed native-config and alias-path false alarms. Retest
-   the fixes with one fresh read-only native session: preserve settings across
-   launch/repair and keep doctor healthy afterward. Automated preservation and
-   alias regression tests cover the implementation. Production placement must
-   use durable paths, never a `/tmp` pilot binding.
-3. Choose and explicitly authorize the artifact/release route. Feature-branch
+The currently identified hands-on regression checkpoints are closed. No repeat
+is required without a new finding. This does not imply every future capability,
+transport, harness version or live-data import has been qualified.
+
+1. Choose and explicitly authorize the artifact/release route. Feature-branch
    pushes are development checkpoints, not releases. The repository still has
    legacy release automation; its existence does not make this rebuild released.
-4. Separately choose Alfred's private source and instance locations and stage a
-   reviewed import. Keep the existing agent recoverable. Establish identity and
+2. Separately choose Alfred's private source and instance locations and stage a
+   reviewed import. Use durable executable/source/instance paths, never `/tmp`
+   pilot bindings. Keep the existing agent recoverable. Establish identity and
    memory first, then validate one private capability at a time. No service
    credentials, GitHub role policy, or email workflow enters this public toolkit.
 
