@@ -351,6 +351,9 @@ func (s *Store) Validate() error {
 	if _, err := s.SourceChanges(""); err != nil {
 		return err
 	}
+	if _, err := s.ReferenceLibraries(); err != nil {
+		return err
+	}
 	caps, err := s.Capabilities()
 	if err != nil {
 		return err

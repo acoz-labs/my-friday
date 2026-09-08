@@ -61,6 +61,11 @@ func TestLaunchKeepsProjectAndSeparatesHarnessHomes(t *testing.T) {
 	if !strings.Contains(env, "MY_FRIDAY_BIN="+instance.Binary) {
 		t.Fatal("portable CLI path unavailable to capabilities")
 	}
+	for _, expected := range []string{"reference list", "reference-only", "agent capability-rationale", "not import procedures 1:1"} {
+		if !strings.Contains(string(instructions), expected) {
+			t.Errorf("missing reference-building guidance: %s", expected)
+		}
+	}
 	for _, expected := range []string{"Native user-wide and project-local skills", "host/project dependencies", "verify its required tools are available"} {
 		if !strings.Contains(string(instructions), expected) {
 			t.Errorf("missing inheritance guidance: %s", expected)

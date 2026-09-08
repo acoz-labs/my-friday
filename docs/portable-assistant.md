@@ -104,6 +104,7 @@ Native instruction priority, project trust, and administrator policy still apply
 agent/
   agent.json                    # Format version, stable identity, default harness
   .my-friday/sync.json           # Optional generic Git author/helper configuration
+  .my-friday/references/         # Optional portable reference-library descriptors
   instructions/                 # Identity and operating instructions
   memory/records/<record-id>/    # Immutable JSON claim revisions
   memory/sources/                # Concise evidence with originating device
@@ -116,6 +117,7 @@ agent/
   .my-friday/local/              # Git-ignored hook execution receipts
 instance/
   binding.json                  # Absolute source/binary paths and device binding
+  references/                   # Local external-directory bindings; not source Git
   codex/                        # Generated instructions/config/hooks; native auth/state
   pi/                           # Generated instructions/extension; native auth/state
 ```
@@ -131,6 +133,10 @@ files are not rewritten. Instance parent aliases are resolved to a canonical
 absolute path so equivalent paths do not generate different hook registrations.
 
 ## Source-change provenance
+
+Linked historical memory and resources are separate from active memory and
+capabilities. See [reference-aware capability building](reference-libraries.md)
+for `reference add/list/bind/search/read` and the private rationale workflow.
 
 Local My Friday Git checkpoints append schema-version-1 observations for changed
 files outside `memory/` and `provenance/`. This includes capabilities,

@@ -551,6 +551,47 @@ remain separate rollout decisions, not consequences of a passing pilot. Private
 transcripts, device labels, artifact paths and capability contents remain outside
 the public repository.
 
+## Reference-aware capability-building foundation — 2026-09-08
+
+The owner approved a provider-neutral reference-library feature before rebuilding
+private capabilities: current requirements first, historical resources as evidence
+to sharpen implementation and tests, not automatic adoption of old instructions.
+The first implementation adds `reference add/list/bind/search/read`, portable
+descriptors, instance-local directory bindings, separate reference-only packets,
+file hashes with stale-read detection, and an embedded private capability-rationale
+template. Linking never loads external instructions into the generated projection,
+normal memory recall or capability inventory. Directory content is not executed,
+copied, fetched or promoted by the reference commands.
+
+Regression tests cover registry validation and older-source compatibility,
+cross-clone descriptor sync without external resources, separate instance bindings,
+stale descriptor/file rejection, overlap/symlink/special-content boundaries,
+bounded/truncated search, non-execution of old scripts, and separation from active
+memory, capabilities and generated instructions. A CLI test exercises registration,
+binding, search, hashed read, rationale/help discovery and validation. Full native
+`mise exec -- bin/ci` passed, including race-enabled tests and native legacy
+acceptance primitives; a Linux/AMD64 CLI cross-build passed too. The additional
+CLI file has the same narrowly scoped portable import allowance, not new network
+or subprocess authority.
+
+A separate disposable CLI smoke used a synthetic external directory, a fresh
+assistant and no native authentication. Registration checkpointed only the portable
+descriptor, binding stayed outside source, lexical discovery returned the three
+expected resource files, a read returned source hashes/reference-only labeling,
+and source validation passed. The synthetic corpus includes useful prior failures,
+imperative obsolete operating rules and an old script with a detectable write if
+executed. It lives outside the public checkout and has not been linked to the
+authenticated pilot yet. No real legacy resource has been fetched or imported.
+
+Next: an owner-driven capability-building conversation must consult these resources,
+retain useful failure cases as tests, reject obsolete workflow instructions,
+implement a portable private capability and document source hashes/reuse decisions.
+Then check read-only discovery/rationale reuse in the other harness. Automated
+loading boundaries do not prove behavioral resistance to retrieved instructions,
+and linked resources already present in native host discovery remain a separate
+source of inherited behavior. See [the reference contract](../reference-libraries.md)
+for retrieval limits and the distinction between content identity and retention.
+
 ## Recovery diagnostics and lifecycle failure boundaries — 2026-09-07
 
 Added `agent doctor`: read-only source validation, own-Git-directory presence,

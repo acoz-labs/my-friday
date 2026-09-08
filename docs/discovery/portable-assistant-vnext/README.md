@@ -302,6 +302,16 @@ routes, including browser profiles.
 
 ## Migration without inherited behavioral restrictions
 
+Owner refinement (2026-09-08): prioritize linking old memory/resources as
+reference libraries for capability building, rather than importing their
+instructions 1:1. Today's ask comes first; historical evidence sharpens the
+requirements, implementation and regression tests. Record reuse, adaptation,
+rejection and uncertainty with source hashes in a private capability rationale.
+The [implemented reference-library contract](../../reference-libraries.md)
+separates portable descriptions, machine-local directory bindings and explicit
+reference-only reads from active memory/capability loading. Facts, preferences
+and commitments still require the distinct reconciliation process below.
+
 Import first into an isolated candidate repository and preserve the original
 source. Record source commit and record IDs, original provenance when known,
 and import device/time separately. Missing original authorship remains unknown.

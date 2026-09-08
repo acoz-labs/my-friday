@@ -4,7 +4,7 @@
 
 The current direction is one private, Git-backed agent repository with portable
 memory and capabilities, plus machine-local Codex/Pi projections. The new
-`setup`, `agent`, `memory`, `sync`, and `hook` commands are an
+`setup`, `agent`, `memory`, `reference`, `sync`, and `hook` commands are an
 initial implementation, not a production release or migration of existing agents.
 Running the binary without arguments opens the new setup wizard.
 
@@ -16,6 +16,10 @@ Start with the [portable assistant guide](docs/portable-assistant.md) for the
 implemented contract, examples, validation, and remaining work. The
 [rebuild design](docs/discovery/portable-assistant-vnext/README.md) describes the
 broader target; not every design feature is implemented yet.
+
+[Reference libraries](docs/reference-libraries.md) let the capability-building
+workflow consult prior memory, documentation and code without automatically
+adopting their instructions or activating their tools.
 
 ## Earlier pilot — retained for compatibility
 

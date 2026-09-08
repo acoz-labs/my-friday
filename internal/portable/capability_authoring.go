@@ -11,6 +11,9 @@ import (
 //go:embed guides/capability-authoring.md
 var CapabilityGuide string
 
+//go:embed guides/capability-rationale.md
+var CapabilityRationale string
+
 func CapabilityTemplate(id, description string) (Capability, error) {
 	if !identifier.MatchString(id) {
 		return Capability{}, errors.New("--capability must be 3-128 lowercase letters, digits, or hyphens, starting with a letter; see agent capability-guide")

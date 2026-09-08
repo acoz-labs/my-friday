@@ -60,12 +60,12 @@ func runPortable(args []string, input io.Reader, out, errout io.Writer) (err err
 		}
 		// Delegate option help to the command's own flag definitions.
 		if (len(args) == 2 && (args[1] == "setup" || args[1] == "sync" || args[1] == "hook")) ||
-			(len(args) == 3 && (args[1] == "agent" || args[1] == "memory")) {
+			(len(args) == 3 && (args[1] == "agent" || args[1] == "memory" || args[1] == "reference")) {
 			return runPortable(append(append([]string{}, args[1:]...), "--help"), input, out, out)
 		}
 		return printPortableHelp(topic, out)
 	}
-	if (args[0] == "agent" || args[0] == "memory") && (len(args) == 1 || (len(args) == 2 && helpFlag(args[1]))) {
+	if (args[0] == "agent" || args[0] == "memory" || args[0] == "reference") && (len(args) == 1 || (len(args) == 2 && helpFlag(args[1]))) {
 		return printPortableHelp(args[0], out)
 	}
 	if (len(args) == 2 || len(args) == 3) && helpFlag(args[len(args)-1]) {
@@ -76,6 +76,8 @@ func runPortable(args []string, input io.Reader, out, errout io.Writer) (err err
 		return portableSetup(args[1:], input, out, errout)
 	case "memory":
 		return portableMemory(args[1:], input, out, errout)
+	case "reference":
+		return portableReference(args[1:], out, errout)
 	case "sync":
 		f := portableFlags("sync", errout)
 		root := f.String("repository", os.Getenv("MY_FRIDAY_ASSISTANT_ROOT"), "Assistant repository")
@@ -100,7 +102,7 @@ func runPortable(args []string, input io.Reader, out, errout io.Writer) (err err
 	case "hook":
 		return portableHook(args[1:], input, out, errout)
 	default:
-		return errors.New("usage: my-friday <setup|agent|memory|sync|hook>")
+		return errors.New("usage: my-friday <setup|agent|memory|reference|sync|hook>")
 	}
 }
 
@@ -403,7 +405,7 @@ func portableAgent(args []string, input io.Reader, out, errout io.Writer) error 
 		return printPortableHelp("agent", out)
 	}
 	switch args[0] {
-	case "launch", "doctor", "repair", "inspect", "validate", "changes", "capabilities", "check", "capability-guide", "capability-template":
+	case "launch", "doctor", "repair", "inspect", "validate", "changes", "capabilities", "check", "capability-guide", "capability-template", "capability-rationale":
 	default:
 		return errors.New("unknown agent command; use my-friday help agent")
 	}
@@ -512,6 +514,10 @@ func portableAgent(args []string, input io.Reader, out, errout io.Writer) error 
 	}
 	if args[0] == "capability-guide" {
 		_, err := io.WriteString(out, portable.CapabilityGuide)
+		return err
+	}
+	if args[0] == "capability-rationale" {
+		_, err := io.WriteString(out, portable.CapabilityRationale)
 		return err
 	}
 	if args[0] == "capability-template" {

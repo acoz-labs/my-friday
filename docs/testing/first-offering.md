@@ -47,18 +47,23 @@ without a regression or new behavior that needs them.
 
 ## Remaining before initial rollout
 
-The currently identified hands-on regression checkpoints are closed. No repeat
-is required without a new finding. This does not imply every future capability,
-transport, harness version or live-data import has been qualified.
+The earlier identified hands-on regression checkpoints are closed. No repeat
+is required without a new finding. The owner subsequently approved a new
+reference-aware capability-building feature; its behavioral pilot is a new
+checkpoint, not a repeat of those earlier tests.
 
 1. Choose and explicitly authorize the artifact/release route. Feature-branch
    pushes are development checkpoints, not releases. The repository still has
    legacy release automation; its existence does not make this rebuild released.
-2. Separately choose Alfred's private source and instance locations and stage a
-   reviewed import. Use durable executable/source/instance paths, never `/tmp`
-   pilot bindings. Keep the existing agent recoverable. Establish identity and
-   memory first, then validate one private capability at a time. No service
-   credentials, GitHub role policy, or email workflow enters this public toolkit.
+2. Exercise reference-aware building with synthetic prior experience plus obsolete
+   instructions, first for capability creation and then cross-harness read-only
+   discovery. Keep exact source hashes and a rationale; preserve lessons without
+   adopting the old operating rules. See [reference libraries](../reference-libraries.md).
+3. Separately choose Alfred's durable private source/instance locations. Link its
+   old resources as reference libraries and rebuild one capability at a time;
+   do not bulk-promote historical instructions. Facts/preferences/commitments
+   still need separate reconciliation. Keep the old agent recoverable. No service
+   credentials, GitHub role policy or email workflow enters this public toolkit.
 
 ## Follow-ups, not prerequisites for this bounded first use
 

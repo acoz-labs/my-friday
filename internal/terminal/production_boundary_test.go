@@ -63,7 +63,7 @@ func TestProductionNetworkAndSubprocessBoundary(t *testing.T) {
 			return err
 		}
 		rel = filepath.ToSlash(rel)
-		portableSource := strings.HasPrefix(rel, "internal/portable/") || rel == "cmd/my-friday/portable.go"
+		portableSource := strings.HasPrefix(rel, "internal/portable/") || rel == "cmd/my-friday/portable.go" || rel == "cmd/my-friday/portable_references.go"
 		for _, spec := range file.Imports {
 			name, _ := strconv.Unquote(spec.Path.Value)
 			if !allowedImports[name] && !(portableSource && portableImports[name]) {

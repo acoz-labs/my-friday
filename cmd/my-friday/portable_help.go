@@ -12,6 +12,7 @@ Usage: my-friday <command> [options]
   setup       Create/import a private agent and machine-local instance
   agent       Inspect, validate, launch, and design private capabilities
   memory      Recall, revise, and explain persistent memory
+  reference   Link and consult external reference-only libraries
   sync        Checkpoint and synchronize an explicit agent repository
   hook        Dispatch a harness lifecycle event (adapter entrypoint)
   help        Show help, optionally for a command
@@ -32,6 +33,7 @@ separate from this portable workflow; use agent commands for portable capabiliti
   capabilities          List private capabilities with directory/instruction paths
   capability-guide      Print the built-in capability design/format guide
   capability-template   Print a manifest; requires --capability <id>
+  capability-rationale  Print a private design/evidence rationale template
   check                 Validate and execute checks; requires --capability <id>
 
 Most commands accept --repository PATH (or MY_FRIDAY_ASSISTANT_ROOT).
@@ -57,6 +59,25 @@ MY_FRIDAY_DEVICE_ID for writes. Select --scope-kind and --scope-id for scoped
 recall. Discover IDs with memory scopes; do not infer them from cwd. Scope counts
 include stored history/future records, not just currently effective guidance.
 Corrections append a new revision with explicit supersedes IDs.
+Use <command> --help for options.
+`,
+	"reference": `Usage: my-friday reference <command> [options]
+  add       Register a portable descriptor: --library ID --title TEXT
+            --description TEXT --purpose TEXT; then checkpoint source
+  list      List descriptions, not local availability or current guidance
+  bind      Bind/rebind --library ID to an external local directory with --path
+  search    Discover files in --library ID with --query TEXT (empty lists files)
+  read      Read --library ID --path FILE; use --sha256 HASH from search
+
+Add/list use --repository PATH or --instance PATH (or their launch environment).
+Bind/search/read require an instance; bindings do not travel in source Git.
+Existing local directories and Git working trees are read as text. Nothing is
+cloned, fetched, executed, or automatically promoted into memory/capabilities.
+Search results contain paths and hashes, not source text. A changed descriptor
+requires review and an explicit rebind. Read requires canonical relative paths;
+hidden paths, node_modules, symlinks, binary and oversized files are excluded.
+Use agent capability-guide for reference-aware building, and
+agent capability-rationale to document reuse/adaptation/rejection with evidence.
 Use <command> --help for options.
 `,
 	"agent launch": `Usage: my-friday agent launch --instance PATH [--harness codex|pi] [harness arguments]
