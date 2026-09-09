@@ -6,7 +6,10 @@ The current direction is one private, Git-backed agent repository with portable
 memory and capabilities, plus machine-local Codex/Pi projections. The new
 `setup`, `agent`, `memory`, `reference`, `sync`, and `hook` commands are an
 initial implementation, not a production release or migration of existing agents.
-Running the binary without arguments opens the new setup wizard.
+Running `my-friday` without arguments opens the [management menu](docs/management-menu.md):
+create/import an agent, manage an installation, check health, repair, and update
+the toolkit. It works in a plain terminal or over SSH; explicit commands remain
+available for automation.
 It now includes [guided source hosting](docs/source-setup.md): private GitHub
 creation/connection, explicit setup and ongoing-sync accounts, and resumable
 configuration with `my-friday setup --instance PATH`.

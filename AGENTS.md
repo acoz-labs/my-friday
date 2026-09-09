@@ -40,6 +40,11 @@ SDLC policies do not govern this development workflow.
   and supply source-sync credentials for an explicitly selected account. It must
   not provide general GitHub actions, role policy, password-manager access or
   private service capabilities, and must not prescribe an account by default.
+  Owner clarification, 2026-09-09: a reusable management menu and toolkit updates
+  are shared installation infrastructure. The updater may read the public
+  official release metadata/assets without account credentials and install an
+  explicitly approved compatible artifact. This does not authorize publishing
+  a release or silently upgrading every installed agent.
 - Development authority does not authorize production release,
   live-data migration, or removal of an existing installation.
 - Do not reintroduce mandatory confirmations for the private assistant's

@@ -6,9 +6,32 @@ import (
 )
 
 var portableHelpTopics = map[string]string{
+	"menu": `Usage: my-friday [menu]
+Open the reusable management menu: create/import agents, inspect existing
+installations, configure source sync, change harness, run doctor/repair, and
+manage toolkit versions. Choose 0 for Back/Exit or :back at a prompt.
+Opening the menu does not change files or launch an agent.
+`,
+	"version": `Usage: my-friday version (or --version)
+Print build revision, platform and portable-management compatibility as JSON.
+`,
+	"toolkit": `Usage: my-friday toolkit [command] [options]
+No command opens the update menu: latest release, approved local artifact,
+or retained toolkit. Updates preserve per-agent version pins.
+  check-instance --instance PATH    Read-only source compatibility check
+  use --instance PATH [--launcher PATH]
+                                    Adopt the running toolkit with backups
+  manifest --binary PATH --release TAG
+                                    Print approved release metadata; no publishing
+Close active agent sessions before adoption. An omitted launcher stays unchanged.
+Use the management menu for guided adoption, repair and rollback.
+`,
 	"": `My Friday — portable assistant toolkit
 
 Usage: my-friday <command> [options]
+  menu        Open agent management (also the default with no arguments)
+  toolkit     Open updates; use/check-instance/manifest support explicit tooling
+  version     Print toolkit build and portable compatibility metadata
   setup       Create/import an agent, or resume remote setup with --instance PATH
   agent       Inspect, validate, launch, and design private capabilities
   memory      Recall, revise, and explain persistent memory
@@ -19,7 +42,7 @@ Usage: my-friday <command> [options]
 
 Start capability authoring with: my-friday agent capability-guide
 Print a manifest with: my-friday agent capability-template --capability <id>
-Running without arguments opens setup. Commands accept --help / -h.
+Running without arguments opens the management menu. Commands accept --help / -h.
 Resume source hosting/account setup with: my-friday setup --instance PATH
 Legacy init, assistant, capability, codex, validate, and recover commands remain
 separate from this portable workflow; use agent commands for portable capabilities.

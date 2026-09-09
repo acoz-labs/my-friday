@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bufio"
 	"context"
 	"encoding/json"
 	"errors"
@@ -48,10 +47,17 @@ func runPortable(args []string, input io.Reader, out, errout io.Writer) (err err
 		}
 	}()
 	if len(args) == 0 {
-		args = []string{"setup"}
+		home, err := realHome()
+		if err != nil {
+			return err
+		}
+		return managementMenu(home, input, out)
 	}
 	if len(args) == 1 && helpFlag(args[0]) {
 		return printPortableHelp("", out)
+	}
+	if len(args) == 2 && helpFlag(args[1]) && (args[0] == "menu" || args[0] == "toolkit" || args[0] == "version") {
+		return printPortableHelp(args[0], out)
 	}
 	if args[0] == "help" {
 		topic := strings.Join(args[1:], " ")
@@ -72,6 +78,22 @@ func runPortable(args []string, input io.Reader, out, errout io.Writer) (err err
 		errout = out
 	}
 	switch args[0] {
+	case "menu":
+		if len(args) != 1 {
+			return errors.New("usage: my-friday menu")
+		}
+		home, err := realHome()
+		if err != nil {
+			return err
+		}
+		return managementMenu(home, input, out)
+	case "version", "--version":
+		if len(args) != 1 {
+			return errors.New("usage: my-friday version")
+		}
+		return outputJSON(out, toolkitVersion())
+	case "toolkit":
+		return portableToolkit(args[1:], input, out, errout)
 	case "setup":
 		return portableSetup(args[1:], input, out, errout)
 	case "source-credential":
@@ -130,14 +152,14 @@ func portableSetup(args []string, input io.Reader, out, errout io.Writer) error 
 		if err != nil {
 			return err
 		}
-		return remoteSetupWizard(bufio.NewReader(input), out, i, s)
+		return remoteSetupWizard(promptReader(input), out, i, s)
 	}
 	interactive := *root == "" && *existing == ""
 	home, err := realHome()
 	if err != nil {
 		return err
 	}
-	reader := bufio.NewReader(input)
+	reader := promptReader(input)
 	ask := func(prompt, def string) (string, error) {
 		fmt.Fprintf(out, "%s [%s]: ", prompt, def)
 		line, err := reader.ReadString('\n')

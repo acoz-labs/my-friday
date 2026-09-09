@@ -42,6 +42,7 @@ func TestProductionNetworkAndSubprocessBoundary(t *testing.T) {
 		"internal/portable/hooks.go":         "CommandContext",
 		"internal/portable/sync.go":          "CommandContext",
 		"internal/portable/source_github.go": "CommandContext",
+		"cmd/my-friday/portable_toolkit.go":  "CommandContext",
 		// Doctor resolves the selected harness but never executes it.
 		"internal/portable/doctor.go": "LookPath",
 	}
@@ -64,10 +65,12 @@ func TestProductionNetworkAndSubprocessBoundary(t *testing.T) {
 			return err
 		}
 		rel = filepath.ToSlash(rel)
-		portableSource := strings.HasPrefix(rel, "internal/portable/") || rel == "cmd/my-friday/portable.go" || rel == "cmd/my-friday/portable_references.go" || rel == "cmd/my-friday/portable_remote.go"
+		portableSource := strings.HasPrefix(rel, "internal/portable/") || strings.HasPrefix(rel, "cmd/my-friday/portable")
+		updateSource := rel == "internal/toolkitupdate/update.go" || rel == "cmd/my-friday/portable_toolkit.go"
+		updateImports := map[string]bool{"context": true, "time": true, "net/http": true, "net/url": true, "runtime/debug": true, "github.com/acoz-labs/my-friday/internal/toolkitupdate": true}
 		for _, spec := range file.Imports {
 			name, _ := strconv.Unquote(spec.Path.Value)
-			if !allowedImports[name] && !(portableSource && portableImports[name]) {
+			if !allowedImports[name] && !(portableSource && portableImports[name]) && !(updateSource && updateImports[name]) {
 				t.Errorf("production import %q is not allowlisted in %s", name, path)
 			}
 			if name == "os/exec" && spec.Name != nil {

@@ -190,6 +190,10 @@ or validate these records; upgrade all writers for consistent coverage.
 
 ## Repair and executable updates
 
+Run `my-friday` for the reusable [management menu](management-menu.md), including
+agent discovery, readable health checks, repair, toolkit adoption and rollback.
+The explicit commands below retain their JSON output for automation.
+
 Start with read-only local diagnostics:
 
 ```sh

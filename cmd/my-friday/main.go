@@ -115,7 +115,7 @@ func run() error {
 		return runPortable(nil, os.Stdin, os.Stdout, os.Stderr)
 	}
 	switch os.Args[1] {
-	case "setup", "source-credential", "agent", "memory", "reference", "sync", "hook", "help", "--help", "-h":
+	case "menu", "toolkit", "version", "--version", "setup", "source-credential", "agent", "memory", "reference", "sync", "hook", "help", "--help", "-h":
 		return runPortable(os.Args[1:], os.Stdin, os.Stdout, os.Stderr)
 	}
 	command := "init"

@@ -8,6 +8,11 @@ Local-only setup and existing private credential helpers remain supported.
 
 ## Start or resume
 
+For a reusable menu, run `my-friday`, then **Manage an installed agent →
+Configure repository and synchronization**. The [management menu](management-menu.md)
+also exposes setup, health, repair and toolkit updates. The explicit commands below
+remain supported for direct workflows.
+
 `my-friday setup` performs the existing local installation wizard, then offers
 source synchronization. To configure an already installed assistant:
 

@@ -654,6 +654,44 @@ after either conversation. The small Codex scope-selection efficiency finding
 above remains tracked; durable installation, release authorization and real
 legacy-resource reconciliation remain separate next steps.
 
+## Reusable management menu and toolkit versions — 2026-09-09
+
+The owner requested a repeatable home menu instead of a one-time setup flow.
+No-argument launch now offers setup, import, agent management and toolkit updates.
+Installed-agent discovery uses the standard local directory, with explicit-path
+access for custom installations. Numbered navigation, Back/EOF handling, readable
+doctor results, repair, default-harness changes and the source wizard share the
+same menu; explicit CLI commands retain JSON for automation.
+
+Synthetic tests cover navigation without writes, invalid input, setup returning
+to management, damaged discovery entries, repair preserving native settings,
+clean-source harness changes, exact managed-launcher adoption, unchanged source,
+rollback and refusal to discard later edits. A compiled executable roundtrip
+stages an artifact by SHA-256, activates a convenience pointer, adopts it for a
+disposable agent, checks compatibility and rolls back without changing native
+settings. An incompatible sync schema is refused by the compatibility endpoint.
+Updater tests use local HTTP fixtures and synthetic bytes: legacy-release refusal,
+manifest/platform selection, scoped downloads, digest mismatch, response limits,
+cancellation, no authentication headers, retained pointers, stale-pointer refusal,
+declined installation and symlink redirection before directory creation.
+
+A read-only native smoke test discovered the existing private rollout, displayed
+its status and all ten passing local health checks, and returned through both
+Back levels. Its source HEAD/worktree, native config digest and executable binding
+were unchanged. A real unauthenticated latest-release check refused the currently
+published legacy release because it lacks the portable update manifest; no
+artifact was downloaded or activated. This is correct refusal evidence, not live
+acceptance of a newly published portable release. No release was published.
+
+Verification passed with Go 1.26.4 on the documented native macOS path:
+`mise exec -- bin/ci` (full race suite, vet, release/acceptance fixture checks and
+cross-builds), an additional Linux/AMD64 CLI cross-build and `git diff --check`.
+
+The remaining hands-on checkpoint is menu usability and deliberate toolkit adoption
+for the private rollout. Actual private source-hosting setup remains pending.
+See [management](../management-menu.md) for update trust, rollback boundaries,
+retained artifacts and explicitly unimplemented cloning/login/source migrations.
+
 ## Resumable source-hosting wizard — 2026-09-09
 
 The owner requested completing setup as product infrastructure instead of manually

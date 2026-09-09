@@ -96,7 +96,12 @@ and this private rollout do not invoke the repository's legacy release automatio
 
 ## Follow-ups, not prerequisites for this bounded first use
 
-Remote cloning/import wizard, harness installation/login automation, automatic
+The reusable management menu is now a separate implementation checkpoint; see
+[management](../management-menu.md). Its synthetic tests do not replace hands-on
+navigation/repair/update acceptance, and no compatible stable release has been
+published by this work. Existing private source-hosting acceptance remains pending.
+
+Remote cloning/import wizard, harness installation/login automation, unattended
 binary updates and source-format migrations, richer provenance claims beyond
 checkpoint observations, QMD/vector retrieval evaluation, Linux end-to-end
 qualification, app-server hook trust, additional lifecycle parity, scheduling,

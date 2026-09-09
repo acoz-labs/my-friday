@@ -14,6 +14,10 @@ import (
 )
 
 func remoteSetupWizard(reader *bufio.Reader, out io.Writer, instance portable.Instance, s *portable.Store) error {
+	return remoteSetupWizardUI(reader, out, instance, s, false)
+}
+
+func remoteSetupWizardUI(reader *bufio.Reader, out io.Writer, instance portable.Instance, s *portable.Store, human bool) error {
 	current, err := os.Executable()
 	if err != nil {
 		return err
@@ -24,6 +28,9 @@ func remoteSetupWizard(reader *bufio.Reader, out io.Writer, instance portable.In
 	}
 	bound, err := filepath.EvalSymlinks(instance.Binary)
 	if err != nil || current != bound {
+		if human {
+			return errors.New("this agent is pinned to a different toolkit; select 'Use this toolkit version for this agent' first, or reopen its pinned toolkit")
+		}
 		return errors.New("resume setup with the instance's bound toolkit; deliberately upgrade its executable binding and launcher first if needed")
 	}
 	ctx := context.Background()
@@ -35,9 +42,15 @@ func remoteSetupWizard(reader *bufio.Reader, out io.Writer, instance portable.In
 		fmt.Fprintf(out, "%s [%s]: ", prompt, def)
 		line, err := reader.ReadString('\n')
 		if err != nil {
+			if human {
+				return "", io.EOF
+			}
 			return "", errors.New("setup input ended; nothing further approved; resume with setup --instance PATH")
 		}
 		line = strings.TrimSpace(line)
+		if human && line == ":back" {
+			return "", errMenuBack
+		}
 		if line == "" {
 			line = def
 		}
@@ -52,6 +65,10 @@ func remoteSetupWizard(reader *bufio.Reader, out io.Writer, instance portable.In
 		return err
 	}
 	if mode == "local" {
+		if human {
+			fmt.Fprintln(out, "Existing local and remote settings left unchanged.")
+			return nil
+		}
 		return outputJSON(out, map[string]any{"state": "unchanged", "origin": state.Origin, "notice": "Local installation preserved. Existing remote settings, if any, are not disabled. Resume with setup --instance PATH."})
 	}
 	if mode != "github" && mode != "existing" {
@@ -170,7 +187,12 @@ func remoteSetupWizard(reader *bufio.Reader, out io.Writer, instance portable.In
 	if err != nil {
 		return err
 	}
-	if err := outputJSON(out, status); err != nil {
+	if human {
+		fmt.Fprintf(out, "Synchronization: %s\n", status.State)
+		if status.Detail != "" {
+			fmt.Fprintln(out, status.Detail)
+		}
+	} else if err := outputJSON(out, status); err != nil {
 		return err
 	}
 	if status.State != "synced" {
