@@ -171,6 +171,24 @@ The launch environment supplies MY_FRIDAY_ASSISTANT_ROOT and MY_FRIDAY_DEVICE_ID
 MY_FRIDAY_BIN is the absolute toolkit executable; use it to keep reusable
 instructions and scripts portable rather than embedding installation paths.
 
+For installation/management automation, start with "$MY_FRIDAY_BIN" api describe.
+It lists versioned actions, typed parameters and side effects. Submit one JSON
+request with api --input - (stdin) or --input FILE; never navigate the human TUI
+or simulate menu keystrokes. Management targets use explicit absolute instance
+paths; MY_FRIDAY_INSTANCE identifies this current instance. Read-only actions run
+directly; mutations default to a parameter-only preview until apply=true. That
+flag expresses an explicit execution request, not permission beyond the user's
+actual task. Inspect ok, state, result, error and the process exit status; a
+failed operation may have made partial progress. Request IDs are correlation,
+not deduplication: inspect before retrying. Structural doctor is not proof of
+authentication or sync, and local_only/pending/conflict are not remote success.
+Memory, references and capabilities still use their established commands below.
+An active agent may inspect/repair its managed files or stage an approved toolkit,
+but toolkit adoption/rollback must be driven from a separate management session
+after the affected session exits. The API refuses a known live self-upgrade.
+Repair or adoption does not reload already-loaded model instructions; honor the
+requires_fresh_session result instead of claiming current context has changed.
+
 Native user-wide and project-local skills may supplement this assistant's own
 capabilities. Their availability depends on the current machine and harness;
 they are not automatically part of the synchronized assistant repository.

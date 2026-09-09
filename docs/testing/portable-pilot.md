@@ -874,3 +874,39 @@ every descendant. No portable Pi interruption event is claimed; that adapter
 limitation and the Codex app-server trust finding remain as documented.
 Both Terminal scenarios now have hands-on evidence. No implementation or
 executable change was needed for this checkpoint; documentation diff checks pass.
+
+## Management TUI and agent API checkpoint — 2026-09-09
+
+The numbered management flow now also has an inline keyboard TUI. Unit tests
+cover arrows, Vim menu movement (`j/k`, `h/l`, `gg/G`), cancellation, pasted
+control characters, Unicode input and defaults. Fields remain ordinary text
+editors, not Vim modal editors. Five disposable real-PTY scenarios passed:
+Vim navigation/status/back, pasted text plus cancelled setup, Ctrl+C, SIGTERM,
+and resize. The terminal-state comparison ignores only macOS's transient PENDIN
+flag; other settings must be restored. These tests exposed and fixed an actual
+SIGTERM bug: an unfinished UI model must never select its highlighted action.
+Neither the tests nor opening the menu touch native credentials or live agents.
+
+A compiled JSON-only driver exercised discovery, setup preview (no writes),
+explicit setup, healthy doctor, intentional managed-file damage, structured
+unhealthy doctor, repair, local-only sync and a real disposable bare Git remote.
+The unrelated caller project remained empty. Contract tests reject unknown,
+wrongly cased and duplicate fields, invalid parameter types and missing explicit
+mutation prerequisites. Existing source-wizard/provider tests exercise the shared
+source-configuration operation used by both interfaces. API previews validate
+parameters only; they are not reserved state, permission grants or idempotency keys.
+
+Native Go 1.26.4 vet and all-package race tests passed, as did an additional
+Linux/AMD64 CLI cross-build. The older launcher-capture integration intermittently
+hit its five-second deadline in the synthetic descendant fixture, before emitting
+its marker: it performed an unrelated global disk flush. Removing that flush
+retains local PID-file visibility and the descendant-cleanup assertion. Its
+fragmented-output assertion also now accepts either raw-plus-normalized marker
+or normalized marker alone, depending on the PTY read boundary. Neither change
+weakens the missing-marker, exit-status or descendant checks, or changes runtime
+capture behavior. The corrected standalone test and subsequent complete native
+`mise exec -- bin/ci` passed: legacy integration scripts, gofmt, vet, all-package
+race tests and configured Darwin/Linux cross-builds. No production release was
+published by this verification.
+Owner usability testing of the new TUI and an actual installed-agent management
+API conversation remain hands-on checkpoints; simulated drivers do not close them.

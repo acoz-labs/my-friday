@@ -28,7 +28,8 @@ case "${TUI_MODE:-success}" in
     trap 'kill "$child" 2>/dev/null; wait "$child" 2>/dev/null; exit 0' HUP
     sleep 30 & child=$!
     printf '%s\n' "$child" >"$TUI_CHILD_PID"
-    sync "$TUI_CHILD_PID" 2>/dev/null || sync
+    # The closed file is immediately visible to the local reader. A global
+    # disk flush is unrelated to process cleanup and can exceed the deadline.
     printf '%s\n' "$TUI_MARKER"
     wait "$child"
     ;;
@@ -55,7 +56,10 @@ for prompt in '--option-shaped' 'white space prompt' 'literal $dollar ; semicolo
 done
 
 run_tui fragmented "$tmp/fragmented.private" FRAGMENTED_COMPLETE 'fragmented completion prompt'
-[[ "$(LC_ALL=C tr -d '\r' <"$tmp/fragmented.private" | LC_ALL=C grep -Fxc FRAGMENTED_COMPLETE)" == 1 ]]
+# The raw marker may end at a read boundary before CRLF arrives. The capture
+# always appends a normalized marker, so one or two complete lines are valid.
+fragmented_lines="$(LC_ALL=C tr -d '\r' <"$tmp/fragmented.private" | LC_ALL=C grep -Fxc FRAGMENTED_COMPLETE)"
+[[ "$fragmented_lines" == 1 || "$fragmented_lines" == 2 ]]
 run_tui framed "$tmp/framed.private" FRAMED_COMPLETE 'framed completion prompt'
 [[ "$(LC_ALL=C tr -d '\r' <"$tmp/framed.private" | LC_ALL=C grep -Fxc FRAMED_COMPLETE)" == 1 ]]
 

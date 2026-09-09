@@ -13,7 +13,11 @@ import (
 	"time"
 )
 
-type InstallationEntry struct{ Path, Name, Problem string }
+type InstallationEntry struct {
+	Path    string `json:"path"`
+	Name    string `json:"name"`
+	Problem string `json:"problem,omitempty"`
+}
 
 func (s *Store) ValidateToolkitCompatibility() error {
 	if err := s.Validate(); err != nil {

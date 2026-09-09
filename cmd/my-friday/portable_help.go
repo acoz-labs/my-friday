@@ -6,11 +6,27 @@ import (
 )
 
 var portableHelpTopics = map[string]string{
-	"menu": `Usage: my-friday [menu]
+	"menu": `Usage: my-friday [menu [--plain]]
 Open the reusable management menu: create/import agents, inspect existing
 installations, configure source sync, change harness, run doctor/repair, and
-manage toolkit versions. Choose 0 for Back/Exit or :back at a prompt.
+manage toolkit versions. Interactive terminals use arrows or j/k, Enter/l,
+Esc/h and gg/G. Text fields use normal typing, Tab to edit the default, and
+Ctrl+U to clear. Ctrl+C exits. The UI restores terminal input modes on exit.
+Use --plain or MY_FRIDAY_PLAIN=1 for numbered prompts; non-TTY/dumb terminals
+automatically use plain mode. There, 0 is Back/Exit and :back cancels a prompt.
 Opening the menu does not change files or launch an agent.
+`,
+	"api": `Usage: my-friday api describe
+       my-friday api --input FILE (or - for stdin)
+One bounded JSON request/response. Discover versioned actions and parameter
+schemas with api describe; never automate the human TUI.
+Request: {"schema_version":1,"action":"agent.doctor","params":{"instance":"/absolute/instance"}}
+Mutations default to preview; apply=true explicitly executes within the user's
+actual authority. A preview is not full preflight or a stored approval.
+Inspect ok, state, error, result and process exit status. Partial work may survive
+failure; request IDs correlate, not deduplicate. Do not blindly retry mutations.
+Known active self-upgrade is refused; use a separate management session after
+the affected agent exits. Memory/reference/capability CLI commands remain available.
 `,
 	"version": `Usage: my-friday version (or --version)
 Print build revision, platform and portable-management compatibility as JSON.
@@ -30,6 +46,7 @@ Use the management menu for guided adoption, repair and rollback.
 
 Usage: my-friday <command> [options]
   menu        Open agent management (also the default with no arguments)
+  api         Discover and execute structured, noninteractive management actions
   toolkit     Open updates; use/check-instance/manifest support explicit tooling
   version     Print toolkit build and portable compatibility metadata
   setup       Create/import an agent, or resume remote setup with --instance PATH

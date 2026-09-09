@@ -56,7 +56,7 @@ func runPortable(args []string, input io.Reader, out, errout io.Writer) (err err
 	if len(args) == 1 && helpFlag(args[0]) {
 		return printPortableHelp("", out)
 	}
-	if len(args) == 2 && helpFlag(args[1]) && (args[0] == "menu" || args[0] == "toolkit" || args[0] == "version") {
+	if len(args) == 2 && helpFlag(args[1]) && (args[0] == "menu" || args[0] == "toolkit" || args[0] == "version" || args[0] == "api") {
 		return printPortableHelp(args[0], out)
 	}
 	if args[0] == "help" {
@@ -78,15 +78,19 @@ func runPortable(args []string, input io.Reader, out, errout io.Writer) (err err
 		errout = out
 	}
 	switch args[0] {
+	case "api":
+		return portableAPI(args[1:], input, out)
 	case "menu":
-		if len(args) != 1 {
-			return errors.New("usage: my-friday menu")
+		f := portableFlags("menu", errout)
+		plain := f.Bool("plain", false, "Use numbered prompts instead of the terminal UI")
+		if err := parseFlags(f, args[1:]); err != nil {
+			return err
 		}
 		home, err := realHome()
 		if err != nil {
 			return err
 		}
-		return managementMenu(home, input, out)
+		return managementMenuMode(home, input, out, *plain)
 	case "version", "--version":
 		if len(args) != 1 {
 			return errors.New("usage: my-friday version")
@@ -131,6 +135,10 @@ func runPortable(args []string, input io.Reader, out, errout io.Writer) (err err
 }
 
 func portableSetup(args []string, input io.Reader, out, errout io.Writer) error {
+	return portableSetupContext(context.Background(), args, input, out, errout)
+}
+
+func portableSetupContext(ctx context.Context, args []string, input io.Reader, out, errout io.Writer) error {
 	f := portableFlags("setup", errout)
 	root := f.String("repository", "", "New assistant repository directory")
 	existing := f.String("import", "", "Existing local assistant repository")
@@ -261,7 +269,7 @@ func portableSetup(args []string, input io.Reader, out, errout io.Writer) error 
 		}
 	}
 	s = s.WithCheckpointObserver(portable.Authorship{DeviceID: device, Actor: s.Agent.Name, Harness: "setup"})
-	if err = s.InitGit(context.Background()); err != nil {
+	if err = s.InitGit(ctx); err != nil {
 		return err
 	}
 	binary, err := os.Executable()

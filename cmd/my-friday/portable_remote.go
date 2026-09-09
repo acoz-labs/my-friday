@@ -17,7 +17,7 @@ func remoteSetupWizard(reader *bufio.Reader, out io.Writer, instance portable.In
 	return remoteSetupWizardUI(reader, out, instance, s, false)
 }
 
-func remoteSetupWizardUI(reader *bufio.Reader, out io.Writer, instance portable.Instance, s *portable.Store, human bool) error {
+func remoteSetupWizardUI(reader *bufio.Reader, out io.Writer, instance portable.Instance, s *portable.Store, human bool, prompts ...func(string, string) (string, error)) error {
 	current, err := os.Executable()
 	if err != nil {
 		return err
@@ -56,6 +56,9 @@ func remoteSetupWizardUI(reader *bufio.Reader, out io.Writer, instance portable.
 		}
 		return line, nil
 	}
+	if len(prompts) > 0 {
+		ask = prompts[0]
+	}
 	fmt.Fprintf(out, "\nSource synchronization for %s\nInstance and native logins are preserved. Source must be clean before setup.\n", s.Agent.Name)
 	if state.Origin != "" {
 		fmt.Fprintf(out, "Existing origin: %s (will not be replaced)\n", state.Origin)
@@ -76,6 +79,7 @@ func remoteSetupWizardUI(reader *bufio.Reader, out io.Writer, instance portable.
 	}
 	s = s.WithCheckpointObserver(portable.Authorship{DeviceID: instance.DeviceID, Actor: s.Agent.Name, Harness: "setup"})
 	var remote string
+	var options portable.SourceSetupOptions
 	if mode == "github" {
 		if state.CustomHelper {
 			return errors.New("custom sync helper already configured; use existing mode to preserve it")
@@ -144,21 +148,7 @@ func remoteSetupWizardUI(reader *bufio.Reader, out io.Writer, instance portable.
 		if confirmed != repository {
 			return errors.New("repository setup not approved; nothing created or configured")
 		}
-		if err := client.EnsureRepository(ctx, account, repository, action == "create"); err != nil {
-			return err
-		}
-		if syncAccount != account {
-			if err := client.EnsureRepository(ctx, syncAccount, repository, false); err != nil {
-				return fmt.Errorf("repository may exist, but ongoing account access is not ready; grant/accept its source-repository access separately and resume: %w", err)
-			}
-		}
-		if err := s.ConfigureGitHubSource(ctx, repository, syncAccount); err != nil {
-			return fmt.Errorf("repository may exist; source configuration needs attention: %w", err)
-		}
-		// Checkpoint only wizard-owned configuration; preflight refused unrelated dirt.
-		if err := s.InitGit(ctx); err != nil {
-			return fmt.Errorf("source settings saved; checkpoint incomplete, preserve and resume: %w", err)
-		}
+		options = portable.SourceSetupOptions{Mode: "github", Repository: repository, SetupAccount: account, SyncAccount: syncAccount, Create: action == "create"}
 	} else {
 		fmt.Fprintln(out, "Existing mode uses your already configured private helper for HTTPS. It does not install credentials or verify hosting-service visibility. Review privacy yourself; local remotes also work.")
 		remote, err = ask("Existing remote HTTPS URL or absolute local path", state.Origin)
@@ -179,11 +169,9 @@ func remoteSetupWizardUI(reader *bufio.Reader, out io.Writer, instance portable.
 		if confirmation != "yes" {
 			return errors.New("source synchronization not approved")
 		}
+		options = portable.SourceSetupOptions{Mode: "existing", Remote: remote}
 	}
-	if err := s.ConnectRemote(ctx, remote); err != nil {
-		return fmt.Errorf("remote not connected/verified; any created repo or saved settings are retained for recovery: %w", err)
-	}
-	status, err := s.Sync(ctx)
+	status, err := s.SetupSource(ctx, options)
 	if err != nil {
 		return err
 	}

@@ -2,10 +2,31 @@
 
 Run `my-friday` (or `my-friday menu`) at any time, from any working directory.
 Opening the menu does not launch an agent, synchronize source or change files.
-It uses numbered choices instead of cursor-control dependencies, so it works
-over SSH and in plain terminals. Enter `0` for Back/Exit or `:back` at a prompt.
+Interactive terminals use a lightweight inline TUI, preserving operation summaries
+in scrollback. Use arrows or `j`/`k` to move, Enter or `l` to select, Escape or `h`
+to go back, `gg`/`G` for first/last and Ctrl+C to exit. `q` also exits from menus.
+Vim navigation does not intercept letters inside text fields. Fields support
+normal typing, arrow/Home/End editing, Backspace/Delete, Ctrl+U to clear, Tab to
+load the default for editing and Enter to submit (empty retains the default).
+Paste is bounded and control characters are removed; these are single-line
+settings fields, never password prompts. Labels are width-limited and menus
+scroll within the available terminal height. Unknown/zero PTY size uses defaults.
+
+The TUI uses pinned Bubble Tea v2.0.9 for terminal rendering/input/restoration.
+It operates over SSH when both streams are terminals with a usable TERM value.
+Use `my-friday menu --plain` or `MY_FRIDAY_PLAIN=1` to retain numbered prompts
+(also suitable for screen-reader preferences). Pipes, missing TERM and TERM=dumb
+automatically use plain mode. There, enter `0` for Back/Exit or `:back` at a prompt.
 EOF exits without approving an unfinished action. Errors return to the menu;
 successful earlier actions are retained, not implicitly undone by Back.
+An external stop is never interpreted as accepting the highlighted option.
+Terminal restoration is tested on normal exit, Ctrl+C and SIGTERM; SIGKILL or
+terminal loss cannot guarantee cleanup by a process that no longer runs.
+
+Agents should use the [versioned JSON management API](agent-api.md), not simulated
+keypresses or piped menu answers. The TUI, numbered prompts and API share core
+operations, including source-hosting configuration. This interface adds no agent
+capabilities, credential provider policy, or private workflows to the public toolkit.
 
 The home menu offers new setup, import, installed-agent management and updates.
 Discovery reads only `~/.local/share/my-friday/instances`, showing damaged entries

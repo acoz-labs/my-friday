@@ -1,0 +1,63 @@
+#!/usr/bin/expect -f
+set timeout 15
+set binary [lindex $argv 0]
+set mode [lindex $argv 1]
+log_user 0
+proc await {pattern} {
+  global expect_out
+  expect {
+    -re $pattern { return }
+    timeout { puts stderr "TUI timed out awaiting: $pattern\n$expect_out(buffer)"; exit 1 }
+    eof { puts stderr "TUI exited before: $pattern\n$expect_out(buffer)"; exit 1 }
+  }
+}
+spawn -noecho {*}[list $binary -test.run=^TestManagementPTYHelper$]
+stty rows 24 columns 100 < $spawn_out(slave,name)
+await {j/k move}
+switch -- $mode {
+  vim {
+    send -- "jjl"
+    await {Installed agents}
+    await {j/k move}
+    send -- "l"
+    await {View status}
+    await {j/k move}
+    send -- "l"
+    await {Agent: fixture}
+    await {j/k move}
+    send -- "Ggg"
+    send -- "h"
+    await {Installed agents}
+    await {j/k move}
+    send -- "h"
+    await {Set up a new agent}
+    await {j/k move}
+    send -- "q"
+  }
+  form {
+    send -- "l"
+    await {Agent command name}
+    await {Tab edit default}
+    send -- "\033\[200~hjkl-agent\033\[201~"
+    send -- "\r"
+    await {Agent command name: hjkl-agent}
+    await {Default harness}
+    await {Tab edit default}
+    send -- "\033"
+    await {Set up a new agent}
+    await {j/k move}
+    send -- "q"
+  }
+  interrupt { send -- "\003" }
+  terminate { exec kill -TERM [exp_pid] }
+  resize {
+    stty rows 8 columns 24 < $spawn_out(slave,name)
+    exec kill -WINCH [exp_pid]
+    after 100
+    send -- "q"
+  }
+}
+await {FRIDAY_TUI_TERMINAL_RESTORED}
+expect eof
+set status [wait]
+if {[lindex $status 3] != 0} { exit 1 }

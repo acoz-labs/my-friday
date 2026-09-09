@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/acoz-labs/my-friday/internal/console"
 	"github.com/acoz-labs/my-friday/internal/portable"
 )
 
@@ -27,9 +28,17 @@ type managementUI struct {
 	reader *bufio.Reader
 	out    io.Writer
 	home   string
+	tui    *console.Console
 }
 
 func (u managementUI) ask(label, def string) (string, error) {
+	if u.tui != nil {
+		value, err := u.tui.Input(label, def)
+		if errors.Is(err, console.ErrBack) || value == ":back" {
+			return "", errMenuBack
+		}
+		return value, err
+	}
 	if def != "" {
 		fmt.Fprintf(u.out, "%s [%s]: ", label, def)
 	} else {
@@ -49,6 +58,13 @@ func (u managementUI) ask(label, def string) (string, error) {
 	return line, nil
 }
 func (u managementUI) choose(title string, items []string, back string) (int, error) {
+	if u.tui != nil {
+		index, err := u.tui.Select(title, append(append([]string{}, items...), back), 0)
+		if errors.Is(err, console.ErrBack) || (err == nil && index == len(items)) {
+			return 0, nil
+		}
+		return index + 1, err
+	}
 	for {
 		fmt.Fprintf(u.out, "\n%s\n\n", title)
 		for n, item := range items {
@@ -71,6 +87,13 @@ func (u managementUI) choose(title string, items []string, back string) (int, er
 }
 func (u managementUI) confirm(summary string) (bool, error) {
 	fmt.Fprintln(u.out, summary)
+	if u.tui != nil {
+		index, err := u.tui.Select("Continue?", []string{"No, go back", "Yes, continue"}, 0)
+		if errors.Is(err, console.ErrBack) {
+			return false, errMenuBack
+		}
+		return index == 1 && err == nil, err
+	}
 	for {
 		answer, err := u.ask("Continue? (yes/no)", "no")
 		if err != nil {
@@ -96,8 +119,15 @@ func (u managementUI) problem(err error) error {
 }
 
 func managementMenu(home string, input io.Reader, out io.Writer) error {
-	u := managementUI{reader: promptReader(input), out: out, home: home}
-	fmt.Fprintln(out, "My Friday — agent management\nNothing changes just by opening this menu. At a prompt, :back cancels that step.")
+	return managementMenuMode(home, input, out, false)
+}
+
+func managementMenuMode(home string, input io.Reader, out io.Writer, plain bool) error {
+	u := newManagementUI(home, input, out, plain)
+	fmt.Fprintln(out, "My Friday — agent management\nNothing changes just by opening this menu.")
+	if u.tui == nil {
+		fmt.Fprintln(out, "Plain mode: choose a number; :back cancels a prompt.")
+	}
 	for {
 		n, err := u.choose("My Friday", []string{"Set up a new agent", "Import an existing agent", "Manage an installed agent", "Update My Friday"}, "Exit")
 		if errors.Is(err, io.EOF) || (err == nil && n == 0) {
@@ -123,6 +153,14 @@ func managementMenu(home string, input io.Reader, out io.Writer) error {
 			return nil
 		}
 	}
+}
+
+func newManagementUI(home string, input io.Reader, out io.Writer, plain bool) managementUI {
+	u := managementUI{reader: promptReader(input), out: console.SafeWriter{Output: out}, home: home}
+	if !plain {
+		u.tui = console.New(input, out)
+	}
+	return u
 }
 
 func (u managementUI) setup(importing bool) error {
@@ -250,7 +288,7 @@ func (u managementUI) agent(path string) error {
 				fmt.Fprintf(u.out, "Configured remote: %s\nThis is configuration, not proof of a successful recent sync.\n", state.Origin)
 			}
 		case 2:
-			err = remoteSetupWizardUI(u.reader, u.out, i, s, true)
+			err = remoteSetupWizardUI(u.reader, u.out, i, s, true, u.ask)
 		case 3:
 			var harness string
 			for {

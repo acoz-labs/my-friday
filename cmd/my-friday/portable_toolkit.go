@@ -23,6 +23,7 @@ type toolkitBuild struct {
 	Product            string `json:"product"`
 	PortableFormat     int    `json:"portable_format"`
 	ManagementProtocol int    `json:"management_protocol"`
+	AgentAPIVersion    int    `json:"agent_api_version,omitempty"`
 	Revision           string `json:"revision"`
 	Modified           bool   `json:"modified"`
 	OS                 string `json:"os"`
@@ -30,7 +31,7 @@ type toolkitBuild struct {
 }
 
 func toolkitVersion() toolkitBuild {
-	v := toolkitBuild{Product: "my-friday", PortableFormat: portable.FormatVersion, ManagementProtocol: 1, Revision: "development", OS: runtime.GOOS, Arch: runtime.GOARCH}
+	v := toolkitBuild{Product: "my-friday", PortableFormat: portable.FormatVersion, ManagementProtocol: 1, AgentAPIVersion: 1, Revision: "development", OS: runtime.GOOS, Arch: runtime.GOARCH}
 	if info, ok := debug.ReadBuildInfo(); ok {
 		for _, setting := range info.Settings {
 			if setting.Key == "vcs.revision" {
@@ -53,7 +54,11 @@ func (b *toolkitOutput) Write(p []byte) (int, error) {
 	return b.Buffer.Write(p)
 }
 func runToolkit(binary string, args ...string) ([]byte, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	return runToolkitContext(context.Background(), binary, args...)
+}
+
+func runToolkitContext(parent context.Context, binary string, args ...string) ([]byte, error) {
+	ctx, cancel := context.WithTimeout(parent, 20*time.Second)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, binary, args...)
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
@@ -78,7 +83,11 @@ func runToolkit(binary string, args ...string) ([]byte, error) {
 	return output.Bytes(), nil
 }
 func verifyToolkit(path string) error {
-	data, err := runToolkit(path, "--version")
+	return verifyToolkitContext(context.Background(), path)
+}
+
+func verifyToolkitContext(ctx context.Context, path string) error {
+	data, err := runToolkitContext(ctx, path, "--version")
 	if err != nil {
 		return err
 	}
@@ -95,7 +104,7 @@ func portableToolkit(args []string, input io.Reader, out, errout io.Writer) erro
 		if err != nil {
 			return err
 		}
-		err = (managementUI{promptReader(input), out, home}).updates()
+		err = newManagementUI(home, input, out, false).updates()
 		if errors.Is(err, errToolkitActivated) || errors.Is(err, io.EOF) {
 			return nil
 		}

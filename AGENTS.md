@@ -45,6 +45,11 @@ SDLC policies do not govern this development workflow.
   official release metadata/assets without account credentials and install an
   explicitly approved compatible artifact. This does not authorize publishing
   a release or silently upgrading every installed agent.
+  Owner clarification, 2026-09-09: add a keyboard/Vim TUI and a harness-neutral
+  agent management API over the same operations. Keep explicit CLI automation,
+  machine-readable discovery/outcomes, no-prompt writes with explicit parameters,
+  safe cancellation and the numbered fallback. These remain shared infrastructure,
+  not bundled personal capabilities. An execution flag is not new user authority.
 - Development authority does not authorize production release,
   live-data migration, or removal of an existing installation.
 - Do not reintroduce mandatory confirmations for the private assistant's

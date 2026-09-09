@@ -100,6 +100,10 @@ The reusable management menu is now a separate implementation checkpoint; see
 [management](../management-menu.md). Its synthetic tests do not replace hands-on
 navigation/repair/update acceptance, and no compatible stable release has been
 published by this work. Existing private source-hosting acceptance remains pending.
+The owner accepted the numbered flow. Its new keyboard/Vim presentation and
+[agent management API](../agent-api.md) have disposable PTY and compiled-CLI
+coverage; hands-on TUI usability and a real agent-driven management request are
+the next focused checks, not a repeat of the memory/lifecycle qualification.
 
 Remote cloning/import wizard, harness installation/login automation, unattended
 binary updates and source-format migrations, richer provenance claims beyond

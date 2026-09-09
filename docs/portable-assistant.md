@@ -192,7 +192,10 @@ or validate these records; upgrade all writers for consistent coverage.
 
 Run `my-friday` for the reusable [management menu](management-menu.md), including
 agent discovery, readable health checks, repair, toolkit adoption and rollback.
-The explicit commands below retain their JSON output for automation.
+It supports arrows and Vim menu navigation, with a numbered fallback. Agents can
+discover the [versioned management API](agent-api.md) with `my-friday api describe`
+and submit explicit JSON requests without interacting with the menu. The explicit
+commands below also retain their JSON output for automation.
 
 Start with read-only local diagnostics:
 

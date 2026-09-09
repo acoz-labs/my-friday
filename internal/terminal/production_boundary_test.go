@@ -28,6 +28,7 @@ func TestProductionNetworkAndSubprocessBoundary(t *testing.T) {
 		"github.com/acoz-labs/my-friday/internal/profile":            true,
 		"github.com/acoz-labs/my-friday/internal/repository":         true,
 		"github.com/acoz-labs/my-friday/internal/terminal":           true,
+		"github.com/acoz-labs/my-friday/internal/console":            true,
 		"github.com/acoz-labs/my-friday/internal/transaction":        true,
 		"github.com/rivo/uniseg":                                     true, "github.com/santhosh-tekuri/jsonschema/v6": true,
 		"golang.org/x/text/unicode/norm": true,
@@ -66,11 +67,12 @@ func TestProductionNetworkAndSubprocessBoundary(t *testing.T) {
 		}
 		rel = filepath.ToSlash(rel)
 		portableSource := strings.HasPrefix(rel, "internal/portable/") || strings.HasPrefix(rel, "cmd/my-friday/portable")
-		updateSource := rel == "internal/toolkitupdate/update.go" || rel == "cmd/my-friday/portable_toolkit.go"
+		updateSource := rel == "internal/toolkitupdate/update.go" || rel == "cmd/my-friday/portable_toolkit.go" || rel == "cmd/my-friday/portable_api.go"
 		updateImports := map[string]bool{"context": true, "time": true, "net/http": true, "net/url": true, "runtime/debug": true, "github.com/acoz-labs/my-friday/internal/toolkitupdate": true}
+		consoleImports := map[string]bool{"charm.land/bubbletea/v2": true, "github.com/charmbracelet/x/term": true}
 		for _, spec := range file.Imports {
 			name, _ := strconv.Unquote(spec.Path.Value)
-			if !allowedImports[name] && !(portableSource && portableImports[name]) && !(updateSource && updateImports[name]) {
+			if !allowedImports[name] && !(portableSource && portableImports[name]) && !(updateSource && updateImports[name]) && !(rel == "internal/console/prompt.go" && consoleImports[name]) {
 				t.Errorf("production import %q is not allowlisted in %s", name, path)
 			}
 			if name == "os/exec" && spec.Name != nil {

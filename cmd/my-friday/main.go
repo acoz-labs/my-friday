@@ -23,6 +23,10 @@ import (
 
 func main() {
 	if err := run(); err != nil {
+		var apiFailure apiExit
+		if errors.As(err, &apiFailure) {
+			os.Exit(apiFailure.status)
+		}
 		code, stable := classifyError(os.Args, err)
 		fmt.Fprintf(os.Stderr, "Error [%s]: %v\n", stable, err)
 		os.Exit(code)
@@ -115,7 +119,7 @@ func run() error {
 		return runPortable(nil, os.Stdin, os.Stdout, os.Stderr)
 	}
 	switch os.Args[1] {
-	case "menu", "toolkit", "version", "--version", "setup", "source-credential", "agent", "memory", "reference", "sync", "hook", "help", "--help", "-h":
+	case "api", "menu", "toolkit", "version", "--version", "setup", "source-credential", "agent", "memory", "reference", "sync", "hook", "help", "--help", "-h":
 		return runPortable(os.Args[1:], os.Stdin, os.Stdout, os.Stderr)
 	}
 	command := "init"

@@ -94,7 +94,7 @@ func TestCompiledToolkitInstallRebindAndRollback(t *testing.T) {
 func TestUpdateMenuDeclineDoesNotInstall(t *testing.T) {
 	home := t.TempDir()
 	var out bytes.Buffer
-	u := managementUI{promptReader(strings.NewReader("2\n/not/read\nnot-a-digest\nno\n0\n")), &out, home}
+	u := newManagementUI(home, strings.NewReader("2\n/not/read\nnot-a-digest\nno\n0\n"), &out, true)
 	if err := u.updates(); err != nil {
 		t.Fatal(err)
 	}
