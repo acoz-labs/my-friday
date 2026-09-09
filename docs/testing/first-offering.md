@@ -47,21 +47,19 @@ without a regression or new behavior that needs them.
 
 ## Remaining before initial rollout
 
-The earlier identified hands-on regression checkpoints are closed. No repeat
-is required without a new finding. The owner subsequently approved a new
-reference-aware capability-building feature; its behavioral pilot is a new
-checkpoint, not a repeat of those earlier tests.
+The identified hands-on regression checkpoints are closed, including the
+reference-aware capability-building pilot on 2026-09-09. Codex turned useful
+historical failures into tests and rejected obsolete rules; Pi discovered and
+reused the resulting capability, rationale and hash-verified references in a
+fresh read-only session. Both preserved the external library/project. This is
+bounded behavioral evidence, not a general instruction-injection guarantee.
+No repeat is required without a new finding. See
+[reference libraries](../reference-libraries.md) and the detailed pilot evidence.
 
 1. Choose and explicitly authorize the artifact/release route. Feature-branch
    pushes are development checkpoints, not releases. The repository still has
    legacy release automation; its existence does not make this rebuild released.
-2. Complete cross-harness read-only reference/capability/rationale discovery in Pi.
-   The Codex creation checkpoint passed on 2026-09-09: useful failure cases became
-   tests, obsolete rules were rejected, exact source hashes were traced, and the
-   external library/project remained unchanged. This is bounded behavioral evidence,
-   not a general instruction-injection guarantee. See
-   [reference libraries](../reference-libraries.md).
-3. Separately choose Alfred's durable private source/instance locations. Link its
+2. Separately choose Alfred's durable private source/instance locations. Link its
    old resources as reference libraries and rebuild one capability at a time;
    do not bulk-promote historical instructions. Facts/preferences/commitments
    still need separate reconciliation. Keep the old agent recoverable. No service

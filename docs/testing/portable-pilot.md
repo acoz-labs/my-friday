@@ -627,6 +627,33 @@ general prompt-injection guarantee. Cross-harness read-only capability/rationale
 reuse and reference discovery in Pi remain pending. No production migration or
 release is implied, and private artifacts/transcripts remain outside this repo.
 
+## Reference-aware cross-harness reuse — 2026-09-09
+
+The owner completed a fresh Pi Terminal session against the same toolkit
+`864601c`, private source and linked synthetic reference directory. Inspection
+confirmed ten successful tool calls: capability inventory, full instruction and
+rationale reads, one invocation of the existing entrypoint, reference inventory
+and help discovery, one search, and three hash-checked reference reads. The
+command returned the expected plain slug. File hashes and the descriptor hash
+matched the existing rationale; the final explanation accurately separated
+useful past failures and implementation structure from rejected operating rules.
+
+No rebuild, historical script execution, approval exchange, unrelated-memory
+lookup, memory write, journal, repair or hook installation occurred. The owner-run
+wrapper completed its post-session doctor after its preservation assertions.
+Independent inspection confirmed the same assistant HEAD and clean worktree,
+unchanged reference hashes, no execution marker, and an empty working project.
+The local reference binding was preserved by the wrapper's comparison. Native
+session/receipt state is expected to change and is not assistant source.
+
+This closes the planned cross-harness reference checkpoint: creation and traced
+adaptation in Codex, fresh discovery and read-only reuse in Pi. It is evidence for
+this bounded scenario, not universal resistance to hostile reference instructions
+or qualification of future harness versions. No toolkit code change was needed
+after either conversation. The small Codex scope-selection efficiency finding
+above remains tracked; durable installation, release authorization and real
+legacy-resource reconciliation remain separate next steps.
+
 ## Recovery diagnostics and lifecycle failure boundaries — 2026-09-07
 
 Added `agent doctor`: read-only source validation, own-Git-directory presence,

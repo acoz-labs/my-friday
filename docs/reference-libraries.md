@@ -137,7 +137,10 @@ Automated tests cover descriptor validation, source sync without local resources
 instance-local bindings, stale descriptor/file detection, bounded search results,
 unsafe paths/content and binding symlinks, non-execution of reference scripts,
 absence from normal recall/capabilities/projections, and the CLI authoring flow.
-These do not prove model behavior. Before linking real legacy material, run a
-synthetic conversation containing useful past failures alongside obsolete rules,
-verify a new capability keeps the lesson and rejects the old rule, then repeat
-read-only reference/rationale discovery with the other supported harness.
+These do not prove model behavior. The initial synthetic behavioral pilot passed
+on 2026-09-09: Codex created a private capability using past failure cases while
+rejecting obsolete rules; a fresh Pi session discovered/reused that capability
+and verified its rationale's reference hashes without modifying source or the
+library. See [pilot evidence](testing/portable-pilot.md). This bounded result is
+not a general prompt-injection guarantee. Real legacy material still requires
+incremental reconciliation against the current ask, one capability at a time.
