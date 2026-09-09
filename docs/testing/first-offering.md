@@ -65,8 +65,17 @@ registered as reference-only libraries; no old memory claims, native credentials
 or provider capabilities were imported. Both harnesses passed structural doctor.
 Machine paths and private installation details stay outside this public repo.
 
-1. Complete native authentication and first-use verification of the durable
-   instance. Structural health does not establish login or model behavior.
+The owner subsequently completed scoped ChatGPT login and a first read-only Codex
+conversation from outside the assistant repository. Inspection confirmed correct
+identity/path reporting, empty private capability/current-memory inventories,
+and a clear distinction between historical references and active guidance. No
+historical contents or credentials were read; source HEAD/worktree were unchanged
+and post-session doctor passed. Some help and metadata discovery was redundant;
+no task command failed. The first durable Codex conversation checkpoint is closed.
+
+1. Complete the separate native Pi login when enabling that harness for daily use.
+   The synthetic cross-harness behavior is already qualified; this instance has
+   not yet had an authenticated Pi conversation.
 2. Confirm the private remote destination and configure/verify source-sync
    credentials deliberately; local checkpoints alone do not provide cross-machine
    continuity. A developer bootstrap account is not an implicit agent role.
