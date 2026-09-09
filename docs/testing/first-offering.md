@@ -55,10 +55,12 @@ checkpoint, not a repeat of those earlier tests.
 1. Choose and explicitly authorize the artifact/release route. Feature-branch
    pushes are development checkpoints, not releases. The repository still has
    legacy release automation; its existence does not make this rebuild released.
-2. Exercise reference-aware building with synthetic prior experience plus obsolete
-   instructions, first for capability creation and then cross-harness read-only
-   discovery. Keep exact source hashes and a rationale; preserve lessons without
-   adopting the old operating rules. See [reference libraries](../reference-libraries.md).
+2. Complete cross-harness read-only reference/capability/rationale discovery in Pi.
+   The Codex creation checkpoint passed on 2026-09-09: useful failure cases became
+   tests, obsolete rules were rejected, exact source hashes were traced, and the
+   external library/project remained unchanged. This is bounded behavioral evidence,
+   not a general instruction-injection guarantee. See
+   [reference libraries](../reference-libraries.md).
 3. Separately choose Alfred's durable private source/instance locations. Link its
    old resources as reference libraries and rebuild one capability at a time;
    do not bulk-promote historical instructions. Facts/preferences/commitments

@@ -592,6 +592,41 @@ and linked resources already present in native host discovery remain a separate
 source of inherited behavior. See [the reference contract](../reference-libraries.md)
 for retrieval limits and the distinction between content identity and retention.
 
+## Reference-aware creation pilot — 2026-09-09
+
+The owner ran a fresh authenticated Codex Terminal session with toolkit `864601c`
+against the synthetic library described above. Session inspection confirmed the
+agent read the embedded authoring guide, discovered the inventory and library,
+and read all three reference files with their selected hashes. It rejected the
+retired working directory, repeated approvals, automatic hooks, manual-only
+verification and JSON-output prescriptions. Historical punctuation, empty-input
+and silently dropped extra-line failures became regression cases in a new private
+manual capability. No old entrypoint was executed or registered.
+
+The private rationale records the descriptor and all three file hashes, current
+requirements, adaptation/rejection decisions, implementation assumptions and
+limits. It distinguishes historical reports from independently verified behavior.
+The command meets the current plain-output contract; 20 synthetic CLI cases cover
+success/failure, ASCII casing, newline handling, arguments and relocation to paths
+with spaces. Checks also compare disposable source/workspace snapshots and assert
+empty subscriptions. Independent review and reruns of the declared checks and
+toolkit capability checks passed. The post-session doctor was healthy; all original
+reference hashes match, no legacy execution marker exists, and the working project
+remains empty. Source changes comprise only the new capability, completion journal
+and device/session checkpoint observation; prior memory revisions are unchanged.
+
+The interaction required no clarification or approval round-trip and had no failed
+task commands. It did perform an unnecessary recall of an unrelated discovered
+project scope, then correctly treated that old request's capability restriction as
+task-local. Track relevance-first scope selection as an efficiency improvement;
+the mere existence of a scope does not justify reading it. Some help discovery and
+verification were repeated, but no repeated implementation/recovery cycle occurred.
+
+This closes the Codex creation checkpoint for this synthetic scenario, not a
+general prompt-injection guarantee. Cross-harness read-only capability/rationale
+reuse and reference discovery in Pi remain pending. No production migration or
+release is implied, and private artifacts/transcripts remain outside this repo.
+
 ## Recovery diagnostics and lifecycle failure boundaries — 2026-09-07
 
 Added `agent doctor`: read-only source validation, own-Git-directory presence,
