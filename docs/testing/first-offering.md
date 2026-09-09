@@ -56,14 +56,26 @@ bounded behavioral evidence, not a general instruction-injection guarantee.
 No repeat is required without a new finding. See
 [reference libraries](../reference-libraries.md) and the detailed pilot evidence.
 
-1. Choose and explicitly authorize the artifact/release route. Feature-branch
-   pushes are development checkpoints, not releases. The repository still has
-   legacy release automation; its existence does not make this rebuild released.
-2. Separately choose Alfred's durable private source/instance locations. Link its
-   old resources as reference libraries and rebuild one capability at a time;
-   do not bulk-promote historical instructions. Facts/preferences/commitments
-   still need separate reconciliation. Keep the old agent recoverable. No service
-   credentials, GitHub role policy or email workflow enters this public toolkit.
+On 2026-09-09 the owner authorized a pinned durable private installation, leaving
+public release separate. The exact tested `864601c` artifact was installed at a
+versioned durable path, with a fresh private source/instance and named launcher.
+The tested Pi runtime was preserved at a durable path too. Existing systems and
+the pilot remain intact. Historical repositories were cloned separately and
+registered as reference-only libraries; no old memory claims, native credentials
+or provider capabilities were imported. Both harnesses passed structural doctor.
+Machine paths and private installation details stay outside this public repo.
+
+1. Complete native authentication and first-use verification of the durable
+   instance. Structural health does not establish login or model behavior.
+2. Confirm the private remote destination and configure/verify source-sync
+   credentials deliberately; local checkpoints alone do not provide cross-machine
+   continuity. A developer bootstrap account is not an implicit agent role.
+3. Rebuild one private capability at a time from the current ask and relevant
+   references. Facts/preferences/commitments still need separate reconciliation.
+   No service credentials, GitHub role policy or email workflow enters this core.
+
+Public merge/release remains separately authorized work. Feature-branch pushes
+and this private rollout do not invoke the repository's legacy release automation.
 
 ## Follow-ups, not prerequisites for this bounded first use
 
