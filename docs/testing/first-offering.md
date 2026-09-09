@@ -73,6 +73,14 @@ historical contents or credentials were read; source HEAD/worktree were unchange
 and post-session doctor passed. Some help and metadata discovery was redundant;
 no task command failed. The first durable Codex conversation checkpoint is closed.
 
+The owner then requested completing the product's source-hosting wizard rather
+than manually filling its gap during private rollout. This is a new checkpoint:
+guided private remote creation/connection, setup versus ongoing-sync account
+selection, and resumption without recreating an installation. See
+[source setup](../source-setup.md). The implementation has synthetic CLI/provider
+coverage; the owner's actual wizard experience and authenticated sync remain to
+be exercised. Do not mark the private source remotely backed up before that succeeds.
+
 1. Complete the separate native Pi login when enabling that harness for daily use.
    The synthetic cross-harness behavior is already qualified; this instance has
    not yet had an authenticated Pi conversation.
@@ -88,7 +96,7 @@ and this private rollout do not invoke the repository's legacy release automatio
 
 ## Follow-ups, not prerequisites for this bounded first use
 
-Remote creation/clone wizard, harness installation/login automation, automatic
+Remote cloning/import wizard, harness installation/login automation, automatic
 binary updates and source-format migrations, richer provenance claims beyond
 checkpoint observations, QMD/vector retrieval evaluation, Linux end-to-end
 qualification, app-server hook trust, additional lifecycle parity, scheduling,

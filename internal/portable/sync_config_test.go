@@ -28,7 +28,7 @@ func TestSyncConfigIsOptionalAndProviderNeutral(t *testing.T) {
 }
 
 func TestSyncConfigRejectsMalformedProvider(t *testing.T) {
-	for _, data := range []string{`{}`, `{"schema_version":2}`, `{"schema_version":1,"credential_helper":[""]}`, `{"schema_version":1,"author":{"name":"Missing email"}}`, `{"schema_version":1,"account_role":"prescribed-role"}`} {
+	for _, data := range []string{`{}`, `{"schema_version":2}`, `{"schema_version":1,"credential_helper":[""]}`, `{"schema_version":1,"author":{"name":"Missing email"}}`, `{"schema_version":1,"account_role":"prescribed-role"}`, `{"schema_version":1,"github_source":{"repository":"https://github.com/o/r"}}`, `{"schema_version":1,"github_source":{"repository":"owner/repo"},"credential_helper":["helper"]}`} {
 		s := fixtureStore(t)
 		if err := os.WriteFile(filepath.Join(s.Root, ".my-friday/sync.json"), []byte(data), 0600); err != nil {
 			t.Fatal(err)

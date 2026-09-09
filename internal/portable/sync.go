@@ -174,7 +174,7 @@ func (s *Store) Sync(parent context.Context) (SyncStatus, error) {
 				result.Detail = "This transport is not configured; use a local remote or HTTPS with a private credential helper."
 				return nil
 			}
-			if len(config.CredentialHelper) == 0 {
+			if len(config.CredentialHelper) == 0 && config.GitHubSource == nil {
 				result.State = "pending"
 				result.Detail = "Configure a private credential helper in .my-friday/sync.json; local changes are committed."
 				return nil

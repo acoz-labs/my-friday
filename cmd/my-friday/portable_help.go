@@ -9,7 +9,7 @@ var portableHelpTopics = map[string]string{
 	"": `My Friday — portable assistant toolkit
 
 Usage: my-friday <command> [options]
-  setup       Create/import a private agent and machine-local instance
+  setup       Create/import an agent, or resume remote setup with --instance PATH
   agent       Inspect, validate, launch, and design private capabilities
   memory      Recall, revise, and explain persistent memory
   reference   Link and consult external reference-only libraries
@@ -20,6 +20,7 @@ Usage: my-friday <command> [options]
 Start capability authoring with: my-friday agent capability-guide
 Print a manifest with: my-friday agent capability-template --capability <id>
 Running without arguments opens setup. Commands accept --help / -h.
+Resume source hosting/account setup with: my-friday setup --instance PATH
 Legacy init, assistant, capability, codex, validate, and recover commands remain
 separate from this portable workflow; use agent commands for portable capabilities.
 `,

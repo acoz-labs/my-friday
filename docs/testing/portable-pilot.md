@@ -654,6 +654,41 @@ after either conversation. The small Codex scope-selection efficiency finding
 above remains tracked; durable installation, release authorization and real
 legacy-resource reconciliation remain separate next steps.
 
+## Resumable source-hosting wizard — 2026-09-09
+
+The owner requested completing setup as product infrastructure instead of manually
+creating a remote during personal rollout. The implementation adds an interactive
+source step after local setup and `setup --instance PATH` for existing installs.
+Local-only and existing-helper routes remain available. An opt-in GitHub adapter
+handles only assistant-source hosting: explicit private repository owner/name,
+create/connect, separately chosen setup and ongoing-sync accounts, exact-target
+confirmation, remote identity checks, and verified normal fetch/push. No private
+provider capability or general GitHub role system is bundled.
+
+The new source configuration points to a repository, while the selected ongoing
+account remains in untracked/ignored machine-local metadata. Tests check exact
+credential host/path and account identity, private/write status, no ambient token
+fallback or active-account switch, no token persistence, native-state preservation,
+decline/EOF, foreign/non-main remotes, unusual push/fetch settings and matching
+toolkit binding. A compiled CLI test uses a real local bare repository and Git
+credential subprocess with synthetic provider/transport shims. It creates with one
+fixture account and syncs with another, then verifies later sync and safe resume.
+No real GitHub repository is created by these tests.
+
+Verification passed with Go 1.26.4 through the documented native macOS path:
+`mise exec -- bin/ci` (including vet, full race suite and cross-build checks),
+an additional Linux/AMD64 CLI cross-build, and `git diff --check`. The final CI
+run includes the separate setup/sync identities and repeated credential-extension
+field cases. This is automated fixture evidence, not live hosting acceptance.
+
+Owner-driven account/store access and the wizard experience are a new hands-on
+checkpoint, not a reason to repeat the closed memory/capability pilots. The
+existing durable installation must be deliberately upgraded before enabling its
+new source configuration; old binaries reject that optional field. The wizard
+itself does not replace launchers or executable bindings. Existing source, native
+logins and the previous version must remain recoverable. See
+[source setup](../source-setup.md) for partial-failure and token-scope limitations.
+
 ## Recovery diagnostics and lifecycle failure boundaries — 2026-09-07
 
 Added `agent doctor`: read-only source validation, own-Git-directory presence,

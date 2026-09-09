@@ -7,6 +7,9 @@ memory and capabilities, plus machine-local Codex/Pi projections. The new
 `setup`, `agent`, `memory`, `reference`, `sync`, and `hook` commands are an
 initial implementation, not a production release or migration of existing agents.
 Running the binary without arguments opens the new setup wizard.
+It now includes [guided source hosting](docs/source-setup.md): private GitHub
+creation/connection, explicit setup and ongoing-sync accounts, and resumable
+configuration with `my-friday setup --instance PATH`.
 
 Only shared assistant infrastructure belongs in this public toolkit. Users define
 their service integrations, credentials, account policies, and personal workflows

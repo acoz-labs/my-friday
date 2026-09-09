@@ -7,12 +7,19 @@ import (
 	"strings"
 )
 
-// SyncConfig contains only source-synchronization policy. Credential storage,
-// provider selection, and account verification belong to the private helper.
+// SyncConfig contains only source-synchronization policy. Users may select a
+// private helper or the explicit GitHub source-hosting adapter. No tokens or
+// machine-local account bindings belong in this portable configuration.
 type SyncConfig struct {
-	Version          int        `json:"schema_version"`
-	CredentialHelper []string   `json:"credential_helper,omitempty"`
-	Author           *GitAuthor `json:"author,omitempty"`
+	Version          int                 `json:"schema_version"`
+	CredentialHelper []string            `json:"credential_helper,omitempty"`
+	Author           *GitAuthor          `json:"author,omitempty"`
+	GitHubSource     *GitHubSourceConfig `json:"github_source,omitempty"`
+}
+
+// Explicit source-hosting configuration, not an agent account-role capability.
+type GitHubSourceConfig struct {
+	Repository string `json:"repository"`
 }
 
 type GitAuthor struct {
@@ -35,6 +42,9 @@ func (s *Store) syncConfiguration() (SyncConfig, error) {
 	if config.Version != 1 {
 		return config, errors.New("unsupported sync configuration version")
 	}
+	if config.GitHubSource != nil && (!validGitHubRepository(config.GitHubSource.Repository) || len(config.CredentialHelper) > 0) {
+		return config, errors.New("GitHub source configuration needs owner/repository and cannot coexist with a custom helper")
+	}
 	for n, arg := range config.CredentialHelper {
 		if strings.ContainsAny(arg, "\x00\r\n") || (n == 0 && strings.TrimSpace(arg) == "") {
 			return config, errors.New("invalid sync credential helper argument")
@@ -56,8 +66,14 @@ func (s *Store) gitArguments() []string {
 	if a := s.gitSettings.Author; a != nil {
 		args = append(args, "-c", "user.name="+a.Name, "-c", "user.email="+a.Email)
 	}
-	if len(s.gitSettings.CredentialHelper) > 0 {
-		command := append([]string{}, s.gitSettings.CredentialHelper...)
+	command := append([]string{}, s.gitSettings.CredentialHelper...)
+	if s.gitSettings.GitHubSource != nil {
+		binary, err := os.Executable()
+		if err == nil {
+			command = []string{binary, "source-credential", "--repository", s.Root}
+		}
+	}
+	if len(command) > 0 {
 		if strings.ContainsRune(command[0], '/') && !filepath.IsAbs(command[0]) {
 			command[0] = filepath.Join(s.Root, command[0])
 		}

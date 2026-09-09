@@ -38,9 +38,10 @@ func TestProductionNetworkAndSubprocessBoundary(t *testing.T) {
 	// Git source-change paths are slash-delimited independently of the host OS.
 	portableImports := map[string]bool{"context": true, "embed": true, "flag": true, "time": true, "net/url": true, "path": true, "github.com/acoz-labs/my-friday/internal/portable": true}
 	portableExec := map[string]string{
-		"cmd/my-friday/portable.go":  "Command",
-		"internal/portable/hooks.go": "CommandContext",
-		"internal/portable/sync.go":  "CommandContext",
+		"cmd/my-friday/portable.go":          "Command",
+		"internal/portable/hooks.go":         "CommandContext",
+		"internal/portable/sync.go":          "CommandContext",
+		"internal/portable/source_github.go": "CommandContext",
 		// Doctor resolves the selected harness but never executes it.
 		"internal/portable/doctor.go": "LookPath",
 	}
@@ -63,7 +64,7 @@ func TestProductionNetworkAndSubprocessBoundary(t *testing.T) {
 			return err
 		}
 		rel = filepath.ToSlash(rel)
-		portableSource := strings.HasPrefix(rel, "internal/portable/") || rel == "cmd/my-friday/portable.go" || rel == "cmd/my-friday/portable_references.go"
+		portableSource := strings.HasPrefix(rel, "internal/portable/") || rel == "cmd/my-friday/portable.go" || rel == "cmd/my-friday/portable_references.go" || rel == "cmd/my-friday/portable_remote.go"
 		for _, spec := range file.Imports {
 			name, _ := strconv.Unquote(spec.Path.Value)
 			if !allowedImports[name] && !(portableSource && portableImports[name]) {

@@ -74,6 +74,8 @@ func runPortable(args []string, input io.Reader, out, errout io.Writer) (err err
 	switch args[0] {
 	case "setup":
 		return portableSetup(args[1:], input, out, errout)
+	case "source-credential":
+		return portableSourceCredential(args[1:], input, out, errout)
 	case "memory":
 		return portableMemory(args[1:], input, out, errout)
 	case "reference":
@@ -116,9 +118,21 @@ func portableSetup(args []string, input io.Reader, out, errout io.Writer) error 
 	label := f.String("device-label", "", "Readable machine label")
 	noLauncher := f.Bool("no-launcher", false, "Prepare an instance without installing its named launcher")
 	launcher := f.String("launcher", "", "Launcher path")
+	resume := f.String("instance", "", "Resume remote/sync setup for an existing instance without recreating it")
 	if err := parseFlags(f, args); err != nil {
 		return err
 	}
+	if *resume != "" {
+		if f.NFlag() != 1 {
+			return errors.New("setup --instance cannot be combined with creation options")
+		}
+		i, s, err := portable.LoadInstance(*resume)
+		if err != nil {
+			return err
+		}
+		return remoteSetupWizard(bufio.NewReader(input), out, i, s)
+	}
+	interactive := *root == "" && *existing == ""
 	home, err := realHome()
 	if err != nil {
 		return err
@@ -245,7 +259,13 @@ func portableSetup(args []string, input io.Reader, out, errout io.Writer) error 
 			return err
 		}
 	}
-	return outputJSON(out, map[string]any{"assistant_id": s.Agent.ID, "repository": s.Root, "instance": instance.Root, "device_id": device, "launcher_installed": !*noLauncher, "default_harness": s.Agent.DefaultHarness, "next": "Authenticate each harness in its private instance home before first use."})
+	if err := outputJSON(out, map[string]any{"assistant_id": s.Agent.ID, "repository": s.Root, "instance": instance.Root, "device_id": device, "launcher_installed": !*noLauncher, "default_harness": s.Agent.DefaultHarness, "next": "Authenticate each harness in its private instance home. Resume remote setup with setup --instance PATH."}); err != nil {
+		return err
+	}
+	if interactive {
+		return remoteSetupWizard(reader, out, instance, s)
+	}
+	return nil
 }
 
 func portableAuthorship(device, actor string) portable.Authorship {

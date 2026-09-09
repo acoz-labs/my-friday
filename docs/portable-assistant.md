@@ -54,8 +54,11 @@ Binding load rechecks separation before launch/hook synchronization. This keeps
 native credentials and sessions out of the normal source checkpoint boundary.
 It is not a security boundary against deliberate edits or same-user races.
 
-It does not create a remote repository, install a harness, copy credentials, or
-log in. A filesystem error midway through setup can leave a partial installation;
+The interactive wizard then offers local-only, private GitHub creation/connection,
+or an existing remote with a configured helper. Resume this step with
+`my-friday setup --instance PATH`. See [guided source setup](source-setup.md) for
+owner/account selection, privacy, credential boundaries and recovery. It does not
+install a harness, copy credentials, or log in. A filesystem error midway through setup can leave a partial installation;
 inspect the reported paths before retrying. Existing installations are not removed.
 
 Import currently requires an already-cloned **new-format** repository:
@@ -314,9 +317,10 @@ all nonignored assistant source, so never place unrelated work or raw secrets in
 this repository. Git history can recover source but cannot undo external effects.
 
 Local remotes work without credentials. Network sync currently supports
-HTTPS remotes with an explicitly configured private Git credential helper. It
-does not choose a hosting service, password manager, or account role. SSH and automatic
-remote cloning/creation are not implemented. Status is returned per operation;
+HTTPS remotes with an explicitly configured private Git credential helper or the
+opt-in GitHub source-hosting adapter. The wizard asks for the hosting/account
+choice; it does not prescribe a password manager or agent account role. SSH and
+remote cloning are not implemented. Status is returned per operation;
 there is no persistent sync dashboard or background retry daemon. Hook deadlines
 can interrupt long synchronization; interrupted operations need a later retry.
 
@@ -422,7 +426,9 @@ delivery guarantees; see the pilot record.
 ## Provider-neutral Git authentication
 
 An optional `.my-friday/sync.json` selects a **user-supplied** executable and Git
-commit attribution. No helper implementation is distributed or seeded:
+commit attribution. No custom helper implementation is seeded. Alternatively,
+the explicit GitHub source route can be selected through
+[guided source setup](source-setup.md); its account binding stays machine-local:
 
 ```json
 {

@@ -34,6 +34,12 @@ SDLC policies do not govern this development workflow.
   integrations as built-ins, optional bundled packages, or seeded examples.
   Use synthetic provider-neutral fixtures for core behavior. The repository's
   own development/release tooling is distinct from installed agent capabilities.
+  Owner clarification, 2026-09-09: guided hosting and authentication for the
+  assistant's own source repository is shared setup infrastructure. A narrowly
+  scoped GitHub CLI source-hosting adapter may create/connect a private remote
+  and supply source-sync credentials for an explicitly selected account. It must
+  not provide general GitHub actions, role policy, password-manager access or
+  private service capabilities, and must not prescribe an account by default.
 - Development authority does not authorize production release,
   live-data migration, or removal of an existing installation.
 - Do not reintroduce mandatory confirmations for the private assistant's
