@@ -107,11 +107,14 @@ Use <command> --help for options.
             --description TEXT --purpose TEXT; then checkpoint source
   list      List descriptions, not local availability or current guidance
   bind      Bind/rebind --library ID to an external local directory with --path
+  status    Check --library ID on this instance without reading any documents
   search    Discover files in --library ID with --query TEXT (empty lists files)
   read      Read --library ID --path FILE; use --sha256 HASH from search
 
 Add/list use --repository PATH or --instance PATH (or their launch environment).
-Bind/search/read require an instance; bindings do not travel in source Git.
+Bind/status/search/read require an instance; bindings do not travel in source Git.
+Status returns available/unbound/stale/invalid/unavailable in JSON; exit 0 means
+the check completed, not that the directory or its documents are usable.
 Existing local directories and Git working trees are read as text. Nothing is
 cloned, fetched, executed, or automatically promoted into memory/capabilities.
 Search results contain paths and hashes, not source text. A changed descriptor

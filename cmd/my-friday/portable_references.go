@@ -16,13 +16,13 @@ func portableReference(args []string, out, errout io.Writer) error {
 		return printPortableHelp("reference", out)
 	}
 	switch args[0] {
-	case "add", "list", "bind", "search", "read":
+	case "add", "list", "bind", "status", "search", "read":
 	default:
 		return errors.New("unknown reference command; use my-friday help reference")
 	}
 	f := portableFlags("reference "+args[0], errout)
 	repository := f.String("repository", os.Getenv("MY_FRIDAY_ASSISTANT_ROOT"), "Assistant repository for add/list; must match instance if supplied")
-	state := f.String("instance", os.Getenv("MY_FRIDAY_INSTANCE"), "Local instance; required for bind/search/read")
+	state := f.String("instance", os.Getenv("MY_FRIDAY_INSTANCE"), "Local instance; required for bind/status/search/read")
 	device := f.String("device", os.Getenv("MY_FRIDAY_DEVICE_ID"), "Checkpoint device for unbound add; instance binding takes precedence")
 	id := f.String("library", "", "Reference library ID")
 	title := f.String("title", "", "Human-readable library title")
@@ -63,6 +63,12 @@ func portableReference(args []string, out, errout io.Writer) error {
 		}
 	}
 	switch args[0] {
+	case "status":
+		status, err := instance.CheckReference(s, *id)
+		if err != nil {
+			return err
+		}
+		return outputJSON(out, status)
 	case "add":
 		lib := portable.ReferenceLibrary{Version: 1, ID: *id, Title: *title, Description: *description, Purpose: *purpose}
 		if err := s.AddReference(lib); err != nil {

@@ -89,6 +89,11 @@ harness installation/login are not part of this menu increment.
   with private rollback copies and explicit managed-launcher selection.
 - **Rollback:** choose a local adoption checkpoint, verify that its previous
   executable supports today's source, and restore unchanged managed files only.
+- **Reference sources:** register portable descriptions, view their purpose,
+  bind/rebind an external local directory, or check availability without reading
+  documents. Registration checkpoints/synchronizes agent source; bindings stay
+  local. References are not active memory or installed skills. See
+  [reference libraries](reference-libraries.md) for states, recovery and limits.
 
 Close active agent sessions before repair, adoption or rollback and start fresh
 afterward. This menu does not claim to detect or terminate every active harness.

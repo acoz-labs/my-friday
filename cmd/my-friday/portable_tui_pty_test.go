@@ -35,6 +35,14 @@ func TestManagementPTYHelper(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if os.Getenv("MY_FRIDAY_TEST_UI_REFERENCES") == "1" {
+		if err := s.AddReference(portable.ReferenceLibrary{Version: 1, ID: "prior-work", Title: "Prior work", Description: "Earlier experiences", Purpose: "Reference only"}); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Mkdir(filepath.Join(home, "external"), 0700); err != nil {
+			t.Fatal(err)
+		}
+	}
 	if err := s.InitGit(context.Background()); err != nil {
 		t.Fatal(err)
 	}
@@ -63,7 +71,7 @@ func TestManagementPTYNavigationFormsSignalsAndResize(t *testing.T) {
 		t.Skip("expect unavailable; pure model tests still run")
 	}
 	binary, _ := os.Executable()
-	for _, mode := range []string{"vim", "no-color", "form", "reports", "interrupt", "terminate", "resize"} {
+	for _, mode := range []string{"vim", "no-color", "form", "reports", "references", "interrupt", "terminate", "resize"} {
 		t.Run(mode, func(t *testing.T) {
 			home := t.TempDir()
 			ctx, cancel := context.WithTimeout(context.Background(), 25*time.Second)
@@ -73,6 +81,9 @@ func TestManagementPTYNavigationFormsSignalsAndResize(t *testing.T) {
 			cmd.Env = []string{"PATH=/usr/bin:/bin", "TERM=xterm-256color", "MY_FRIDAY_TEST_UI_HELPER=1", "MY_FRIDAY_TEST_UI_HOME=" + home}
 			transcript := filepath.Join(home, "terminal.txt")
 			cmd.Env = append(cmd.Env, "MY_FRIDAY_TEST_UI_TRANSCRIPT="+transcript)
+			if mode == "references" {
+				cmd.Env = append(cmd.Env, "MY_FRIDAY_TEST_UI_REFERENCES=1")
+			}
 			if mode == "no-color" {
 				cmd.Env = append(cmd.Env, "NO_COLOR=1")
 			}

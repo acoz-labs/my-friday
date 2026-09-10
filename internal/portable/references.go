@@ -151,10 +151,15 @@ func (i Instance) validateReferenceRoot(s *Store, root string) error {
 	return nil
 }
 
-func (i Instance) BindReference(s *Store, id, root string) error {
+// A guided caller may supply the descriptor it displayed. A concurrent change
+// then fails instead of silently acknowledging an unseen description.
+func (i Instance) BindReference(s *Store, id, root string, reviewed ...ReferenceLibrary) error {
 	lib, err := s.referenceLibrary(id)
 	if err != nil {
 		return err
+	}
+	if len(reviewed) > 1 || (len(reviewed) == 1 && reviewed[0] != lib) {
+		return errors.New("reference description changed during review; reopen it before rebinding")
 	}
 	root, err = prospectivePath(root)
 	if err != nil {
@@ -182,25 +187,69 @@ func (i Instance) BindReference(s *Store, id, root string) error {
 	})
 }
 
+type ReferenceAvailability struct {
+	LibraryID string `json:"library_id"`
+	State     string `json:"state"`
+	Root      string `json:"root,omitempty"`
+	Detail    string `json:"detail"`
+}
+
+// CheckReference opens only the directory and metadata, never enumerating or
+// reading documents, executing scripts, or contacting a Git remote.
+func (i Instance) CheckReference(s *Store, id string) (ReferenceAvailability, error) {
+	status, _, root, err := i.inspectReference(s, id)
+	if root != nil {
+		_ = root.Close()
+	}
+	return status, err
+}
+
 func (i Instance) openReference(s *Store, id string) (*os.Root, ReferenceLibrary, error) {
+	status, lib, root, err := i.inspectReference(s, id)
+	if err == nil && status.State != "available" {
+		err = errors.New(status.Detail)
+	}
+	return root, lib, err
+}
+
+func (i Instance) inspectReference(s *Store, id string) (ReferenceAvailability, ReferenceLibrary, *os.Root, error) {
+	status := ReferenceAvailability{LibraryID: id}
 	lib, err := s.referenceLibrary(id)
 	if err != nil {
-		return nil, lib, err
+		return status, lib, nil, err
+	}
+	fail := func(state, detail string) (ReferenceAvailability, ReferenceLibrary, *os.Root, error) {
+		status.State, status.Detail = state, detail
+		return status, lib, nil, nil
 	}
 	dir := filepath.Join(i.Root, "references")
 	if err := referenceDirectory(dir, false); err != nil {
-		return nil, lib, errors.New("reference library is not bound on this instance; use reference bind")
+		if os.IsNotExist(err) {
+			return fail("unbound", "Reference library is not bound on this instance; use reference bind.")
+		}
+		return fail("invalid", "Reference metadata directory is invalid or unreadable; preserve it and inspect before rebinding.")
 	}
 	var binding referenceBinding
 	if err := readJSON(filepath.Join(dir, id+".json"), &binding); err != nil {
-		return nil, lib, errors.New("reference binding missing or invalid; use reference bind")
+		if os.IsNotExist(err) {
+			return fail("unbound", "Reference binding missing; use reference bind.")
+		}
+		return fail("invalid", "Reference binding invalid or unreadable; inspect it before rebinding.")
 	}
-	if binding.Version != 1 || binding.LibraryID != id || binding.LibrarySHA256 != libraryHash(lib) {
-		return nil, lib, errors.New("reference descriptor changed or binding is invalid; review it and explicitly rebind")
+	if binding.Version != 1 || binding.LibraryID != id {
+		return fail("invalid", "Reference binding version or library ID is invalid; review it before rebinding.")
+	}
+	status.Root = binding.Root
+	if binding.LibrarySHA256 != libraryHash(lib) {
+		return fail("stale", "Reference descriptor changed or binding is invalid; review it and explicitly rebind.")
 	}
 	if err := i.validateReferenceRoot(s, binding.Root); err != nil {
-		return nil, lib, err
+		return fail("unavailable", err.Error())
 	}
 	root, err := os.OpenRoot(binding.Root)
-	return root, lib, err
+	if err != nil {
+		return fail("unavailable", "Reference directory cannot be opened on this machine.")
+	}
+	status.State, status.Detail = "available", "Directory opened successfully. Document readability, eligible content and Git freshness were not tested; no documents were read."
+	return status, lib, root, nil
 }

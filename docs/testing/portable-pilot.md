@@ -952,3 +952,33 @@ unkeyed display-field literals flagged by vet. This includes the full race suite
 compiled management/API workflows, source-wizard regressions and configured
 cross-builds. An additional Linux/AMD64 CLI cross-build also passed. No public
 release or live source-hosting operation was performed.
+
+## Guided reference sources — 2026-09-09
+
+The owner requested a product workflow for the previously command-driven linking
+of external references. The agent menu now offers Reference sources: registration,
+description viewing, machine-local binding/rebinding, and explicit availability
+checks. The shared `reference status` JSON command provides the same metadata-only
+check to agents. Registration retains the existing descriptor/checkpoint/sync
+flow, with a clean-source preflight and explicit history-upload warning; binding
+acknowledges only the displayed descriptor and does not modify source Git.
+
+Disposable tests cover registration → local-only checkpoint → bind → availability,
+rebind without changing source HEAD, cancellation, dirty-source refusal, offline
+pending registration, stale-description review, unavailable/moved directories,
+malformed bindings and unbound states. The menu never displays the private-content
+canary in a fixture document and leaves that document unchanged. Eight real-PTY
+scenarios include navigating to a pre-registered source, observing unbound status,
+binding an existing directory and checking availability with Vim keys. Existing
+reference search/read boundary tests remain in the regression suite.
+
+Available means directory/metadata access only, not document eligibility or Git
+freshness. No remote cloning/fetching, descriptor editing/removal, content import,
+script execution or instruction promotion is added. Actual owner usability with
+their existing libraries remains a hands-on checkpoint.
+
+Complete native `mise exec -- bin/ci` passed with Go 1.26.4: vet, full race suite,
+compiled CLI/API regressions, PTY journeys and configured cross-builds. An extra
+Linux/AMD64 CLI cross-build passed. Final wording clarifications were followed
+by focused reference/menu tests. No live reference binding or source change was
+performed by this implementation checkpoint.

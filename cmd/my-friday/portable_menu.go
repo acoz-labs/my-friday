@@ -317,7 +317,7 @@ func (u managementUI) agent(path string) error {
 			}
 			u.tui = u.tui.WithContext(s.Agent.DefaultHarness + " · pinned: " + pin)
 		}
-		n, err := u.choose(i.Name, []string{"View status", "Configure repository and synchronization", "Change default harness", "Check installation health", "Repair installation", "Use this toolkit version for this agent", "Roll back the last toolkit change"}, "Back")
+		n, err := u.choose(i.Name, []string{"View status", "Configure repository and synchronization", "Change default harness", "Check installation health", "Repair installation", "Use this toolkit version for this agent", "Roll back the last toolkit change", "Reference sources"}, "Back")
 		if err != nil || n == 0 {
 			return err
 		}
@@ -386,6 +386,8 @@ func (u managementUI) agent(path string) error {
 			err = u.adopt(i, s)
 		case 7:
 			err = u.rollback(i, s)
+		case 8:
+			err = u.references(i.Root)
 		}
 		if err := u.problem(err); err != nil {
 			return err

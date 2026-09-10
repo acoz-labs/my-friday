@@ -81,6 +81,37 @@ switch -- $mode {
     await {j/k move}
     send -- "q"
   }
+  references {
+    send -- "jjl"
+    await {Installed agents}
+    await {j/k move}
+    send -- "l"
+    await {View status}
+    await {j/k move}
+    send -- "Gkl"
+    await {Register a reference source}
+    await {j/k move}
+    send -- "jl"
+    await {View description}
+    await {j/k move}
+    send -- "jjl"
+    await {Reference availability}
+    await {unbound}
+    await {j/k move}
+    send -- "jl"
+    await {Existing external directory}
+    await {Tab edit default}
+    send -- "$env(MY_FRIDAY_TEST_UI_HOME)/external\r"
+    await {What will change}
+    await {Continue\?}
+    send -- "jl"
+    await {Local binding saved}
+    await {j/k move}
+    send -- "jjl"
+    await {Directory opened successfully}
+    await {j/k move}
+    send -- "q"
+  }
   interrupt { send -- "\003" }
   terminate { exec kill -TERM [exp_pid] }
   resize {

@@ -24,6 +24,10 @@ func TestPortableReferenceWorkflow(t *testing.T) {
 	t.Setenv("MY_FRIDAY_INSTANCE", state)
 	t.Setenv("MY_FRIDAY_ASSISTANT_ROOT", source)
 	run("reference", "add", "--library", "prior-work", "--title", "Prior work", "--description", "Earlier implementation experiences", "--purpose", "Historical reference")
+	run("reference", "status", "--library", "prior-work")
+	if !strings.Contains(out.String(), `"state": "unbound"`) {
+		t.Fatal(out.String())
+	}
 	run("reference", "list")
 	if !strings.Contains(out.String(), "prior-work") || !strings.Contains(out.String(), "reference-only") {
 		t.Fatalf("missing discovery: %s", out.String())
@@ -35,6 +39,10 @@ func TestPortableReferenceWorkflow(t *testing.T) {
 		t.Fatal(err)
 	}
 	run("reference", "bind", "--library", "prior-work", "--path", external)
+	run("reference", "status", "--library", "prior-work")
+	if !strings.Contains(out.String(), `"state": "available"`) || strings.Contains(out.String(), "Retries duplicated") {
+		t.Fatal(out.String())
+	}
 	run("reference", "search", "--library", "prior-work", "--query", "retries")
 	var result struct {
 		Matches []struct {

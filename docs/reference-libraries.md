@@ -9,6 +9,36 @@ current. Provider integrations and personal libraries stay private.
 
 ## First slice: external local directories
 
+For guided setup, run `my-friday` → **Manage an installed agent → Reference
+sources**. Register a source's ID, title, description and intended purpose; review
+the portable metadata and checkpoint/sync effects before confirming. Then open
+that source and choose **Bind/rebind local directory**. You can register now and
+bind later, or bind an existing description after importing an agent on a second
+machine. The menu refuses registration while source has unrelated uncommitted
+work; avoid concurrent source edits during registration. A saved descriptor is
+retained if synchronization is pending or fails—inspect state rather than retrying
+registration. Local-only is not a remote backup.
+
+The source submenu offers **View description**, **Bind/rebind local directory**
+and **Check availability**. Checks inspect metadata and open the selected directory,
+without listing/reading documents or contacting a remote. States are `available`,
+`unbound`, `stale`, `invalid` and `unavailable`. Available does not prove readable
+documents, eligible text, absence of secrets or Git freshness. Rebinding explicitly
+acknowledges the displayed description; a change during review requires reopening
+it. Binding changes do not checkpoint source or edit the external directory.
+
+Agents and scripts use the same core check through:
+
+```sh
+my-friday reference status --instance /absolute/instance --library historical-notes
+```
+
+The result is JSON with `library_id`, `state`, `detail` and, when known, `root`.
+Exit 0 means the check completed; inspect `state` for availability. Unknown IDs or
+invalid descriptors are errors. Registration/binding/search/read remain the existing
+commands below, not simulated menu input. The TUI does not yet edit/remove portable
+descriptors or clone/update remote reference repositories.
+
 Supported sources are existing local directories, including Git working trees.
 No remote creation, cloning, fetching, authentication provider, script execution,
 vector index or format-specific memory converter is involved. Use a narrowly
