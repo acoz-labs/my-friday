@@ -31,6 +31,14 @@ type managementUI struct {
 	tui    *console.Console
 }
 
+func (u managementUI) line(tone console.Tone, text string) {
+	if u.tui != nil {
+		u.tui.Println(tone, text)
+		return
+	}
+	fmt.Fprintln(u.out, text)
+}
+
 func (u managementUI) ask(label, def string) (string, error) {
 	if u.tui != nil {
 		value, err := u.tui.Input(label, def)
@@ -113,7 +121,8 @@ func (u managementUI) problem(err error) error {
 		return io.EOF
 	}
 	if err != nil && !errors.Is(err, errMenuBack) {
-		fmt.Fprintf(u.out, "\nNeeds attention: %s\nYou can correct the issue and retry from this menu.\n", err)
+		u.line(console.Failure, "\nNeeds attention: "+err.Error())
+		u.line(console.Muted, "You can correct the issue and retry from this menu.")
 	}
 	return nil
 }
@@ -124,7 +133,8 @@ func managementMenu(home string, input io.Reader, out io.Writer) error {
 
 func managementMenuMode(home string, input io.Reader, out io.Writer, plain bool) error {
 	u := newManagementUI(home, input, out, plain)
-	fmt.Fprintln(out, "My Friday — agent management\nNothing changes just by opening this menu.")
+	u.line(console.Accent, "My Friday — agent management")
+	u.line(console.Muted, "Nothing changes just by opening this menu.")
 	if u.tui == nil {
 		fmt.Fprintln(out, "Plain mode: choose a number; :back cancels a prompt.")
 	}
@@ -168,7 +178,7 @@ func (u managementUI) setup(importing bool) error {
 	if importing {
 		title = "Import an existing agent"
 	}
-	fmt.Fprintf(u.out, "\n%s\n", title)
+	u.line(console.Heading, "\n"+title)
 	source := ""
 	var err error
 	if importing {
@@ -272,18 +282,28 @@ func (u managementUI) agent(path string) error {
 		if err != nil {
 			return fmt.Errorf("cannot load installation %s; preserve its files and inspect binding/source: %w", path, err)
 		}
+		if u.tui != nil {
+			pin := "custom path (see status)"
+			parent := filepath.Dir(i.Binary)
+			if filepath.Base(filepath.Dir(parent)) == "releases" {
+				pin = filepath.Base(parent)
+			}
+			u.tui = u.tui.WithContext(s.Agent.DefaultHarness + " · pinned: " + pin)
+		}
 		n, err := u.choose(i.Name, []string{"View status", "Configure repository and synchronization", "Change default harness", "Check installation health", "Repair installation", "Use this toolkit version for this agent", "Roll back the last toolkit change"}, "Back")
 		if err != nil || n == 0 {
 			return err
 		}
 		switch n {
 		case 1:
-			fmt.Fprintf(u.out, "\nAgent: %s\nDefault harness: %s\nSource: %s\nPersistent memory: %s\nInstance: %s\nPinned toolkit: %s\n", i.Name, s.Agent.DefaultHarness, s.Root, filepath.Join(s.Root, "memory"), i.Root, i.Binary)
+			u.line(console.Heading, "\nAgent: "+i.Name)
+			fmt.Fprintf(u.out, "Default harness: %s\n", s.Agent.DefaultHarness)
+			u.line(console.Muted, fmt.Sprintf("Source: %s\nPersistent memory: %s\nInstance: %s\nPinned toolkit: %s", s.Root, filepath.Join(s.Root, "memory"), i.Root, i.Binary))
 			state, e := s.RemoteSetupStatus(context.Background())
 			if e != nil {
-				fmt.Fprintf(u.out, "Source setup status needs attention: %s\n", e)
+				u.line(console.Warning, "Source setup status needs attention: "+e.Error())
 			} else if state.Origin == "" {
-				fmt.Fprintln(u.out, "Source backup: local only (no remote).")
+				u.line(console.Warning, "Source backup: local only (no remote).")
 			} else {
 				fmt.Fprintf(u.out, "Configured remote: %s\nThis is configuration, not proof of a successful recent sync.\n", state.Origin)
 			}
@@ -304,7 +324,7 @@ func (u managementUI) agent(path string) error {
 				if err == nil && ok {
 					err = s.WithCheckpointObserver(portable.Authorship{DeviceID: i.DeviceID, Actor: s.Agent.Name, Harness: "management"}).SetDefaultHarness(context.Background(), harness)
 					if err == nil {
-						fmt.Fprintln(u.out, "Default harness saved and checkpointed locally. It will synchronize at the next normal sync.")
+						u.line(console.Success, "Default harness saved and checkpointed locally. It will synchronize at the next normal sync.")
 					}
 				}
 			}
@@ -319,7 +339,7 @@ func (u managementUI) agent(path string) error {
 					err = i.Project(s)
 				}
 				if err == nil {
-					fmt.Fprintln(u.out, "Managed files refreshed. Start a fresh agent session.")
+					u.line(console.Success, "Managed files refreshed. Start a fresh agent session.")
 					launcher := filepath.Join(u.home, ".local/bin", i.Name)
 					if _, missing := os.Lstat(launcher); os.IsNotExist(missing) {
 						create, askErr := u.confirm("The default launcher is missing at " + launcher + ". Create it? Custom launchers elsewhere will not be changed.")
@@ -351,18 +371,18 @@ func (u managementUI) doctor(i portable.Instance, s *portable.Store) {
 			passed++
 		}
 	}
-	fmt.Fprintf(u.out, "\nInstallation health: %d of %d local checks passed.\n", passed, len(r.Checks))
+	u.line(console.Heading, fmt.Sprintf("\nInstallation health: %d of %d local checks passed.", passed, len(r.Checks)))
 	for _, check := range r.Checks {
 		if check.OK {
 			continue
 		}
-		fmt.Fprintf(u.out, "  Needs attention — %s: %s\n", check.Name, check.Detail)
+		u.line(console.Warning, fmt.Sprintf("  Needs attention — %s: %s", check.Name, check.Detail))
 		if check.Remedy != "" {
 			fmt.Fprintf(u.out, "    Next: %s\n", check.Remedy)
 		}
 	}
 	if r.Healthy {
-		fmt.Fprintln(u.out, "Local structural checks passed.")
+		u.line(console.Success, "Healthy: local structural checks passed.")
 	} else {
 		fmt.Fprintln(u.out, "Repair installation can refresh managed instructions/hooks; other findings need the remedy shown above.")
 	}
@@ -371,7 +391,7 @@ func (u managementUI) doctor(i portable.Instance, s *portable.Store) {
 	if current != i.Binary {
 		fmt.Fprintln(u.out, "This compares against the running toolkit; the agent is pinned to another executable. Use this toolkit version to adopt it explicitly.")
 	}
-	fmt.Fprintln(u.out, "Authentication and remote synchronization were not tested. Doctor is read-only.")
+	u.line(console.Muted, "Authentication and remote synchronization were not tested. Doctor is read-only.")
 }
 
 func (u managementUI) adopt(i portable.Instance, s *portable.Store) error {
@@ -402,7 +422,9 @@ func (u managementUI) adopt(i portable.Instance, s *portable.Store) error {
 	if err != nil {
 		return err
 	}
-	fmt.Fprintf(u.out, "Agent toolkit updated. Rollback files: %s\nStart a fresh agent session. Other agents retain their existing versions.\n", backup)
+	u.line(console.Success, "Agent toolkit updated.")
+	u.line(console.Muted, "Rollback files: "+backup)
+	fmt.Fprintln(u.out, "Start a fresh agent session. Other agents retain their existing versions.")
 	return nil
 }
 
@@ -449,6 +471,6 @@ func (u managementUI) rollback(i portable.Instance, s *portable.Store) error {
 	if err := i.RollbackToolkit(s, backups[n-1]); err != nil {
 		return err
 	}
-	fmt.Fprintln(u.out, "Previous agent toolkit restored. Start a fresh session. The My Friday management command was not downgraded.")
+	u.line(console.Success, "Previous agent toolkit restored. Start a fresh session. The My Friday management command was not downgraded.")
 	return nil
 }

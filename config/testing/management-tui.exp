@@ -3,6 +3,9 @@ set timeout 15
 set binary [lindex $argv 0]
 set mode [lindex $argv 1]
 log_user 0
+if {[info exists env(MY_FRIDAY_TEST_UI_TRANSCRIPT)]} {
+  log_file -a $env(MY_FRIDAY_TEST_UI_TRANSCRIPT)
+}
 proc await {pattern} {
   global expect_out
   expect {
@@ -15,7 +18,8 @@ spawn -noecho {*}[list $binary -test.run=^TestManagementPTYHelper$]
 stty rows 24 columns 100 < $spawn_out(slave,name)
 await {j/k move}
 switch -- $mode {
-  vim {
+  vim -
+  no-color {
     send -- "jjl"
     await {Installed agents}
     await {j/k move}
@@ -60,4 +64,5 @@ switch -- $mode {
 await {FRIDAY_TUI_TERMINAL_RESTORED}
 expect eof
 set status [wait]
+log_file
 if {[lindex $status 3] != 0} { exit 1 }

@@ -7,6 +7,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"regexp"
+	"strings"
 	"testing"
 	"time"
 
@@ -61,7 +63,7 @@ func TestManagementPTYNavigationFormsSignalsAndResize(t *testing.T) {
 		t.Skip("expect unavailable; pure model tests still run")
 	}
 	binary, _ := os.Executable()
-	for _, mode := range []string{"vim", "form", "interrupt", "terminate", "resize"} {
+	for _, mode := range []string{"vim", "no-color", "form", "interrupt", "terminate", "resize"} {
 		t.Run(mode, func(t *testing.T) {
 			home := t.TempDir()
 			ctx, cancel := context.WithTimeout(context.Background(), 25*time.Second)
@@ -69,9 +71,28 @@ func TestManagementPTYNavigationFormsSignalsAndResize(t *testing.T) {
 			script := filepath.Join("..", "..", "config", "testing", "management-tui.exp")
 			cmd := exec.CommandContext(ctx, "/usr/bin/expect", script, binary, mode)
 			cmd.Env = []string{"PATH=/usr/bin:/bin", "TERM=xterm-256color", "MY_FRIDAY_TEST_UI_HELPER=1", "MY_FRIDAY_TEST_UI_HOME=" + home}
+			transcript := filepath.Join(home, "terminal.txt")
+			cmd.Env = append(cmd.Env, "MY_FRIDAY_TEST_UI_TRANSCRIPT="+transcript)
+			if mode == "no-color" {
+				cmd.Env = append(cmd.Env, "NO_COLOR=1")
+			}
 			data, err := cmd.CombinedOutput()
 			if err != nil {
 				t.Fatalf("%s\n%v", data, err)
+			}
+			raw, err := os.ReadFile(transcript)
+			if err != nil {
+				t.Fatal(err)
+			}
+			styled := regexp.MustCompile(`\x1b\[(1;36|32|33|31|2|1)m`).Match(raw)
+			if mode == "no-color" && styled {
+				t.Fatal("NO_COLOR emitted styling")
+			}
+			if mode == "vim" && !styled {
+				t.Fatal("interactive terminal emitted no styling")
+			}
+			if (mode == "vim" || mode == "no-color") && !strings.Contains(string(raw), "pinned:") {
+				t.Fatal("missing agent context")
 			}
 			if _, err := os.Stat(filepath.Join(home, ".local/share/my-friday/repositories/hjkl-agent")); !os.IsNotExist(err) {
 				t.Fatal("cancelled form created agent")

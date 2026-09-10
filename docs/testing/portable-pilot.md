@@ -910,3 +910,24 @@ race tests and configured Darwin/Linux cross-builds. No production release was
 published by this verification.
 Owner usability testing of the new TUI and an actual installed-agent management
 API conversation remain hands-on checkpoints; simulated drivers do not close them.
+
+## Restrained management styling — 2026-09-09
+
+The owner accepted the keyboard TUI and requested a restrained visual pass.
+Presentation now adds terminal-palette accents, muted supporting text, labeled
+status colors and a compact per-agent harness/pin header. No management operation,
+projection, memory format, credential flow or API contract changes. The header
+does not launch a retained executable to infer build metadata.
+
+Unit tests verify color preserves text, sanitizes untrusted controls, honors
+nonempty NO_COLOR, and clips before styling, including a corrected narrow-width
+submitted-field summary. Six disposable real-PTY scenarios passed: styled Vim
+navigation/context, NO_COLOR navigation/context, fields/cancel, Ctrl+C, SIGTERM
+and resize. The transcript assertions check style presence/absence while terminal
+restoration checks remain in place. Visual preference acceptance for the new
+palette remains a hands-on check; the terminal's palette and dim-text treatment
+can differ by emulator/theme.
+
+Complete native `mise exec -- bin/ci` passed with Go 1.26.4, including vet,
+all-package race tests and the legacy integration checks. An additional
+Linux/AMD64 CLI cross-build passed. No public release was published.

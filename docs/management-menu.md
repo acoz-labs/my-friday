@@ -12,6 +12,20 @@ Paste is bounded and control characters are removed; these are single-line
 settings fields, never password prompts. Labels are width-limited and menus
 scroll within the available terminal height. Unknown/zero PTY size uses defaults.
 
+The visual treatment is deliberately small: bold headings, cyan selection/active
+fields, muted help/defaults/paths, and green/amber/red success/attention/failure
+messages. Text labels and the selection marker remain meaningful without color.
+The terminal's own ANSI palette supplies the colors, with no fixed background,
+borders or animation. Agent menus include the default harness and pinned toolkit
+directory label; custom executable locations say "custom path" and the full path
+remains available in Status. This header does not execute a binary to infer its
+version or imply that the pin matches the running management tool.
+
+Set `NO_COLOR=1` to disable styling while retaining the keyboard TUI. Any nonempty
+`NO_COLOR` value is honored. Plain mode, pipes and machine-readable CLI/API output
+remain unstyled; `NO_COLOR` does not disable the cursor controls needed by the TUI.
+Use `menu --plain` when you want neither styling nor interactive cursor control.
+
 The TUI uses pinned Bubble Tea v2.0.9 for terminal rendering/input/restoration.
 It operates over SSH when both streams are terminals with a usable TERM value.
 Use `my-friday menu --plain` or `MY_FRIDAY_PLAIN=1` to retain numbered prompts

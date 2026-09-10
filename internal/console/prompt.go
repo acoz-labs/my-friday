@@ -16,7 +16,11 @@ import (
 
 var ErrBack = errors.New("back")
 
-type Console struct{ input, output *os.File }
+type Console struct {
+	input, output *os.File
+	theme         Theme
+	subtitle      string
+}
 
 // Keep operation summaries readable without allowing data-derived terminal
 // control sequences. The TUI renderer itself writes to the original terminal.
@@ -48,9 +52,10 @@ func New(input io.Reader, output io.Writer) *Console {
 	if !Available(input, output) {
 		return nil
 	}
-	return &Console{input.(*os.File), output.(*os.File)}
+	return &Console{input: input.(*os.File), output: output.(*os.File), theme: terminalTheme()}
 }
 func (c *Console) run(m promptModel) (promptModel, error) {
+	m.theme, m.subtitle = c.theme, c.subtitle
 	result, err := tea.NewProgram(m, tea.WithInput(c.input), tea.WithOutput(c.output)).Run()
 	if errors.Is(err, tea.ErrInterrupted) {
 		return m, io.EOF
@@ -88,6 +93,8 @@ type promptModel struct {
 	input, done, cancelled, quit bool
 	width, height                int
 	goPending                    bool
+	theme                        Theme
+	subtitle                     string
 }
 
 func newSelector(title string, items []string, selected int) promptModel {
@@ -252,12 +259,16 @@ func (m promptModel) View() tea.View {
 			return tea.NewView("")
 		}
 		if m.input {
-			return tea.NewView(fit(m.title, m.width) + ": " + fit(m.value, m.width) + "\n")
+			return tea.NewView(m.theme.Text(Muted, fit(m.title+": "+m.value, m.width)) + "\n")
 		}
-		return tea.NewView(fit(m.title+" › "+m.items[m.selected], m.width) + "\n")
+		return tea.NewView(m.theme.Text(Muted, fit(m.title+" › "+m.items[m.selected], m.width)) + "\n")
 	}
 	width := max(8, m.width-2)
-	lines := []string{fit(m.title, width), ""}
+	lines := []string{m.theme.Text(Heading, fit(m.title, width))}
+	if m.subtitle != "" {
+		lines = append(lines, m.theme.Text(Muted, fit(m.subtitle, width)))
+	}
+	lines = append(lines, "")
 	if m.input {
 		before := string(m.text[:m.cursor])
 		after := string(m.text[m.cursor:])
@@ -265,13 +276,13 @@ func (m promptModel) View() tea.View {
 			_, size := firstRune(before)
 			before = before[size:]
 		}
-		lines = append(lines, fit("› "+before+"│"+after, width))
+		lines = append(lines, m.theme.Text(Accent, fit("› "+before+"│"+after, width)))
 		if m.def != "" {
-			lines = append(lines, fit("Default: "+m.def, width))
+			lines = append(lines, m.theme.Text(Muted, fit("Default: "+m.def, width)))
 		}
-		lines = append(lines, fit("Enter save · Tab edit default · Esc back · Ctrl+C exit", width))
+		lines = append(lines, m.theme.Text(Muted, fit("Enter save · Tab edit default · Esc back · Ctrl+C exit", width)))
 	} else {
-		count := max(1, m.height-5)
+		count := max(1, m.height-len(lines)-4)
 		start := max(0, m.selected-count+1)
 		end := min(len(m.items), start+count)
 		for n := start; n < end; n++ {
@@ -279,12 +290,16 @@ func (m promptModel) View() tea.View {
 			if n == m.selected {
 				mark = "› "
 			}
-			lines = append(lines, fit(mark+m.items[n], width))
+			line := fit(mark+m.items[n], width)
+			if n == m.selected {
+				line = m.theme.Text(Accent, line)
+			}
+			lines = append(lines, line)
 		}
 		if end-start < len(m.items) {
-			lines = append(lines, fit(fmt.Sprintf("%d of %d", m.selected+1, len(m.items)), width))
+			lines = append(lines, m.theme.Text(Muted, fit(fmt.Sprintf("%d of %d", m.selected+1, len(m.items)), width)))
 		}
-		lines = append(lines, "", fit("↑/↓ or j/k move · Enter/l select · Esc/h back · gg/G ends", width))
+		lines = append(lines, "", m.theme.Text(Muted, fit("↑/↓ or j/k move · Enter/l select · Esc/h back · gg/G ends", width)))
 	}
 	return tea.NewView(strings.Join(lines, "\n") + "\n")
 }
