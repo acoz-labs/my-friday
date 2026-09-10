@@ -1013,3 +1013,30 @@ is historical, not perpetual authentication proof. Package installation, secret
 enrollment, unattended provider access and portability of a real capability
 still require private hands-on acceptance. No source migration, live provider
 effects or public release were performed for this checkpoint.
+
+## Platform-aware capability authoring — 2026-09-10
+
+The owner requested explicit platform support in shared capability-building
+guidance, with native implementations remaining private. The embedded guide,
+rationale template and generated harness instructions now distinguish shared
+behavior, OS/architecture prerequisites, backend selection and native evidence.
+Selection must not rewrite source, replace another platform's implementation,
+copy credential stores or improvise a fallback. Unimplemented platforms are not
+actionable missing packages; private checks must fail without requesting prepare.
+
+No manifest migration, core OS dispatcher, provider backend or new readiness state
+was introduced. The guide explicitly documents generic failed receipts and
+suppressed private diagnostics, and asks capability authors for safe diagnostics
+and honest shared/native/skipped test reporting. Existing capabilities are not
+automatically edited or certified by a toolkit upgrade.
+
+Tests first demonstrated missing embedded guidance, then passed after the guide
+changes. Self-contained CLI tests require no source repository; projection tests
+check the generated reminder. A synthetic unsupported-platform check exits 20
+through the actual machine runner and proves neither prepare nor verify runs
+and no readiness is claimed. This is not Linux-native capability acceptance.
+
+Complete native Go 1.26.4 `mise exec -- bin/ci` passed: vet, full race suite, nine
+disposable PTY scenarios and configured cross-builds. An additional Linux/AMD64
+CLI cross-build passed. No private capability changes, credential access or live
+provider effects were performed for this implementation checkpoint.

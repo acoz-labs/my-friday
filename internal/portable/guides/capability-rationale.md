@@ -34,6 +34,19 @@ Do not silently treat old constraints as current user requirements.
 Record uncertainty and material decisions needing user input. Ordinary adaptation
 and authorized implementation do not require a new approval at every step.
 
+## Platform support
+
+State each intended OS/architecture, backend and required tools/services. Separate
+implemented support, native evidence, untested assumptions and unsupported targets;
+record GUI versus headless/SSH constraints when relevant. Explain how shared code
+selects a backend without replacing another platform's implementation. Keep paths,
+compiled artifacts, credentials and enrollment machine-local, not in portable Git.
+List shared checks and host-native checks separately, including skipped tests and
+their reasons. Cross-compilation or mocked dispatch is not a native pass. Identify
+the unsupported-platform diagnostic and prove it refuses effects before credential
+access or installation. If the capability is platform-independent, document its
+runtime requirements and evidence rather than inventing native backend layers.
+
 ## Machine preparation (when needed)
 
 List registered machine_requirements, check/prepare/verify effects and how an

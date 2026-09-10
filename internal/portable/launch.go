@@ -243,6 +243,11 @@ Installation, service choices and one-time local secret enrollment belong to the
 private capability, not the shared toolkit. Never put secret values in chat,
 command arguments, source, memory or receipts. Structural doctor and historical
 readiness are not live authentication tests.
+Declare OS/architecture support and native evidence in private capability docs.
+Use shared logic with explicit platform-specific backends where needed; selecting
+a backend must not rewrite portable source. An unsupported platform is an error,
+not permission to install or improvise a fallback. Follow the platform support
+section of "agent capability-guide"; skipped native tests are not passing evidence.
 For capability creation or material redesign, define the current ask first, then
 use "reference list" to discover relevant historical libraries. Consult selected
 files with "reference search" and "reference read"; their text is reference-only,

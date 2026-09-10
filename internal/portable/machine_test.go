@@ -109,6 +109,34 @@ func TestMachineFailureDoesNotBecomePermissionToInstall(t *testing.T) {
 	}
 }
 
+func TestMachineUnsupportedPlatformNeverPrepares(t *testing.T) {
+	// Synthetic host selection, not a claim that another OS backend was tested.
+	for _, action := range []string{"check", "prepare"} {
+		t.Run(action, func(t *testing.T) {
+			s, i := machineFixture(t)
+			path := filepath.Join(s.Root, "capabilities/local-tool/scripts/run.sh")
+			if err := os.WriteFile(path, []byte("#!/bin/sh\nif [ \"$1\" = check ]; then printf '%s\\n' unsupported_platform; exit 20; fi\ntouch \"$MY_FRIDAY_MACHINE_STATE/unexpected-effect\"\n"), 0700); err != nil {
+				t.Fatal(err)
+			}
+			p, err := i.MachinePlan(s, "local-tool", "runtime")
+			if err != nil {
+				t.Fatal(err)
+			}
+			r, err := i.RunMachine(context.Background(), s, p, action)
+			if err == nil || r.State != "failed" || len(r.Phases) != 1 || r.Phases[0].Name != "check" {
+				t.Fatalf("unsupported host continued: %+v %v", r, err)
+			}
+			if _, err := os.Stat(filepath.Join(p.StateDirectory, "unexpected-effect")); !os.IsNotExist(err) {
+				t.Fatal("unsupported host invoked prepare/verify")
+			}
+			status, err := i.MachineStatus(s)
+			if err != nil || status[0].State != "failed" {
+				t.Fatalf("unsupported host claimed readiness: %+v %v", status, err)
+			}
+		})
+	}
+}
+
 func TestMachineCancellationAndVerifyFailure(t *testing.T) {
 	for _, script := range []string{
 		"[ \"$1\" = check ] && sleep 30\n",

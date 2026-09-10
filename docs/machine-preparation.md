@@ -11,6 +11,30 @@ unchanged. Upgrade every participating machine before adding the optional field;
 older strict parsers reject it. Removing the field to roll back does not uninstall
 software or delete local state. No public release is implied by this feature.
 
+## Platform-aware private capabilities
+
+The embedded capability guide and rationale template require explicit platform
+support, runtime prerequisites and per-platform evidence. One private capability
+can retain shared logic plus host-specific implementations. Runtime selection
+must not rewrite Git source, replace another host's backend, transfer credential
+stores or silently install a fallback. A new backend is a deliberate capability
+development task, not an automatic consequence of importing source.
+
+No manifest schema or runtime dispatch is added for this guidance. Private command
+entrypoints detect OS/architecture before platform-only imports, credentials or
+effects. Unsupported targets return an error other than check exit 10, which is
+reserved for actionable missing setup. Ordinary use and direct prepare/verify
+must guard too. Document a credential-free diagnostic; the runner suppresses its
+raw output and records a generic failed phase, not a distinct unsupported state.
+Neither the menu nor doctor claims live OS support based on historical receipts.
+
+Separate shared tests from native checks. Host-inapplicable suites may be reported
+as skipped, never passed; missing dependencies on a claimed supported host fail
+its native check. Shared tests alone cannot establish operational readiness on
+an unsupported host. Mocked platform dispatch and cross-builds do not substitute
+for native tests. Keep local enrollment and acceptance per machine, and preserve
+the other platform's implementation and evidence when extending support.
+
 ## Human and agent entry points
 
 In the management menu, select an agent → **Prepare this machine**. Inspect a

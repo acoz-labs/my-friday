@@ -19,7 +19,9 @@ inspect that capability directory for its documentation before using it.
 ## Authoring workflow
 
 1. Define the trigger, inputs, output, prerequisites, allowed effects, and failure
-   behavior. Keep service choices and personal rules in this private repository.
+   behavior. Declare platform support and evidence as described below; portability
+   of source is not proof that every backend works everywhere. Keep service
+   choices and personal rules in this private repository.
 2. Run `reference list`. Select relevant linked libraries by description/purpose,
    then consult them using the reference workflow below. Refine the ask using
    their evidence; do not replace current requirements with an old process.
@@ -225,6 +227,66 @@ Test synthetic success, repeat-without-reinstall, missing prerequisites, uncerta
 checks, invalid credentials without replacement, verification failure, partial
 preparation, and portability. Never mark a capability operational on manifest
 validation alone. Keep provider-specific live acceptance in the private source.
+
+## Platform support
+
+Keep one portable capability with shared behavior and only the platform-specific
+code it actually needs. Describe support in instructions.md and evidence in
+RATIONALE.md: OS/architecture, required runtimes/tools/services, backend choice,
+implemented versus unimplemented support, and native tests actually run. Include
+GUI/login versus headless/SSH assumptions when relevant. A platform-independent
+implementation still declares its runtime prerequisites. Do not build speculative
+backends merely to fill a matrix or force extra layers into a small capability.
+No new manifest fields are defined here; do not add platforms, backends or
+supported_os to capability.json. The existing command arrays can call a private
+platform-aware entrypoint.
+
+Detect the real host OS/architecture before importing platform-only modules,
+compiling native code, accessing credentials or changing machine configuration.
+Select the existing supported backend; backend selection must not rewrite
+portable source, replace another platform's implementation, or enable new hooks.
+Keep portable intent and both implementations in source Git; keep the selected
+machine's paths, compiled artifacts, credentials and setup receipts local. Never
+sync credential values or copy a native credential store between machines as
+an import shortcut. Enroll once and verify separately on each supported machine.
+
+An unimplemented OS/architecture is unsupported_platform, not a missing package.
+Give a fixed, secret-free private diagnostic identifying the unsupported target
+and the next step: add/test that backend through capability design, or use a
+supported host. In machine check/prepare/verify, return a nonzero error code
+other than 10 (for example 20), not exit 10, and perform no installation,
+credential reads, automatic fallback or source rewriting. Guard ordinary usage
+and direct prepare/verify entrypoints too, not just the toolkit's initial check.
+On a supported target, absent prerequisites can request preparation with check
+exit 10 only when a reviewed installation path exists. A missing bootstrap
+interpreter cannot install itself: use an already available bootstrap entrypoint
+or explain that prerequisite explicitly. Never report ready from a stub backend.
+
+Current toolkit limits matter: machine status and doctor do not detect live
+platform support; they inspect historical receipts. The runner records failed,
+not a special unsupported_platform state, and discards raw script diagnostics.
+Document the support matrix and a safe credential-free diagnostic entrypoint for
+details; do not claim the menu displays a private failure reason it cannot see.
+This guidance does not add automatic OS dispatch, installation or source edits
+to My Friday itself. Those decisions belong to reviewed private capability code.
+
+Separate shared checks from native backend checks. Shared logic should be tested
+without importing unavailable native libraries. A private test dispatcher may
+select this host's native suite and explicitly report other platforms as skipped,
+with reasons, not passed. Missing prerequisites for a claimed supported host
+must fail its native check; an unsupported host must not pass the readiness or
+aggregate operational check merely because shared checks passed. agent check
+suppresses output and records exit status only: keep a safe direct test summary
+and per-platform evidence in the rationale; a green wrapper is not cross-platform
+proof. Preserve existing tests for other backends when adding a new one.
+
+Test platform selection, unknown OS/architecture, missing runtime, repeated setup,
+and unsupported check/prepare/verify refusing effects. Inject synthetic targets
+only through test fixtures; mocked platform selection and cross-compilation are
+not native evidence. Record which tests were executed, skipped, or still need
+SSH/reboot/sleep or other user participation. Adding Linux support after macOS
+is a normal private capability change using current requirements, references and
+tests; it should extend the same capability, not silently migrate its storage.
 
 ## Portable paths and working directories
 

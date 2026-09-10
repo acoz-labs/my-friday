@@ -329,3 +329,24 @@ func TestCapabilityAuthoringIsSelfContained(t *testing.T) {
 		t.Fatal("invalid template ID accepted")
 	}
 }
+
+func TestCapabilityPlatformGuidanceShipsWithoutRepository(t *testing.T) {
+	t.Setenv("MY_FRIDAY_ASSISTANT_ROOT", "/nonexistent-assistant")
+	for command, required := range map[string][]string{
+		"capability-guide":     {"## Platform support", "unsupported_platform", "not exit 10", "shared checks", "skipped", "No new manifest fields", "backend selection must not rewrite"},
+		"capability-rationale": {"## Platform support", "OS/architecture", "unsupported", "native evidence", "machine-local"},
+	} {
+		var out, errs bytes.Buffer
+		if err := runPortable([]string{"agent", command}, strings.NewReader(""), &out, &errs); err != nil {
+			t.Fatal(err)
+		}
+		for _, want := range required {
+			if !strings.Contains(out.String(), want) {
+				t.Errorf("%s omits %q", command, want)
+			}
+		}
+		if errs.Len() != 0 {
+			t.Fatal(errs.String())
+		}
+	}
+}
