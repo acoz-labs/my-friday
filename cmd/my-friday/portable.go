@@ -66,12 +66,12 @@ func runPortable(args []string, input io.Reader, out, errout io.Writer) (err err
 		}
 		// Delegate option help to the command's own flag definitions.
 		if (len(args) == 2 && (args[1] == "setup" || args[1] == "sync" || args[1] == "hook")) ||
-			(len(args) == 3 && (args[1] == "agent" || args[1] == "memory" || args[1] == "reference")) {
+			(len(args) == 3 && (args[1] == "agent" || args[1] == "memory" || args[1] == "reference" || args[1] == "machine")) {
 			return runPortable(append(append([]string{}, args[1:]...), "--help"), input, out, out)
 		}
 		return printPortableHelp(topic, out)
 	}
-	if (args[0] == "agent" || args[0] == "memory" || args[0] == "reference") && (len(args) == 1 || (len(args) == 2 && helpFlag(args[1]))) {
+	if (args[0] == "agent" || args[0] == "memory" || args[0] == "reference" || args[0] == "machine") && (len(args) == 1 || (len(args) == 2 && helpFlag(args[1]))) {
 		return printPortableHelp(args[0], out)
 	}
 	if (len(args) == 2 || len(args) == 3) && helpFlag(args[len(args)-1]) {
@@ -106,6 +106,8 @@ func runPortable(args []string, input io.Reader, out, errout io.Writer) (err err
 		return portableMemory(args[1:], input, out, errout)
 	case "reference":
 		return portableReference(args[1:], out, errout)
+	case "machine":
+		return portableMachine(args[1:], out, errout)
 	case "sync":
 		f := portableFlags("sync", errout)
 		root := f.String("repository", os.Getenv("MY_FRIDAY_ASSISTANT_ROOT"), "Assistant repository")

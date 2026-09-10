@@ -34,6 +34,15 @@ Do not silently treat old constraints as current user requirements.
 Record uncertainty and material decisions needing user input. Ordinary adaptation
 and authorized implementation do not require a new approval at every step.
 
+## Machine preparation (when needed)
+
+List registered machine_requirements, check/prepare/verify effects and how an
+existing installation is preserved. Explain the separate one-time local secret
+enrollment step, unattended reuse and explicit invalid-credential replacement.
+Identify synthetic versus live readiness checks, interruption recovery and the
+new-machine test. Do not copy local state, credential values or receipt paths
+into this portable document. Omit this section when there are no prerequisites.
+
 ## Verification and active learning
 
 List the actual tests, outcomes, limitations and regression cases derived from

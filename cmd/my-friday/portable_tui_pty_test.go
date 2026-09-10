@@ -43,6 +43,9 @@ func TestManagementPTYHelper(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+	if os.Getenv("MY_FRIDAY_TEST_UI_MACHINE") == "1" {
+		writeCommandMachineFixture(t, s)
+	}
 	if err := s.InitGit(context.Background()); err != nil {
 		t.Fatal(err)
 	}
@@ -71,7 +74,7 @@ func TestManagementPTYNavigationFormsSignalsAndResize(t *testing.T) {
 		t.Skip("expect unavailable; pure model tests still run")
 	}
 	binary, _ := os.Executable()
-	for _, mode := range []string{"vim", "no-color", "form", "reports", "references", "interrupt", "terminate", "resize"} {
+	for _, mode := range []string{"vim", "no-color", "form", "reports", "references", "machine", "interrupt", "terminate", "resize"} {
 		t.Run(mode, func(t *testing.T) {
 			home := t.TempDir()
 			ctx, cancel := context.WithTimeout(context.Background(), 25*time.Second)
@@ -83,6 +86,9 @@ func TestManagementPTYNavigationFormsSignalsAndResize(t *testing.T) {
 			cmd.Env = append(cmd.Env, "MY_FRIDAY_TEST_UI_TRANSCRIPT="+transcript)
 			if mode == "references" {
 				cmd.Env = append(cmd.Env, "MY_FRIDAY_TEST_UI_REFERENCES=1")
+			}
+			if mode == "machine" {
+				cmd.Env = append(cmd.Env, "MY_FRIDAY_TEST_UI_MACHINE=1")
 			}
 			if mode == "no-color" {
 				cmd.Env = append(cmd.Env, "NO_COLOR=1")
@@ -98,6 +104,19 @@ func TestManagementPTYNavigationFormsSignalsAndResize(t *testing.T) {
 			styled := regexp.MustCompile(`\x1b\[(1;36|32|33|31|2|1)m`).Match(raw)
 			if mode == "no-color" && styled {
 				t.Fatal("NO_COLOR emitted styling")
+			}
+			if mode == "machine" {
+				i, s, err := portable.LoadInstance(filepath.Join(home, ".local/share/my-friday/instances/fixture"))
+				if err != nil {
+					t.Fatal(err)
+				}
+				status, err := i.MachineStatus(s)
+				if err != nil || len(status) != 1 || status[0].State != "ready" {
+					t.Fatalf("machine TUI did not verify: %+v %v", status, err)
+				}
+				if strings.Contains(string(raw), "RAW_OUTPUT_CANARY") {
+					t.Fatal("private script output leaked into terminal")
+				}
 			}
 			if mode == "vim" && !styled {
 				t.Fatal("interactive terminal emitted no styling")

@@ -18,11 +18,12 @@ import (
 )
 
 type Capability struct {
-	Version       int            `json:"schema_version"`
-	ID            string         `json:"id"`
-	Description   string         `json:"description"`
-	Subscriptions []Subscription `json:"subscriptions"`
-	Checks        [][]string     `json:"checks,omitempty"`
+	Version             int                  `json:"schema_version"`
+	ID                  string               `json:"id"`
+	Description         string               `json:"description"`
+	Subscriptions       []Subscription       `json:"subscriptions"`
+	Checks              [][]string           `json:"checks,omitempty"`
+	MachineRequirements []MachineRequirement `json:"machine_requirements,omitempty"`
 }
 
 // CapabilityInfo adds machine-local navigation to the runtime inventory only.
@@ -112,6 +113,9 @@ func (s *Store) Capabilities() ([]Capability, error) {
 		}
 		if c.Version != 1 || c.ID != entry.Name() || strings.TrimSpace(c.Description) == "" {
 			return nil, errors.New("invalid capability manifest")
+		}
+		if err := validateMachineRequirements(c.MachineRequirements); err != nil {
+			return nil, err
 		}
 		ids := map[string]bool{}
 		for _, sub := range c.Subscriptions {

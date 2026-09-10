@@ -7,6 +7,11 @@ memory, reference and capability commands remain their established JSON CLI;
 this API completes the **installation/management** surface rather than wrapping
 arbitrary shell commands or replacing working memory tooling.
 
+[Machine preparation](machine-preparation.md) also uses its own JSON CLI:
+`machine status`, `machine check` and preview/apply `machine prepare`. Discover
+flags with `help machine`; do not automate its management menu. These commands
+are not actions in the management API envelope.
+
 Start with:
 
 ```sh

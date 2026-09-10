@@ -123,7 +123,8 @@ checks is an optional array of command-argument arrays. Each command must be
 nonempty. Commands are literal argv, not shell expressions. Use an explicit
 interpreter (such as sh or python3) or mark directly invoked scripts executable.
 Do not invent additional manifest fields: unknown fields are rejected. Put
-requirements, usage, limitations, and side-effect policy in instructions.md.
+usage, limitations, and side-effect policy in instructions.md. Optional
+machine_requirements registers the explicit preparation contract below.
 
 Checks execute sequentially from a temporary copy of the capability directory,
 with a 120-second timeout per command. Locate implementation relative to the
@@ -134,6 +135,96 @@ My Friday. For debugging, run the declared check directly from its capability
 directory after reading its instructions and effects. Empty checks mean only
 structural validation, not tested behavior. Check scripts have full user access;
 the temporary copy is not a security sandbox.
+
+## Machine prerequisites: register once, prepare explicitly
+
+Keep provider choices, package installation, service configuration and credential
+storage inside the private capability. My Friday supplies the execution and
+readiness mechanism, not a credential vault or provider integration. Do not use
+session hooks to repeatedly install tools or prompt for credentials.
+
+Add optional machine_requirements to capability.json. Each requirement has an
+ID (same rules as capability IDs), description and three literal argv commands:
+
+```json
+"machine_requirements": [{
+  "id": "local-runtime",
+  "description": "Local prerequisites for this capability",
+  "check": ["sh", "scripts/machine.sh", "check"],
+  "prepare": ["sh", "scripts/machine.sh", "prepare"],
+  "verify": ["sh", "scripts/machine.sh", "verify"],
+  "timeout_seconds": 300
+}]
+```
+
+This is a manifest fragment, not a runnable bundled integration. Implement all
+three commands. check and verify must avoid external mutations: check exits 0
+if prerequisites are satisfied, 10 only when preparation is needed, and any other
+code on uncertainty/error (including invalid or expired credentials). An error
+does NOT authorize installation or credential replacement. verify exits 0 only
+after the promised readiness checks pass. Distinguish a presence-only probe from
+an authenticated live verification in instructions and RATIONALE.md.
+
+prepare reconciles missing prerequisites and preserves existing credentials,
+services and unrelated settings. It must tolerate repetition and interruptions.
+My Friday always checks first, skips prepare when check exits 0, and verifies
+afterward. Requirements are selected individually; no implicit dependency graph
+or all-machine installer exists. Document order if another requirement is needed.
+
+Discover machine status; it executes nothing. To test actual readiness, run
+machine check --capability ID --requirement ID. To prepare, first run
+machine prepare --capability ID --requirement ID, inspect its plan and private
+scripts, then repeat with --apply --expect-sha256 HASH from the plan. All commands
+accept --instance PATH or MY_FRIDAY_INSTANCE and return JSON. No TUI automation
+is needed. Apply is explicit execution within existing user authority, not new
+permission or a required user confirmation on every agent operation.
+
+Scripts run noninteractively from one temporary capability snapshot, with literal
+argv and a JSON stdin event containing schema_version=1, phase, capability_id,
+requirement_id, device_id, state_directory and interactive=false. They inherit
+normal host environment plus MY_FRIDAY_BIN, MY_FRIDAY_ASSISTANT_ROOT,
+MY_FRIDAY_ASSISTANT_ID, MY_FRIDAY_DEVICE_ID, MY_FRIDAY_INSTANCE,
+MY_FRIDAY_MACHINE_ACTIVE=1, MY_FRIDAY_MACHINE_INTERACTIVE=false and
+MY_FRIDAY_MACHINE_STATE. State is <instance>/machine/state/<capability>/<requirement>,
+outside source Git. The directory is created with owner-only permissions; private
+code owns its contents and protection. Scripts should accept standalone arguments
+or documented environment inputs too, so they remain useful outside My Friday.
+Resolve sibling scripts from the snapshot; external resources and PATH binaries
+are not pinned by the source fingerprint. Never write scratch files to source.
+
+One-time credential enrollment is a separate, private, terminal-local helper in
+this initial contract. My Friday does not collect secrets or provide interactive
+stdin to preparation. Supply a secret once per machine through hidden input, not
+chat, command arguments or a recorded agent session. The capability must explain
+how to run that helper safely, keep values outside Git, reuse a valid existing
+credential without prompting, and request deliberate replacement when invalid.
+Do not use globally exported secrets or shell profiles as the default. Resolve
+credentials only for processes needing them; installation scripts must not print
+them. Owner-only file permissions are not encryption or isolation from the user,
+administrator or backups. This runtime is not an OS security sandbox.
+
+stdout/stderr are discarded; phase states, device ID, timestamps and a capability
+fingerprint go in local receipts, never raw output or arbitrary script messages.
+Read instructions and run a safe diagnostic directly if more detail is needed;
+never suggest enabling secret tracing. Default timeout is 300 seconds per phase,
+maximum 3600. Cancellation kills ordinary process-group descendants, not detached
+processes, and does not undo external effects. A running receipt after a hard kill
+needs inspection; no automatic replay occurs. Explicit reruns reconcile first.
+
+Doctor and machine status only inspect receipts. ready is a past observation,
+unknown means unchecked, stale means capability bytes changed, needs-preparation
+means check requested setup, failed/running require inspection. The fingerprint
+covers all capability file paths, owner permission bits and bytes; it does not
+track external state or prove a token is still valid. Live checks are explicit.
+Preparation does not sync or change other machines; each machine needs its own
+enrollment and verification. Upgrade all participating toolkits before committing
+machine_requirements: older strict parsers reject the new optional field. Update
+and repair never execute preparation implicitly.
+
+Test synthetic success, repeat-without-reinstall, missing prerequisites, uncertain
+checks, invalid credentials without replacement, verification failure, partial
+preparation, and portability. Never mark a capability operational on manifest
+validation alone. Keep provider-specific live acceptance in the private source.
 
 ## Portable paths and working directories
 

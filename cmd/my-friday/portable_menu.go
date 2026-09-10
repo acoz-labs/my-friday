@@ -262,7 +262,7 @@ func (u managementUI) setup(importing bool) error {
 		return err
 	}
 	u.block(console.Block{Title: "Installed", Body: name + " is installed. No credentials were copied.", Tone: console.Success})
-	u.section("Next step", "Complete native harness login if needed, then configure repository synchronization from this menu.")
+	u.section("Next step", "Complete native harness login if needed, then configure repository synchronization. For imported capability prerequisites, choose Prepare this machine; setup has not executed private preparation scripts.")
 	return u.agent(instance)
 }
 
@@ -317,7 +317,7 @@ func (u managementUI) agent(path string) error {
 			}
 			u.tui = u.tui.WithContext(s.Agent.DefaultHarness + " · pinned: " + pin)
 		}
-		n, err := u.choose(i.Name, []string{"View status", "Configure repository and synchronization", "Change default harness", "Check installation health", "Repair installation", "Use this toolkit version for this agent", "Roll back the last toolkit change", "Reference sources"}, "Back")
+		n, err := u.choose(i.Name, []string{"View status", "Configure repository and synchronization", "Change default harness", "Check installation health", "Repair installation", "Use this toolkit version for this agent", "Roll back the last toolkit change", "Reference sources", "Prepare this machine"}, "Back")
 		if err != nil || n == 0 {
 			return err
 		}
@@ -388,6 +388,8 @@ func (u managementUI) agent(path string) error {
 			err = u.rollback(i, s)
 		case 8:
 			err = u.references(i.Root)
+		case 9:
+			err = u.machine(i.Root)
 		}
 		if err := u.problem(err); err != nil {
 			return err
@@ -425,6 +427,12 @@ func (u managementUI) doctor(i portable.Instance, s *portable.Store, repaired bo
 		scope += " This compares against the running toolkit; the agent is pinned to another executable. Adoption is a separate action."
 	}
 	u.section("Scope", scope)
+	if len(r.MachineRequirements) > 0 {
+		u.section("Machine readiness", "Historical receipts only; no private scripts were run. Use Prepare this machine for an explicit check or targeted preparation. Structural repair does not install dependencies.")
+		for _, st := range r.MachineRequirements {
+			u.section(st.CapabilityID+" / "+st.Requirement.ID, st.State, console.Field{Label: "Last observation", Value: st.CheckedAt})
+		}
+	}
 	if repaired {
 		u.section("Next step", "Start a fresh agent session after resolving any remaining findings above.")
 	} else if r.Healthy {

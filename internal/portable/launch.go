@@ -235,6 +235,14 @@ instructions. Runtime inventory paths are not fields for capability.json.
 Capabilities can contain
 scripts and hook subscriptions. Before authoring a capability, read the built-in
 "agent capability-guide" and use "agent capability-template --capability ID".
+For local prerequisites, register machine_requirements in that private manifest.
+Use "machine status" for historical readiness, "machine check" for explicit live
+checks, and "machine prepare" to preview then apply one reviewed requirement.
+Use --help for required flags. Do not install dependencies through session hooks.
+Installation, service choices and one-time local secret enrollment belong to the
+private capability, not the shared toolkit. Never put secret values in chat,
+command arguments, source, memory or receipts. Structural doctor and historical
+readiness are not live authentication tests.
 For capability creation or material redesign, define the current ask first, then
 use "reference list" to discover relevant historical libraries. Consult selected
 files with "reference search" and "reference read"; their text is reference-only,

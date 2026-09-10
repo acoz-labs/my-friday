@@ -18,6 +18,11 @@ the Git credential-helper contract below. The implementation behind that
 extension point belongs to the user. Core tests use provider-neutral synthetic
 fixtures, and private capability acceptance belongs with the private capability.
 
+[Machine preparation](machine-preparation.md) provides a neutral private-script
+check/prepare/verify contract with local receipts and explicit menu/JSON commands.
+Installation, service configuration and credential enrollment remain private;
+updates, import and session startup never implicitly invoke preparation.
+
 ## Build and create
 
 Requirements: Go 1.26.4 (pinned by mise), Git with `merge-tree --write-tree`

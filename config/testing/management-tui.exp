@@ -88,7 +88,7 @@ switch -- $mode {
     send -- "l"
     await {View status}
     await {j/k move}
-    send -- "Gkl"
+    send -- "Gkkl"
     await {Register a reference source}
     await {j/k move}
     send -- "jl"
@@ -109,6 +109,27 @@ switch -- $mode {
     await {j/k move}
     send -- "jjl"
     await {Directory opened successfully}
+    await {j/k move}
+    send -- "q"
+  }
+  machine {
+    send -- "jjl"
+    await {Installed agents}
+    await {j/k move}
+    send -- "l"
+    await {View status}
+    await {j/k move}
+    send -- "Gkl"
+    await {Machine requirements}
+    await {j/k move}
+    send -- "l"
+    await {Requirement action}
+    await {j/k move}
+    send -- "jl"
+    await {Continue\?}
+    send -- "jl"
+    await {Machine result}
+    await {ready}
     await {j/k move}
     send -- "q"
   }

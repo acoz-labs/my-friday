@@ -982,3 +982,34 @@ compiled CLI/API regressions, PTY journeys and configured cross-builds. An extra
 Linux/AMD64 CLI cross-build passed. Final wording clarifications were followed
 by focused reference/menu tests. No live reference binding or source change was
 performed by this implementation checkpoint.
+
+## Explicit machine preparation — 2026-09-10
+
+The owner approved shared preparation wiring while keeping installation,
+credential enrollment/storage and provider authentication in private capabilities.
+Optional machine_requirements manifests now describe explicit check/prepare/verify
+commands. A no-execution preview precedes fingerprint-checked CLI apply; the
+management menu offers requirement selection and review. Doctor reports past
+readiness separately from structural health and executes no private probes.
+
+Synthetic fixtures verify missing prerequisites, ready-without-reinstallation,
+uncertain checks without installation, failed verification, timeout/cancellation,
+changed-source refusal and stale receipts, manifest validation, unsafe local
+paths, corrupt-receipt preservation, recursive/busy refusal, isolated instance
+readiness, and doctor/projection preservation. Raw-output canaries are absent
+from reports, receipts and the terminal. No live credentials were supplied.
+
+Native Go 1.26.4 `mise exec -- bin/ci` passed, including vet, full race tests,
+nine disposable PTY journeys and configured cross-builds. The added native TUI
+journey uses Vim navigation to prepare and verify a synthetic requirement.
+Additional Linux/AMD64 CLI cross-build and focused tests passed. The subprocess
+boundary allowlist explicitly covers the new bounded runner; no new provider
+or network client was added. Final rationale-template wording passed focused
+capability/machine tests after the complete suite.
+
+Preparation is noninteractive in this version. A capability needing a bootstrap
+secret must provide a separate local hidden-input enrollment helper. Readiness
+is historical, not perpetual authentication proof. Package installation, secret
+enrollment, unattended provider access and portability of a real capability
+still require private hands-on acceptance. No source migration, live provider
+effects or public release were performed for this checkpoint.

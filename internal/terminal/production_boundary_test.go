@@ -39,8 +39,11 @@ func TestProductionNetworkAndSubprocessBoundary(t *testing.T) {
 	// Git source-change paths are slash-delimited independently of the host OS.
 	portableImports := map[string]bool{"context": true, "embed": true, "flag": true, "time": true, "net/url": true, "path": true, "github.com/acoz-labs/my-friday/internal/portable": true}
 	portableExec := map[string]string{
-		"cmd/my-friday/portable.go":          "Command",
-		"internal/portable/hooks.go":         "CommandContext",
+		"cmd/my-friday/portable.go":  "Command",
+		"internal/portable/hooks.go": "CommandContext",
+		// Explicit private machine preparation; bounded process-group execution,
+		// never an automatic installer or a new provider integration.
+		"internal/portable/machine.go":       "CommandContext",
 		"internal/portable/sync.go":          "CommandContext",
 		"internal/portable/source_github.go": "CommandContext",
 		"cmd/my-friday/portable_toolkit.go":  "CommandContext",

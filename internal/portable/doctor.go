@@ -15,11 +15,12 @@ type Diagnostic struct {
 }
 
 type DoctorReport struct {
-	Healthy  bool         `json:"healthy"`
-	Instance string       `json:"instance"`
-	Harness  string       `json:"harness"`
-	Checks   []Diagnostic `json:"checks"`
-	Notice   string       `json:"notice"`
+	Healthy             bool            `json:"healthy"`
+	Instance            string          `json:"instance"`
+	Harness             string          `json:"harness"`
+	Checks              []Diagnostic    `json:"checks"`
+	Notice              string          `json:"notice"`
+	MachineRequirements []MachineStatus `json:"machine_requirements,omitempty"`
 }
 
 // Doctor is deliberately local and read-only: no commands, credential reads,
@@ -48,6 +49,14 @@ func (i Instance) Doctor(s *Store, harness string) DoctorReport {
 		return r
 	}
 	add("source", true, "Assistant source and memory structure valid.", "")
+	var machineErr error
+	r.MachineRequirements, machineErr = i.MachineStatus(s)
+	if len(r.MachineRequirements) > 0 {
+		r.Notice += " Machine readiness is historical receipt metadata and does not affect structural health; use machine check for explicit live verification."
+	}
+	if machineErr != nil {
+		add("machine-metadata", false, "Machine readiness metadata could not be inspected.", "Inspect machine status and preserve local state. Structural repair does not execute private preparation scripts.")
+	}
 	gitInfo, gitErr := os.Lstat(filepath.Join(s.Root, ".git"))
 	add("source-git", gitErr == nil && gitInfo.IsDir(), "Assistant requires its own .git directory for synchronization.", "Restore the source repository's Git metadata from a known backup, or import a separate verified clone; preserve uncommitted local records. Repair does not rebuild Git history.")
 	info, err := os.Stat(i.Binary)

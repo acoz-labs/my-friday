@@ -53,6 +53,7 @@ Usage: my-friday <command> [options]
   agent       Inspect, validate, launch, and design private capabilities
   memory      Recall, revise, and explain persistent memory
   reference   Link and consult external reference-only libraries
+  machine     Inspect readiness and explicitly prepare private prerequisites
   sync        Checkpoint and synchronize an explicit agent repository
   hook        Dispatch a harness lifecycle event (adapter entrypoint)
   help        Show help, optionally for a command
@@ -85,6 +86,24 @@ Doctor compares generated files with the running toolkit and checks the selected
 harness on PATH. It does not test authentication/network or change files.
 Use my-friday help agent launch for launcher help; a launcher's --help is
 forwarded to its selected harness. Use <command> --help for options.
+`,
+	"machine": `Usage: my-friday machine <command> --instance PATH [options]
+  status    List requirements and historical local readiness; no scripts or writes
+  check     Run selected private check/verify and save local receipts
+  prepare   Preview selected requirement; execute with --apply --expect-sha256 HASH
+
+check/prepare require --capability ID --requirement ID. Instance may come from
+MY_FRIDAY_INSTANCE; working directory is never an implicit target. Commands
+return JSON; never automate the TUI. Apply requires the preview fingerprint.
+Only exit 10 from check requests preparation; other failures do not install.
+Successful prepare is verified, and already-satisfied installers are skipped.
+Commands are noninteractive; private secret enrollment is a separate local step.
+No credential values belong in arguments, output, source, memory or receipts.
+Scripts have full user access, not a sandbox. Stdout/stderr are discarded.
+Status exit 0 means inspection completed, not all requirements are ready.
+check/prepare exit nonzero when not ready; inspect JSON state and phases before
+retrying. Cancellation does not roll back effects. No implicit sync or updates.
+See agent capability-guide for the manifest and script contract.
 `,
 	"memory": `Usage: my-friday memory <command> [options]
   template   Print a revision document to edit

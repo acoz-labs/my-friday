@@ -82,6 +82,11 @@ harness installation/login are not part of this menu increment.
   sync and does not change an active session or perform native login.
 - **Health:** read-only structural doctor, with readable findings and remedies.
   This is not an authentication, network or functional capability check.
+- **Prepare this machine:** inspect private capability requirements and past
+  readiness; explicitly check or prepare one requirement after review. No scripts
+  run on opening the menu, importing source, repairing projections or updating
+  the toolkit. See [machine preparation](machine-preparation.md), including the
+  separate private one-time secret enrollment boundary.
 - **Repair:** confirmed regeneration of managed instructions/hooks, preserving
   source, native config, credentials and sessions. A missing default launcher can
   be recreated with separate confirmation. Existing custom launchers are untouched.
