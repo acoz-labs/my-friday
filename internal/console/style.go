@@ -15,6 +15,7 @@ const (
 	Success
 	Warning
 	Failure
+	Plain
 )
 
 // Use the terminal's own ANSI palette, not fixed RGB backgrounds. Every
@@ -29,7 +30,7 @@ func (t Theme) Text(tone Tone, text string) string {
 	var safe strings.Builder
 	_, _ = (SafeWriter{Output: &safe}).Write([]byte(text))
 	text = safe.String()
-	if !t.Color {
+	if !t.Color || tone == Plain {
 		return text
 	}
 	code := "0"

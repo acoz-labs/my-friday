@@ -26,6 +26,22 @@ Set `NO_COLOR=1` to disable styling while retaining the keyboard TUI. Any nonemp
 remain unstyled; `NO_COLOR` does not disable the cursor controls needed by the TUI.
 Use `menu --plain` when you want neither styling nor interactive cursor control.
 
+Reports use short, separated sections rather than boxes or tables. Status groups
+Agent, Storage and Source backup, followed by a Next step. Health leads with the
+pass count, shows only failed-check details/remedies, and distinguishes its Scope
+from the next action. Confirmations separate What will change, What stays untouched
+and Session guidance; setup, source-hosting and toolkit reviews keep their explicit
+targets and preservation warnings. The confirmation defaults and execution
+operations are unchanged.
+
+Labels align when a complete value fits; long values move to their own indented
+lines. Prose wraps to the current terminal width (capped at 100 columns); pipes
+use 80 columns. Paths, checksums and commands are never shortened with an ellipsis
+in reports. Narrow-terminal wrapping preserves literal characters and spaces,
+but introduces display line breaks: join wrapped lines before copying a command
+or path. JSON output remains the exact machine-readable interface. Resizing
+affects the next report; previous scrollback is not re-rendered.
+
 The TUI uses pinned Bubble Tea v2.0.9 for terminal rendering/input/restoration.
 It operates over SSH when both streams are terminals with a usable TERM value.
 Use `my-friday menu --plain` or `MY_FRIDAY_PLAIN=1` to retain numbered prompts

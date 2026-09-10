@@ -52,6 +52,35 @@ switch -- $mode {
     await {j/k move}
     send -- "q"
   }
+  reports {
+    stty rows 24 columns 40 < $spawn_out(slave,name)
+    exec kill -WINCH [exp_pid]
+    send -- "jjl"
+    await {Installed agents}
+    await {j/k move}
+    send -- "l"
+    await {View status}
+    await {j/k move}
+    send -- "l"
+    await {Storage}
+    await {Source backup}
+    await {Next step}
+    await {j/k move}
+    send -- "jjjl"
+    await {Installation health}
+    await {Scope}
+    await {Next step}
+    await {j/k move}
+    send -- "jjjjl"
+    await {What will change}
+    await {What stays untouched}
+    await {Session guidance}
+    await {Continue\?}
+    send -- "h"
+    await {View status}
+    await {j/k move}
+    send -- "q"
+  }
   interrupt { send -- "\003" }
   terminate { exec kill -TERM [exp_pid] }
   resize {

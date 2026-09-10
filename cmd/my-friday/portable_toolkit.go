@@ -15,6 +15,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/acoz-labs/my-friday/internal/console"
 	"github.com/acoz-labs/my-friday/internal/portable"
 	"github.com/acoz-labs/my-friday/internal/toolkitupdate"
 )
@@ -162,7 +163,7 @@ func portableToolkit(args []string, input io.Reader, out, errout io.Writer) erro
 func (u managementUI) updates() error {
 	for {
 		v := toolkitVersion()
-		fmt.Fprintf(u.out, "\nRunning My Friday: %s (%s/%s)\n", v.Revision, v.OS, v.Arch)
+		u.section("Running My Friday", "", console.Field{Label: "Revision", Value: v.Revision}, console.Field{Label: "Platform", Value: v.OS + "/" + v.Arch})
 		n, err := u.choose("Update My Friday", []string{"Check latest compatible release", "Install an approved local artifact", "Switch to a retained toolkit version"}, "Back")
 		if err != nil || n == 0 {
 			return err
@@ -198,7 +199,8 @@ func (u managementUI) activate(path string) error {
 	if err != nil {
 		return err
 	}
-	fmt.Fprintf(u.out, "My Friday command now points to: %s\nPrevious command checkpoint: %s\nExit and run my-friday again to use that version.\nAgents keep their existing pins: Manage an installed agent → Use this toolkit version.\n", path, backup)
+	u.block(console.Block{Title: "Management command updated", Body: "Agents keep their existing pins.", Tone: console.Success, Fields: []console.Field{{Label: "Selected toolkit", Value: path}, {Label: "Previous command checkpoint", Value: backup}}})
+	u.section("Next step", "Exit and run my-friday again to use that version. To update one agent, choose Manage an installed agent → Use this toolkit version.")
 	return errToolkitActivated
 }
 func (u managementUI) latestRelease() error {
@@ -210,7 +212,7 @@ func (u managementUI) latestRelease() error {
 	if err != nil {
 		return err
 	}
-	ok, err := u.confirm(fmt.Sprintf("Release: %s\nArtifact: %s\nSHA-256: %s\nDownload, verify and execute its compatibility check, then update the My Friday command? Agent versions stay pinned.", a.Version, a.Name, a.SHA256))
+	ok, err := u.review("Download, verify and execute the artifact's compatibility check, then update the My Friday command.", "Agent versions stay pinned. Agent source and native logins are not changed.", "Reopen my-friday after installation. Agent adoption is a separate action.", console.Field{Label: "Release", Value: a.Version}, console.Field{Label: "Artifact", Value: a.Name}, console.Field{Label: "SHA-256", Value: a.SHA256})
 	if err != nil || !ok {
 		return err
 	}
@@ -224,7 +226,7 @@ func (u managementUI) latestRelease() error {
 	return u.activate(path)
 }
 func (u managementUI) localArtifact() error {
-	fmt.Fprintln(u.out, "For a separately approved development/offline artifact. A checksum verifies bytes, not publisher trust. Only select an executable you trust to run.")
+	u.section("Local artifact", "For a separately approved development/offline artifact. A checksum verifies bytes, not publisher trust. Only select an executable you trust to run.")
 	path, err := u.ask("Artifact file", "")
 	if err != nil {
 		return err
@@ -233,7 +235,7 @@ func (u managementUI) localArtifact() error {
 	if err != nil {
 		return err
 	}
-	ok, err := u.confirm("Verify and install this artifact, execute its compatibility check, and update the My Friday command? Existing agent versions remain pinned.")
+	ok, err := u.review("Verify and install this artifact, execute its compatibility check, and update the My Friday command.", "Existing agent versions remain pinned. Agent source and native logins are not changed.", "Reopen my-friday after installation. Agent adoption is a separate action.", console.Field{Label: "Artifact", Value: path}, console.Field{Label: "Expected SHA-256", Value: hash})
 	if err != nil || !ok {
 		return err
 	}
@@ -269,7 +271,7 @@ func (u managementUI) retainedToolkit() error {
 	if err != nil || n == 0 {
 		return err
 	}
-	ok, err := u.confirm("Execute this retained toolkit's compatibility check and point the My Friday command to it? This does not roll back any agent, memory or external action.")
+	ok, err := u.review("Execute this retained toolkit's compatibility check and point the My Friday command to it.", "No agent, memory or external action is rolled back.", "Reopen my-friday to use the selected toolkit. Agent adoption is separate.", console.Field{Label: "Selected toolkit", Value: paths[n-1]})
 	if err != nil || !ok {
 		return err
 	}

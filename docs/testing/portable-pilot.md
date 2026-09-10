@@ -931,3 +931,24 @@ can differ by emulator/theme.
 Complete native `mise exec -- bin/ci` passed with Go 1.26.4, including vet,
 all-package race tests and the legacy integration checks. An additional
 Linux/AMD64 CLI cross-build passed. No public release was published.
+
+## Structured management reports — 2026-09-09
+
+The owner accepted the accent styling and requested cleaner information layout.
+Status, health, errors, source-hosting reviews, toolkit results and confirmations
+now use separated headings, aligned labels where values fit, and explicit next
+steps. Only presentation changes: confirmation defaults, exact-target source
+approval, management actions, private state and JSON interfaces are preserved.
+
+Renderer tests cover 24/40/100-column layouts, styled/unstyled equivalence, Unicode
+cell width, control sanitization, and complete literal paths with repeated spaces.
+Review tests exercise yes, no, blank, EOF and Back while checking section order
+and ANSI-free plain output. Seven disposable real-PTY scenarios include a new
+40-column status → health → repair-review → Back journey; no repair is approved.
+Native user preference testing remains separate from these synthetic checks.
+
+Complete native `mise exec -- bin/ci` passed with Go 1.26.4 after correcting
+unkeyed display-field literals flagged by vet. This includes the full race suite,
+compiled management/API workflows, source-wizard regressions and configured
+cross-builds. An additional Linux/AMD64 CLI cross-build also passed. No public
+release or live source-hosting operation was performed.

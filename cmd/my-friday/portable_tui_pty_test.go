@@ -63,7 +63,7 @@ func TestManagementPTYNavigationFormsSignalsAndResize(t *testing.T) {
 		t.Skip("expect unavailable; pure model tests still run")
 	}
 	binary, _ := os.Executable()
-	for _, mode := range []string{"vim", "no-color", "form", "interrupt", "terminate", "resize"} {
+	for _, mode := range []string{"vim", "no-color", "form", "reports", "interrupt", "terminate", "resize"} {
 		t.Run(mode, func(t *testing.T) {
 			home := t.TempDir()
 			ctx, cancel := context.WithTimeout(context.Background(), 25*time.Second)

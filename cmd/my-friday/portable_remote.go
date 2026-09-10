@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/acoz-labs/my-friday/internal/console"
 	"github.com/acoz-labs/my-friday/internal/portable"
 )
 
@@ -17,7 +18,7 @@ func remoteSetupWizard(reader *bufio.Reader, out io.Writer, instance portable.In
 	return remoteSetupWizardUI(reader, out, instance, s, false)
 }
 
-func remoteSetupWizardUI(reader *bufio.Reader, out io.Writer, instance portable.Instance, s *portable.Store, human bool, prompts ...func(string, string) (string, error)) error {
+func remoteSetupWizardUI(reader *bufio.Reader, out io.Writer, instance portable.Instance, s *portable.Store, human bool, menus ...*managementUI) error {
 	current, err := os.Executable()
 	if err != nil {
 		return err
@@ -56,12 +57,22 @@ func remoteSetupWizardUI(reader *bufio.Reader, out io.Writer, instance portable.
 		}
 		return line, nil
 	}
-	if len(prompts) > 0 {
-		ask = prompts[0]
+	u := managementUI{reader: reader, out: out, screen: out}
+	if len(menus) > 0 {
+		u = *menus[0]
+		ask = u.ask
 	}
-	fmt.Fprintf(out, "\nSource synchronization for %s\nInstance and native logins are preserved. Source must be clean before setup.\n", s.Agent.Name)
+	if human {
+		u.section("Source synchronization", "Source must be clean before setup. Instance and native logins are preserved.", console.Field{Label: "Agent", Value: s.Agent.Name})
+	} else {
+		fmt.Fprintf(out, "\nSource synchronization for %s\nInstance and native logins are preserved. Source must be clean before setup.\n", s.Agent.Name)
+	}
 	if state.Origin != "" {
-		fmt.Fprintf(out, "Existing origin: %s (will not be replaced)\n", state.Origin)
+		if human {
+			u.section("Existing remote", "Will not be replaced.", console.Field{Label: "Origin", Value: state.Origin})
+		} else {
+			fmt.Fprintf(out, "Existing origin: %s (will not be replaced)\n", state.Origin)
+		}
 	}
 	mode, err := ask("Remote setup: local (leave unchanged), github, or existing (URL + configured helper)", "local")
 	if err != nil {
@@ -69,7 +80,7 @@ func remoteSetupWizardUI(reader *bufio.Reader, out io.Writer, instance portable.
 	}
 	if mode == "local" {
 		if human {
-			fmt.Fprintln(out, "Existing local and remote settings left unchanged.")
+			u.section("Unchanged", "Existing local and remote settings left unchanged.")
 			return nil
 		}
 		return outputJSON(out, map[string]any{"state": "unchanged", "origin": state.Origin, "notice": "Local installation preserved. Existing remote settings, if any, are not disabled. Resume with setup --instance PATH."})
@@ -89,7 +100,11 @@ func remoteSetupWizardUI(reader *bufio.Reader, out io.Writer, instance portable.
 		if err != nil {
 			return err
 		}
-		fmt.Fprintf(out, "Stored github.com accounts: %s\nNo active-account switch or token copying is performed.\n", strings.Join(accounts, ", "))
+		if human {
+			u.section("Source-hosting accounts", "No active-account switch or token copying is performed.", console.Field{Label: "Stored accounts", Value: strings.Join(accounts, ", ")})
+		} else {
+			fmt.Fprintf(out, "Stored github.com accounts: %s\nNo active-account switch or token copying is performed.\n", strings.Join(accounts, ", "))
+		}
 		account, err := ask("Account for repository setup/creation", accounts[0])
 		if err != nil {
 			return err
@@ -140,7 +155,14 @@ func remoteSetupWizardUI(reader *bufio.Reader, out io.Writer, instance portable.
 		if !known {
 			return errors.New("authenticate the intended source-sync account separately and resume")
 		}
-		fmt.Fprintf(out, "\nPlan: %s PRIVATE %s using setup account %s; use %s for ongoing source synchronization on this machine.\nUpload this assistant's complete committed history, including private memory and capabilities.\nReview the source/history for secrets before proceeding. No secret scanner or history rewrite is provided.\nOther machines must explicitly bind their source account. Existing remote must be empty or this same assistant.\n", action, repository, account, syncAccount)
+		if human {
+			u.section("What will change", "Configure PRIVATE source hosting and upload complete committed assistant history, including private memory and capabilities.", console.Field{Label: "Action", Value: action}, console.Field{Label: "Repository", Value: repository}, console.Field{Label: "Setup account", Value: account}, console.Field{Label: "Ongoing sync account", Value: syncAccount})
+			u.section("What stays untouched", "Native logins, instance binding and launcher stay unchanged. Existing origin is not replaced; remote must be empty or this same assistant.")
+			u.block(console.Block{Title: "Before continuing", Body: "Review source and history for secrets. No secret scanner or history rewrite is provided. Other machines must explicitly bind their source account.", Tone: console.Warning})
+			u.section("Session guidance", "This does not reload an active conversation's context. New hook or instruction changes need a fresh session.")
+		} else {
+			fmt.Fprintf(out, "\nPlan: %s PRIVATE %s using setup account %s; use %s for ongoing source synchronization on this machine.\nUpload this assistant's complete committed history, including private memory and capabilities.\nReview the source/history for secrets before proceeding. No secret scanner or history rewrite is provided.\nOther machines must explicitly bind their source account. Existing remote must be empty or this same assistant.\n", action, repository, account, syncAccount)
+		}
 		confirmed, err := ask("To approve, type the exact owner/name", "")
 		if err != nil {
 			return err
@@ -150,7 +172,11 @@ func remoteSetupWizardUI(reader *bufio.Reader, out io.Writer, instance portable.
 		}
 		options = portable.SourceSetupOptions{Mode: "github", Repository: repository, SetupAccount: account, SyncAccount: syncAccount, Create: action == "create"}
 	} else {
-		fmt.Fprintln(out, "Existing mode uses your already configured private helper for HTTPS. It does not install credentials or verify hosting-service visibility. Review privacy yourself; local remotes also work.")
+		if human {
+			u.section("Existing remote", "Uses your configured private helper for HTTPS. It does not install credentials or verify hosting-service visibility. Review privacy yourself; local remotes also work.")
+		} else {
+			fmt.Fprintln(out, "Existing mode uses your already configured private helper for HTTPS. It does not install credentials or verify hosting-service visibility. Review privacy yourself; local remotes also work.")
+		}
 		remote, err = ask("Existing remote HTTPS URL or absolute local path", state.Origin)
 		if err != nil {
 			return err
@@ -161,7 +187,13 @@ func remoteSetupWizardUI(reader *bufio.Reader, out io.Writer, instance portable.
 		if strings.HasPrefix(remote, "https://") && !state.CustomHelper && state.GitHubSource == nil {
 			return errors.New("configure a private credential_helper in .my-friday/sync.json, checkpoint it, then resume (or use github mode)")
 		}
-		fmt.Fprintf(out, "This will verify origin and upload complete committed assistant history to %s.\n", remote)
+		if human {
+			u.section("What will change", "Verify origin and upload complete committed assistant history. Review source/history for secrets before proceeding.", console.Field{Label: "Remote", Value: remote})
+			u.section("What stays untouched", "Native credentials, launcher and instance binding are preserved. No automatic secret scanning or history rewrite is provided.")
+			u.section("Session guidance", "This does not reload an active conversation's context. New hook or instruction changes need a fresh session.")
+		} else {
+			fmt.Fprintf(out, "This will verify origin and upload complete committed assistant history to %s.\n", remote)
+		}
 		confirmation, err := ask("Approve source synchronization (yes/no)", "no")
 		if err != nil {
 			return err
@@ -176,9 +208,13 @@ func remoteSetupWizardUI(reader *bufio.Reader, out io.Writer, instance portable.
 		return err
 	}
 	if human {
-		fmt.Fprintf(out, "Synchronization: %s\n", status.State)
+		tone := console.Warning
+		if status.State == "synced" {
+			tone = console.Success
+		}
+		u.block(console.Block{Title: "Synchronization", Body: status.State, Tone: tone})
 		if status.Detail != "" {
-			fmt.Fprintln(out, status.Detail)
+			u.section("Details", status.Detail)
 		}
 	} else if err := outputJSON(out, status); err != nil {
 		return err
@@ -186,7 +222,12 @@ func remoteSetupWizardUI(reader *bufio.Reader, out io.Writer, instance portable.
 	if status.State != "synced" {
 		return errors.New("synchronization not confirmed; local history preserved; resolve the reported status and resume")
 	}
-	fmt.Fprintln(out, "Verified fetch/push synchronization. No launcher, instance binding, native login, memory claim or agent capability was recreated.")
+	if human {
+		u.section("Verified", "Fetch/push synchronization completed. No launcher, instance binding, native login, memory claim or agent capability was recreated.")
+		u.section("Next step", "Return to the agent menu. Configure each additional machine's source account separately.")
+	} else {
+		fmt.Fprintln(out, "Verified fetch/push synchronization. No launcher, instance binding, native login, memory claim or agent capability was recreated.")
+	}
 	return nil
 }
 

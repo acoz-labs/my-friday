@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/acoz-labs/my-friday/internal/console"
 	"github.com/acoz-labs/my-friday/internal/portable"
 )
 
@@ -23,6 +24,28 @@ func TestManagementMenuNavigationAndEOF(t *testing.T) {
 		}
 		if _, err := os.Stat(filepath.Join(home, ".local")); !os.IsNotExist(err) {
 			t.Fatal("navigation created installation")
+		}
+	}
+}
+
+func TestManagementReviewHierarchyAndSafeDefaults(t *testing.T) {
+	for _, input := range []string{"", "\n", "no\n", ":back\n", "yes\n"} {
+		var out bytes.Buffer
+		u := newManagementUI(t.TempDir(), strings.NewReader(input), &out, true)
+		approved, _ := u.review("Replace managed files.", "Keep source and credentials.", "Start a fresh session.", console.Field{Label: "Target", Value: "/fixture/instance"})
+		if approved != (input == "yes\n") {
+			t.Fatalf("unexpected approval for %q", input)
+		}
+		last := -1
+		for _, label := range []string{"What will change", "Target:", "What stays untouched", "Session guidance", "Continue?"} {
+			position := strings.Index(out.String(), label)
+			if position <= last {
+				t.Fatalf("missing/out of order %s: %s", label, out.String())
+			}
+			last = position
+		}
+		if strings.Contains(out.String(), "\x1b") {
+			t.Fatal("plain review contains ANSI")
 		}
 	}
 }

@@ -69,10 +69,10 @@ func TestProductionNetworkAndSubprocessBoundary(t *testing.T) {
 		portableSource := strings.HasPrefix(rel, "internal/portable/") || strings.HasPrefix(rel, "cmd/my-friday/portable")
 		updateSource := rel == "internal/toolkitupdate/update.go" || rel == "cmd/my-friday/portable_toolkit.go" || rel == "cmd/my-friday/portable_api.go"
 		updateImports := map[string]bool{"context": true, "time": true, "net/http": true, "net/url": true, "runtime/debug": true, "github.com/acoz-labs/my-friday/internal/toolkitupdate": true}
-		consoleImports := map[string]bool{"charm.land/bubbletea/v2": true, "github.com/charmbracelet/x/term": true}
+		consoleImports := map[string]bool{"charm.land/bubbletea/v2": true, "github.com/charmbracelet/x/term": true, "github.com/charmbracelet/x/ansi": true}
 		for _, spec := range file.Imports {
 			name, _ := strconv.Unquote(spec.Path.Value)
-			if !allowedImports[name] && !(portableSource && portableImports[name]) && !(updateSource && updateImports[name]) && !(rel == "internal/console/prompt.go" && consoleImports[name]) {
+			if !allowedImports[name] && !(portableSource && portableImports[name]) && !(updateSource && updateImports[name]) && !((rel == "internal/console/prompt.go" || rel == "internal/console/report.go") && consoleImports[name]) {
 				t.Errorf("production import %q is not allowlisted in %s", name, path)
 			}
 			if name == "os/exec" && spec.Name != nil {
