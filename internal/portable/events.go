@@ -37,6 +37,23 @@ func (s *Store) RecordEvent(kind, summary string, author Authorship) (JournalEnt
 }
 
 func (s *Store) CheckCapability(id string) ([]HandlerResult, error) {
+	return s.checkCapability(id, "", "")
+}
+
+// CheckCapability resolves machine-local context from a current, valid binding.
+// Source-only checks use Store.CheckCapability and never inherit instance state.
+func (i Instance) CheckCapability(id string) ([]HandlerResult, error) {
+	current, s, err := LoadInstance(i.Root)
+	if err != nil {
+		return nil, err
+	}
+	if current != i {
+		return nil, errors.New("instance binding changed; reload before checking capability")
+	}
+	return s.checkCapability(id, current.Root, current.DeviceID)
+}
+
+func (s *Store) checkCapability(id, instance, device string) ([]HandlerResult, error) {
 	if !identifier.MatchString(id) {
 		return nil, errors.New("invalid capability ID")
 	}
@@ -62,7 +79,7 @@ func (s *Store) CheckCapability(id string) ([]HandlerResult, error) {
 					return results, errors.New("empty capability check command")
 				}
 				ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
-				_, err := runHandler(ctx, root, s, "", command, nil, true)
+				_, err := runHandler(ctx, root, s, device, instance, command, nil, true)
 				cancel()
 				if err != nil {
 					return append(results, HandlerResult{ID: id, Success: false, Detail: "Executable check failed; raw output suppressed."}), err

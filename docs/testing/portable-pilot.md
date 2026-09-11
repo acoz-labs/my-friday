@@ -1040,3 +1040,35 @@ Complete native Go 1.26.4 `mise exec -- bin/ci` passed: vet, full race suite, ni
 disposable PTY scenarios and configured cross-builds. An additional Linux/AMD64
 CLI cross-build passed. No private capability changes, credential access or live
 provider effects were performed for this implementation checkpoint.
+
+## Instance context for capability checks — 2026-09-11
+
+A private capability's disposable probe exposed that agent check parsed but
+ignored --instance and stripped the inherited instance variable from snapshots.
+The unchanged probe reproduced four failures on the prior runtime: with/without
+an inherited instance, from an unrelated directory and the capability directory.
+Its machine-check control already received the correct context.
+
+Instance-backed agent checks now validate the selected binding, derive their
+source/device from it, and supply MY_FRIDAY_INSTANCE to the snapshot process.
+Explicit instance selection overrides ambient defaults; an explicit repository
+must identify the same source. Inherited instance/source mismatches fail before
+execution. Source-only checks remain available, including explicit --instance ''.
+Arbitrary inherited MY_FRIDAY_* variables are still removed; machine state is
+not created. The embedded guide documents the context and selection contract.
+
+Tests first reproduced the gap, then covered explicit/inherited context,
+instance-only selection, stale-environment overrides, equivalent parent paths,
+source-only isolation, invalid identity/device/version, missing/stale/forged
+bindings, mismatched sources, snapshot execution and suppressed success/failure
+output. The unchanged external disposable probe passed all four cases against
+the updated executable; its machine-check control also passed. No private
+capability contents, identities or integration fixtures were added to core.
+
+Complete native Go 1.26.4 `mise exec -- bin/ci` passed, including vet, the full
+race suite, PTY coverage and configured cross-builds. An extra Linux/AMD64 CLI
+cross-build and focused race-enabled context tests passed. This supplies a
+configuration locator, not runtime discovery, installation, binding creation,
+credential access or live-service readiness. Private runtime binding and its
+failure/rebinding tests remain separate acceptance work. Lifecycle subscription
+context is unchanged; this fix concerns explicit agent checks only.

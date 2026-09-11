@@ -27,6 +27,46 @@ func fixtureCapability(t *testing.T, s *Store, id string, subscriptions []Subscr
 	}
 }
 
+func TestCapabilityCheckBindingValidationAndSourceOnlyIsolation(t *testing.T) {
+	s := fixtureStore(t)
+	binary, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	i, err := Bind(s, filepath.Join(t.TempDir(), "instance with spaces"), "fixture", binary, "device-laptop")
+	if err != nil {
+		t.Fatal(err)
+	}
+	fixtureCapability(t, s, "context-probe", nil, "set -eu\ntest -z \"${MY_FRIDAY_INSTANCE-}\"\ntest -z \"$MY_FRIDAY_DEVICE_ID\"\n")
+	manifest := filepath.Join(s.Root, "capabilities/context-probe/capability.json")
+	var capability Capability
+	if err := readJSON(manifest, &capability); err != nil {
+		t.Fatal(err)
+	}
+	capability.Checks = [][]string{{"sh", "scripts/run.sh"}}
+	if err := writeLocalJSON(manifest, capability); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("MY_FRIDAY_INSTANCE", i.Root)
+	t.Setenv("MY_FRIDAY_DEVICE_ID", i.DeviceID)
+	if _, err := s.CheckCapability("context-probe"); err != nil {
+		t.Fatalf("source-only check inherited a binding: %v", err)
+	}
+	forged := i
+	forged.DeviceID = "device-forged"
+	if _, err := forged.CheckCapability("context-probe"); err == nil || !strings.Contains(err.Error(), "binding changed") {
+		t.Fatalf("forged binding not rejected before execution: %v", err)
+	}
+	changed := i
+	changed.Name = "renamed-fixture"
+	if err := writeLocalJSON(filepath.Join(i.Root, "binding.json"), changed); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := i.CheckCapability("context-probe"); err == nil || !strings.Contains(err.Error(), "binding changed") {
+		t.Fatalf("stale binding not rejected before execution: %v", err)
+	}
+}
+
 func TestHookRejectsTrailingOutput(t *testing.T) {
 	for _, output := range []string{`{"additional_context":"ok"} {}`, `{"additional_context":"ok"} garbage`, `null`} {
 		t.Run(output, func(t *testing.T) {

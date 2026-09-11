@@ -79,6 +79,10 @@ separate from this portable workflow; use agent commands for portable capabiliti
   check                 Validate and execute checks; requires --capability <id>
 
 Most commands accept --repository PATH (or MY_FRIDAY_ASSISTANT_ROOT).
+Check also accepts --instance PATH (or MY_FRIDAY_INSTANCE), validates the binding
+and supplies instance/device context to its temporary capability copy. An explicit
+instance overrides ambient source defaults; an explicit repository must match.
+Use --instance '' --repository PATH for intentional source-only checks.
 The guide and template need no repository, installation, or source checkout.
 Repair preserves credentials/sessions and the binding; optional --launcher PATH
 creates a missing launcher only. It does not replace or relocate the executable.

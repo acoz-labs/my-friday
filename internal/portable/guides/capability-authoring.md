@@ -138,6 +138,30 @@ directory after reading its instructions and effects. Empty checks mean only
 structural validation, not tested behavior. Check scripts have full user access;
 the temporary copy is not a security sandbox.
 
+For instance-backed checks, use `agent check --instance PATH --capability ID`,
+or omit --instance inside a launched session to use MY_FRIDAY_INSTANCE. The
+toolkit validates that binding and resolves the source from it. Checks receive
+MY_FRIDAY_INSTANCE (absolute machine-local instance directory) and the binding's
+MY_FRIDAY_DEVICE_ID, alongside MY_FRIDAY_ASSISTANT_ROOT, MY_FRIDAY_ASSISTANT_ID,
+MY_FRIDAY_BIN (the running toolkit, not necessarily the bound version), and
+MY_FRIDAY_DISPATCH_ACTIVE (recursion guard). Other inherited MY_FRIDAY_* values
+are stripped. No machine requirement state/receipt is created by agent check.
+
+An explicit --instance overrides ambient instance and source defaults; an explicit
+--repository must still identify that instance's source. With an inherited
+instance, any selected repository must match. Mismatched or invalid bindings
+fail before checks run. Without a selected instance, checks remain source-only:
+MY_FRIDAY_INSTANCE is absent and MY_FRIDAY_DEVICE_ID is empty. To intentionally
+check an unbound source from within a session, use
+`agent check --instance '' --repository PATH --capability ID`.
+
+Private helpers may locate reviewed, non-secret runtime configuration under the
+selected instance. They own its schema, validation and explicit setup/rebinding;
+the toolkit does not discover an interpreter, enroll credentials or repair it.
+Instance context is not proof that prerequisites are ready, nor permission for
+checks to exercise live services. Continue using synthetic fixtures. Working
+directory and private shell initialization must not substitute for a binding.
+
 ## Machine prerequisites: register once, prepare explicitly
 
 Keep provider choices, package installation, service configuration and credential

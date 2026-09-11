@@ -582,6 +582,41 @@ func portableAgent(args []string, input io.Reader, out, errout io.Writer) error 
 	if args[0] == "check" && *capabilityID == "" {
 		return errors.New("agent check requires --capability ID; use agent capabilities to list IDs or agent capability-guide to design one")
 	}
+	if args[0] == "check" && *state != "" {
+		instance, s, err := portable.LoadInstance(*state)
+		if err != nil {
+			return err
+		}
+		instanceExplicit, rootExplicit := false, false
+		f.Visit(func(option *flag.Flag) {
+			instanceExplicit = instanceExplicit || option.Name == "instance"
+			rootExplicit = rootExplicit || option.Name == "repository"
+		})
+		// An explicit instance replaces ambient context. An explicit repository
+		// remains an assertion about that instance, never an independent target.
+		if rootExplicit || (!instanceExplicit && *root != "") {
+			selected, err := portable.Open(*root)
+			if err != nil {
+				return err
+			}
+			selectedInfo, err := os.Stat(selected.Root)
+			if err != nil {
+				return err
+			}
+			boundInfo, err := os.Stat(s.Root)
+			if err != nil {
+				return err
+			}
+			if !os.SameFile(selectedInfo, boundInfo) {
+				return errors.New("agent check instance/repository mismatch; select matching paths or use --instance '' for a source-only check")
+			}
+		}
+		results, err := instance.CheckCapability(*capabilityID)
+		if err != nil {
+			return err
+		}
+		return outputJSON(out, results)
+	}
 	s, err := portable.Open(*root)
 	if err != nil {
 		return err
