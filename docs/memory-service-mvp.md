@@ -205,6 +205,18 @@ Fresh-thread corrected recall passed:
   were called. Git HEAD and the clean bank were unchanged; the same two journals
   remained. Automatic context delivery and subsequent MCP recall agreed.
 
+Ordinary-task learning did not pass on its first trial:
+
+- In the same session immediately after a read-only recall request, the owner
+  stated an offline/local-storage prototype decision and excluded cloud sync,
+  asking for a two-item checklist without explicitly requesting a memory save.
+- Hook context arrived, but the model answered without any tool calls. No
+  decision or journal was saved; the bank remained at the rename checkpoint.
+- The earlier read-only request is a possible confound, not an established
+  cause. Repeat the same ordinary-task prompt in a fresh session before changing
+  learning instructions. Do not insert the missing decision on the model's
+  behalf or count its correct checklist as durable-memory acceptance.
+
 Still pending: ordinary-task learning without explicit save instructions,
 broader read-only/no-save scenarios,
 interruption/compaction scenarios, actual second-machine
