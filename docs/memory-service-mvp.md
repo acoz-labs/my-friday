@@ -229,7 +229,20 @@ Fresh-session ordinary-task control passed:
   explanation for the first miss. Test an explicitly one-answer no-save request
   followed by another ordinary decision in the same session before resolving it.
 
-Still pending: reliability of ordinary-task learning across task boundaries,
+Explicit one-reply no-save boundary passed:
+
+- The hypothetical cloud-sync question produced no tool calls or memory writes;
+  its answer retained the actual offline-only decision. The following macOS/Linux
+  target decision was automatically saved and journaled in the same session.
+- The offline decision, project identity and answer preference remained unchanged.
+  The new confirmed record contains only the user's platform choice; the agent's
+  storage-interface suggestion appears in historical journal context, not as an
+  approved decision. No cloud-sync requirement was introduced by the hypothetical.
+- This proves the explicitly scoped boundary in this sample. The earlier bare
+  read-only carryover ambiguity remains documented rather than reclassified as
+  a proven implementation defect or universal model behavior.
+
+Still pending: current-user reversal of a remembered project constraint,
 broader read-only/no-save scenarios,
 interruption/compaction scenarios, actual second-machine
 acceptance, final user-facing management/distribution experience, and GitHub board
