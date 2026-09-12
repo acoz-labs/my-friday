@@ -283,11 +283,27 @@ acceptance. Writes are not idempotent: clients must inspect after ambiguous fail
 before retrying. The generated development marketplace is named `personal`; a
 collision-safe public distribution name is not finalized.
 
-An isolated native Codex pilot and blank bank are prepared for owner-assisted
-conversation acceptance; no ambient authentication was copied. The previously
-used second Mac currently refuses SSH with `Host key verification failed`.
-Do not bypass host verification to continue that test; establish its identity
-with the owner first.
+Second-machine preparation exposed and repaired a transport gap:
+
+- The owner supplied the second Mac's host public-key fingerprint out of band.
+  It matched the presented SSH key. A trial-local known-hosts file pins it with
+  strict checking; the owner authorized the first Mac's existing client public
+  key. Batch-mode access to the second Darwin/ARM64 machine now works.
+- Source inspection found that the earlier documentation's SSH-support claim
+  contradicted the transport gate, which allowed only local paths and HTTPS.
+  Regression tests reproduced `pending` before any SSH transport was attempted.
+- The engine now accepts SSH URLs and common scp-style remotes without an HTTPS
+  helper, while rejecting embedded passwords, control characters, option-like
+  endpoints and remote-helper syntax. It leaves host trust and client credentials
+  to machine-local OpenSSH configuration. Git environment overrides stay filtered.
+- Tests use real Git upload/receive-pack with a disposable SSH transport fixture;
+  both formats transfer checkpoints, and connection failure preserves a clean
+  local checkpoint with pending status. Actual two-host transfer follows on a
+  new immutable candidate, not by overwriting the original conversation trial.
+- The second Mac has native Codex 0.154.0. Its isolated profile will use the same
+  packaged plugin; no ambient credentials, session history or private Alfred
+  memory are copied. A disposable bare Git repository on that host is the test
+  remote, not a new hosted service or production deployment.
 
 The MVP is not complete. No production release or private-memory migration has
 been performed.

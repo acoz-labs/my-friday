@@ -121,6 +121,13 @@ by the MCP tools. The current engine ignores global Git configuration and its
 credential helpers: do not assume ambient HTTPS authentication will work.
 An SSH remote can use normal SSH configuration and an available agent socket.
 Test source access from the actual Codex process, particularly over SSH.
+Both `ssh://user@host/path/to/bank.git` and `user@host:path/to/bank.git`
+are supported. SSH needs no HTTPS credential helper. Host keys and client keys
+must already be configured on that machine; My Friday does not enroll either or
+bypass host verification. For unattended runs, configure OpenSSH with batch mode
+and strict host-key checking. A bank-local Git `core.sshCommand` can select a
+specific SSH configuration without changing global settings. `GIT_*` environment
+overrides (including `GIT_SSH_COMMAND`) are intentionally not inherited.
 
 On the next machine, clone the bank and bind the clone:
 

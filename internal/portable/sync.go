@@ -167,11 +167,11 @@ func (s *Store) Sync(parent context.Context) (SyncStatus, error) {
 			result.State = "local-only"
 			return nil
 		}
-		if !filepath.IsAbs(remote) && !strings.HasPrefix(remote, "file://") {
+		if !filepath.IsAbs(remote) && !strings.HasPrefix(remote, "file://") && !isSSHRemote(remote) {
 			parsed, parseErr := url.Parse(remote)
 			if parseErr != nil || parsed.Scheme != "https" || parsed.Host == "" || parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" {
 				result.State = "pending"
-				result.Detail = "This transport is not configured; use a local remote or HTTPS with a private credential helper."
+				result.Detail = "This transport is not configured; use a local remote, SSH, or HTTPS with a private credential helper."
 				return nil
 			}
 			if len(config.CredentialHelper) == 0 && config.GitHubSource == nil {
