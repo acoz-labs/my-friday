@@ -265,8 +265,17 @@ Different-working-directory native acceptance passed:
 - A separate empty synthetic bank/binding is prepared for the next native
   isolation test, using the same plugin and native profile in a fresh session.
 
-Still pending: native isolation between separately selected banks,
-broader read-only/no-save scenarios,
+Separate-bank native selection passed:
+
+- A fresh session using the same native profile/plugin but a separate empty
+  binding received the second bank ID in hook context. MCP recall and scope
+  inventory were empty, and the model did not invent a project or preference.
+- It did not inspect other banks or native transcripts and made no write/sync
+  calls. The second bank remained empty; the original bank's clean tree and
+  checkpoint were unchanged. This is evidence for explicit bank routing and
+  observed task compliance, not filesystem isolation from an unrestricted agent.
+
+Still pending: broader read-only/no-save scenarios,
 interruption/compaction scenarios, actual second-machine
 acceptance, final user-facing management/distribution experience, and GitHub board
 attachment. Current clone tests simulate two machines; they are not physical-host
