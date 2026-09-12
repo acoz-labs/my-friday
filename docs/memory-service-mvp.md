@@ -355,3 +355,17 @@ Second-host native learning/publish passed; first-host discovery pending:
 - Searching the suggested two-word spelling initially returned no match; the
   actual prompt, journal and refined milestone query confirmed the one-word
   saved value. Empty lexical recall was not treated as proof of failed learning.
+
+First-host native return trip and in-session freshness passed:
+
+- The new first-host conversation started with stale local hook context: four
+  records and no milestone. It then called MCP sync, which fetched the second
+  host's checkpoint, followed by scopes, recall and history without restarting.
+- It answered Harborlight and the correct second-host device ID. Independent
+  inspection confirmed the first clone reached the second clone's checkpoint,
+  remained clean, and had exactly the six existing journals. No post-sync
+  remember or journal-append call occurred.
+- This proves that fresh tool reads can observe synchronized data within a
+  running native session; it does not claim that startup instructions reload or
+  that local-only hooks automatically synchronize. Cross-machine conversation
+  continuity in both directions now has actual native-model evidence.
