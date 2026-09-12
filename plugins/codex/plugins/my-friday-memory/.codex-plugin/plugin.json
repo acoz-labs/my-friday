@@ -1,6 +1,6 @@
 {
   "name": "my-friday-memory",
-  "version": "0.1.0+codex.20260912193537",
+  "version": "0.1.0+codex.20260912201014",
   "description": "Portable, Git-backed long-term memory for native Codex sessions.",
   "author": {
     "name": "My Friday contributors"

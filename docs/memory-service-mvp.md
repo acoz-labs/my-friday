@@ -137,6 +137,26 @@ Memory-first front door after the initial candidate:
   failed for missing `read:project` scope. Continue native acceptance with owner
   input; do not treat these unperformed checks as successful acceptance.
 
+First owner-assisted hook trial exposed a runtime-selection bug:
+
+- Native shell initialization reordered PATH and selected an older installed
+  assistant-platform executable. `codex-memory-hook` was unknown; exit code 2
+  blocked the prompt before a model response. Discovery/MCP-only testing had
+  not covered this path. This is failed acceptance, not a memory-save result.
+- The plugin now uses a small POSIX runner and optional absolute
+  `MY_FRIDAY_MEMORY_BIN` for both hooks and MCP, independent of shell PATH order.
+  Failed hook execution produces a nonblocking warning without failed raw output.
+  It does not silently fall back from a missing explicit runtime to another one.
+- Regression tests first reproduced the failure, then passed for both lifecycle
+  hooks, old/missing runtimes, relative overrides, paths with spaces and MCP stdio.
+  Native Codex 0.153.4 install/discovery and MCP recall passed with the pinned
+  executable deliberately absent from PATH. Live trusted-hook retest is pending.
+- Direct execution through the same host login shell returned valid recall
+  context with the explicit runtime. Full host `bin/ci` and plugin validation
+  passed after the repair; no live model-save success is implied.
+- The trial's compiled executable remains unchanged. Only its plugin and local
+  test wrapper need updating, at a fresh-session boundary; Alfred stays intact.
+
 Still pending: actual model recall/save behavior, hook execution/context delivery
 in live turns, interruption/compaction/fresh-thread scenarios, actual second-machine
 acceptance, final user-facing management/distribution experience, and GitHub board

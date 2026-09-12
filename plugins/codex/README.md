@@ -17,6 +17,19 @@ Make that directory available on the PATH used to start Codex. `my-friday versio
 identifies the selected executable. An older assistant-platform executable does
 not supply the new `bank`, `mcp`, or `codex-memory-hook` commands.
 
+When more than one version is installed, also select the exact executable before
+starting Codex:
+
+```sh
+export MY_FRIDAY_MEMORY_BIN=/absolute/candidate/bin/my-friday
+```
+
+Both MCP and hooks honor this machine-local override. It must be an absolute
+executable path (spaces are supported). Without it they use `my-friday` on PATH.
+Native login-shell setup can reorder PATH, so merely prepending the candidate
+directory at launch is not enough to pin a trial. No global shell changes are
+required; the variable can be supplied only to the Codex process.
+
 Create a new memory bank; do not point this command at existing memory:
 
 ```sh
@@ -62,9 +75,11 @@ Open a **fresh thread**, use `/hooks` to review and trust the two bundled hooks,
 and `/mcp` to confirm the memory server connected. Hook trust is a native setup
 step; no bypass flag is required or recommended for everyday use.
 
-The plugin starts `my-friday mcp --harness codex` through PATH. It explicitly
-forwards `MY_FRIDAY_MEMORY_BINDING`, `XDG_CONFIG_HOME`, and `SSH_AUTH_SOCK`, not
-arbitrary credentials from the shell. Default binding selection needs no export.
+The plugin's small POSIX shell runner starts the selected executable with
+`mcp --harness codex`. It explicitly forwards `MY_FRIDAY_MEMORY_BIN`,
+`MY_FRIDAY_MEMORY_BINDING`, `XDG_CONFIG_HOME`, and `SSH_AUTH_SOCK`, not arbitrary
+credentials from the shell. Default binding selection needs no export. The
+runner requires `/bin/sh` on the current macOS/Linux targets.
 
 ## What happens during work
 
@@ -126,6 +141,12 @@ Use `my-friday bank doctor` for read-only structure and binding checks. It does
 not prove remote freshness, authentication, plugin loading or model behavior.
 Missing binding/server: check the selected executable, PATH, binding path and
 `/mcp`. Missing automatic recall: inspect `/hooks` for disabled/untrusted hooks.
+`unknown command "codex-memory-hook"` indicates an older executable was selected.
+Set `MY_FRIDAY_MEMORY_BIN` to the intended candidate and start a fresh session.
+The packaged runner converts a missing/failed hook executable into a visible
+nonblocking warning; it suppresses failed raw output. This does not make memory
+available: diagnose the warning before relying on automatic recall. MCP startup
+failures remain visible as an unavailable server, not a successful connection.
 
 After updating the candidate binary and packaged plugin, reinstall the plugin
 through its configured local marketplace and start a fresh thread. Development
@@ -141,6 +162,7 @@ plugins/codex/
     .codex-plugin/plugin.json
     .mcp.json
     hooks/hooks.json
+    scripts/run-memory.sh
     skills/memory/SKILL.md
 ```
 

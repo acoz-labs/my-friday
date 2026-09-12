@@ -56,7 +56,9 @@ func TestNativeCodexMemoryPlugin(t *testing.T) {
 		}
 		env = append(env, v)
 	}
-	env = append(env, "CODEX_HOME="+nativeHome, "MY_FRIDAY_MEMORY_BINDING="+binding, "PATH="+filepath.Dir(friday)+string(os.PathListSeparator)+os.Getenv("PATH"))
+	// Deliberately do not add the candidate to PATH: explicit runtime selection
+	// must work even when the native shell finds an older installation first.
+	env = append(env, "CODEX_HOME="+nativeHome, "MY_FRIDAY_MEMORY_BINDING="+binding, "MY_FRIDAY_MEMORY_BIN="+friday, "PATH="+os.Getenv("PATH"))
 	ctx, cancel := context.WithTimeout(context.Background(), 55*time.Second)
 	defer cancel()
 	run := func(args ...string) {
@@ -128,7 +130,7 @@ func TestNativeCodexMemoryPlugin(t *testing.T) {
 		t.Fatalf("memory skill not discovered: %s", skills)
 	}
 	hooks := request("hooks/list", map[string]any{"cwds": []string{project}})
-	if !strings.Contains(string(hooks), "my-friday codex-memory-hook") || !strings.Contains(string(hooks), "userPromptSubmit") {
+	if !strings.Contains(string(hooks), "scripts/run-memory.sh") || !strings.Contains(string(hooks), "userPromptSubmit") {
 		t.Fatalf("native hook not discovered: %s", hooks)
 	}
 	started := request("thread/start", map[string]any{"cwd": project, "approvalPolicy": "never", "ephemeral": true})
