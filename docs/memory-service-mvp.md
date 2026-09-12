@@ -217,7 +217,19 @@ Ordinary-task learning did not pass on its first trial:
   learning instructions. Do not insert the missing decision on the model's
   behalf or count its correct checklist as durable-memory acceptance.
 
-Still pending: ordinary-task learning without explicit save instructions,
+Fresh-session ordinary-task control passed:
+
+- Repeating the same prototype/checklist prompt in a distinct session saved one
+  user-directed decision for offline operation, local storage and excluded cloud
+  sync, without an explicit request to remember. One semantic journal stated
+  that no implementation had occurred, and sync checkpointed the local bank.
+- Suggested CRUD tests, asset bundling and other checklist details were not
+  promoted to user-approved requirements. Existing records remained unchanged.
+- This supports, but does not prove, prior read-only scope carryover as the
+  explanation for the first miss. Test an explicitly one-answer no-save request
+  followed by another ordinary decision in the same session before resolving it.
+
+Still pending: reliability of ordinary-task learning across task boundaries,
 broader read-only/no-save scenarios,
 interruption/compaction scenarios, actual second-machine
 acceptance, final user-facing management/distribution experience, and GitHub board
