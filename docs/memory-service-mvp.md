@@ -307,3 +307,24 @@ Second-machine preparation exposed and repaired a transport gap:
 
 The MVP is not complete. No production release or private-memory migration has
 been performed.
+
+Two-host transport and runtime checks completed after the SSH repair:
+
+- Built clean candidate `6e2f30ba73f854851314031daca893e00ed84bdf` once; both
+  hosts have SHA256 `751aaae3bb2aa03f25f2134c619852b82ff5f6d079875804fb742e4aca0785c9`.
+  The original conversation candidate remains intact. The plugin is unchanged.
+- A first-host clone pushed the existing synthetic memory over verified SSH to
+  a disposable bare repository on the second host. That host cloned/bound it,
+  checkpointed its new device identity, and the first host fetched it back over
+  SSH. Both converged at `ad289574ee8d53820b4a6090509723e1cd76c8ee`.
+- Second-host CLI recall returned the current renamed project, platform targets
+  and optional-backup decision with original first-machine provenance. Both
+  binding/structure doctors passed. No native conversation was copied.
+- Native plugin installation passed on Codex 0.154.0 in an isolated second-host
+  profile without copied authentication. First-host native discovery/MCP recall
+  passed against the new binary. Owner-assisted second-host conversation and a
+  model-authored return trip remain pending.
+- Full host CI initially flagged the new `net.ParseIP` import. The boundary test
+  now narrowly permits only that parsing API in the SSH address validator; no
+  socket/network API was added. Full host CI then passed. This test-only change
+  does not change the nominated candidate binary.

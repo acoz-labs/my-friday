@@ -70,6 +70,8 @@ func TestProductionNetworkAndSubprocessBoundary(t *testing.T) {
 		}
 		rel = filepath.ToSlash(rel)
 		portableSource := strings.HasPrefix(rel, "internal/portable/") || strings.HasPrefix(rel, "cmd/my-friday/portable")
+		// SSH URL validation parses IPv6 literals; it does not open sockets.
+		sshAddressParser := rel == "internal/portable/sync_transport.go"
 		memorySource := strings.HasPrefix(rel, "internal/memorybank/")
 		memoryImports := map[string]bool{"context": true, "time": true, "github.com/acoz-labs/my-friday/internal/portable": true}
 		if rel == "cmd/my-friday/portable_bank_menu.go" {
@@ -88,7 +90,7 @@ func TestProductionNetworkAndSubprocessBoundary(t *testing.T) {
 		consoleImports := map[string]bool{"charm.land/bubbletea/v2": true, "github.com/charmbracelet/x/term": true, "github.com/charmbracelet/x/ansi": true}
 		for _, spec := range file.Imports {
 			name, _ := strconv.Unquote(spec.Path.Value)
-			if !allowedImports[name] && !(portableSource && portableImports[name]) && !(memorySource && memoryImports[name]) && !(mcpSource && mcpImports[name]) && !(updateSource && updateImports[name]) && !((rel == "internal/console/prompt.go" || rel == "internal/console/report.go") && consoleImports[name]) {
+			if !allowedImports[name] && !(sshAddressParser && name == "net") && !(portableSource && portableImports[name]) && !(memorySource && memoryImports[name]) && !(mcpSource && mcpImports[name]) && !(updateSource && updateImports[name]) && !((rel == "internal/console/prompt.go" || rel == "internal/console/report.go") && consoleImports[name]) {
 				t.Errorf("production import %q is not allowlisted in %s", name, path)
 			}
 			if name == "os/exec" && spec.Name != nil {
@@ -105,6 +107,9 @@ func TestProductionNetworkAndSubprocessBoundary(t *testing.T) {
 				return true
 			}
 			pkg, pkgOK := sel.X.(*ast.Ident)
+			if pkgOK && sshAddressParser && pkg.Name == "net" && sel.Sel.Name != "ParseIP" {
+				t.Errorf("unexpected net API %s in address parser %s", sel.Sel.Name, path)
+			}
 			if !pkgOK || pkg.Name != "exec" {
 				return true
 			}
