@@ -196,7 +196,17 @@ Owner-assisted rename/supersession acceptance passed:
   the bank was checkpointed locally with a clean working tree. Fresh-session
   recall of the corrected name is the next behavioral check.
 
-Still pending: fresh-thread corrected recall, broader read-only/no-save scenarios,
+Fresh-thread corrected recall passed:
+
+- A distinct native session received only the current Silver Heron revision
+  for its name query, including Copper Finch as historical context. It answered
+  correctly without the prompt supplying either name.
+- The model read the skill and performed one MCP recall; no write or sync tools
+  were called. Git HEAD and the clean bank were unchanged; the same two journals
+  remained. Automatic context delivery and subsequent MCP recall agreed.
+
+Still pending: ordinary-task learning without explicit save instructions,
+broader read-only/no-save scenarios,
 interruption/compaction scenarios, actual second-machine
 acceptance, final user-facing management/distribution experience, and GitHub board
 attachment. Current clone tests simulate two machines; they are not physical-host
