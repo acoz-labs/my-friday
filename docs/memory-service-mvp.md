@@ -308,6 +308,18 @@ Second-machine preparation exposed and repaired a transport gap:
 The MVP is not complete. No production release or private-memory migration has
 been performed.
 
+Owner-assisted second-host native recall passed:
+
+- The actual second Mac's Codex session reported its hostname and retrieved the
+  current project name, macOS/Linux targets, local/offline data and optional cloud
+  backup from the shared bank. Both prompt-hook context and MCP recall carried
+  the first machine's saved records; no native threads were transferred.
+- It used only hostname/skill reads and memory scopes/recall. No remember,
+  journal-append or sync call occurred. Both clones remained clean at the same
+  checkpoint, with the original five journals unchanged.
+- Next is a model-authored decision on the second host followed by native sync
+  and recall on the first, verifying authorship and context freshness together.
+
 Two-host transport and runtime checks completed after the SSH repair:
 
 - Built clean candidate `6e2f30ba73f854851314031daca893e00ed84bdf` once; both
