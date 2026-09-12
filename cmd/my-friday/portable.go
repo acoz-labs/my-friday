@@ -51,7 +51,7 @@ func runPortable(args []string, input io.Reader, out, errout io.Writer) (err err
 		if err != nil {
 			return err
 		}
-		return managementMenu(home, input, out)
+		return memoryMenuMode(home, input, out, false)
 	}
 	if len(args) == 1 && helpFlag(args[0]) {
 		return printPortableHelp("", out)
@@ -89,6 +89,7 @@ func runPortable(args []string, input io.Reader, out, errout io.Writer) (err err
 	case "menu":
 		f := portableFlags("menu", errout)
 		plain := f.Bool("plain", false, "Use numbered prompts instead of the terminal UI")
+		legacy := f.Bool("legacy", false, "Manage previous assistant-platform installations")
 		if err := parseFlags(f, args[1:]); err != nil {
 			return err
 		}
@@ -96,7 +97,10 @@ func runPortable(args []string, input io.Reader, out, errout io.Writer) (err err
 		if err != nil {
 			return err
 		}
-		return managementMenuMode(home, input, out, *plain)
+		if *legacy {
+			return managementMenuMode(home, input, out, *plain)
+		}
+		return memoryMenuMode(home, input, out, *plain)
 	case "version", "--version":
 		if len(args) != 1 {
 			return errors.New("usage: my-friday version")

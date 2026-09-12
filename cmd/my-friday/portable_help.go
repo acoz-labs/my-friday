@@ -26,10 +26,12 @@ identity and this machine's device ID. Use a separate binding for another bank.
 Clone an existing bank with Git, then bind its local path on the new machine.
 Nothing targets the working directory implicitly. See each command's --help.
 `,
-	"menu": `Usage: my-friday [menu [--plain]]
-Open the reusable management menu: create/import agents, inspect existing
-installations, configure source sync, change harness, run doctor/repair, and
-manage toolkit versions. Interactive terminals use arrows or j/k, Enter/l,
+	"menu": `Usage: my-friday [menu [--plain] [--legacy]]
+Open memory-bank management: create a bank, connect an existing local clone,
+check its structure, or synchronize its configured Git remote. No assistant
+launcher, capability setup or native login is required to manage a bank.
+Use --legacy for previous assistant-platform setup, doctor/repair and updates.
+Interactive terminals use arrows or j/k, Enter/l,
 Esc/h and gg/G. Text fields use normal typing, Tab to edit the default, and
 Ctrl+U to clear. Ctrl+C exits. The UI restores terminal input modes on exit.
 Use --plain or MY_FRIDAY_PLAIN=1 for numbered prompts; non-TTY/dumb terminals
@@ -60,14 +62,14 @@ or retained toolkit. Updates preserve per-agent version pins.
   manifest --binary PATH --release TAG
                                     Print approved release metadata; no publishing
 Close active agent sessions before adoption. An omitted launcher stays unchanged.
-Use the management menu for guided adoption, repair and rollback.
+Use menu --legacy for guided assistant adoption, repair and rollback.
 `,
-	"": `My Friday — portable assistant toolkit
+	"": `My Friday — durable memory for your agent
 
 Usage: my-friday <command> [options]
   bank        Create, bind, and use a memory-only bank (memory-service MVP)
   mcp         Serve the selected memory bank over stdio MCP
-  menu        Open agent management (also the default with no arguments)
+  menu        Open memory-bank management; --legacy manages previous assistants
   api         Discover and execute structured, noninteractive management actions
   toolkit     Open updates; use/check-instance/manifest support explicit tooling
   version     Print toolkit build and portable compatibility metadata
@@ -80,9 +82,8 @@ Usage: my-friday <command> [options]
   hook        Dispatch a harness lifecycle event (adapter entrypoint)
   help        Show help, optionally for a command
 
-Start capability authoring with: my-friday agent capability-guide
-Print a manifest with: my-friday agent capability-template --capability <id>
-Running without arguments opens the management menu. Commands accept --help / -h.
+Running without arguments opens memory-bank management. Commands accept --help / -h.
+Assistant/capability commands above are retained compatibility, not memory setup.
 Resume source hosting/account setup with: my-friday setup --instance PATH
 Legacy init, assistant, capability, codex, validate, and recover commands remain
 separate from this portable workflow; use agent commands for portable capabilities.

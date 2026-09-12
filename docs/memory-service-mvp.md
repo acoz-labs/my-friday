@@ -120,6 +120,23 @@ Retrieval scale investigation after the first candidate:
 - The owner-assisted trial remains pinned to its original candidate. Do not
   replace its executable while the first conversation test is pending.
 
+Memory-first front door after the initial candidate:
+
+- Empty argv and `menu` now open memory-bank create/connect/check/sync, using
+  the existing arrow/Vim UI and numbered fallback. Machine-local binding paths
+  are explicit; no agent identity, capability setup or native configuration is
+  created. Existing assistant management remains available through `menu --legacy`.
+- The UI uses the same memory storage, binding and sync operations as explicit
+  commands. It does not automate native plugin installation or authentication,
+  and it does not change the already-handed-off pilot binary.
+- Tests cover the new default route, explicit legacy route, create/connect,
+  health/sync, cancellation, connection collisions and an unresolved symlink
+  hiding an in-bank binding. Full host CI and Linux AMD64/ARM64 builds passed.
+- At the follow-up check, no process matching the handed-off native pilot was
+  running and its scope inventory remained empty. GitHub Project listing still
+  failed for missing `read:project` scope. Continue native acceptance with owner
+  input; do not treat these unperformed checks as successful acceptance.
+
 Still pending: actual model recall/save behavior, hook execution/context delivery
 in live turns, interruption/compaction/fresh-thread scenarios, actual second-machine
 acceptance, final user-facing management/distribution experience, and GitHub board

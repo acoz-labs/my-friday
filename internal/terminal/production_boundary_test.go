@@ -72,6 +72,10 @@ func TestProductionNetworkAndSubprocessBoundary(t *testing.T) {
 		portableSource := strings.HasPrefix(rel, "internal/portable/") || strings.HasPrefix(rel, "cmd/my-friday/portable")
 		memorySource := strings.HasPrefix(rel, "internal/memorybank/")
 		memoryImports := map[string]bool{"context": true, "time": true, "github.com/acoz-labs/my-friday/internal/portable": true}
+		if rel == "cmd/my-friday/portable_bank_menu.go" {
+			memorySource = true
+			memoryImports["github.com/acoz-labs/my-friday/internal/memorybank"] = true
+		}
 		mcpSource := strings.HasPrefix(rel, "internal/memorymcp/") || strings.HasPrefix(rel, "internal/memorycodex/")
 		mcpImports := map[string]bool{"context": true, "github.com/acoz-labs/my-friday/internal/memorybank": true, "github.com/acoz-labs/my-friday/internal/portable": true, "github.com/modelcontextprotocol/go-sdk/mcp": true}
 		if rel == "cmd/my-friday/portable_bank.go" {

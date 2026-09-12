@@ -8,6 +8,11 @@ knowledge tools, explicit correction history and machine provenance, plus a
 local MCP server and a thin native Codex plugin. It does not require an agent
 identity, custom launcher, capability framework, or separate model subscription.
 
+Run `my-friday` for memory-bank setup and management, or `my-friday menu --plain`
+for numbered prompts. Create a bank, connect an existing clone, check its health,
+or synchronize its configured Git remote. Automation uses the `bank` CLI or MCP
+tools, not the interactive menu.
+
 Start with the [Codex memory setup guide](plugins/codex/README.md) and
 [memory-service acceptance ledger](docs/memory-service-mvp.md). The engine, CLI,
 MCP round trip, and model-free native plugin checks pass locally; real
@@ -23,13 +28,13 @@ The previous iteration used one private, Git-backed agent repository with portab
 memory and capabilities, plus machine-local Codex/Pi projections. The new
 `setup`, `agent`, `memory`, `reference`, `sync`, and `hook` commands are an
 initial implementation, not a production release or migration of existing agents.
-Running `my-friday` without arguments opens the [management menu](docs/management-menu.md):
+Run `my-friday menu --legacy` for the [previous management menu](docs/management-menu.md):
 create/import an agent, manage an installation, check health, repair, and update
 the toolkit. Interactive terminals get arrow/Vim navigation and editable fields;
-`my-friday menu --plain` retains numbered prompts. For automation, the
+`my-friday menu --legacy --plain` retains numbered prompts. For automation, the
 [agent management API](docs/agent-api.md) exposes discovery, typed parameters,
 preview/apply and JSON outcomes without navigating the TUI.
-That menu currently manages the previous assistant platform; use `bank` and the
+That explicit compatibility menu manages the previous assistant platform; use `bank` and the
 Codex plugin for the memory-only MVP.
 It now includes [guided source hosting](docs/source-setup.md): private GitHub
 creation/connection, explicit setup and ongoing-sync accounts, and resumable

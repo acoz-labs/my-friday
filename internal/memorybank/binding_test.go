@@ -43,3 +43,18 @@ func TestBindingIsLocalAndPinsBankIdentity(t *testing.T) {
 		t.Fatal("already-running service read a replacement bank")
 	}
 }
+
+func TestBindingPreflightRefusesUnresolvedSymlinkIntoFutureBank(t *testing.T) {
+	base := t.TempDir()
+	root := filepath.Join(base, "future-bank")
+	alias := filepath.Join(base, "alias")
+	if err := os.Symlink(root, alias); err != nil {
+		t.Fatal(err)
+	}
+	if err := ValidateBindingDestination(root, filepath.Join(alias, "binding.json")); err == nil {
+		t.Fatal("unresolved symlink hid a future in-bank binding")
+	}
+	if _, err := os.Lstat(root); !os.IsNotExist(err) {
+		t.Fatal("preflight created the bank")
+	}
+}

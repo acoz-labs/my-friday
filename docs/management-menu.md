@@ -1,6 +1,25 @@
-# Agent management menu
+# Memory and compatibility management menus
 
 Run `my-friday` (or `my-friday menu`) at any time, from any working directory.
+The default menu manages **memory-only banks**: create, connect an already-cloned
+bank, perform read-only structure checks, and synchronize a configured Git remote.
+It asks for the bank directory and a separate machine-local binding file; it
+does not require an assistant name, harness home, capabilities or launcher.
+Create/connect reviews the paths before writing and preserves existing bindings.
+Back/EOF does not approve an unfinished operation. A partial failure preserves
+the bank and reports how to connect it after correcting the problem.
+
+Native plugin installation and authentication remain separate from bank setup.
+No remote is configured automatically. Explicit sync reports local-only/pending
+instead of presenting local persistence as cross-machine delivery. Health checks
+do not prove remote access, plugin loading or model behavior.
+
+For previous assistant installations, run `my-friday menu --legacy` (optionally
+with `--plain`). That preserves the prior setup, repair, source and update menu.
+It is not a prerequisite for the memory service.
+
+## Shared terminal controls
+
 Opening the menu does not launch an agent, synchronize source or change files.
 Interactive terminals use a lightweight inline TUI, preserving operation summaries
 in scrollback. Use arrows or `j`/`k` to move, Enter or `l` to select, Escape or `h`
@@ -53,12 +72,15 @@ An external stop is never interpreted as accepting the highlighted option.
 Terminal restoration is tested on normal exit, Ctrl+C and SIGTERM; SIGKILL or
 terminal loss cannot guarantee cleanup by a process that no longer runs.
 
-Agents should use the [versioned JSON management API](agent-api.md), not simulated
-keypresses or piped menu answers. The TUI, numbered prompts and API share core
-operations, including source-hosting configuration. This interface adds no agent
+For automation, use the `bank` CLI or memory MCP tools. Previous assistant-platform
+operations have the [versioned JSON management API](agent-api.md). Do not simulate
+keypresses or pipe menu answers from an agent. The human interfaces reuse core
+operations. This interface adds no agent
 capabilities, credential provider policy, or private workflows to the public toolkit.
 
-The home menu offers new setup, import, installed-agent management and updates.
+## Previous assistant management
+
+The `--legacy` home menu offers new setup, import, installed-agent management and updates.
 Discovery reads only `~/.local/share/my-friday/instances`, showing damaged entries
 instead of hiding them. An explicit path can open a nonstandard installation;
 these paths are not automatically registered or found by scanning the home tree.

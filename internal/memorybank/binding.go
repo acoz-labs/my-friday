@@ -46,11 +46,39 @@ func prospectivePath(path string) (string, error) {
 	if !os.IsNotExist(err) || filepath.Dir(path) == path {
 		return "", err
 	}
+	if info, statErr := os.Lstat(path); statErr == nil && info.Mode()&os.ModeSymlink != 0 {
+		return "", errors.New("binding paths cannot traverse unresolved symlinks; select a real directory")
+	}
 	parent, err := prospectivePath(filepath.Dir(path))
 	if err != nil {
 		return "", err
 	}
 	return filepath.Join(parent, filepath.Base(path)), nil
+}
+
+// ValidateBindingDestination preflights a new machine-local connection before
+// a wizard creates its bank. Bind repeats it before writing and publishes
+// the connection without replacing an existing file.
+func ValidateBindingDestination(root, path string) error {
+	if root == "" || path == "" {
+		return errors.New("bank and binding paths required")
+	}
+	root, err := prospectivePath(root)
+	if err != nil {
+		return err
+	}
+	path, err = prospectivePath(path)
+	if err != nil {
+		return err
+	}
+	rel, err := filepath.Rel(root, path)
+	if err != nil || (rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))) {
+		return errors.New("machine binding must be outside the Git-backed bank")
+	}
+	if _, err := os.Lstat(path); !os.IsNotExist(err) {
+		return errors.New("binding already exists or cannot be inspected; use a new path, preserving the existing binding")
+	}
+	return nil
 }
 
 func Bind(root, path, label, actor string) (Binding, error) {
@@ -69,12 +97,8 @@ func Bind(root, path, label, actor string) (Binding, error) {
 	if err != nil {
 		return b, err
 	}
-	rel, err := filepath.Rel(s.Root, path)
-	if err != nil || (rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))) {
-		return b, errors.New("machine binding must be outside the Git-backed bank")
-	}
-	if _, err := os.Lstat(path); !os.IsNotExist(err) {
-		return b, errors.New("binding already exists or cannot be inspected; use a new path, preserving the existing binding")
+	if err := ValidateBindingDestination(s.Root, path); err != nil {
+		return b, err
 	}
 	if err := s.Validate(); err != nil {
 		return b, err
