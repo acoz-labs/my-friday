@@ -242,7 +242,18 @@ Explicit one-reply no-save boundary passed:
   read-only carryover ambiguity remains documented rather than reclassified as
   a proven implementation defect or universal model behavior.
 
-Still pending: current-user reversal of a remembered project constraint,
+Current-user scope change acceptance passed:
+
+- The model accepted optional cloud backup without an approval loop or objection
+  based on the earlier exclusion. It revised the existing scope record with an
+  explicit supersession edge and reason, preserving the original revision.
+- Current knowledge retains local data, full offline operation when backup is
+  disabled, and unchanged macOS/Linux targets. It distinguishes optional backup
+  from general cloud synchronization rather than expanding the user's request.
+- A semantic journal describes the actual change; no implementation was claimed.
+  No duplicate or conflicting current decision was introduced.
+
+Still pending: native memory use from another project directory,
 broader read-only/no-save scenarios,
 interruption/compaction scenarios, actual second-machine
 acceptance, final user-facing management/distribution experience, and GitHub board
