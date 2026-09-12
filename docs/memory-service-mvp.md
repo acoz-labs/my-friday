@@ -185,7 +185,18 @@ Fresh-thread read-only acceptance passed:
   harmless here, but a concrete efficiency opportunity to revisit after core
   behavioral acceptance. No plugin/runtime change was made for this test.
 
-Still pending: corrections and supersession, broader read-only/no-save scenarios,
+Owner-assisted rename/supersession acceptance passed:
+
+- The model updated the existing project record, explicitly superseding its
+  Copper Finch revision with Silver Heron. Independent history inspection
+  confirmed both immutable revisions, the supersession edge, user-directed
+  reason and original machine/harness provenance.
+- Current recall contains Silver Heron and the unchanged original preference
+  revision, with no duplicates or conflicts. One rename journal was added and
+  the bank was checkpointed locally with a clean working tree. Fresh-session
+  recall of the corrected name is the next behavioral check.
+
+Still pending: fresh-thread corrected recall, broader read-only/no-save scenarios,
 interruption/compaction scenarios, actual second-machine
 acceptance, final user-facing management/distribution experience, and GitHub board
 attachment. Current clone tests simulate two machines; they are not physical-host
