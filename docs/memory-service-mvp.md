@@ -173,7 +173,19 @@ First successful owner-assisted conversation after the hook repair:
   containing writes and checkpoint. This sample is not a performance target;
   unnecessary reads and checkpoint overhead remain worth observing.
 
-Still pending: fresh-thread recall and corrections, read-only/no-save compliance,
+Fresh-thread read-only acceptance passed:
+
+- A distinct native session received both saved facts through the prompt hook,
+  then read the memory skill and made one read-only MCP recall. Its answer named
+  Copper Finch and the concise-answer preference correctly without being given
+  either answer in the new prompt.
+- No remember, journal-append or sync call occurred. Independent inspection
+  found the same two records, one journal, unchanged Git HEAD and clean bank.
+- The additional MCP recall repeated evidence already present in hook context;
+  harmless here, but a concrete efficiency opportunity to revisit after core
+  behavioral acceptance. No plugin/runtime change was made for this test.
+
+Still pending: corrections and supersession, broader read-only/no-save scenarios,
 interruption/compaction scenarios, actual second-machine
 acceptance, final user-facing management/distribution experience, and GitHub board
 attachment. Current clone tests simulate two machines; they are not physical-host
