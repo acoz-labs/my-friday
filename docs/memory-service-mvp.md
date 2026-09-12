@@ -157,8 +157,24 @@ First owner-assisted hook trial exposed a runtime-selection bug:
 - The trial's compiled executable remains unchanged. Only its plugin and local
   test wrapper need updating, at a fresh-session boundary; Alfred stays intact.
 
-Still pending: actual model recall/save behavior, hook execution/context delivery
-in live turns, interruption/compaction/fresh-thread scenarios, actual second-machine
+First successful owner-assisted conversation after the hook repair:
+
+- The retained synthetic native transcript contains the prompt-hook orientation,
+  empty initial recall packet and scope inventory, confirming context delivery.
+- The model read the installed memory skill, recalled existing records, saved
+  Copper Finch as a fact and concise answers as a preference through MCP, then
+  appended one short setup journal and called sync. No tool failures or retries
+  appeared in this turn; no capability-building workflow was invoked.
+- Independent read-only CLI inspection confirmed exactly two current records
+  and one journal, with the bound device and Codex provenance. Sync returned
+  `local-only`, and the final answer accurately stated that cross-machine sync
+  was not configured. This proves the basic save path, not remote delivery.
+- The native turn took about 38 seconds, including a roughly 14.5-second batch
+  containing writes and checkpoint. This sample is not a performance target;
+  unnecessary reads and checkpoint overhead remain worth observing.
+
+Still pending: fresh-thread recall and corrections, read-only/no-save compliance,
+interruption/compaction scenarios, actual second-machine
 acceptance, final user-facing management/distribution experience, and GitHub board
 attachment. Current clone tests simulate two machines; they are not physical-host
 acceptance. Writes are not idempotent: clients must inspect after ambiguous failure
