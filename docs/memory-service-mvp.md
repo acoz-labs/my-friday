@@ -253,7 +253,19 @@ Current-user scope change acceptance passed:
 - A semantic journal describes the actual change; no implementation was claimed.
   No duplicate or conflicting current decision was introduced.
 
-Still pending: native memory use from another project directory,
+Different-working-directory native acceptance passed:
+
+- A fresh native session launched in an empty second project directory. Its
+  `pwd` and final answer retained that directory while both prompt-hook context
+  and MCP recall supplied Silver Heron's current prototype scope from the bound
+  bank. No assistant-repository cwd or project-local instructions were needed.
+- It retrieved macOS/Linux targets, local storage, offline operation and optional
+  backup without reverting to the earlier exclusion. Only read operations were
+  invoked; the second directory remained empty and bank HEAD/tree were unchanged.
+- A separate empty synthetic bank/binding is prepared for the next native
+  isolation test, using the same plugin and native profile in a fresh session.
+
+Still pending: native isolation between separately selected banks,
 broader read-only/no-save scenarios,
 interruption/compaction scenarios, actual second-machine
 acceptance, final user-facing management/distribution experience, and GitHub board
