@@ -35,6 +35,17 @@ no model call, copies no authentication and changes no ambient native config.
 It does not prove model adherence, trusted hook execution, or cross-machine
 behavior. See [the acceptance ledger](memory-service-mvp.md).
 
+For reproducible memory retrieval scale measurements:
+
+```sh
+mise exec -- go test ./internal/memorybank -run '^$' \
+  -bench BenchmarkRecallCorpus -benchtime=1x -count=1
+```
+
+This creates and validates synthetic 100/1,000/5,000-record banks before timing.
+It reports retrieval allocations and elapsed time, not peak retained memory or
+end-to-end native hook latency. It never reads a user's real memory bank.
+
 Portable Codex discovery has an additional opt-in, model-free native contract
 test. Set `FRIDAY_TEST_CODEX` to an absolute installed executable and run:
 

@@ -40,6 +40,40 @@ func TestCreateAndValidate(t *testing.T) {
 	}
 }
 
+func TestRecallRankingAndTiesRemainStable(t *testing.T) {
+	s := fixtureStore(t)
+	for _, item := range []struct{ id, summary, body string }{
+		{"revision-weak", "General note", "Project detail"},
+		{"revision-tie-b", "Project", "General detail"},
+		{"revision-strong", "Project project", "General detail"},
+		{"revision-tie-a", "Project", "General detail"},
+		{"revision-unrelated", "General note", "Unrelated detail"},
+	} {
+		r := revision(item.id)
+		r.RecordID, r.Summary, r.Body = "record-"+item.id, item.summary, item.body
+		if err := s.Put(r); err != nil {
+			t.Fatal(err)
+		}
+	}
+	want := []string{"revision-strong", "revision-tie-a", "revision-tie-b", "revision-weak"}
+	for _, limit := range []int{2, 10} {
+		for attempt := 0; attempt < 5; attempt++ {
+			p, err := s.Recall(Query{Text: "project", Scope: Scope{Kind: "account", ID: "account-example"}, Limit: limit}, time.Now())
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(p.Current) != min(limit, len(want)) {
+				t.Fatalf("wrong hit count: %+v", p.Current)
+			}
+			for n, r := range p.Current {
+				if r.ID != want[n] {
+					t.Fatalf("ranking at %d: got %s, want %s", n, r.ID, want[n])
+				}
+			}
+		}
+	}
+}
+
 func TestRevisionHistoryAndCrossMachineCorrection(t *testing.T) {
 	s := fixtureStore(t)
 	first := revision("revision-first")

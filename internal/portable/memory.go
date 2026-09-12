@@ -350,6 +350,10 @@ func (s *Store) Recall(q Query, now time.Time) (Packet, error) {
 			heads[r.RecordID] = append(heads[r.RecordID], r)
 		}
 	}
+	// Scores belong to this fresh read, not a persistent index. Tokenizing the
+	// same bodies inside the sort comparator makes broad recalls needlessly
+	// expensive as a bank grows; compute each candidate's relevance only once.
+	scores := map[string]int{}
 	for recordID, revisions := range heads {
 		scoped := revisions[0].Scope
 		if q.ExactScope && scoped != q.Scope {
@@ -367,12 +371,13 @@ func (s *Store) Recall(q Query, now time.Time) (Packet, error) {
 			p.Conflicts = append(p.Conflicts, Conflict{RecordID: recordID, Revisions: revisions})
 			continue
 		}
-		if relevance(revisions[0], q.Text) > 0 {
+		if score := relevance(revisions[0], q.Text); score > 0 {
+			scores[revisions[0].ID] = score
 			p.Current = append(p.Current, revisions[0])
 		}
 	}
 	sort.Slice(p.Current, func(i, j int) bool {
-		a, b := relevance(p.Current[i], q.Text), relevance(p.Current[j], q.Text)
+		a, b := scores[p.Current[i].ID], scores[p.Current[j].ID]
 		if a == b {
 			return p.Current[i].ID < p.Current[j].ID
 		}

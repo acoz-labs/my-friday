@@ -100,6 +100,26 @@ Implemented and exercised on macOS/ARM64, 2026-09-12:
   unverified; a build is not proof of platform behavior.
 - Plugin and skill validators pass using an isolated `uv --with pyyaml` environment.
 
+Retrieval scale investigation after the first candidate:
+
+- Added `BenchmarkRecallCorpus` with validated on-disk synthetic corpora of 100,
+  1,000 and 5,000 records, approximately 540 bytes of body text per record. It
+  measures a broad matching query returning five hits within an 8 KiB budget.
+- A single local measurement on Apple M1 Pro showed the 5,000-record recall
+  taking 3.85 seconds and allocating 872 MB. Relevance was repeatedly recomputed
+  inside the sorting comparator.
+- Computing each candidate score once per fresh read reduced that measurement
+  to 0.65 seconds and 182 MB allocated. The 1,000-record measurement fell from
+  0.64 to 0.13 seconds. These are synthetic benchmark samples, not latency SLOs,
+  peak retained memory, cold-disk measurements, or full hook timings.
+- Ordering/tie regression coverage preserves the existing lexical results,
+  while supersession and scope tests retain their semantics. No persisted index
+  or cross-call cache was added; later disk changes still require fresh reads.
+- Focused `go vet` and race-enabled tests passed for `internal/portable`,
+  `internal/memorybank`, `internal/memorymcp` and `internal/memorycodex`.
+- The owner-assisted trial remains pinned to its original candidate. Do not
+  replace its executable while the first conversation test is pending.
+
 Still pending: actual model recall/save behavior, hook execution/context delivery
 in live turns, interruption/compaction/fresh-thread scenarios, actual second-machine
 acceptance, final user-facing management/distribution experience, and GitHub board
