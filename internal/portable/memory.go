@@ -87,6 +87,9 @@ type Query struct {
 	Text  string
 	Scope Scope
 	Limit int
+	// ExactScope omits bank-wide records when a narrower scope is selected.
+	// False preserves the assistant runtime's existing combined-scope behavior.
+	ExactScope bool
 }
 type Conflict struct {
 	RecordID  string     `json:"record_id"`
@@ -101,6 +104,10 @@ type Packet struct {
 }
 
 func (s *Store) validateGraph(records []Revision) error {
+	return s.validateGraphWithSources(records, nil)
+}
+
+func (s *Store) validateGraphWithSources(records []Revision, pending map[string]Source) error {
 	schema, err := memorySchema()
 	if err != nil {
 		return err
@@ -127,9 +134,11 @@ func (s *Store) validateGraph(records []Revision) error {
 			return err
 		}
 		for _, id := range r.Evidence.SourceRefs {
-			var source Source
-			if err = readJSON(filepath.Join(s.Root, "memory/sources", id+".json"), &source); err != nil {
-				return fmt.Errorf("source %s: %w", id, err)
+			source, exists := pending[id]
+			if !exists {
+				if err = readJSON(filepath.Join(s.Root, "memory/sources", id+".json"), &source); err != nil {
+					return fmt.Errorf("source %s: %w", id, err)
+				}
 			}
 			if source.ID != id {
 				return errors.New("source ID mismatch")
@@ -343,6 +352,9 @@ func (s *Store) Recall(q Query, now time.Time) (Packet, error) {
 	}
 	for recordID, revisions := range heads {
 		scoped := revisions[0].Scope
+		if q.ExactScope && scoped != q.Scope {
+			continue
+		}
 		if scoped.Kind != "assistant" && scoped != q.Scope {
 			continue
 		}

@@ -15,6 +15,26 @@ bin/ci
 My Friday uses Go 1.26.4, pinned by `mise.toml`; `go.mod` declares the module's
 language baseline. Install the exact host toolchain with `mise install`.
 
+Memory-service MVP validation uses the same CI entrypoint. On 2026-09-12 Docker
+was installed but its daemon was unavailable; `mise exec -- bin/ci` passed on
+macOS/ARM64 using the documented host fallback.
+
+The new memory-only plugin has a model-free native acceptance test:
+
+```sh
+mise exec -- go build -o /absolute/candidate/bin/my-friday ./cmd/my-friday
+FRIDAY_TEST_CODEX=/absolute/path/to/codex \
+FRIDAY_TEST_MEMORY_BINARY=/absolute/candidate/bin/my-friday \
+mise exec -- go test ./internal/memorycodex -run TestNativeCodexMemoryPlugin -count=1 -v
+```
+
+It installs the repository's packaged plugin into disposable `CODEX_HOME`,
+checks native skill/hook discovery, starts the stdio MCP server through Codex,
+and recalls synthetic knowledge through Codex's native MCP call API. It makes
+no model call, copies no authentication and changes no ambient native config.
+It does not prove model adherence, trusted hook execution, or cross-machine
+behavior. See [the acceptance ledger](memory-service-mvp.md).
+
 Portable Codex discovery has an additional opt-in, model-free native contract
 test. Set `FRIDAY_TEST_CODEX` to an absolute installed executable and run:
 

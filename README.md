@@ -1,8 +1,25 @@
 # My Friday
 
-## Portable assistant rebuild — local development
+Bring your agent. My Friday supplies durable memory across conversations,
+machines, and agent tools.
 
-The current direction is one private, Git-backed agent repository with portable
+The memory-service MVP provides a memory-only Git repository, journal and
+knowledge tools, explicit correction history and machine provenance, plus a
+local MCP server and a thin native Codex plugin. It does not require an agent
+identity, custom launcher, capability framework, or separate model subscription.
+
+Start with the [Codex memory setup guide](plugins/codex/README.md) and
+[memory-service acceptance ledger](docs/memory-service-mvp.md). The engine, CLI,
+MCP round trip, and model-free native plugin checks pass locally; real
+conversation and second-machine acceptance are still pending. This is a
+development candidate, not a production release or an automatic migration.
+
+Pi support follows accepted Codex support in [#117](https://github.com/acoz-labs/my-friday/issues/117).
+Claude Code follows Pi in [#118](https://github.com/acoz-labs/my-friday/issues/118).
+
+## Previous assistant platform — retained compatibility
+
+The previous iteration used one private, Git-backed agent repository with portable
 memory and capabilities, plus machine-local Codex/Pi projections. The new
 `setup`, `agent`, `memory`, `reference`, `sync`, and `hook` commands are an
 initial implementation, not a production release or migration of existing agents.
@@ -12,6 +29,8 @@ the toolkit. Interactive terminals get arrow/Vim navigation and editable fields;
 `my-friday menu --plain` retains numbered prompts. For automation, the
 [agent management API](docs/agent-api.md) exposes discovery, typed parameters,
 preview/apply and JSON outcomes without navigating the TUI.
+That menu currently manages the previous assistant platform; use `bank` and the
+Codex plugin for the memory-only MVP.
 It now includes [guided source hosting](docs/source-setup.md): private GitHub
 creation/connection, explicit setup and ongoing-sync accounts, and resumable
 configuration with `my-friday setup --instance PATH`.

@@ -1,0 +1,28 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "my-friday codex-memory-hook",
+            "timeout": 5,
+            "statusMessage": "Connecting My Friday memory"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "my-friday codex-memory-hook",
+            "timeout": 5,
+            "statusMessage": "Recalling My Friday memory"
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,5 +1,29 @@
 # Repository Instructions
 
+## Current product direction: memory service MVP (2026-09-12)
+
+The owner authorized a memory-focused replacement: structured, local-first,
+Git-backed memory with a shared engine/CLI, MCP access, and thin native harness
+plugins. The MVP must be fully proven with Codex first. Pi and Claude Code follow
+in that order in tracked issues; do not implement them in this goal. Keep their
+integration locations obvious under plugins/<harness> without duplicating memory
+semantics. This direction supersedes conflicting assistant-platform scope below.
+
+- Do not require a My Friday assistant launcher, capability framework, provider
+  integration or replacement native configuration to use memory.
+- Reuse tested memory, provenance, supersession and synchronization behavior.
+- Recall relevant current knowledge; preserve journal/history without promoting
+  historical proposals into user requirements. Explicit current direction wins
+  within its scope. No lossless transcript or infallible recall claims.
+- Keep ordinary memory learning lightweight. No capability engineering, signing,
+  credential storage or host automation belongs in this MVP.
+- Preserve existing installations and their source. Compatibility code is not the
+  new product experience, and preserving it must not prevent a memory-only setup.
+- Use synthetic banks for native/plugin acceptance; do not copy ambient auth or
+  private transcripts into tests. Record real evidence and pending hands-on work.
+- Changes, commits, feature-branch pushes and the requested follow-up issues are
+  authorized. No automatic migration or public release is implied.
+
 ## Current workflow: portable assistant rebuild
 
 On 2026-09-06 the product owner explicitly authorized replacing the legacy

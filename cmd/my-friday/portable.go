@@ -78,6 +78,12 @@ func runPortable(args []string, input io.Reader, out, errout io.Writer) (err err
 		errout = out
 	}
 	switch args[0] {
+	case "bank":
+		return memoryBankCLI(args[1:], input, out, errout)
+	case "mcp":
+		return memoryMCPCLI(args[1:], input, out, errout)
+	case "codex-memory-hook":
+		return memoryCodexHookCLI(args[1:], input, out, errout)
 	case "api":
 		return portableAPI(args[1:], input, out)
 	case "menu":

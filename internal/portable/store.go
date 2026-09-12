@@ -50,6 +50,7 @@ type Source struct {
 type Store struct {
 	Root               string
 	Agent              Agent
+	memoryOnly         bool
 	gitSettings        *SyncConfig
 	checkpointObserver *Authorship
 }
@@ -63,10 +64,14 @@ func NewID(prefix string) string {
 }
 
 func Create(root, name, harness, deviceID, label string) (*Store, error) {
+	return createStore(root, name, harness, deviceID, label, false)
+}
+
+func createStore(root, name, harness, deviceID, label string, memoryOnly bool) (*Store, error) {
 	if strings.TrimSpace(name) == "" || strings.ContainsAny(name, "\x00\r\n") {
 		return nil, errors.New("agent name is required and must be one line")
 	}
-	if harness != "codex" && harness != "pi" {
+	if !memoryOnly && harness != "codex" && harness != "pi" {
 		return nil, errors.New("harness must be codex or pi")
 	}
 	if !identifier.MatchString(deviceID) || strings.TrimSpace(label) == "" {
@@ -93,8 +98,14 @@ func Create(root, name, harness, deviceID, label string) (*Store, error) {
 	}
 	// Only this newly created temporary tree is owned by this operation.
 	defer os.RemoveAll(staging)
-	s := &Store{Root: staging, Agent: Agent{FormatVersion: FormatVersion, ID: NewID("assistant"), Name: name, DefaultHarness: harness}}
-	for _, dir := range []string{".my-friday", "instructions", "memory/records", "memory/events", "memory/sources", "provenance/devices", "provenance/changes", "capabilities", "integrations", "extensions"} {
+	s := &Store{Root: staging, Agent: Agent{FormatVersion: FormatVersion, ID: NewID("assistant"), Name: name, DefaultHarness: harness}, memoryOnly: memoryOnly}
+	directories := []string{".my-friday", "memory/records", "memory/events", "memory/sources", "provenance/devices", "provenance/changes"}
+	if memoryOnly {
+		s.Agent.ID = NewID("bank")
+	} else {
+		directories = append(directories, "instructions", "capabilities", "integrations", "extensions")
+	}
+	for _, dir := range directories {
 		if err = os.MkdirAll(filepath.Join(staging, dir), 0700); err != nil {
 			return nil, err
 		}
@@ -102,7 +113,12 @@ func Create(root, name, harness, deviceID, label string) (*Store, error) {
 			return nil, err
 		}
 	}
-	if err = writeNewJSON(filepath.Join(staging, "agent.json"), s.Agent); err != nil {
+	if memoryOnly {
+		err = writeNewJSON(filepath.Join(staging, "bank.json"), MemoryBank{Version: 1, ID: s.Agent.ID, Name: name})
+	} else {
+		err = writeNewJSON(filepath.Join(staging, "agent.json"), s.Agent)
+	}
+	if err != nil {
 		return nil, err
 	}
 	if err = s.AddDevice(Device{Version: 1, ID: deviceID, Label: label}); err != nil {
@@ -114,6 +130,9 @@ func Create(root, name, harness, deviceID, label string) (*Store, error) {
 		"instructions/operating.md": "# Working behavior\n\nCarry authorized tasks through to a verified outcome. Investigate available APIs, CLI tools, browser tools, and computer use when a route fails. Use the tools actually available on this installation.\n\nCurrent explicit user direction supersedes older remembered user guidance within its scope. Distinguish one-task exceptions from ongoing changes. Record meaningful outcomes, corrections, preferences, and reusable procedures automatically. Keep inference distinguishable from user direction.\n\nYou may improve and verify executable capabilities and subscriptions in this private assistant repository as part of authorized work. Preserve history and recovery. A code rollback does not undo external effects. Keep credentials out of memory and transcripts.\n",
 	}
 	for path, content := range files {
+		if memoryOnly && strings.HasPrefix(path, "instructions/") {
+			continue
+		}
 		if err = os.WriteFile(filepath.Join(staging, path), []byte(content), 0600); err != nil {
 			return nil, err
 		}
@@ -141,6 +160,11 @@ func Open(root string) (*Store, error) {
 		return nil, errors.New("assistant root must be a real directory")
 	}
 	s := &Store{Root: abs}
+	if _, err := os.Lstat(filepath.Join(abs, "bank.json")); err == nil {
+		return openMemoryBank(s)
+	} else if !os.IsNotExist(err) {
+		return nil, err
+	}
 	if err = readJSON(filepath.Join(abs, "agent.json"), &s.Agent); err != nil {
 		return nil, err
 	}
@@ -238,7 +262,18 @@ func (s *Store) withLock(fn func() error) error {
 }
 
 func (s *Store) checkDirectories() error {
-	for _, dir := range []string{".my-friday", "memory", "memory/records", "memory/events", "memory/sources", "provenance", "provenance/devices", "provenance/changes", "capabilities", "integrations", "instructions"} {
+	current, err := Open(s.Root)
+	if err != nil {
+		return err
+	}
+	if current.Agent.ID != s.Agent.ID || current.memoryOnly != s.memoryOnly {
+		return errors.New("store identity changed; reopen the intended repository")
+	}
+	directories := []string{".my-friday", "memory", "memory/records", "memory/events", "memory/sources", "provenance", "provenance/devices", "provenance/changes"}
+	if !s.memoryOnly {
+		directories = append(directories, "capabilities", "integrations", "instructions")
+	}
+	for _, dir := range directories {
 		info, err := os.Lstat(filepath.Join(s.Root, dir))
 		if err != nil {
 			return err
@@ -257,6 +292,13 @@ func (s *Store) AddDevice(d Device) error {
 	return s.withLock(func() error { return writeNewJSON(filepath.Join(s.Root, "provenance/devices", d.ID+".json"), d) })
 }
 func (s *Store) AddSource(source Source) error {
+	if err := s.validateSource(source); err != nil {
+		return err
+	}
+	return s.withLock(func() error { return writeNewJSON(filepath.Join(s.Root, "memory/sources", source.ID+".json"), source) })
+}
+
+func (s *Store) validateSource(source Source) error {
 	if source.Version != 1 || !identifier.MatchString(source.ID) || strings.TrimSpace(source.Summary) == "" || strings.TrimSpace(source.Kind) == "" {
 		return errors.New("invalid source record")
 	}
@@ -266,7 +308,7 @@ func (s *Store) AddSource(source Source) error {
 	if err := s.deviceExists(source.DeviceID); err != nil {
 		return err
 	}
-	return s.withLock(func() error { return writeNewJSON(filepath.Join(s.Root, "memory/sources", source.ID+".json"), source) })
+	return nil
 }
 func (s *Store) deviceExists(id string) error {
 	if !identifier.MatchString(id) {
@@ -338,7 +380,7 @@ func (s *Store) Validate() error {
 	if err != nil {
 		return err
 	}
-	if current.Agent.ID != s.Agent.ID {
+	if current.Agent.ID != s.Agent.ID || current.memoryOnly != s.memoryOnly {
 		return errors.New("assistant identity changed during operation")
 	}
 	records, err := s.revisions()
@@ -349,6 +391,16 @@ func (s *Store) Validate() error {
 		return err
 	}
 	if _, err := s.SourceChanges(""); err != nil {
+		return err
+	}
+	if s.memoryOnly {
+		if err := s.validateBankFiles(); err != nil {
+			return err
+		}
+		if _, err := s.Journal("", 1); err != nil {
+			return err
+		}
+		_, err = s.syncConfiguration()
 		return err
 	}
 	if _, err := s.ReferenceLibraries(); err != nil {

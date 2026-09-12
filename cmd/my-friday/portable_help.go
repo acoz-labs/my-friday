@@ -6,6 +6,26 @@ import (
 )
 
 var portableHelpTopics = map[string]string{
+	"bank": `Usage: my-friday bank <command> [options]
+Memory-only banks do not need an assistant installation or launcher.
+  create          Create --repository PATH --name NAME --device-label LABEL
+  bind            Enroll --repository PATH --device-label LABEL --actor NAME
+  doctor          Read-only structure and local binding checks
+  recall          Retrieve compact current evidence with --query TEXT
+  remember        Append knowledge/corrections from bounded JSON on stdin
+  history         Inspect --record ID, optionally --offset N --limit N
+  scopes          Discover stored scopes, optionally --offset N --limit N
+  journal         Search semantic journals with --query TEXT
+  journal-append  Append {"kind":"session","summary":"..."} from stdin
+  sync            Checkpoint locally and sync the bank's configured Git remote
+
+bind and all memory operations accept --binding FILE. Default: the operating
+system's user config directory / my-friday / memory.json, or
+MY_FRIDAY_MEMORY_BINDING. The binding stays outside the Git bank and pins its
+identity and this machine's device ID. Use a separate binding for another bank.
+Clone an existing bank with Git, then bind its local path on the new machine.
+Nothing targets the working directory implicitly. See each command's --help.
+`,
 	"menu": `Usage: my-friday [menu [--plain]]
 Open the reusable management menu: create/import agents, inspect existing
 installations, configure source sync, change harness, run doctor/repair, and
@@ -45,6 +65,8 @@ Use the management menu for guided adoption, repair and rollback.
 	"": `My Friday — portable assistant toolkit
 
 Usage: my-friday <command> [options]
+  bank        Create, bind, and use a memory-only bank (memory-service MVP)
+  mcp         Serve the selected memory bank over stdio MCP
   menu        Open agent management (also the default with no arguments)
   api         Discover and execute structured, noninteractive management actions
   toolkit     Open updates; use/check-instance/manifest support explicit tooling

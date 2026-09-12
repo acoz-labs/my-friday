@@ -26,8 +26,14 @@ func (s *Store) RecordEvent(kind, summary string, author Authorship) (JournalEnt
 	if err := s.deviceExists(author.DeviceID); err != nil {
 		return entry, err
 	}
+	if s.memoryOnly {
+		if err := s.validateCheckpointObserver(&author); err != nil {
+			return entry, err
+		}
+	}
 	err := s.withLock(func() error {
-		dir := filepath.Join(s.Root, "memory/events", time.Now().UTC().Format("2006/01"))
+		at, _ := time.Parse(time.RFC3339Nano, entry.RecordedAt)
+		dir := filepath.Join(s.Root, "memory/events", at.Format("2006/01"))
 		if err := os.MkdirAll(dir, 0700); err != nil {
 			return err
 		}

@@ -70,12 +70,21 @@ func TestProductionNetworkAndSubprocessBoundary(t *testing.T) {
 		}
 		rel = filepath.ToSlash(rel)
 		portableSource := strings.HasPrefix(rel, "internal/portable/") || strings.HasPrefix(rel, "cmd/my-friday/portable")
+		memorySource := strings.HasPrefix(rel, "internal/memorybank/")
+		memoryImports := map[string]bool{"context": true, "time": true, "github.com/acoz-labs/my-friday/internal/portable": true}
+		mcpSource := strings.HasPrefix(rel, "internal/memorymcp/") || strings.HasPrefix(rel, "internal/memorycodex/")
+		mcpImports := map[string]bool{"context": true, "github.com/acoz-labs/my-friday/internal/memorybank": true, "github.com/acoz-labs/my-friday/internal/portable": true, "github.com/modelcontextprotocol/go-sdk/mcp": true}
+		if rel == "cmd/my-friday/portable_bank.go" {
+			mcpSource = true
+			mcpImports["github.com/acoz-labs/my-friday/internal/memorymcp"] = true
+			mcpImports["github.com/acoz-labs/my-friday/internal/memorycodex"] = true
+		}
 		updateSource := rel == "internal/toolkitupdate/update.go" || rel == "cmd/my-friday/portable_toolkit.go" || rel == "cmd/my-friday/portable_api.go"
 		updateImports := map[string]bool{"context": true, "time": true, "net/http": true, "net/url": true, "runtime/debug": true, "github.com/acoz-labs/my-friday/internal/toolkitupdate": true}
 		consoleImports := map[string]bool{"charm.land/bubbletea/v2": true, "github.com/charmbracelet/x/term": true, "github.com/charmbracelet/x/ansi": true}
 		for _, spec := range file.Imports {
 			name, _ := strconv.Unquote(spec.Path.Value)
-			if !allowedImports[name] && !(portableSource && portableImports[name]) && !(updateSource && updateImports[name]) && !((rel == "internal/console/prompt.go" || rel == "internal/console/report.go") && consoleImports[name]) {
+			if !allowedImports[name] && !(portableSource && portableImports[name]) && !(memorySource && memoryImports[name]) && !(mcpSource && mcpImports[name]) && !(updateSource && updateImports[name]) && !((rel == "internal/console/prompt.go" || rel == "internal/console/report.go") && consoleImports[name]) {
 				t.Errorf("production import %q is not allowlisted in %s", name, path)
 			}
 			if name == "os/exec" && spec.Name != nil {

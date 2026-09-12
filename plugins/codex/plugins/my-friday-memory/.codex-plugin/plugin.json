@@ -1,0 +1,19 @@
+{
+  "name": "my-friday-memory",
+  "version": "0.1.0+codex.20260912193537",
+  "description": "Portable, Git-backed long-term memory for native Codex sessions.",
+  "author": {
+    "name": "My Friday contributors"
+  },
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "My Friday Memory",
+    "shortDescription": "Bring durable memory to your native agent.",
+    "longDescription": "Recall decisions and preferences, maintain concise journals, and preserve corrections and machine provenance in your own memory bank. Native tools and agent settings remain yours.",
+    "developerName": "My Friday contributors",
+    "category": "Productivity",
+    "capabilities": [],
+    "defaultPrompt": "What useful context do you remember for this task?"
+  },
+  "mcpServers": "./.mcp.json"
+}

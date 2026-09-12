@@ -34,6 +34,9 @@ func ValidateLauncherName(name string) error {
 
 func Bind(s *Store, state, name, binary, deviceID string) (Instance, error) {
 	result := Instance{Version: 1, Name: name, AssistantID: s.Agent.ID, Repository: s.Root, DeviceID: deviceID, Binary: binary}
+	if s.IsMemoryBank() {
+		return result, errors.New("memory banks attach to native agents; they are not assistant installations")
+	}
 	if err := ValidateInstallationPaths(s.Root, state, ""); err != nil {
 		return result, err
 	}
