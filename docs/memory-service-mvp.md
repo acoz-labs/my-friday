@@ -340,3 +340,18 @@ Two-host transport and runtime checks completed after the SSH repair:
   now narrowly permits only that parsing API in the SSH address validator; no
   socket/network API was added. Full host CI then passed. This test-only change
   does not change the nominated candidate binary.
+
+Second-host native learning/publish passed; first-host discovery pending:
+
+- The owner entered the milestone as **Harborlight** (one word). The model
+  preserved that spelling, saved a user-directed decision and semantic journal,
+  and synchronized the second-host clone to its bare remote. Both reached
+  `6248fd37a87908d1264b4783dbffb13aa905aaca` with a clean working tree.
+- The new revision records the second host's bound device identity, distinct
+  from the first host's original records. The first network clone remains at
+  `ad289574ee8d53820b4a6090509723e1cd76c8ee` and has no milestone record.
+  No diagnostic sync was performed there: native sync plus subsequent recall
+  on the first host is the next test of mid-session memory freshness.
+- Searching the suggested two-word spelling initially returned no match; the
+  actual prompt, journal and refined milestone query confirmed the one-word
+  saved value. Empty lexical recall was not treated as proof of failed learning.
