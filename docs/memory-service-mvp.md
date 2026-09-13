@@ -416,3 +416,22 @@ Native interruption/recovery passed (2026-09-13):
   fixtures use bank-wide records. Next check two deliberately different project
   decisions in distinct scopes, followed by fresh-session scoped recall. Keep
   this distinct from the already-passed separate-bank routing test.
+
+Native project-scoped learning passed (2026-09-13):
+
+- The owner requested Go for Cedar Kite and Rust for Maple Wren as distinct
+  project decisions, with one journal and no synchronization. The agent checked
+  existing scopes/recall, then saved one user-directed decision in each newly
+  established project scope (`cedar-kite` and `maple-wren`). Neither became a
+  bank-wide language preference. Both carry the first network host's device ID.
+- Independent scope/history inspection confirmed one revision per new project,
+  five unchanged bank-wide records, and exactly one new journal (seven total).
+  All previously tracked memory files are unchanged; only the two new records,
+  their source files and the requested journal are present as untracked files.
+- No sync tool was called. HEAD remains
+  `6248fd37a87908d1264b4783dbffb13aa905aaca`: these saves are local files, not
+  yet Git-checkpointed or delivered to the second host. Diagnostic checks did
+  not commit or synchronize the bank on the agent's behalf.
+- Fresh-session project-scope discovery/recall is next. It must retrieve the
+  two distinct choices without inventing a language decision for Silver Heron
+  or treating either project's choice as a general preference.
