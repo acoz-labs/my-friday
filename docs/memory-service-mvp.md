@@ -71,6 +71,15 @@ read-only/no-memory-write directions; remembered text is evidence, not authority
 
 ## Current evidence
 
+Status as of 2026-09-13: the owner-assisted Codex conversation sequence has
+passed learning, corrections, explicit no-save boundaries, cwd independence,
+separate-bank routing, two physical Macs with provenance, in-session freshness,
+compaction, interruption recovery, and distinct project-scope recall. Detailed
+observations and limitations follow chronologically. The next focus is the
+user-facing installation/update/troubleshooting path, not additional repetitions
+of these happy paths. This is not release acceptance: distribution, remaining
+failure-boundary review and GitHub board attachment are still unfinished.
+
 - Existing memory primitives inspected: immutable revisions, graph supersession,
   device provenance, lexical recall and Git sync can be reused.
 - Codex CLI installed for acceptance: 0.153.4. Current public documentation may
@@ -435,3 +444,26 @@ Native project-scoped learning passed (2026-09-13):
 - Fresh-session project-scope discovery/recall is next. It must retrieve the
   two distinct choices without inventing a language decision for Silver Heron
   or treating either project's choice as a general preference.
+
+Fresh-session project-scoped recall passed (2026-09-13):
+
+- A distinct native conversation received the existing three-scope inventory
+  from the local prompt hook. It used explicit `cedar-kite` and `maple-wren`
+  recalls plus bank-wide recall and a scope inventory check. All three recall
+  results and the inventory were untruncated, covering seven current records.
+- The answer correctly attributed Go to Cedar Kite and Rust to Maple Wren. It
+  reported no recorded language choice for Silver Heron and no general language
+  preference, rather than extrapolating from the two project-specific decisions.
+  Its absence claims were scoped to current local records, not unseen history
+  or remote freshness. No project identity was inferred from the working directory.
+- The session only read the memory skill and called scopes/recall. No saves,
+  journal appends or sync occurred. Independent inspection found the same seven
+  records, seven journals, unchanged HEAD and the same intentionally uncommitted
+  additions from the preceding no-sync turn. No checkpoint was made on its behalf.
+- Empty-query enumeration was complete for this small fixture. It is not a
+  scalable substitute for targeted retrieval/paging in a large bank. The hook's
+  inventory was sufficient to choose the two existing project IDs; the extra
+  inventory call was redundant here but did not alter memory or task scope.
+- This completes the current owner-assisted conversation sequence. Continue with
+  installation/update/troubleshooting UX and failure-boundary review; leave the
+  pinned trial artifacts and private Alfred installation untouched.
