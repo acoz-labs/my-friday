@@ -275,11 +275,11 @@ Separate-bank native selection passed:
   checkpoint were unchanged. This is evidence for explicit bank routing and
   observed task compliance, not filesystem isolation from an unrestricted agent.
 
-Still pending: broader read-only/no-save scenarios,
-interruption/compaction scenarios, actual second-machine
-acceptance, final user-facing management/distribution experience, and GitHub board
-attachment. Current clone tests simulate two machines; they are not physical-host
-acceptance. Writes are not idempotent: clients must inspect after ambiguous failure
+At this point in the acceptance sequence, broader read-only/no-save scenarios,
+interruption/compaction scenarios, actual second-machine acceptance, final
+user-facing management/distribution experience, and GitHub board attachment were
+pending. Subsequent physical-host and compaction evidence is recorded below.
+Writes are not idempotent: clients must inspect after ambiguous failure
 before retrying. The generated development marketplace is named `personal`; a
 collision-safe public distribution name is not finalized.
 
@@ -369,3 +369,29 @@ First-host native return trip and in-session freshness passed:
   running native session; it does not claim that startup instructions reload or
   that local-only hooks automatically synchronize. Cross-machine conversation
   continuity in both directions now has actual native-model evidence.
+
+Native context-compaction recovery passed (2026-09-13):
+
+- The first-host network trial transcript contains both a `compacted` event and
+  a completed native `ContextCompaction` item on September 12. The owner's next
+  read-only prompt on September 13 ran in that same conversation. This is actual
+  compaction evidence, not inferred from a correct answer or a new thread.
+- After compaction the agent read the plugin's memory skill, discovered the MCP
+  tools, queried scopes/current recall and inspected four project records' history.
+  It correctly reported macOS/Linux, local storage, offline operation with backup
+  disabled, optional cloud backup, and Harborlight. It distinguished the former
+  name and earlier scope from current guidance without enabling general sync.
+- No remember, journal-append or synchronization call occurred. Independent
+  read-only checks found the bank clean at
+  `6248fd37a87908d1264b4783dbffb13aa905aaca`, with five current records and six
+  existing journals. The answer explicitly disclaimed rechecking remote freshness.
+- This proves post-compaction access and correct use of durable memory in this
+  sample, not preservation of unsaved conversation content. The native compaction
+  summary may also retain facts; the observed MCP reads establish that the answer
+  did not rely solely on that summary.
+- Efficiency observation: scopes, one recall and four history calls completed in
+  an approximately 24-second turn. History was relevant to the requested comparison,
+  but fetching it for unchanged platform/milestone records was potentially redundant.
+  Do not change the pinned candidate mid-trial or mistake correctness for optimal
+  retrieval cost. Interruption recovery remains the next owner-assisted check;
+  final management/distribution UX and broader robustness work remain unfinished.
