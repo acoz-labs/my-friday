@@ -395,3 +395,24 @@ Native context-compaction recovery passed (2026-09-13):
   Do not change the pinned candidate mid-trial or mistake correctness for optimal
   retrieval cost. Interruption recovery remains the next owner-assisted check;
   final management/distribution UX and broader robustness work remain unfinished.
+
+Native interruption/recovery passed (2026-09-13):
+
+- In the same first-host conversation, the agent attempted the owner's single
+  `sleep 60` command. Its tool result was `aborted by user after 0.2s`, followed
+  by a native `turn_aborted` event with reason `interrupted`. No retry or resume
+  followed. This establishes tool-call/turn interruption, not independent proof
+  of OS process startup or process-tree termination.
+- The next owner prompt requested read-only milestone/backup recall. One MCP
+  recall completed, and the answer correctly returned Harborlight, optional
+  cloud backup, local data and offline operation with backup disabled, without
+  expanding that into general cloud synchronization. The turn took about eight
+  seconds and did not repeat skill discovery or fetch record history.
+- No memory save, journal append or sync occurred in either turn. The bank stayed
+  clean at `6248fd37a87908d1264b4783dbffb13aa905aaca` with five current records
+  and six journals. Cancellation during a write or sync was not exercised here;
+  this result does not establish transactional/idempotent interrupted writes.
+- Native project-scope selection remains untested: the current conversation
+  fixtures use bank-wide records. Next check two deliberately different project
+  decisions in distinct scopes, followed by fresh-session scoped recall. Keep
+  this distinct from the already-passed separate-bank routing test.
