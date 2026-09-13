@@ -27,22 +27,25 @@ var digestPattern = regexp.MustCompile(`^[a-f0-9]{64}$`)
 var safeName = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$`)
 
 type Artifact struct {
-	OS      string `json:"os"`
-	Arch    string `json:"arch"`
-	Name    string `json:"name"`
-	SHA256  string `json:"sha256"`
-	Version string `json:"-"`
-	URL     string `json:"-"`
+	OS             string `json:"os"`
+	Arch           string `json:"arch"`
+	Name           string `json:"name"`
+	SHA256         string `json:"sha256"`
+	Version        string `json:"-"`
+	URL            string `json:"-"`
+	MemoryProtocol int    `json:"-"`
 }
 type Manifest struct {
 	SchemaVersion      int        `json:"schema_version"`
 	PortableFormat     int        `json:"portable_format"`
 	ManagementProtocol int        `json:"management_protocol"`
+	MemoryProtocol     int        `json:"memory_protocol,omitempty"`
 	Version            string     `json:"version"`
 	Artifacts          []Artifact `json:"artifacts"`
 }
 type Client struct {
-	get func(context.Context, string, int64) ([]byte, error)
+	get           func(context.Context, string, int64) ([]byte, error)
+	RequireMemory bool
 }
 
 func fetch(ctx context.Context, c *http.Client, address string, limit int64) ([]byte, error) {
@@ -122,6 +125,9 @@ func (c Client) Latest(ctx context.Context) (Artifact, error) {
 	if json.Unmarshal(data, &manifest) != nil || manifest.SchemaVersion != 1 || manifest.PortableFormat != 1 || manifest.ManagementProtocol != 1 || manifest.Version != release.Tag {
 		return result, errors.New("release requires an unsupported format or management protocol; installation unchanged")
 	}
+	if c.RequireMemory && manifest.MemoryProtocol != 1 {
+		return result, errors.New("latest release does not declare memory-service compatibility; current installation unchanged")
+	}
 	matches := 0
 	for _, asset := range manifest.Artifacts {
 		if asset.OS == runtime.GOOS && asset.Arch == runtime.GOARCH {
@@ -131,6 +137,7 @@ func (c Client) Latest(ctx context.Context) (Artifact, error) {
 			matches++
 			result = asset
 			result.Version = manifest.Version
+			result.MemoryProtocol = manifest.MemoryProtocol
 			result.URL = releasePrefix + release.Tag + "/" + asset.Name
 		}
 	}
@@ -151,6 +158,9 @@ func (c Client) Latest(ctx context.Context) (Artifact, error) {
 }
 
 func (c Client) Download(ctx context.Context, home string, a Artifact) (string, error) {
+	if c.RequireMemory && a.MemoryProtocol != 1 {
+		return "", errors.New("artifact does not declare memory-service compatibility")
+	}
 	expected := releasePrefix + a.Version + "/" + a.Name
 	parsed, err := url.Parse(a.URL)
 	if err != nil || parsed.RawQuery != "" || !safeName.MatchString(a.Version) || !safeName.MatchString(a.Name) || a.URL != expected || !digestPattern.MatchString(a.SHA256) {

@@ -111,3 +111,58 @@ func TestMemoryMenuCancellationAndBindingCollisionPreserveState(t *testing.T) {
 		})
 	}
 }
+
+func TestMemoryConnectionPreviewAndMenuCancellation(t *testing.T) {
+	home := t.TempDir()
+	bank, err := portable.CreateMemoryBank(filepath.Join(home, "bank"), "Fixture", "device-fixture", "Host")
+	if err != nil {
+		t.Fatal(err)
+	}
+	binding := filepath.Join(home, "binding.json")
+	if _, err := memorybank.Bind(bank.Root, binding, "Host", "Writer"); err != nil {
+		t.Fatal(err)
+	}
+	binary, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out bytes.Buffer
+	args := []string{"bank", "connect-codex", "--installation-home", home, "--codex-home", filepath.Join(home, "native"), "--codex", "/not/executed/codex", "--binding", binding, "--binary", binary}
+	if err := runPortable(args, strings.NewReader(""), &out, &out); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), `"state": "preview"`) || !strings.Contains(out.String(), `"binding"`) {
+		t.Fatal(out.String())
+	}
+	t.Setenv("MY_FRIDAY_MEMORY_BINDING", binding)
+	input := strings.Join([]string{"5", filepath.Join(home, "native"), "/not/executed/codex", binding, "no", "7", "0", "0", ""}, "\n")
+	out.Reset()
+	if err := memoryMenuMode(home, strings.NewReader(input), &out, true); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), "Repair Codex memory connection") || !strings.Contains(out.String(), "Update My Friday") {
+		t.Fatal(out.String())
+	}
+	for _, dir := range []string{".local", "native"} {
+		if _, err := os.Stat(filepath.Join(home, dir)); !os.IsNotExist(err) {
+			t.Fatalf("cancelled preview wrote %s", dir)
+		}
+	}
+}
+
+func TestMemoryMenuInstallationHomeIsExplicitAndDoesNotChangeEnvironment(t *testing.T) {
+	home := t.TempDir()
+	before := os.Getenv("HOME")
+	var out bytes.Buffer
+	if err := runPortable([]string{"menu", "--plain", "--installation-home", home}, strings.NewReader("0\n"), &out, &out); err != nil {
+		t.Fatal(err)
+	}
+	if os.Getenv("HOME") != before {
+		t.Fatal("menu changed HOME")
+	}
+	for _, args := range [][]string{{"menu", "--installation-home", "relative"}, {"menu", "--legacy", "--installation-home", home}} {
+		if err := runPortable(args, strings.NewReader("0\n"), &out, &out); err == nil {
+			t.Fatal("invalid home selection accepted")
+		}
+	}
+}

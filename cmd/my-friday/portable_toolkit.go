@@ -25,6 +25,7 @@ type toolkitBuild struct {
 	PortableFormat     int    `json:"portable_format"`
 	ManagementProtocol int    `json:"management_protocol"`
 	AgentAPIVersion    int    `json:"agent_api_version,omitempty"`
+	MemoryProtocol     int    `json:"memory_protocol,omitempty"`
 	Revision           string `json:"revision"`
 	Modified           bool   `json:"modified"`
 	OS                 string `json:"os"`
@@ -32,7 +33,7 @@ type toolkitBuild struct {
 }
 
 func toolkitVersion() toolkitBuild {
-	v := toolkitBuild{Product: "my-friday", PortableFormat: portable.FormatVersion, ManagementProtocol: 1, AgentAPIVersion: 1, Revision: "development", OS: runtime.GOOS, Arch: runtime.GOARCH}
+	v := toolkitBuild{Product: "my-friday", PortableFormat: portable.FormatVersion, ManagementProtocol: 1, AgentAPIVersion: 1, MemoryProtocol: 1, Revision: "development", OS: runtime.GOOS, Arch: runtime.GOARCH}
 	if info, ok := debug.ReadBuildInfo(); ok {
 		for _, setting := range info.Settings {
 			if setting.Key == "vcs.revision" {
@@ -99,13 +100,27 @@ func verifyToolkitContext(ctx context.Context, path string) error {
 	return nil
 }
 
+func verifyMemoryToolkit(path string) error {
+	if err := verifyToolkit(path); err != nil {
+		return err
+	}
+	data, err := runToolkit(path, "--version")
+	var v toolkitBuild
+	if err != nil || json.Unmarshal(data, &v) != nil || v.MemoryProtocol != 1 {
+		return errors.New("artifact does not support the memory-service protocol; existing command preserved")
+	}
+	return nil
+}
+
 func portableToolkit(args []string, input io.Reader, out, errout io.Writer) error {
 	if len(args) == 0 {
 		home, err := realHome()
 		if err != nil {
 			return err
 		}
-		err = newManagementUI(home, input, out, false).updates()
+		u := newManagementUI(home, input, out, false)
+		u.memory = true
+		err = u.updates()
 		if errors.Is(err, errToolkitActivated) || errors.Is(err, io.EOF) {
 			return nil
 		}
@@ -154,7 +169,15 @@ func portableToolkit(args []string, input io.Reader, out, errout io.Writer) erro
 		if err != nil {
 			return err
 		}
-		return outputJSON(out, toolkitupdate.Manifest{SchemaVersion: 1, PortableFormat: 1, ManagementProtocol: 1, Version: *release, Artifacts: []toolkitupdate.Artifact{{OS: runtime.GOOS, Arch: runtime.GOARCH, Name: "my-friday-" + runtime.GOOS + "-" + runtime.GOARCH, SHA256: hash}}})
+		raw, err := runToolkit(*binary, "--version")
+		if err != nil {
+			return err
+		}
+		var v toolkitBuild
+		if err := json.Unmarshal(raw, &v); err != nil {
+			return err
+		}
+		return outputJSON(out, toolkitupdate.Manifest{SchemaVersion: 1, PortableFormat: 1, ManagementProtocol: 1, MemoryProtocol: v.MemoryProtocol, Version: *release, Artifacts: []toolkitupdate.Artifact{{OS: runtime.GOOS, Arch: runtime.GOARCH, Name: "my-friday-" + runtime.GOOS + "-" + runtime.GOARCH, SHA256: hash}}})
 	default:
 		return errors.New("usage: my-friday toolkit [check-instance|use|manifest] (no subcommand opens update menu)")
 	}
@@ -188,6 +211,11 @@ func (u managementUI) updates() error {
 var errToolkitActivated = errors.New("toolkit activated")
 
 func (u managementUI) activate(path string) error {
+	if u.memory {
+		if err := verifyMemoryToolkit(path); err != nil {
+			return err
+		}
+	}
 	if err := verifyToolkit(path); err != nil {
 		return err
 	}
@@ -200,12 +228,16 @@ func (u managementUI) activate(path string) error {
 		return err
 	}
 	u.block(console.Block{Title: "Management command updated", Body: "Agents keep their existing pins.", Tone: console.Success, Fields: []console.Field{{Label: "Selected toolkit", Value: path}, {Label: "Previous command checkpoint", Value: backup}}})
-	u.section("Next step", "Exit and run my-friday again to use that version. To update one agent, choose Manage an installed agent → Use this toolkit version.")
+	if u.memory {
+		u.section("Next step", "Exit and run my-friday again. Choose Connect or update Codex memory to adopt its runtime/plugin for the selected native profile. Existing memory connections stay pinned until then; memory and prior versions are retained.")
+	} else {
+		u.section("Next step", "Exit and run my-friday again to use that version. To update one agent, choose Manage an installed agent → Use this toolkit version.")
+	}
 	return errToolkitActivated
 }
 func (u managementUI) latestRelease() error {
 	fmt.Fprintln(u.out, "Checking the official latest release (read-only; no account credentials used)…")
-	client := toolkitupdate.Client{}
+	client := toolkitupdate.Client{RequireMemory: u.memory}
 	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
 	defer cancel()
 	a, err := client.Latest(ctx)

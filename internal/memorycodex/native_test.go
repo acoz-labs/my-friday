@@ -27,6 +27,7 @@ func TestNativeCodexMemoryPlugin(t *testing.T) {
 		t.Fatal("absolute executables required; memory binary must be named my-friday")
 	}
 	root := t.TempDir()
+	managedConnection := os.Getenv("FRIDAY_TEST_MEMORY_CONNECT") == "1"
 	nativeHome, project := filepath.Join(root, "codex"), filepath.Join(root, "project")
 	for _, dir := range []string{nativeHome, project} {
 		if err := os.Mkdir(dir, 0700); err != nil {
@@ -59,6 +60,10 @@ func TestNativeCodexMemoryPlugin(t *testing.T) {
 	// Deliberately do not add the candidate to PATH: explicit runtime selection
 	// must work even when the native shell finds an older installation first.
 	env = append(env, "CODEX_HOME="+nativeHome, "MY_FRIDAY_MEMORY_BINDING="+binding, "MY_FRIDAY_MEMORY_BIN="+friday, "PATH="+os.Getenv("PATH"))
+	if managedConnection {
+		env = env[:len(env)-4]
+		env = append(env, "CODEX_HOME="+nativeHome, "PATH="+os.Getenv("PATH"))
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 55*time.Second)
 	defer cancel()
 	run := func(args ...string) {
@@ -73,8 +78,34 @@ func TestNativeCodexMemoryPlugin(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	run("plugin", "marketplace", "add", marketplace)
-	run("plugin", "add", "my-friday-memory@personal")
+	if managedConnection {
+		cmd := exec.CommandContext(ctx, friday, "bank", "connect-codex", "--installation-home", root, "--codex-home", nativeHome, "--codex", codex, "--binding", binding, "--apply")
+		cmd.Env, cmd.Dir = env, project
+		if output, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("managed native install: %v\n%s", err, output)
+		}
+		// Repeat through the public CLI: unchanged selection must be idempotent.
+		cmd = exec.CommandContext(ctx, friday, "bank", "connect-codex", "--installation-home", root, "--codex-home", nativeHome, "--codex", codex, "--binding", binding, "--apply")
+		cmd.Env, cmd.Dir = env, project
+		if output, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("managed reinstall: %v\n%s", err, output)
+		}
+		// Refresh is also the repair/update path: new immutable source/cache
+		// identity, same bank, no copied login and no memory environment exports.
+		cmd = exec.CommandContext(ctx, friday, "bank", "connect-codex", "--installation-home", root, "--codex-home", nativeHome, "--codex", codex, "--binding", binding, "--refresh", "--apply")
+		cmd.Env, cmd.Dir = env, project
+		if output, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("managed refresh: %v\n%s", err, output)
+		}
+		cmd = exec.CommandContext(ctx, friday, "bank", "doctor-codex", "--installation-home", root, "--codex-home", nativeHome, "--codex", codex)
+		cmd.Env, cmd.Dir = env, project
+		if output, err := cmd.CombinedOutput(); err != nil || !strings.Contains(string(output), `"healthy": true`) {
+			t.Fatalf("managed doctor: %v\n%s", err, output)
+		}
+	} else {
+		run("plugin", "marketplace", "add", marketplace)
+		run("plugin", "add", "my-friday-memory@personal")
+	}
 	before, err := os.ReadFile(filepath.Join(nativeHome, "config.toml"))
 	if err != nil {
 		t.Fatal(err)
@@ -130,7 +161,11 @@ func TestNativeCodexMemoryPlugin(t *testing.T) {
 		t.Fatalf("memory skill not discovered: %s", skills)
 	}
 	hooks := request("hooks/list", map[string]any{"cwds": []string{project}})
-	if !strings.Contains(string(hooks), "scripts/run-memory.sh") || !strings.Contains(string(hooks), "userPromptSubmit") {
+	hookScript := "scripts/run-memory.sh"
+	if managedConnection {
+		hookScript = "scripts/connection.sh"
+	}
+	if !strings.Contains(string(hooks), hookScript) || !strings.Contains(string(hooks), "userPromptSubmit") {
 		t.Fatalf("native hook not discovered: %s", hooks)
 	}
 	started := request("thread/start", map[string]any{"cwd": project, "approvalPolicy": "never", "ephemeral": true})

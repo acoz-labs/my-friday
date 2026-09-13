@@ -30,6 +30,7 @@ type managementUI struct {
 	home   string
 	tui    *console.Console
 	screen io.Writer
+	memory bool
 }
 
 func (u managementUI) block(b console.Block) {

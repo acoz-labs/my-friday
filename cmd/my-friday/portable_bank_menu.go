@@ -15,11 +15,12 @@ import (
 
 func memoryMenuMode(home string, input io.Reader, out io.Writer, plain bool) error {
 	u := newManagementUI(home, input, out, plain)
+	u.memory = true
 	u.line(console.Accent, "My Friday — durable memory")
 	u.line(console.Muted, "Bring your agent. Nothing changes just by opening this menu.")
 	u.line(console.Muted, "Previous assistant installations: my-friday menu --legacy")
 	for {
-		n, err := u.choose("Memory banks", []string{"Create a memory bank", "Connect an existing bank", "Check a memory bank", "Synchronize a memory bank"}, "Exit")
+		n, err := u.choose("Memory banks", []string{"Create a memory bank", "Connect an existing bank", "Check a memory bank", "Synchronize a memory bank", "Connect or update Codex memory", "Check Codex memory connection", "Update My Friday", "Repair Codex memory connection"}, "Exit")
 		if errors.Is(err, io.EOF) || (err == nil && n == 0) {
 			return nil
 		}
@@ -31,6 +32,15 @@ func memoryMenuMode(home string, input io.Reader, out io.Writer, plain bool) err
 			err = u.memorySetup(n == 2)
 		case 3, 4:
 			err = u.memoryInspectOrSync(n == 4)
+		case 5, 6:
+			err = u.memoryConnectCodex(n == 6, false)
+		case 7:
+			err = u.updates()
+		case 8:
+			err = u.memoryConnectCodex(false, true)
+		}
+		if errors.Is(err, errToolkitActivated) {
+			return nil
 		}
 		if errors.Is(u.problem(err), io.EOF) {
 			return nil
@@ -106,7 +116,7 @@ func (u managementUI) memorySetup(existing bool) error {
 		return err
 	}
 	u.block(console.Block{Title: "Memory bank connected", Tone: console.Success, Fields: []console.Field{{Label: "Bank", Value: b.Root}, {Label: "Bank ID", Value: b.BankID}, {Label: "Local binding", Value: binding}, {Label: "Device", Value: b.DeviceID}}})
-	u.section("Next step", "Connect your native agent's memory plugin. It must use this binding file; non-default files are selected with MY_FRIDAY_MEMORY_BINDING. No agent was installed or launched.")
+	u.section("Next step", "Choose Connect or update Codex memory from this menu, using this binding file. That step pins the runtime and bank without shell configuration. No agent was installed or launched yet.")
 	return nil
 }
 

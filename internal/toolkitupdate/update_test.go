@@ -46,6 +46,28 @@ func TestLatestRejectsLegacyAndChecksManifest(t *testing.T) {
 	}
 }
 
+func TestMemoryUpdateRejectsAssistantOnlyRelease(t *testing.T) {
+	for _, protocol := range []int{0, 1, 2} {
+		t.Run(fmt.Sprint(protocol), func(t *testing.T) {
+			c := Client{RequireMemory: true, get: func(ctx context.Context, address string, limit int64) ([]byte, error) {
+				if address == releaseAPI {
+					return []byte(`{"tag_name":"v1","assets":[{"name":"my-friday-update.json","browser_download_url":"https://github.com/acoz-labs/my-friday/releases/download/v1/my-friday-update.json"},{"name":"my-friday-test","browser_download_url":"https://github.com/acoz-labs/my-friday/releases/download/v1/my-friday-test"}]}`), nil
+				}
+				return []byte(fmt.Sprintf(`{"schema_version":1,"portable_format":1,"management_protocol":1,"memory_protocol":%d,"version":"v1","artifacts":[{"os":%q,"arch":%q,"name":"my-friday-test","sha256":%q}]}`, protocol, runtime.GOOS, runtime.GOARCH, strings.Repeat("a", 64))), nil
+			}}
+			a, err := c.Latest(context.Background())
+			if (protocol == 1) != (err == nil) {
+				t.Fatalf("protocol=%d artifact=%+v err=%v", protocol, a, err)
+			}
+		})
+	}
+	called := false
+	c := Client{RequireMemory: true, get: func(context.Context, string, int64) ([]byte, error) { called = true; return nil, nil }}
+	if _, err := c.Download(context.Background(), t.TempDir(), Artifact{}); err == nil || called {
+		t.Fatal("downloaded incompatible artifact")
+	}
+}
+
 func TestStageIntegrityAndPointerPreservation(t *testing.T) {
 	home := t.TempDir()
 	source := filepath.Join(t.TempDir(), "binary")

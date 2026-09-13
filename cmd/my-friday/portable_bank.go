@@ -22,6 +22,9 @@ func memoryBankCLI(args []string, input io.Reader, out, errout io.Writer) error 
 		return printPortableHelp("bank", out)
 	}
 	command := args[0]
+	if command == "connect-codex" || command == "doctor-codex" {
+		return memoryCodexConnectionCLI(args, out, errout)
+	}
 	f := portableFlags("bank "+command, errout)
 	if command == "create" || command == "bind" {
 		root := f.String("repository", "", "Memory-only repository directory")

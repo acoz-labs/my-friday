@@ -90,6 +90,7 @@ func runPortable(args []string, input io.Reader, out, errout io.Writer) (err err
 		f := portableFlags("menu", errout)
 		plain := f.Bool("plain", false, "Use numbered prompts instead of the terminal UI")
 		legacy := f.Bool("legacy", false, "Manage previous assistant-platform installations")
+		installationHome := f.String("installation-home", "", "Memory menu: existing home directory for retained artifacts and bank defaults; does not change HOME")
 		if err := parseFlags(f, args[1:]); err != nil {
 			return err
 		}
@@ -98,7 +99,23 @@ func runPortable(args []string, input io.Reader, out, errout io.Writer) (err err
 			return err
 		}
 		if *legacy {
+			if *installationHome != "" {
+				return errors.New("installation-home is only supported by the memory menu")
+			}
 			return managementMenuMode(home, input, out, *plain)
+		}
+		if *installationHome != "" {
+			if !filepath.IsAbs(*installationHome) {
+				return errors.New("installation-home must be an absolute existing directory")
+			}
+			home, err = filepath.EvalSymlinks(*installationHome)
+			if err != nil {
+				return err
+			}
+			info, err := os.Stat(home)
+			if err != nil || !info.IsDir() {
+				return errors.New("installation-home must be an existing directory")
+			}
 		}
 		return memoryMenuMode(home, input, out, *plain)
 	case "version", "--version":

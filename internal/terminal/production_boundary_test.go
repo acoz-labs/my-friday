@@ -47,6 +47,10 @@ func TestProductionNetworkAndSubprocessBoundary(t *testing.T) {
 		"internal/portable/sync.go":          "CommandContext",
 		"internal/portable/source_github.go": "CommandContext",
 		"cmd/my-friday/portable_toolkit.go":  "CommandContext",
+		// Explicit memory-plugin setup uses bounded native CLI commands, never
+		// a model turn or an authentication-copy operation.
+		"internal/memoryinstall/native.go":     "CommandContext",
+		"cmd/my-friday/portable_bank_codex.go": "LookPath",
 		// Doctor resolves the selected harness but never executes it.
 		"internal/portable/doctor.go": "LookPath",
 	}
@@ -88,9 +92,11 @@ func TestProductionNetworkAndSubprocessBoundary(t *testing.T) {
 		updateSource := rel == "internal/toolkitupdate/update.go" || rel == "cmd/my-friday/portable_toolkit.go" || rel == "cmd/my-friday/portable_api.go"
 		updateImports := map[string]bool{"context": true, "time": true, "net/http": true, "net/url": true, "runtime/debug": true, "github.com/acoz-labs/my-friday/internal/toolkitupdate": true}
 		consoleImports := map[string]bool{"charm.land/bubbletea/v2": true, "github.com/charmbracelet/x/term": true, "github.com/charmbracelet/x/ansi": true}
+		installSource := strings.HasPrefix(rel, "internal/memoryinstall/") || rel == "cmd/my-friday/portable_bank_codex.go"
+		installImports := map[string]bool{"context": true, "time": true, "github.com/acoz-labs/my-friday/internal/memorybank": true, "github.com/acoz-labs/my-friday/internal/memoryinstall": true, "github.com/acoz-labs/my-friday/internal/toolkitupdate": true, "github.com/acoz-labs/my-friday/plugins/codex": true}
 		for _, spec := range file.Imports {
 			name, _ := strconv.Unquote(spec.Path.Value)
-			if !allowedImports[name] && !(sshAddressParser && name == "net") && !(portableSource && portableImports[name]) && !(memorySource && memoryImports[name]) && !(mcpSource && mcpImports[name]) && !(updateSource && updateImports[name]) && !((rel == "internal/console/prompt.go" || rel == "internal/console/report.go") && consoleImports[name]) {
+			if !allowedImports[name] && !(installSource && installImports[name]) && !(sshAddressParser && name == "net") && !(portableSource && portableImports[name]) && !(memorySource && memoryImports[name]) && !(mcpSource && mcpImports[name]) && !(updateSource && updateImports[name]) && !((rel == "internal/console/prompt.go" || rel == "internal/console/report.go") && consoleImports[name]) {
 				t.Errorf("production import %q is not allowlisted in %s", name, path)
 			}
 			if name == "os/exec" && spec.Name != nil {

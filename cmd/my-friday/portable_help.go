@@ -11,6 +11,8 @@ Memory-only banks do not need an assistant installation or launcher.
   create          Create --repository PATH --name NAME --device-label LABEL
   bind            Enroll --repository PATH --device-label LABEL --actor NAME
   doctor          Read-only structure and local binding checks
+  connect-codex   Preview native plugin connection; --apply installs or reconnects
+  doctor-codex    Check pinned runtime/plugin/binding and native plugin inventory
   recall          Retrieve compact current evidence with --query TEXT
   remember        Append knowledge/corrections from bounded JSON on stdin
   history         Inspect --record ID, optionally --offset N --limit N
@@ -28,7 +30,8 @@ Nothing targets the working directory implicitly. See each command's --help.
 `,
 	"menu": `Usage: my-friday [menu [--plain] [--legacy]]
 Open memory-bank management: create a bank, connect an existing local clone,
-check its structure, or synchronize its configured Git remote. No assistant
+check its structure, synchronize its configured Git remote, connect/check native
+Codex memory, or update My Friday. No assistant
 launcher, capability setup or native login is required to manage a bank.
 Use --legacy for previous assistant-platform setup, doctor/repair and updates.
 Interactive terminals use arrows or j/k, Enter/l,
@@ -37,6 +40,9 @@ Ctrl+U to clear. Ctrl+C exits. The UI restores terminal input modes on exit.
 Use --plain or MY_FRIDAY_PLAIN=1 for numbered prompts; non-TTY/dumb terminals
 automatically use plain mode. There, 0 is Back/Exit and :back cancels a prompt.
 Opening the menu does not change files or launch an agent.
+Memory mode also accepts --installation-home PATH for an explicit existing
+artifact home without changing HOME. Use an explicit binding/native profile
+for isolated testing; that option does not replace their environment overrides.
 `,
 	"api": `Usage: my-friday api describe
        my-friday api --input FILE (or - for stdin)

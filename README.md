@@ -10,13 +10,16 @@ identity, custom launcher, capability framework, or separate model subscription.
 
 Run `my-friday` for memory-bank setup and management, or `my-friday menu --plain`
 for numbered prompts. Create a bank, connect an existing clone, check its health,
-or synchronize its configured Git remote. Automation uses the `bank` CLI or MCP
+synchronize its configured Git remote, connect/repair native Codex memory, or
+update My Friday. Automation uses the `bank` CLI or MCP
 tools, not the interactive menu.
 
 Start with the [Codex memory setup guide](plugins/codex/README.md) and
 [memory-service acceptance ledger](docs/memory-service-mvp.md). The engine, CLI,
-MCP round trip, and model-free native plugin checks pass locally; real
-conversation and second-machine acceptance are still pending. This is a
+MCP round trip, and native conversation tests have passed, including two Macs,
+corrections, project scopes, compaction and interruption recovery. The new guided
+installation path has model-free native checks; owner hands-on acceptance of that
+path remains pending. This is a
 development candidate, not a production release or an automatic migration.
 
 Pi support follows accepted Codex support in [#117](https://github.com/acoz-labs/my-friday/issues/117).
