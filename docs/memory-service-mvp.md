@@ -520,3 +520,17 @@ Guided native connection implementation (2026-09-13):
 - Distribution naming still needs the owner's choice: the existing source
   marketplace is `personal`; `my-friday` was recommended to avoid collisions.
   Owner hands-on acceptance of the new installation flow is still pending.
+
+Clean guided-installation candidate retained:
+
+- Source `f3d337bca419fdaf82bd9a6ce31ebde7f3748eb8`, `modified: false`, Darwin/ARM64,
+  SHA256 `651e84e3d55d41409fb75c0476e916e6447b9768fadb06cb599232f17a83d596`.
+  Built once with pinned Go, `CGO_ENABLED=0 -trimpath -buildvcs=true`.
+- The public managed-install CLI native test passed again against these exact
+  bytes on Codex 0.153.4: install, reinstall, refresh, doctor and MCP recall.
+  No native login or model turn was needed for this structural test.
+- No management-command activation, private Alfred update, release or memory
+  migration was performed. Namespace selection, owner menu acceptance and final
+  distribution/release handoff remain open. Existing release automation still
+  targets the earlier artifact contract; memory-compatible manifest/raw-asset
+  publication must be addressed before claiming the latest-release path is live.
